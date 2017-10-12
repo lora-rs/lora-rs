@@ -1,0 +1,8 @@
+[package]
+name = "lorawan"
+version = "0.1.0"
+authors = ["Ivaylo Petrov <ivajloip@gmail.com>"]
+
+[dependencies]
+arrayref = "0.3.4"
+rust-crypto = "^0.2"
