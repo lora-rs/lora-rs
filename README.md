@@ -1,5 +1,8 @@
 # LoRaWAN
 
+[![Build Status](https://travis-ci.org/ivajloip/rust-lorawan.svg?branch=master)](https://travis-ci.org/ivajloip/rust-lorawan)
+[![Gitter chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/rust-lorawan/lorawan)
+
 Package lorawan provides structures and tools to read and write LoRaWAN
 messages from and to a slice of bytes.
 
