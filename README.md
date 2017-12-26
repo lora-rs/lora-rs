@@ -1,6 +1,8 @@
 # LoRaWAN
 
 [![Build Status](https://travis-ci.org/ivajloip/rust-lorawan.svg?branch=master)](https://travis-ci.org/ivajloip/rust-lorawan)
+[![Latest Version]][crates.io]
+[![Docs]][doc.rs]
 [![Gitter chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/rust-lorawan/lorawan)
 
 Package lorawan provides structures and tools to read and write LoRaWAN
@@ -20,7 +22,7 @@ The following structures are implemented (+ fields):
 * EUI64
 * DevNonce
 * JoinRequestPayload
-* JoinAcceptPayload (partial)
+* JoinAcceptPayload
 * DevAddr
 * NwkAdr
 * FHDR
@@ -31,16 +33,16 @@ The following structures are implemented (+ fields):
 * MacCommand
 * LinkCkeckReq
 
-MIC can be checked and FRMPayload can be decrypted.
+MIC can be checked and FRMPayload and JoinAccept can be decrypted.
 
 ## Next steps
 
 I plan to implement soon:
 
-* Finish with JoinAcceptPayload.
-* Finish with the mac commands.
-* Add more tests.
-* Add packet creation functions.
+* [ ] Add packet creation functions.
+* [ ] Finish with the mac commands.
+* [ ] Add more tests.
+* [x] Finish with JoinAcceptPayload.
 
 ## Used code and inspiration
 
@@ -55,3 +57,7 @@ implementation of cmac
 [3]: https://github.com/DaGenix/rust-crypto
 [4]: https://github.com/DaGenix
 [5]: https://github.com/a-dma
+[Latest Version]: https://img.shields.io/crates/v/lorawan.svg
+[crates.io]: https://crates.io/crates/lorawan
+[Docs]: https://docs.rs/lorawan/badge.svg
+[doc.rs]: https://docs.rs/lorawan/badge.svg

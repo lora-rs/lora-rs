@@ -68,6 +68,43 @@ impl<'a> PhyPayload<'a> {
         Ok(result)
     }
 
+    /// Creates a PhyPayload from the decrypted bytes of a JoinAccept.
+    ///
+    /// # Argument
+    ///
+    /// * bytes - the data from which the PhyPayload is to be built.
+    /// * key - the key that is to be used to decrypt the payload.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut data = vec![0x20u8, 0x49u8, 0x3eu8, 0xebu8, 0x51u8, 0xfbu8,
+    ///     0xa2u8, 0x11u8, 0x6fu8, 0x81u8, 0x0eu8, 0xdbu8, 0x37u8, 0x42u8,
+    ///     0x97u8, 0x51u8, 0x42u8];
+    /// let key = lorawan::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
+    ///     0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
+    /// let phy = lorawan::PhyPayload::new_decrypted_join_accept(&mut data[..], &key);
+    /// ```
+    pub fn new_decrypted_join_accept(
+        bytes: &'a mut [u8],
+        key: &'a AES128,
+    ) -> Result<PhyPayload<'a>, &'a str> {
+        let len = bytes.len();
+        if len != 17 && len != 33 {
+            return Err("bytes have incorrect size");
+        }
+        let aes_enc = aessafe::AesSafe128Encryptor::new(&key.0[..]);
+        let mut tmp = vec![0; 16];
+        for i in 0..(len >> 4) {
+            let start = (i << 4) + 1;
+            aes_enc.encrypt_block(&bytes[start..(start + 16)], &mut tmp[..]);
+            for j in 0..16 {
+                bytes[start + j] = tmp[j];
+            }
+        }
+        PhyPayload::new(&bytes[..])
+    }
+
     /// Gives the MHDR of the PhyPayload.
     pub fn mhdr(&self) -> MHDR {
         MHDR(self.0[0])
@@ -163,8 +200,8 @@ impl<'a> PhyPayload<'a> {
 
     /// Verifies that the PhyPayload has correct MIC.
     ///
-    /// The PhyPayload needs to contain JoinRequest.
-    pub fn validate_join_request_mic(&self, key: &AES128) -> Result<bool, &str> {
+    /// The PhyPayload needs to contain JoinRequest or JoinAccept.
+    pub fn validate_join_mic(&self, key: &AES128) -> Result<bool, &str> {
         let expected_mic: MIC;
 
         match self.calculate_join_pkt_mic(key) {
@@ -201,7 +238,6 @@ impl<'a> PhyPayload<'a> {
     ///
     /// The PhyPayload needs to contain DataPayload.
     pub fn decrypted_payload(&self, key: &AES128, fcnt: u32) -> Result<FRMPayload, &str> {
-
         if let MacPayload::Data(data_payload) = self.mac_payload() {
             let fhdr_length = data_payload.fhdr_length();
             let fhdr = data_payload.fhdr();
@@ -455,6 +491,24 @@ impl<'a> DevNonce<'a> {
     }
 }
 
+/// AppNonce represents a 24 bit network server nonce.
+#[derive(Debug, PartialEq)]
+pub struct AppNonce<'a>(&'a [u8; 3]);
+
+impl<'a> AppNonce<'a> {
+    fn new_from_raw(bytes: &'a [u8]) -> AppNonce {
+        AppNonce(array_ref![bytes, 0, 3])
+    }
+
+    pub fn new(bytes: &'a [u8]) -> Option<AppNonce> {
+        if bytes.len() != 3 {
+            None
+        } else {
+            Some(AppNonce(array_ref![bytes, 0, 3]))
+        }
+    }
+}
+
 /// JoinRequestPayload represents a join request MacPayload.
 #[derive(Debug, PartialEq)]
 pub struct JoinRequestPayload<'a>(&'a [u8]);
@@ -497,12 +551,80 @@ impl<'a> JoinAcceptPayload<'a> {
         Some(JoinAcceptPayload(bytes))
     }
 
-    fn can_build_from(bytes: &'a [u8]) -> bool {
-        let data_len = bytes.len();
-        data_len == 17 || data_len == 33
+    pub fn new_from_raw(bytes: &'a [u8]) -> JoinAcceptPayload {
+        JoinAcceptPayload(bytes)
     }
 
-    // TODO(ivajloip): Finish :)
+    fn can_build_from(bytes: &'a [u8]) -> bool {
+        let data_len = bytes.len();
+        data_len == 12 || data_len == 28
+    }
+
+    pub fn app_nonce(&self) -> AppNonce {
+        AppNonce::new_from_raw(&self.0[0..3])
+    }
+
+    pub fn net_id(&self) -> NwkAddr {
+        NwkAddr([self.0[5], self.0[4], self.0[3]])
+    }
+
+    pub fn dev_addr(&self) -> DevAddr {
+        DevAddr([self.0[9], self.0[8], self.0[7], self.0[6]])
+    }
+
+    /// Gives the downlink configuration.
+    pub fn dl_settings(&self) -> DLSettings {
+        DLSettings(self.0[10])
+    }
+
+    pub fn rx_delay(&self) -> u8 {
+        self.0[11]
+    }
+
+    pub fn c_f_list(&self) -> Vec<Frequency> {
+        if self.0.len() == 12 {
+            return Vec::new();
+        }
+        self.0[12..27]
+            .chunks(3)
+            .map(|f| Frequency::new_from_raw(f))
+            .collect()
+    }
+}
+
+/// DLSettings represents LoRaWAN MHDR.
+#[derive(Debug, PartialEq)]
+pub struct DLSettings(pub u8);
+
+impl DLSettings {
+    pub fn rx1_dr_offset(&self) -> u8 {
+        self.0 >> 4 & 0x07
+    }
+
+    pub fn rx2_data_rate(&self) -> u8 {
+        self.0 & 0x0f
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Frequency<'a>(&'a [u8]);
+
+impl<'a> Frequency<'a> {
+    pub fn new_from_raw(bytes: &'a [u8]) -> Frequency {
+        Frequency(bytes)
+    }
+
+    pub fn new(bytes: &'a [u8]) -> Option<Frequency> {
+        if bytes.len() != 3 {
+            return None;
+        }
+
+        Some(Frequency(bytes))
+    }
+
+    pub fn value(&self) -> u32 {
+        (((self.0[2] as u32) << 16) + ((self.0[1] as u32) << 8) + (self.0[0] as u32)) * 100
+    }
 }
 
 /// DevAddr represents a 32 bit device address.
