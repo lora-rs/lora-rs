@@ -414,3 +414,18 @@ fn test_validate_join_request_mic_when_ok() {
     assert!(phy.is_ok());
     assert_eq!(phy.unwrap().validate_join_mic(&key), Ok(true));
 }
+
+#[test]
+fn test_join_accept_creator() {
+    let mut phy = lorawan::JoinAcceptCreator::new();
+    let key = lorawan::AES128(app_key());
+    let app_nonce_bytes = [0xc7, 0x0b, 0x57];
+    phy.set_app_nonce(&lorawan::AppNonce::new_from_raw(&app_nonce_bytes[..]));
+    let nwk_addr_bytes = [0x22, 0x11, 0x01];
+    phy.set_net_id(&lorawan::NwkAddr(nwk_addr_bytes));
+    phy.set_dev_addr(&lorawan::DevAddr::new(&[0x02, 0x03, 0x19, 0x80]));
+    phy.set_dl_settings(lorawan::DLSettings(0));
+    phy.set_rx_delay(0);
+
+    assert_eq!(phy.build(key).unwrap(), &phy_join_accept_payload()[..]);
+}
