@@ -60,4 +60,4 @@ implementation of cmac
 [Latest Version]: https://img.shields.io/crates/v/lorawan.svg
 [crates.io]: https://crates.io/crates/lorawan
 [Docs]: https://docs.rs/lorawan/badge.svg
-[doc.rs]: https://docs.rs/lorawan/badge.svg
+[doc.rs]: https://docs.rs/lorawan

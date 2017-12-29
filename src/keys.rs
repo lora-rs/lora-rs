@@ -4,13 +4,10 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-//! This module implements LoRaWAN packet handling and parsing.
+/// AES128 represents 128 bit AES key.
+#[derive(Debug, PartialEq)]
+pub struct AES128(pub [u8; 16]);
 
-#[macro_use]
-extern crate arrayref;
-extern crate crypto;
-
-pub mod cmac;
-pub mod extractor;
-pub mod keys;
-pub mod parser;
+/// MIC represents LoRaWAN MIC.
+#[derive(Debug, PartialEq)]
+pub struct MIC(pub [u8; 4]);

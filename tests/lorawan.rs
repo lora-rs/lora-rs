@@ -1,5 +1,9 @@
 extern crate lorawan;
 
+use lorawan::keys::*;
+use lorawan::parser::*;
+use lorawan::extractor::*;
+
 fn join_request_payload() -> Vec<u8> {
     vec![
         0x00,
@@ -131,26 +135,26 @@ fn app_key() -> [u8; 16] {
 #[test]
 fn test_mhdr_mtype() {
     let examples = [
-        (0x00, lorawan::MType::JoinRequest),
-        (0x20, lorawan::MType::JoinAccept),
-        (0x40, lorawan::MType::UnconfirmedDataUp),
-        (0x60, lorawan::MType::UnconfirmedDataDown),
-        (0x80, lorawan::MType::ConfirmedDataUp),
-        (0xa0, lorawan::MType::ConfirmedDataDown),
-        (0xc0, lorawan::MType::RFU),
-        (0xe0, lorawan::MType::Proprietary),
+        (0x00, MType::JoinRequest),
+        (0x20, MType::JoinAccept),
+        (0x40, MType::UnconfirmedDataUp),
+        (0x60, MType::UnconfirmedDataDown),
+        (0x80, MType::ConfirmedDataUp),
+        (0xa0, MType::ConfirmedDataDown),
+        (0xc0, MType::RFU),
+        (0xe0, MType::Proprietary),
     ];
     for &(ref v, ref expected) in &examples {
-        let mhdr = lorawan::MHDR(*v);
+        let mhdr = MHDR(*v);
         assert_eq!(mhdr.mtype(), *expected);
     }
 }
 
 #[test]
 fn test_mhdr_major() {
-    let examples = [(0, lorawan::Major::LoRaWANR1), (1, lorawan::Major::RFU)];
+    let examples = [(0, Major::LoRaWANR1), (1, Major::RFU)];
     for &(ref v, ref expected) in &examples {
-        let mhdr = lorawan::MHDR(*v);
+        let mhdr = MHDR(*v);
         assert_eq!(mhdr.major(), *expected);
     }
 }
@@ -158,10 +162,10 @@ fn test_mhdr_major() {
 #[test]
 fn test_mic() {
     let bytes = &data_payload()[..];
-    let phy = lorawan::PhyPayload::new(bytes);
+    let phy = PhyPayload::new(bytes);
 
     assert!(phy.is_ok());
-    assert_eq!(phy.unwrap().mic(), lorawan::MIC([0xd6, 0xc3, 0xb5, 0x82]));
+    assert_eq!(phy.unwrap().mic(), MIC([0xd6, 0xc3, 0xb5, 0x82]));
 }
 
 #[test]
@@ -179,7 +183,7 @@ fn test_phy_payload_is_none_when_too_few_bytes() {
         0x03,
         0x04,
     ];
-    let phy = lorawan::PhyPayload::new(bytes);
+    let phy = PhyPayload::new(bytes);
     assert!(phy.is_err());
 }
 
@@ -189,14 +193,14 @@ fn test_new_data_payload_is_none_if_bytes_too_short() {
     let bytes = &[0x04, 0x03, 0x02, 0x01, 0x00, 0xff];
     let bytes_with_fopts = &[0x04, 0x03, 0x02, 0x01, 0x01, 0xff, 0x04];
 
-    assert!(lorawan::DataPayload::new(bytes, true).is_none());
-    assert!(lorawan::DataPayload::new(bytes_with_fopts, true).is_none());
+    assert!(DataPayload::new(bytes, true).is_none());
+    assert!(DataPayload::new(bytes_with_fopts, true).is_none());
 }
 
 #[test]
 fn test_f_port_could_be_absent_in_data_payload() {
     let bytes = &[0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x04];
-    let data_payload = lorawan::DataPayload::new(bytes, true);
+    let data_payload = DataPayload::new(bytes, true);
     assert!(data_payload.is_some());
     assert!(data_payload.unwrap().f_port().is_none());
 }
@@ -204,14 +208,13 @@ fn test_f_port_could_be_absent_in_data_payload() {
 #[test]
 fn test_new_join_accept_payload_mic_validation() {
     let mut data = phy_join_accept_payload();
-    let key = lorawan::AES128(app_key());
+    let key = AES128(app_key());
     {
-        let phy = lorawan::PhyPayload::new(&data[..]).unwrap();
+        let phy = PhyPayload::new(&data[..]).unwrap();
         assert_eq!(phy.validate_join_mic(&key), Ok(false));
     }
 
-    let decrypted_phy = lorawan::PhyPayload::new_decrypted_join_accept(&mut data[..], &key)
-        .unwrap();
+    let decrypted_phy = PhyPayload::new_decrypted_join_accept(&mut data[..], &key).unwrap();
     assert_eq!(decrypted_phy.validate_join_mic(&key), Ok(true));
 }
 
@@ -219,9 +222,9 @@ fn test_new_join_accept_payload_mic_validation() {
 fn test_new_join_accept_payload() {
     let bytes = &phy_join_accept_payload()[1..13];
 
-    assert!(lorawan::JoinAcceptPayload::new(&bytes[1..]).is_none());
-    assert!(lorawan::JoinAcceptPayload::new(bytes).is_some());
-    let ja = lorawan::JoinAcceptPayload::new(bytes).unwrap();
+    assert!(JoinAcceptPayload::new(&bytes[1..]).is_none());
+    assert!(JoinAcceptPayload::new(bytes).is_some());
+    let ja = JoinAcceptPayload::new(bytes).unwrap();
 
     assert_eq!(ja.c_f_list(), Vec::new());
 }
@@ -230,20 +233,20 @@ fn test_new_join_accept_payload() {
 fn test_new_join_accept_payload_with_c_f_list() {
     let bytes = &join_accept_payload_with_c_f_list()[..];
 
-    let ja = lorawan::JoinAcceptPayload::new(bytes).unwrap();
+    let ja = JoinAcceptPayload::new(bytes).unwrap();
     let expected_c_f_list = vec![
-        lorawan::Frequency::new_from_raw(&[0x18, 0x4F, 0x84]),
-        lorawan::Frequency::new_from_raw(&[0xE8, 0x56, 0x84]),
-        lorawan::Frequency::new_from_raw(&[0xB8, 0x5E, 0x84]),
-        lorawan::Frequency::new_from_raw(&[0x88, 0x66, 0x84]),
-        lorawan::Frequency::new_from_raw(&[0x58, 0x6E, 0x84]),
+        Frequency::new_from_raw(&[0x18, 0x4F, 0x84]),
+        Frequency::new_from_raw(&[0xE8, 0x56, 0x84]),
+        Frequency::new_from_raw(&[0xB8, 0x5E, 0x84]),
+        Frequency::new_from_raw(&[0x88, 0x66, 0x84]),
+        Frequency::new_from_raw(&[0x58, 0x6E, 0x84]),
     ];
     assert_eq!(ja.c_f_list(), expected_c_f_list);
 }
 
 #[test]
 fn test_new_frequency() {
-    let freq = lorawan::Frequency::new(&[0x18, 0x4F, 0x84]);
+    let freq = Frequency::new(&[0x18, 0x4F, 0x84]);
 
     assert!(freq.is_some());
     assert_eq!(freq.unwrap().value(), 867100000);
@@ -265,12 +268,12 @@ fn test_mac_payload_has_good_bytes_when_size_correct() {
         0x03,
         0x04,
     ];
-    let phy_res = lorawan::PhyPayload::new(bytes);
+    let phy_res = PhyPayload::new(bytes);
     assert!(phy_res.is_ok());
     let phy = phy_res.unwrap();
-    if let lorawan::MacPayload::Data(data_payload) = phy.mac_payload() {
+    if let MacPayload::Data(data_payload) = phy.mac_payload() {
         let expected_bytes = &[0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0xff];
-        let expected = lorawan::DataPayload::new(expected_bytes, true).unwrap();
+        let expected = DataPayload::new(expected_bytes, true).unwrap();
 
         assert_eq!(data_payload, expected)
     } else {
@@ -281,10 +284,10 @@ fn test_mac_payload_has_good_bytes_when_size_correct() {
 #[test]
 fn test_complete_data_payload_f_port() {
     let data = data_payload();
-    let phy = lorawan::PhyPayload::new(&data[..]);
+    let phy = PhyPayload::new(&data[..]);
 
     assert!(phy.is_ok());
-    if let lorawan::MacPayload::Data(data_payload) = phy.unwrap().mac_payload() {
+    if let MacPayload::Data(data_payload) = phy.unwrap().mac_payload() {
         assert_eq!(data_payload.f_port(), Some(1))
     } else {
         panic!("failed to parse DataPayload");
@@ -294,13 +297,13 @@ fn test_complete_data_payload_f_port() {
 #[test]
 fn test_complete_data_payload_fhdr() {
     let data = data_payload();
-    let phy = lorawan::PhyPayload::new(&data[..]);
+    let phy = PhyPayload::new(&data[..]);
 
     assert!(phy.is_ok());
-    if let lorawan::MacPayload::Data(data_payload) = phy.unwrap().mac_payload() {
+    if let MacPayload::Data(data_payload) = phy.unwrap().mac_payload() {
         let fhdr = data_payload.fhdr();
 
-        assert_eq!(fhdr.dev_addr(), lorawan::DevAddr::new(&[1, 2, 3, 4]));
+        assert_eq!(fhdr.dev_addr(), DevAddr::new(&[1, 2, 3, 4]));
 
         assert_eq!(fhdr.fcnt(), 1u16);
 
@@ -321,15 +324,14 @@ fn test_complete_data_payload_fhdr() {
 #[test]
 fn test_complete_data_payload_frm_payload() {
     let data = data_payload();
-    let phy = lorawan::PhyPayload::new(&data[..]);
-    let key = lorawan::AES128([1; 16]);
+    let phy = PhyPayload::new(&data[..]);
+    let key = AES128([1; 16]);
 
     assert!(phy.is_ok());
     assert_eq!(
         phy.unwrap().decrypted_payload(&key, 1),
-        Ok(lorawan::FRMPayload::Data(
-            String::from("hello").into_bytes() as
-                lorawan::FRMDataPayload,
+        Ok(FRMPayload::Data(
+            String::from("hello").into_bytes() as FRMDataPayload,
         ))
     );
 }
@@ -337,8 +339,8 @@ fn test_complete_data_payload_frm_payload() {
 #[test]
 fn test_validate_data_mic_when_ok() {
     let data = data_payload();
-    let phy = lorawan::PhyPayload::new(&data[..]);
-    let key = lorawan::AES128([2; 16]);
+    let phy = PhyPayload::new(&data[..]);
+    let key = AES128([2; 16]);
 
     assert!(phy.is_ok());
     assert_eq!(phy.unwrap().validate_data_mic(&key, 1), Ok(true));
@@ -347,8 +349,8 @@ fn test_validate_data_mic_when_ok() {
 #[test]
 fn test_validate_data_mic_when_type_not_ok() {
     let bytes = [0; 23];
-    let phy = lorawan::PhyPayload::new(&bytes[..]);
-    let key = lorawan::AES128([2; 16]);
+    let phy = PhyPayload::new(&bytes[..]);
+    let key = AES128([2; 16]);
 
     assert!(phy.is_ok());
     assert_eq!(
@@ -360,14 +362,11 @@ fn test_validate_data_mic_when_type_not_ok() {
 #[test]
 fn test_join_request_dev_eui_extraction() {
     let data = join_request_payload();
-    let phy = lorawan::PhyPayload::new(&data[..]);
+    let phy = PhyPayload::new(&data[..]);
 
     assert!(phy.is_ok());
-    if let lorawan::MacPayload::JoinRequest(join_request) = phy.unwrap().mac_payload() {
-        assert_eq!(
-            join_request.dev_eui(),
-            lorawan::EUI64::new(&data[9..17]).unwrap()
-        );
+    if let MacPayload::JoinRequest(join_request) = phy.unwrap().mac_payload() {
+        assert_eq!(join_request.dev_eui(), EUI64::new(&data[9..17]).unwrap());
     } else {
         panic!("failed to parse JoinRequest mac payload");
     }
@@ -376,14 +375,11 @@ fn test_join_request_dev_eui_extraction() {
 #[test]
 fn test_join_request_app_eui_extraction() {
     let data = join_request_payload();
-    let phy = lorawan::PhyPayload::new(&data[..]);
+    let phy = PhyPayload::new(&data[..]);
 
     assert!(phy.is_ok());
-    if let lorawan::MacPayload::JoinRequest(join_request) = phy.unwrap().mac_payload() {
-        assert_eq!(
-            join_request.app_eui(),
-            lorawan::EUI64::new(&data[1..9]).unwrap()
-        );
+    if let MacPayload::JoinRequest(join_request) = phy.unwrap().mac_payload() {
+        assert_eq!(join_request.app_eui(), EUI64::new(&data[1..9]).unwrap());
     } else {
         panic!("failed to parse JoinRequest mac payload");
     }
@@ -392,13 +388,13 @@ fn test_join_request_app_eui_extraction() {
 #[test]
 fn test_join_request_dev_nonce_extraction() {
     let data = join_request_payload();
-    let phy = lorawan::PhyPayload::new(&data[..]);
+    let phy = PhyPayload::new(&data[..]);
 
     assert!(phy.is_ok());
-    if let lorawan::MacPayload::JoinRequest(join_request) = phy.unwrap().mac_payload() {
+    if let MacPayload::JoinRequest(join_request) = phy.unwrap().mac_payload() {
         assert_eq!(
             join_request.dev_nonce(),
-            lorawan::DevNonce::new(&data[17..19]).unwrap()
+            DevNonce::new(&data[17..19]).unwrap()
         );
     } else {
         panic!("failed to parse JoinRequest mac payload");
@@ -408,8 +404,8 @@ fn test_join_request_dev_nonce_extraction() {
 #[test]
 fn test_validate_join_request_mic_when_ok() {
     let data = join_request_payload();
-    let phy = lorawan::PhyPayload::new(&data[..]);
-    let key = lorawan::AES128([1; 16]);
+    let phy = PhyPayload::new(&data[..]);
+    let key = AES128([1; 16]);
 
     assert!(phy.is_ok());
     assert_eq!(phy.unwrap().validate_join_mic(&key), Ok(true));
@@ -417,14 +413,14 @@ fn test_validate_join_request_mic_when_ok() {
 
 #[test]
 fn test_join_accept_creator() {
-    let mut phy = lorawan::JoinAcceptCreator::new();
-    let key = lorawan::AES128(app_key());
+    let mut phy = JoinAcceptCreator::new();
+    let key = AES128(app_key());
     let app_nonce_bytes = [0xc7, 0x0b, 0x57];
-    phy.set_app_nonce(&lorawan::AppNonce::new_from_raw(&app_nonce_bytes[..]));
+    phy.set_app_nonce(&AppNonce::new_from_raw(&app_nonce_bytes[..]));
     let nwk_addr_bytes = [0x22, 0x11, 0x01];
-    phy.set_net_id(&lorawan::NwkAddr(nwk_addr_bytes));
-    phy.set_dev_addr(&lorawan::DevAddr::new(&[0x02, 0x03, 0x19, 0x80]));
-    phy.set_dl_settings(lorawan::DLSettings(0));
+    phy.set_net_id(&NwkAddr(nwk_addr_bytes));
+    phy.set_dev_addr(&DevAddr::new(&[0x02, 0x03, 0x19, 0x80]));
+    phy.set_dl_settings(DLSettings(0));
     phy.set_rx_delay(0);
 
     assert_eq!(phy.build(key).unwrap(), &phy_join_accept_payload()[..]);
