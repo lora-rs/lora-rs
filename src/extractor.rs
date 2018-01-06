@@ -29,27 +29,31 @@ impl JoinAcceptCreator {
         }
     }
 
-    pub fn set_app_nonce(&mut self, app_nonce: &parser::AppNonce) {
-        self.data[1] = app_nonce.as_ref()[0];
-        self.data[2] = app_nonce.as_ref()[1];
-        self.data[3] = app_nonce.as_ref()[2];
+    pub fn set_app_nonce<'a, T: Into<parser::AppNonce<'a>>>(&mut self, app_nonce: T) {
+        let converted = app_nonce.into();
+        self.data[1] = converted.as_ref()[0];
+        self.data[2] = converted.as_ref()[1];
+        self.data[3] = converted.as_ref()[2];
     }
 
-    pub fn set_net_id(&mut self, net_id: &parser::NwkAddr) {
-        self.data[4] = net_id.as_ref()[2];
-        self.data[5] = net_id.as_ref()[1];
-        self.data[6] = net_id.as_ref()[0];
+    pub fn set_net_id<T: Into<parser::NwkAddr>>(&mut self, net_id: T) {
+        let converted = net_id.into();
+        self.data[4] = converted.as_ref()[2];
+        self.data[5] = converted.as_ref()[1];
+        self.data[6] = converted.as_ref()[0];
     }
 
-    pub fn set_dev_addr(&mut self, dev_addr: &parser::DevAddr) {
-        self.data[7] = dev_addr.as_ref()[3];
-        self.data[8] = dev_addr.as_ref()[2];
-        self.data[9] = dev_addr.as_ref()[1];
-        self.data[10] = dev_addr.as_ref()[0];
+    pub fn set_dev_addr<T: Into<parser::DevAddr>>(&mut self, dev_addr: T) {
+        let converted = dev_addr.into();
+        self.data[7] = converted.as_ref()[3];
+        self.data[8] = converted.as_ref()[2];
+        self.data[9] = converted.as_ref()[1];
+        self.data[10] = converted.as_ref()[0];
     }
 
-    pub fn set_dl_settings(&mut self, dl_settings: parser::DLSettings) {
-        self.data[11] = dl_settings.raw_value();
+    pub fn set_dl_settings<T: Into<parser::DLSettings>>(&mut self, dl_settings: T) {
+        let converted = dl_settings.into();
+        self.data[11] = converted.raw_value();
     }
 
     pub fn set_rx_delay(&mut self, rx_delay: u8) {

@@ -460,11 +460,11 @@ fn test_validate_join_request_mic_when_ok() {
 fn test_join_accept_creator() {
     let mut phy = JoinAcceptCreator::new();
     let key = AES128(app_key());
-    let app_nonce_bytes = [0xc7, 0x0b, 0x57];
-    phy.set_app_nonce(&AppNonce::new_from_raw(&app_nonce_bytes[..]));
-    let nwk_addr_bytes = [0x22, 0x11, 0x01];
-    phy.set_net_id(&NwkAddr(nwk_addr_bytes));
-    phy.set_dev_addr(&DevAddr::new(&[0x02, 0x03, 0x19, 0x80]));
+    let app_nonce_bytes = [0xc7u8, 0x0b, 0x57];
+    phy.set_app_nonce(&app_nonce_bytes);
+    let nwk_addr_bytes = [0x22u8, 0x11, 0x01];
+    phy.set_net_id(nwk_addr_bytes);
+    phy.set_dev_addr([0x02u8, 0x03, 0x19, 0x80]);
     phy.set_dl_settings(DLSettings::new(0));
     phy.set_rx_delay(0);
 
