@@ -324,9 +324,13 @@ fn compute_fcnt(old_fcnt: u32, fcnt: u16) -> u32 {
 
 /// MHDR represents LoRaWAN MHDR.
 #[derive(Debug, PartialEq)]
-pub struct MHDR(pub u8);
+pub struct MHDR(u8);
 
 impl MHDR {
+    pub fn new(byte: u8) -> MHDR {
+        MHDR(byte)
+    }
+
     /// Gives the type of message that PhyPayload is carrying.
     pub fn mtype(&self) -> MType {
         match self.0 >> 5 {
@@ -575,7 +579,7 @@ impl<'a> JoinAcceptPayload<'a> {
     }
 
     pub fn rx_delay(&self) -> u8 {
-        self.0[11]
+        self.0[11] & 0x0f
     }
 
     pub fn c_f_list(&self) -> Vec<Frequency> {
@@ -589,17 +593,25 @@ impl<'a> JoinAcceptPayload<'a> {
     }
 }
 
-/// DLSettings represents LoRaWAN MHDR.
+/// DLSettings represents LoRaWAN DLSettings.
 #[derive(Debug, PartialEq)]
-pub struct DLSettings(pub u8);
+pub struct DLSettings(u8);
 
 impl DLSettings {
+    pub fn new(byte: u8) -> DLSettings {
+        DLSettings(byte)
+    }
+
     pub fn rx1_dr_offset(&self) -> u8 {
         self.0 >> 4 & 0x07
     }
 
     pub fn rx2_data_rate(&self) -> u8 {
         self.0 & 0x0f
+    }
+
+    pub fn raw_value(&self) -> u8 {
+        self.0
     }
 }
 

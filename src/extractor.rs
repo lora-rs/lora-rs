@@ -47,7 +47,7 @@ impl JoinAcceptCreator {
     }
 
     pub fn set_dl_settings(&mut self, dl_settings: parser::DLSettings) {
-        self.data[11] = dl_settings.0;
+        self.data[11] = dl_settings.raw_value();
     }
 
     pub fn set_rx_delay(&mut self, rx_delay: u8) {

@@ -145,7 +145,7 @@ fn test_mhdr_mtype() {
         (0xe0, MType::Proprietary),
     ];
     for &(ref v, ref expected) in &examples {
-        let mhdr = MHDR(*v);
+        let mhdr = MHDR::new(*v);
         assert_eq!(mhdr.mtype(), *expected);
     }
 }
@@ -154,7 +154,7 @@ fn test_mhdr_mtype() {
 fn test_mhdr_major() {
     let examples = [(0, Major::LoRaWANR1), (1, Major::RFU)];
     for &(ref v, ref expected) in &examples {
-        let mhdr = MHDR(*v);
+        let mhdr = MHDR::new(*v);
         assert_eq!(mhdr.major(), *expected);
     }
 }
@@ -227,6 +227,43 @@ fn test_new_join_accept_payload() {
     let ja = JoinAcceptPayload::new(bytes).unwrap();
 
     assert_eq!(ja.c_f_list(), Vec::new());
+}
+
+#[test]
+fn test_join_accept_app_nonce_extraction() {
+    let bytes = &phy_join_accept_payload();
+    let join_accept = JoinAcceptPayload::new(&bytes[1..13]);
+    assert!(join_accept.is_some());
+
+    assert_eq!(
+        join_accept.unwrap().app_nonce(),
+        AppNonce::new(&bytes[1..4]).unwrap()
+    );
+}
+
+#[test]
+fn test_join_accept_rx_delay_extraction() {
+    let bytes = &phy_join_accept_payload();
+    let join_accept = JoinAcceptPayload::new(&bytes[1..13]);
+    assert!(join_accept.is_some());
+
+    assert_eq!(join_accept.unwrap().rx_delay(), 7);
+}
+
+#[test]
+fn test_join_accept_dl_settings_extraction() {
+    let bytes = &phy_join_accept_payload();
+    let join_accept = JoinAcceptPayload::new(&bytes[1..13]);
+    assert!(join_accept.is_some());
+
+    assert_eq!(join_accept.unwrap().dl_settings(), DLSettings::new(219));
+}
+
+#[test]
+fn test_dl_settings() {
+    let dl_settings = DLSettings::new(0xcb);
+    assert_eq!(dl_settings.rx1_dr_offset(), 4);
+    assert_eq!(dl_settings.rx2_data_rate(), 11);
 }
 
 #[test]
@@ -420,7 +457,7 @@ fn test_join_accept_creator() {
     let nwk_addr_bytes = [0x22, 0x11, 0x01];
     phy.set_net_id(&NwkAddr(nwk_addr_bytes));
     phy.set_dev_addr(&DevAddr::new(&[0x02, 0x03, 0x19, 0x80]));
-    phy.set_dl_settings(DLSettings(0));
+    phy.set_dl_settings(DLSettings::new(0));
     phy.set_rx_delay(0);
 
     assert_eq!(phy.build(key).unwrap(), &phy_join_accept_payload()[..]);
