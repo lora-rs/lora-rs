@@ -355,6 +355,12 @@ impl MHDR {
     }
 }
 
+impl From<u8> for MHDR {
+    fn from(v: u8) -> Self {
+        MHDR(v)
+    }
+}
+
 /// MType gives the possible message types of the PhyPayload.
 #[derive(Debug, PartialEq)]
 pub enum MType {
@@ -467,6 +473,13 @@ impl<'a> EUI64<'a> {
     }
 }
 
+impl<'a> From<&'a [u8; 8]> for EUI64<'a> {
+    fn from(v: &'a [u8; 8]) -> Self {
+        EUI64(&v)
+    }
+}
+
+
 /// DevNonce represents a 16 bit device nonce.
 #[derive(Debug, PartialEq)]
 pub struct DevNonce<'a>(&'a [u8; 2]);
@@ -485,6 +498,12 @@ impl<'a> DevNonce<'a> {
     }
 }
 
+impl<'a> From<&'a [u8; 2]> for DevNonce<'a> {
+    fn from(v: &'a [u8; 2]) -> Self {
+        DevNonce(v)
+    }
+}
+
 /// AppNonce represents a 24 bit network server nonce.
 #[derive(Debug, PartialEq)]
 pub struct AppNonce<'a>(&'a [u8; 3]);
@@ -500,6 +519,12 @@ impl<'a> AppNonce<'a> {
         } else {
             Some(AppNonce(array_ref![bytes, 0, 3]))
         }
+    }
+}
+
+impl<'a> From<&'a [u8; 3]> for AppNonce<'a> {
+    fn from(v: &'a [u8; 3]) -> Self {
+        AppNonce(v)
     }
 }
 
@@ -615,6 +640,13 @@ impl DLSettings {
     }
 }
 
+impl From<u8> for DLSettings {
+    fn from(v: u8) -> Self {
+        DLSettings(v)
+    }
+}
+
+
 #[derive(Debug, PartialEq)]
 pub struct Frequency<'a>(&'a [u8]);
 
@@ -650,6 +682,12 @@ impl DevAddr {
     }
 }
 
+impl From<[u8; 4]> for DevAddr {
+    fn from(v: [u8; 4]) -> Self {
+        DevAddr(v)
+    }
+}
+
 impl AsRef<[u8]> for DevAddr {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]
@@ -663,6 +701,12 @@ pub struct NwkAddr(pub [u8; 3]);
 impl AsRef<[u8]> for NwkAddr {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]
+    }
+}
+
+impl From<[u8; 3]> for NwkAddr {
+    fn from(v: [u8; 3]) -> Self {
+        NwkAddr(v)
     }
 }
 
@@ -784,3 +828,9 @@ pub enum MacCommand<'a> {
 /// LinkCheckReqPayload represents the LinkCheckReq LoRaWAN MACCommand.
 #[derive(Debug, PartialEq)]
 pub struct LinkCheckReqPayload<'a>(&'a [u8; 2]);
+
+impl<'a> From<&'a [u8; 2]> for LinkCheckReqPayload<'a> {
+    fn from(v: &'a [u8; 2]) -> Self {
+        LinkCheckReqPayload(v)
+    }
+}

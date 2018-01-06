@@ -8,6 +8,19 @@
 #[derive(Debug, PartialEq)]
 pub struct AES128(pub [u8; 16]);
 
+impl From<[u8; 16]> for AES128 {
+    fn from(v: [u8; 16]) -> Self {
+        AES128(v)
+    }
+}
+
+
 /// MIC represents LoRaWAN MIC.
 #[derive(Debug, PartialEq)]
 pub struct MIC(pub [u8; 4]);
+
+impl From<[u8; 4]> for MIC {
+    fn from(v: [u8; 4]) -> Self {
+        MIC(v)
+    }
+}
