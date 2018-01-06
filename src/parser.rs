@@ -475,6 +475,12 @@ impl<'a> EUI64<'a> {
     }
 }
 
+impl<'a> AsRef<[u8]> for EUI64<'a> {
+    fn as_ref(&self) -> &[u8] {
+        &self.0[..]
+    }
+}
+
 impl<'a> From<&'a [u8; 8]> for EUI64<'a> {
     fn from(v: &'a [u8; 8]) -> Self {
         EUI64(&v)
@@ -497,6 +503,12 @@ impl<'a> DevNonce<'a> {
         } else {
             Some(DevNonce(array_ref![bytes, 0, 2]))
         }
+    }
+}
+
+impl<'a> AsRef<[u8]> for DevNonce<'a> {
+    fn as_ref(&self) -> &[u8] {
+        &self.0[..]
     }
 }
 
@@ -535,7 +547,6 @@ impl<'a> AsRef<[u8]> for AppNonce<'a> {
         &self.0[..]
     }
 }
-
 
 /// JoinRequestPayload represents a join request MacPayload.
 #[derive(Debug, PartialEq)]

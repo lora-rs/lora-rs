@@ -13,6 +13,6 @@ extern crate arrayref;
 extern crate crypto;
 
 pub mod cmac;
-pub mod extractor;
+pub mod creator;
 pub mod keys;
 pub mod parser;
