@@ -35,6 +35,8 @@ impl JoinAcceptCreator {
     /// phy.set_dev_addr([1; 4]);
     /// phy.set_dl_settings(2);
     /// phy.set_rx_delay(1);
+    /// phy.set_c_f_list(vec![lorawan::parser::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap(),
+    ///      lorawan::parser::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()]);
     /// let payload = phy.build(&key).unwrap();
     /// ```
     pub fn new() -> JoinAcceptCreator {
@@ -112,6 +114,9 @@ impl JoinAcceptCreator {
     pub fn set_c_f_list(&mut self, ch_list: Vec<parser::Frequency>) -> Result<bool, &str> {
         if ch_list.len() > 5 {
             return Err("too many frequences");
+        }
+        if self.data.len() < 33 {
+            self.data.resize(33, 0);
         }
         ch_list.iter().enumerate().for_each(|(i, fr)| {
             let v = fr.value() / 100;
