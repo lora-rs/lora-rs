@@ -9,11 +9,10 @@
 use std::convert::AsRef;
 
 use crypto::aessafe;
-use crypto::mac::Mac;
 use crypto::symmetriccipher::BlockEncryptor;
 
-use super::cmac;
 use super::keys;
+use super::securityhelpers;
 
 /// Represents the complete structure for handling lorawan mac layer payload.
 #[derive(Debug, PartialEq)]
@@ -143,73 +142,29 @@ impl<'a> PhyPayload<'a> {
     ///
     /// The PhyPayload needs to contain DataPayload.
     pub fn validate_data_mic(&self, key: &keys::AES128, fcnt: u32) -> Result<bool, &str> {
-        let expected_mic: keys::MIC;
-
-        match self.calculate_data_mic(key, fcnt) {
-            Ok(mic) => {
-                expected_mic = mic;
-            }
-            Err(e) => return Err(e),
-        };
+        let expected_mic = self.calculate_data_mic(key, fcnt)?;
         let actual_mic = self.mic();
 
         Ok(actual_mic == expected_mic)
     }
 
     fn calculate_data_mic(&self, key: &keys::AES128, fcnt: u32) -> Result<keys::MIC, &str> {
-        let payload_bytes = &self.0[..(self.0.len() - 4)];
-        let mut b0 = [0u8; 16];
-        b0[0] = 0x49;
-        // b0[1..5] are 0
-        let mhdr = self.mhdr();
-        if mhdr.mtype() == MType::UnconfirmedDataDown || mhdr.mtype() == MType::ConfirmedDataDown {
-            b0[5] = 1;
-        }
-
-        if let MacPayload::Data(mac_payload) = self.mac_payload() {
-            let dev_addr = mac_payload.fhdr().dev_addr();
-            b0[6] = dev_addr.0[3];
-            b0[7] = dev_addr.0[2];
-            b0[8] = dev_addr.0[1];
-            b0[9] = dev_addr.0[0];
+        if let MacPayload::Data(_) = self.mac_payload() {
+            Ok(securityhelpers::calculate_data_mic(
+                &self.0[..self.0.len() - 4],
+                key,
+                fcnt,
+            ))
         } else {
-            return Err("Could not read mac payload, maybe of incorrect type");
+            Err("Could not read mac payload, maybe of incorrect type")
         }
-        // fcnt
-        b0[10] = (fcnt & 0xff) as u8;
-        b0[11] = ((fcnt >> 8) & 0xff) as u8;
-        b0[12] = ((fcnt >> 16) & 0xff) as u8;
-        b0[13] = ((fcnt >> 24) & 0xff) as u8;
-        // b0[14] is 0
-        b0[15] = payload_bytes.len() as u8;
-
-        let mut mic_bytes = Vec::new();
-        mic_bytes.extend_from_slice(&b0[..]);
-        mic_bytes.extend_from_slice(payload_bytes);
-
-        let aes_enc = aessafe::AesSafe128Encryptor::new(&key.0[..]);
-        let mut cmac1 = cmac::Cmac::new(aes_enc);
-
-        cmac1.input(&mic_bytes[..]);
-        let result = cmac1.result();
-        let mut mic = [0u8; 4];
-        mic.copy_from_slice(&result.code()[0..4]);
-
-        Ok(keys::MIC(mic))
     }
 
     /// Verifies that the PhyPayload has correct MIC.
     ///
     /// The PhyPayload needs to contain JoinRequest or JoinAccept.
     pub fn validate_join_mic(&self, key: &keys::AES128) -> Result<bool, &str> {
-        let expected_mic: keys::MIC;
-
-        match self.calculate_join_pkt_mic(key) {
-            Ok(mic) => {
-                expected_mic = mic;
-            }
-            Err(e) => return Err(e),
-        };
+        let expected_mic = self.calculate_join_pkt_mic(key)?;
         let actual_mic = self.mic();
 
         Ok(actual_mic == expected_mic)
@@ -221,17 +176,10 @@ impl<'a> PhyPayload<'a> {
             return Err("Incorrect message type is not join request/accept");
         }
 
-        let mic_bytes = &self.0[..(self.0.len() - 4)];
-
-        let aes_enc = aessafe::AesSafe128Encryptor::new(&key.0[..]);
-        let mut cmac1 = cmac::Cmac::new(aes_enc);
-
-        cmac1.input(mic_bytes);
-        let result = cmac1.result();
-        let mut mic = [0u8; 4];
-        mic.copy_from_slice(&result.code()[0..4]);
-
-        Ok(keys::MIC(mic))
+        Ok(securityhelpers::calculate_mic(
+            &self.0[..self.0.len() - 4],
+            key,
+        ))
     }
 
     /// Decrypts the DataPayload payload.
@@ -241,13 +189,12 @@ impl<'a> PhyPayload<'a> {
         if let MacPayload::Data(data_payload) = self.mac_payload() {
             let fhdr_length = data_payload.fhdr_length();
             let fhdr = data_payload.fhdr();
-            let dev_addr = fhdr.dev_addr();
             let full_fcnt = compute_fcnt(fcnt, fhdr.fcnt());
-            let clear_data = self.encrypt_frm_data_payload(
-                key,
-                &dev_addr,
-                full_fcnt,
+            let clear_data = securityhelpers::encrypt_frm_data_payload(
+                self.0,
                 &data_payload.0[(fhdr_length + 1)..],
+                full_fcnt,
+                &key,
             );
             if clear_data.is_err() {
                 return Err(clear_data.unwrap_err());
@@ -272,51 +219,6 @@ impl<'a> PhyPayload<'a> {
         let mhdr = self.mhdr();
 
         mhdr.mtype() == MType::UnconfirmedDataUp || mhdr.mtype() == MType::ConfirmedDataUp
-    }
-
-    fn encrypt_frm_data_payload(
-        &self,
-        key: &keys::AES128,
-        dev_addr: &DevAddr,
-        fcnt: u32,
-        bytes: &[u8],
-    ) -> Result<Vec<u8>, &str> {
-        // make the block size a multiple of 16
-        let block_size = ((bytes.len() + 15) / 16) * 16;
-        let mut block = Vec::new();
-        block.extend_from_slice(bytes);
-        block.extend_from_slice(&vec![0u8; block_size - bytes.len()][..]);
-
-        let mut a = [0u8; 16];
-        a[0] = 0x01;
-        a[5] = 1 - (self.is_uplink() as u8);
-        a[6] = dev_addr.0[3];
-        a[7] = dev_addr.0[2];
-        a[8] = dev_addr.0[1];
-        a[9] = dev_addr.0[0];
-        a[10] = (fcnt & 0xff) as u8;
-        a[11] = ((fcnt >> 8) & 0xff) as u8;
-        a[12] = ((fcnt >> 16) & 0xff) as u8;
-        a[13] = ((fcnt >> 24) & 0xff) as u8;
-
-        let aes_enc = aessafe::AesSafe128Encryptor::new(&key.0[..]);
-        let mut result: Vec<u8> = block
-            .chunks(16)
-            .enumerate()
-            .flat_map(|(i, c)| {
-                let mut tmp = [0u8; 16];
-                a[15] = (i + 1) as u8;
-                aes_enc.encrypt_block(&a[..], &mut tmp);
-                c.iter()
-                    .enumerate()
-                    .map(|(j, v)| v ^ tmp[j])
-                    .collect::<Vec<u8>>()
-            })
-            .collect();
-
-        result.truncate(bytes.len());
-
-        Ok(result)
     }
 }
 
@@ -444,7 +346,7 @@ impl<'a> DataPayload<'a> {
     }
 
     /// Gives the payload of the DataPayload if there is one.
-    pub fn encrypted_from_payload(&self) -> &'a [u8] {
+    pub fn encrypted_frm_payload(&self) -> &'a [u8] {
         let fhdr_length = self.fhdr_length();
         if fhdr_length + 2 >= self.0.len() {
             return &self.0[0..0];
@@ -790,6 +692,10 @@ impl FCtrl {
 
     pub fn f_opts_len(&self) -> u8 {
         self.0 & 0x0f
+    }
+
+    pub fn raw_value(&self) -> u8 {
+        self.0
     }
 }
 

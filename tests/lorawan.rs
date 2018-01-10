@@ -405,6 +405,25 @@ fn test_validate_data_mic_when_type_not_ok() {
 }
 
 #[test]
+fn test_data_payload_creator() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([2; 16]);
+    let app_skey = AES128([1; 16]);
+    let fctrl = FCtrl::new(0x80, true);
+    phy.set_confirmed(false)
+        .set_uplink(true)
+        .set_f_port(1)
+        .set_dev_addr([1, 2, 3, 4])
+        .set_fctrl(&fctrl) // ADR: true, all others: false
+        .set_fcnt(1);
+
+    assert_eq!(
+        phy.build(b"hello", &nwk_skey, &app_skey).unwrap(),
+        &data_payload()[..]
+    );
+}
+
+#[test]
 fn test_join_request_dev_eui_extraction() {
     let data = phy_join_request_payload();
     let phy = PhyPayload::new(&data[..]);
@@ -461,11 +480,11 @@ fn test_join_accept_creator() {
     let mut phy = JoinAcceptCreator::new();
     let key = AES128(app_key());
     let app_nonce_bytes = [0xc7, 0x0b, 0x57];
-    phy.set_app_nonce(&app_nonce_bytes);
-    phy.set_net_id([0x22, 0x11, 0x01]);
-    phy.set_dev_addr([0x02, 0x03, 0x19, 0x80]);
-    phy.set_dl_settings(0);
-    phy.set_rx_delay(0);
+    phy.set_app_nonce(&app_nonce_bytes)
+        .set_net_id([0x22, 0x11, 0x01])
+        .set_dev_addr([0x02, 0x03, 0x19, 0x80])
+        .set_dl_settings(0)
+        .set_rx_delay(0);
 
     assert_eq!(phy.build(&key).unwrap(), &phy_join_accept_payload()[..]);
 }
@@ -474,9 +493,9 @@ fn test_join_accept_creator() {
 fn test_join_request_creator() {
     let mut phy = JoinRequestCreator::new();
     let key = AES128([1; 16]);
-    phy.set_app_eui(&[0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01]);
-    phy.set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02]);
-    phy.set_dev_nonce(&[0x2du8, 0x10]);
+    phy.set_app_eui(&[0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01])
+        .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
+        .set_dev_nonce(&[0x2du8, 0x10]);
 
     assert_eq!(phy.build(&key).unwrap(), &phy_join_request_payload()[..]);
 }
