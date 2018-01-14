@@ -32,25 +32,30 @@ The following structures are implemented (+ fields):
 * FRMMacCommands
 * MacCommand
 * LinkCkeckReq
+* JoinRequestCreator
+* JoinAcceptCreator
+* DataPayloadCreator
 
 MIC can be checked and FRMPayload and JoinAccept can be decrypted.
+
+JoinRequest, JoinAccept and DataPayload packets can be constructed (without MAC
+commands).
 
 ## Next steps
 
 I plan to implement soon:
 
-* [ ] Add packet creation functions.
+* [x] Finish with JoinAcceptPayload.
+* [x] Add packet creation functions.
 * [ ] Finish with the mac commands.
 * [ ] Add more tests.
-* [x] Finish with JoinAcceptPayload.
 
 ## Used code and inspiration
 
 I would like to thank the projects [lorawan][1] by [brocaar][2] for the
 inspiration and useful examples, [rust-crypto][3] by [DaGenix][4] for the AES
 implentation and the form of rust-crypto by [a-dma][5] that helped me with the
-implementation of cmac
-:)
+implementation of cmac :)
 
 [1]: https://github.com/brocaar/lorawan
 [2]: https://github.com/brocaar
@@ -60,4 +65,4 @@ implementation of cmac
 [Latest Version]: https://img.shields.io/crates/v/lorawan.svg
 [crates.io]: https://crates.io/crates/lorawan
 [Docs]: https://docs.rs/lorawan/badge.svg
-[doc.rs]: https://docs.rs/lorawan/badge.svg
+[doc.rs]: https://docs.rs/lorawan
