@@ -10,6 +10,7 @@ use crypto::aessafe;
 use crypto::symmetriccipher::BlockDecryptor;
 
 use super::keys;
+use super::maccommands;
 use super::parser;
 use super::securityhelpers;
 
@@ -34,8 +35,8 @@ impl JoinAcceptCreator {
     /// phy.set_dev_addr([1; 4]);
     /// phy.set_dl_settings(2);
     /// phy.set_rx_delay(1);
-    /// phy.set_c_f_list(vec![lorawan::parser::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap(),
-    ///      lorawan::parser::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()]);
+    /// phy.set_c_f_list(vec![lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap(),
+    ///      lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()]);
     /// let payload = phy.build(&key).unwrap();
     /// ```
     pub fn new() -> JoinAcceptCreator {
@@ -101,9 +102,9 @@ impl JoinAcceptCreator {
     ///
     /// # Argument
     ///
-    /// * dl_settings - instance of lorawan::parser::DLSettings or anything
+    /// * dl_settings - instance of lorawan::maccommands::DLSettings or anything
     ///   that can be converted into it.
-    pub fn set_dl_settings<T: Into<parser::DLSettings>>(
+    pub fn set_dl_settings<T: Into<maccommands::DLSettings>>(
         &mut self,
         dl_settings: T,
     ) -> &mut JoinAcceptCreator {
@@ -131,7 +132,7 @@ impl JoinAcceptCreator {
     /// * ch_list - list of Frequences to be sent to the device.
     pub fn set_c_f_list(
         &mut self,
-        ch_list: Vec<parser::Frequency>,
+        ch_list: Vec<maccommands::Frequency>,
     ) -> Result<&mut JoinAcceptCreator, &str> {
         if ch_list.len() > 5 {
             return Err("too many frequences");
@@ -405,7 +406,7 @@ impl DataPayloadCreator {
     /// Not implemented yet!
     pub fn set_mac_commands<'a, 'b>(
         &'a mut self,
-        _: Vec<parser::MacCommand<'b>>,
+        _: Vec<maccommands::MacCommand<'b>>,
     ) -> &mut DataPayloadCreator {
         // TODO(ivajloip): Finish
         self
@@ -419,7 +420,7 @@ impl DataPayloadCreator {
     }
 
     /// Not implemented yet!
-    pub fn can_piggyback<'a>(_: Vec<parser::MacCommand<'a>>) -> bool {
+    pub fn can_piggyback<'a>(_: Vec<maccommands::MacCommand<'a>>) -> bool {
         // TODO(ivajloip): Finish
         true
     }

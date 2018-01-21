@@ -10,6 +10,7 @@ extern crate lorawan;
 
 use lorawan::keys::*;
 use lorawan::parser::*;
+use lorawan::maccommands::*;
 use lorawan::creator::*;
 
 fn phy_join_request_payload() -> Vec<u8> {

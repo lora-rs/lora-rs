@@ -14,6 +14,7 @@ extern crate crypto;
 
 pub mod cmac;
 pub mod creator;
+pub mod maccommands;
 pub mod keys;
 pub mod parser;
 
