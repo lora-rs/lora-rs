@@ -16,7 +16,6 @@ impl From<[u8; 16]> for AES128 {
     }
 }
 
-
 /// MIC represents LoRaWAN MIC.
 #[derive(Debug, PartialEq)]
 pub struct MIC(pub [u8; 4]);

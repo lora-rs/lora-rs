@@ -28,7 +28,6 @@ pub struct Cmac<C: BlockEncryptor> {
 }
 
 fn do_shift_one_bit_left(a: &[u8], block_size: usize) -> (Vec<u8>, u8) {
-
     let mut carry = 0;
 
     let mut b: Vec<u8> = repeat(0).take(block_size).collect();
@@ -47,7 +46,6 @@ fn do_shift_one_bit_left(a: &[u8], block_size: usize) -> (Vec<u8>, u8) {
 }
 
 fn generate_subkey(key: &[u8], block_size: usize) -> Vec<u8> {
-
     let (mut subkey, carry) = do_shift_one_bit_left(key, block_size);
 
     // Only two block sizes are defined, 64 and 128
@@ -62,7 +60,6 @@ fn generate_subkey(key: &[u8], block_size: usize) -> Vec<u8> {
 
 // Cmac uses two keys derived from the provided key
 fn create_keys<C: BlockEncryptor>(cipher: &C) -> (Vec<u8>, Vec<u8>) {
-
     let zeroes: Vec<u8> = repeat(0).take(cipher.block_size()).collect();
     let mut l: Vec<u8> = repeat(0).take(cipher.block_size()).collect();
 
@@ -75,14 +72,12 @@ fn create_keys<C: BlockEncryptor>(cipher: &C) -> (Vec<u8>, Vec<u8>) {
 }
 
 fn do_inplace_xor(a: &[u8], b: &mut [u8]) {
-
     for (x, y) in a.iter().zip(b) {
         *y ^= *x;
     }
 }
 
 fn do_pad(data: &mut [u8], len: usize, block_size: usize) {
-
     data[len] = 0x80;
 
     for i in (len + 1)..block_size {
@@ -97,7 +92,6 @@ fn cmac_encrypt<C: BlockEncryptor>(
     key_two: &[u8],
     data: &[u8],
 ) -> Vec<u8> {
-
     let block_size = cipher.block_size();
 
     let n_blocks = if data.len() == 0 {

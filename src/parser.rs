@@ -54,8 +54,7 @@ impl<'a> PhyPayload<'a> {
             MType::UnconfirmedDataUp | MType::ConfirmedDataUp => {
                 can_build = DataPayload::can_build_from(payload, true);
             }
-            MType::UnconfirmedDataDown |
-            MType::ConfirmedDataDown => {
+            MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
                 can_build = DataPayload::can_build_from(payload, true);
             }
             _ => return Err("unsupported message type"),
@@ -113,14 +112,12 @@ impl<'a> PhyPayload<'a> {
     /// Gives the MIC of the PhyPayload.
     pub fn mic(&self) -> keys::MIC {
         let len = self.0.len();
-        keys::MIC(
-            [
-                self.0[len - 4],
-                self.0[len - 3],
-                self.0[len - 2],
-                self.0[len - 1],
-            ],
-        )
+        keys::MIC([
+            self.0[len - 4],
+            self.0[len - 3],
+            self.0[len - 2],
+            self.0[len - 1],
+        ])
     }
 
     /// Gives the MacPayload of the PhyPayload.
@@ -133,8 +130,9 @@ impl<'a> PhyPayload<'a> {
             MType::UnconfirmedDataUp | MType::ConfirmedDataUp => {
                 MacPayload::Data(DataPayload::new(bytes, true).unwrap())
             }
-            MType::UnconfirmedDataDown |
-            MType::ConfirmedDataDown => MacPayload::Data(DataPayload::new(bytes, true).unwrap()),
+            MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
+                MacPayload::Data(DataPayload::new(bytes, true).unwrap())
+            }
             _ => panic!("unexpected message type passed through the new method"),
         }
     }
@@ -207,9 +205,10 @@ impl<'a> PhyPayload<'a> {
                 // the size guarantees the existance of f_port
                 Ok(FRMPayload::Data(clear_data.unwrap()))
             } else {
-                Ok(FRMPayload::MACCommands(
-                    FRMMacCommands::new(clear_data.unwrap(), self.is_uplink()),
-                ))
+                Ok(FRMPayload::MACCommands(FRMMacCommands::new(
+                    clear_data.unwrap(),
+                    self.is_uplink(),
+                )))
             }
         } else {
             Err("bad mac payload")
@@ -389,7 +388,6 @@ impl<'a> From<&'a [u8; 8]> for EUI64<'a> {
         EUI64(&v)
     }
 }
-
 
 /// DevNonce represents a 16 bit device nonce.
 #[derive(Debug, PartialEq)]

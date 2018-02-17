@@ -45,7 +45,10 @@ macro_rules! mac_cmds_map  {
 }
 
 fn format_error(expected: usize, actual: usize) -> String {
-    format!("not enough bytes to read: needs {}, given {}", expected, actual)
+    format!(
+        "not enough bytes to read: needs {}, given {}",
+        expected, actual
+    )
 }
 
 macro_rules! new_mac_cmd_helper  {
@@ -70,23 +73,22 @@ macro_rules! new_mac_cmd_helper  {
 }
 
 pub fn parse_mac_commands<'a>(data: &'a [u8], uplink: bool) -> Result<Vec<MacCommand<'a>>, String> {
-    let cid_to_parser =
-        mac_cmds_map![
-            LinkCheckReqPayload,
-            LinkADRAnsPayload,
-            LinkADRReqPayload,
-            LinkADRAnsPayload,
-            DutyCycleReqPayload,
-            DutyCycleAnsPayload,
-            RXParamSetupReqPayload,
-            RXParamSetupAnsPayload,
-            DevStatusReqPayload,
-            DevStatusAnsPayload,
-            NewChannelReqPayload,
-            NewChannelAnsPayload,
-            RXTimingSetupReqPayload,
-            RXTimingSetupAnsPayload,
-        ];
+    let cid_to_parser = mac_cmds_map![
+        LinkCheckReqPayload,
+        LinkADRAnsPayload,
+        LinkADRReqPayload,
+        LinkADRAnsPayload,
+        DutyCycleReqPayload,
+        DutyCycleAnsPayload,
+        RXParamSetupReqPayload,
+        RXParamSetupAnsPayload,
+        DevStatusReqPayload,
+        DevStatusAnsPayload,
+        NewChannelReqPayload,
+        NewChannelAnsPayload,
+        RXTimingSetupReqPayload,
+        RXTimingSetupAnsPayload,
+    ];
     println!("{:?}", cid_to_parser.keys());
     let mut i = 0;
     let mut res = Vec::new();
@@ -194,12 +196,11 @@ pub struct ChannelMask<'a>(&'a [u8; 2]);
 impl<'a> ChannelMask<'a> {
     pub fn new<'b>(data: &'b [u8]) -> Result<ChannelMask<'b>, String> {
         if data.len() < 2 {
-            let msg =
-                format!(
+            let msg = format!(
                 "not enough bytes to read: needs {}, given {}",
                 2,
                 data.len(),
-                );
+            );
             return Err(msg);
         }
         Ok(Self::new_from_raw(data))
