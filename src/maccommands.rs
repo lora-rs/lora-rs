@@ -52,7 +52,7 @@ fn format_error(expected: usize, actual: usize) -> String {
 }
 
 macro_rules! new_mac_cmd_helper  {
-    ( $name:ident, $type:ident, $data:ident, 0 ) => {{
+    ( $name:ident, $type:ident, 0 ) => {{
         Ok((MacCommand::$name($type()), 0))
     }};
     ( $name:ident, $type:ident, $data:ident, 1 ) => {{
@@ -89,7 +89,6 @@ pub fn parse_mac_commands<'a>(data: &'a [u8], uplink: bool) -> Result<Vec<MacCom
         RXTimingSetupReqPayload,
         RXTimingSetupAnsPayload,
     ];
-    println!("{:?}", cid_to_parser.keys());
     let mut i = 0;
     let mut res = Vec::new();
     while i < data.len() {
@@ -115,7 +114,7 @@ impl LinkCheckReqPayload {
     }
 
     pub fn new<'a>(_: &'a [u8]) -> Result<(MacCommand<'a>, usize), String> {
-        new_mac_cmd_helper!(LinkCheckReq, LinkCheckReqPayload, data, 0)
+        new_mac_cmd_helper!(LinkCheckReq, LinkCheckReqPayload, 0)
     }
 
     pub fn uplink() -> bool {
@@ -210,6 +209,21 @@ impl<'a> ChannelMask<'a> {
         let payload = array_ref![&data[..2], 0, 2];
         ChannelMask(payload)
     }
+
+    fn channel_enabled(&self, index: usize) -> bool {
+        self.0[index >> 3] & (1 << (index & 0x07)) != 0
+    }
+
+    pub fn is_enabled(&self, index: usize) -> Result<bool, String> {
+        if index > 15 {
+            return Err(String::from("index should be between 0 and 15"));
+        }
+        Ok(self.channel_enabled(index))
+    }
+
+    pub fn statuses(&self) -> Vec<bool> {
+        (0..16).map(|v| self.channel_enabled(v)).collect()
+    }
 }
 
 /// Redundancy represents the ChannelMask from LoRaWAN.
@@ -222,11 +236,11 @@ impl Redundancy {
     }
 
     pub fn channel_mask_control(&self) -> u8 {
-        0
+        (self.0 >> 4) & 0x07
     }
 
     pub fn number_of_transmissions(&self) -> u8 {
-        0
+        self.0 & 0x0f
     }
 }
 
@@ -305,7 +319,7 @@ impl DutyCycleAnsPayload {
     }
 
     pub fn new<'b>(_: &'b [u8]) -> Result<(MacCommand<'b>, usize), String> {
-        new_mac_cmd_helper!(DutyCycleAns, DutyCycleAnsPayload, data, 0)
+        new_mac_cmd_helper!(DutyCycleAns, DutyCycleAnsPayload, 0)
     }
 }
 
@@ -429,7 +443,7 @@ impl DevStatusReqPayload {
     }
 
     pub fn new<'b>(_: &'b [u8]) -> Result<(MacCommand<'b>, usize), String> {
-        new_mac_cmd_helper!(DevStatusReq, DevStatusReqPayload, data, 0)
+        new_mac_cmd_helper!(DevStatusReq, DevStatusReqPayload, 0)
     }
 }
 
@@ -579,6 +593,6 @@ impl RXTimingSetupAnsPayload {
     }
 
     pub fn new<'a>(_data: &'a [u8]) -> Result<(MacCommand<'a>, usize), String> {
-        new_mac_cmd_helper!(RXTimingSetupAns, RXTimingSetupAnsPayload, data, 0)
+        new_mac_cmd_helper!(RXTimingSetupAns, RXTimingSetupAnsPayload, 0)
     }
 }
