@@ -78,13 +78,14 @@ fn test_link_adr_req_new() {
 #[test]
 fn test_link_adr_ans_new() {
     let examples = [
-        ([0x00], false, false, false),
-        ([0x01], true, false, false),
-        ([0x02], false, true, false),
-        ([0x04], false, false, true),
+        ([0x00], false, false, false, false),
+        ([0x01], true, false, false, false),
+        ([0x02], false, true, false, false),
+        ([0x04], false, false, true, false),
+        ([0x07], true, true, true, true),
     ];
     assert!(LinkADRReqPayload::new(&examples[0].0[0..0]).is_err());
-    for &(ref v, ref e_power, ref e_dr, ref e_cm) in &examples {
+    for &(ref v, ref e_power, ref e_dr, ref e_cm, ref e_ack) in &examples {
         let mc = LinkADRAnsPayload::new(&v[..]);
         assert!(mc.is_ok());
         if let (MacCommand::LinkADRAns(laa), size) = mc.unwrap() {
@@ -92,6 +93,7 @@ fn test_link_adr_ans_new() {
             assert_eq!(laa.channel_mask_ack(), *e_power);
             assert_eq!(laa.data_rate_ack(), *e_dr);
             assert_eq!(laa.powert_ack(), *e_cm);
+            assert_eq!(laa.ack(), *e_ack);
         } else {
             panic!("failed to parse LinkADRAnsPayload");
         }
@@ -132,13 +134,14 @@ fn test_rx_param_setup_req_new() {
 #[test]
 fn test_rx_param_setup_ans_new() {
     let examples = [
-        ([0x00], false, false, false),
-        ([0x01], true, false, false),
-        ([0x02], false, true, false),
-        ([0x04], false, false, true),
+        ([0x00], false, false, false, false),
+        ([0x01], true, false, false, false),
+        ([0x02], false, true, false, false),
+        ([0x04], false, false, true, false),
+        ([0x07], true, true, true, true),
     ];
     assert!(RXParamSetupAnsPayload::new(&examples[0].0[0..0]).is_err());
-    for &(ref v, ref e_ch, ref e_rx2_dr, ref e_rx1_dr_offset) in &examples {
+    for &(ref v, ref e_ch, ref e_rx2_dr, ref e_rx1_dr_offset, ref e_ack) in &examples {
         let mc = RXParamSetupAnsPayload::new(&v[..]);
         assert!(mc.is_ok());
         if let (MacCommand::RXParamSetupAns(psa), size) = mc.unwrap() {
@@ -146,6 +149,7 @@ fn test_rx_param_setup_ans_new() {
             assert_eq!(psa.channel_ack(), *e_ch);
             assert_eq!(psa.rx2_data_rate_ack(), *e_rx2_dr);
             assert_eq!(psa.rx1_dr_offset_ack(), *e_rx1_dr_offset);
+            assert_eq!(psa.ack(), *e_ack);
         } else {
             panic!("failed to parse RXParamSetupAnsPayload");
         }
@@ -187,18 +191,20 @@ fn test_new_channel_req() {
 #[test]
 fn test_new_channel_ans() {
     let examples = [
-        ([0x00], false, false),
-        ([0x01], true, false),
-        ([0x02], false, true),
+        ([0x00], false, false, false),
+        ([0x01], true, false, false),
+        ([0x02], false, true, false),
+        ([0x03], true, true, true),
     ];
     assert!(NewChannelAnsPayload::new(&examples[0].0[0..0]).is_err());
-    for &(ref v, ref ch_freq, ref drr) in &examples {
+    for &(ref v, ref e_ch_freq, ref e_drr, ref e_ack) in &examples {
         let mc = NewChannelAnsPayload::new(&v[..]);
         assert!(mc.is_ok());
         if let (MacCommand::NewChannelAns(nca), size) = mc.unwrap() {
             assert_eq!(size, 1);
-            assert_eq!(nca.data_rate_range_ack(), *drr);
-            assert_eq!(nca.channel_freq_ack(), *ch_freq);
+            assert_eq!(nca.data_rate_range_ack(), *e_drr);
+            assert_eq!(nca.channel_freq_ack(), *e_ch_freq);
+            assert_eq!(nca.ack(), *e_ack);
         } else {
             panic!("failed to parse RXParamSetupAnsPayload");
         }
