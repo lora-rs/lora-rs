@@ -10,9 +10,12 @@ use crypto::aessafe;
 use crypto::symmetriccipher::BlockDecryptor;
 
 use super::keys;
+use super::maccommandcreator;
 use super::maccommands;
 use super::parser;
 use super::securityhelpers;
+
+const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
 /// JoinAcceptCreator serves for creating binary representation of Physical
 /// Payload of JoinAccept.
@@ -389,40 +392,60 @@ impl DataPayloadCreator {
 
     /// Sets the FPort header of the DataPayload packet to the specified value.
     ///
+    /// If f_port == 0, automatically sets `encrypt_mac_commands` to `true`.
+    ///
     /// # Argument
     ///
     /// * f_port - the FPort to be set.
     pub fn set_f_port(&mut self, f_port: u8) -> &mut DataPayloadCreator {
-        if f_port > 0 {
-            self.data_f_port = Some(f_port);
-        } else {
+        if f_port == 0 {
             self.encrypt_mac_commands = true;
-            self.data_f_port = None;
         }
+        self.data_f_port = Some(f_port);
 
         self
     }
 
-    /// Not implemented yet!
+    /// Sets the mac commands to be used.
+    ///
+    /// Based on f_port value and value of encrypt_mac_commands, the mac commands will be sent
+    /// either as payload or piggybacked.
+    ///
+    /// # Examples:
+    ///
+    /// ```
+    /// let mut phy = lorawan::creator::DataPayloadCreator::new();
+    /// let mac_cmd1 = lorawan::maccommands::MacCommand::LinkCheckReq(
+    ///     lorawan::maccommands::LinkCheckReqPayload());
+    /// let mut mac_cmd2 = lorawan::maccommandcreator::LinkADRAnsCreator::new();
+    /// mac_cmd2
+    ///     .set_channel_mask_ack(true)
+    ///     .set_data_rate_ack(false)
+    ///     .set_tx_power_ack(true);
+    /// let cmds: Vec<&lorawan::maccommands::SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
+    /// phy.set_mac_commands(cmds);
+    /// ```
     pub fn set_mac_commands<'a, 'b>(
         &'a mut self,
-        _: Vec<maccommands::MacCommand<'b>>,
+        cmds: Vec<&maccommands::SerializableMacCommand>,
     ) -> &mut DataPayloadCreator {
-        // TODO(ivajloip): Finish
+        self.mac_commands_bytes = maccommandcreator::build_mac_commands(&cmds[..]);
+
         self
     }
 
-    /// Not implemented yet!
+    /// Whether the mac commands should be encrypted.
+    ///
+    /// NOTE: Setting the f_port to 0 implicitly sets the mac commands to be encrypted.
     pub fn set_encrypt_mac_commands(&mut self, encrypt: bool) -> &mut DataPayloadCreator {
         self.encrypt_mac_commands = encrypt;
 
         self
     }
 
-    /// Not implemented yet!
-    pub fn can_piggyback<'a>(_: Vec<maccommands::MacCommand<'a>>) -> bool {
-        // TODO(ivajloip): Finish
-        true
+    /// Whether a set of mac commands can be piggybacked.
+    pub fn can_piggyback<'a>(cmds: Vec<&maccommands::SerializableMacCommand>) -> bool {
+        maccommands::mac_commands_len(&cmds[..]) <= PIGGYBACK_MAC_COMMANDS_MAX_LEN
     }
 
     /// Provides the binary representation of the DataPayload physical payload
@@ -443,20 +466,36 @@ impl DataPayloadCreator {
     ) -> Result<&[u8], &str> {
         let mut last_filled = 8; // MHDR + FHDR without the FOpts
         let has_fport = self.data_f_port.is_some();
+        let has_fport_zero = has_fport && self.data_f_port.unwrap() == 0;
 
         // Set MAC Commands
-        if self.mac_commands_bytes.len() > 15 && has_fport && self.data_f_port.unwrap() != 0 {
+        if self.mac_commands_bytes.len() > PIGGYBACK_MAC_COMMANDS_MAX_LEN && has_fport
+            && self.data_f_port.unwrap() != 0
+        {
             return Err("mac commands are too big for FOpts");
         }
-        // TODO(ivajloip): Finish
+        if self.encrypt_mac_commands && has_fport && !has_fport_zero {
+            return Err("mac commands in payload require FPort == 0");
+        }
+        if !self.encrypt_mac_commands && has_fport_zero {
+            return Err("mac commands have to be encrypted when FPort is 0");
+        }
 
         // Set FPort
-        let payload_len = payload.len();
+        let mut payload_len = payload.len();
+        if has_fport_zero && payload_len > 0 {
+            return Err("mac commands in payload can not be send together with payload");
+        }
         if !has_fport && payload_len > 0 {
             return Err("fport must be provided when there is FRMPayload");
         }
-        if has_fport && self.data_f_port.unwrap() == 0 && !self.encrypt_mac_commands {
-            return Err("mac commands have to be encrypted when FPort is 0");
+        // Set FOptsLen if present
+        if !self.encrypt_mac_commands && self.mac_commands_bytes.len() > 0 {
+            let mac_cmds_len = self.mac_commands_bytes.len();
+            self.data[5] |= mac_cmds_len as u8 & 0x0f;
+            self.data[last_filled..last_filled + mac_cmds_len]
+                .copy_from_slice(&self.mac_commands_bytes[..]);
+            last_filled += mac_cmds_len;
         }
         if has_fport {
             self.data[last_filled] = self.data_f_port.unwrap();
@@ -464,12 +503,23 @@ impl DataPayloadCreator {
         }
 
         // Encrypt FRMPayload
-        let encrypted_payload = securityhelpers::encrypt_frm_data_payload(
-            &self.data[..],
-            payload,
-            self.fcnt,
-            app_skey,
-        )?;
+        let encrypted_payload;
+        if has_fport_zero {
+            payload_len = self.mac_commands_bytes.len();
+            encrypted_payload = securityhelpers::encrypt_frm_data_payload(
+                &self.data[..],
+                &self.mac_commands_bytes[..],
+                self.fcnt,
+                nwk_skey,
+            )?;
+        } else {
+            encrypted_payload = securityhelpers::encrypt_frm_data_payload(
+                &self.data[..],
+                payload,
+                self.fcnt,
+                app_skey,
+            )?;
+        }
 
         // Set payload if possible, otherwise return error
         let additional_bytes_needed = last_filled + payload_len + 4 - self.data.len();

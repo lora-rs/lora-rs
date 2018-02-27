@@ -8,6 +8,7 @@
 
 extern crate lorawan;
 
+use lorawan::maccommandcreator::*;
 use lorawan::maccommands::*;
 
 macro_rules! test_helper {
@@ -312,4 +313,23 @@ fn test_data_rate_range() {
     let drr = DataRateRange::new(0x5a);
     assert_eq!(drr.max_data_rate(), 0x05);
     assert_eq!(drr.min_data_range(), 0x0a);
+    // TODO Check for invalid data rate range - lower and upper bounds inversed.
+}
+
+#[test]
+fn test_mac_commands_len_with_creators() {
+    let rx_timing_setup_req = RXTimingSetupReqCreator::new();
+    let dev_status_req = DevStatusReqCreator::new();
+    let cmds: Vec<&SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_req];
+
+    assert_eq!(mac_commands_len(&cmds[..]), 3);
+}
+
+#[test]
+fn test_mac_commands_len_with_mac_cmds() {
+    let rx_timing_setup_req = RXTimingSetupReqPayload::new(&[0x02]).unwrap().0;
+    let dev_status_ans = DevStatusAnsPayload::new(&[0xfe, 0x3f]).unwrap().0;
+    let cmds: Vec<&SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_ans];
+
+    assert_eq!(mac_commands_len(&cmds[..]), 5);
 }

@@ -8,10 +8,11 @@
 
 extern crate lorawan;
 
-use lorawan::keys::*;
-use lorawan::parser::*;
-use lorawan::maccommands::*;
 use lorawan::creator::*;
+use lorawan::keys::*;
+use lorawan::maccommandcreator::*;
+use lorawan::maccommands::*;
+use lorawan::parser::*;
 
 fn phy_join_request_payload() -> Vec<u8> {
     vec![
@@ -39,6 +40,19 @@ fn data_payload() -> Vec<u8> {
     vec![
         0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01, 0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6,
         0xc3, 0xb5, 0x82,
+    ]
+}
+
+fn data_payload_with_fport_zero() -> Vec<u8> {
+    vec![
+        0x40, 0x04, 0x03, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x69, 0x36, 0x9e, 0xee, 0x6a, 0xa5,
+        0x08,
+    ]
+}
+
+fn data_payload_with_f_opts() -> Vec<u8> {
+    vec![
+        0x40, 0x04, 0x03, 0x02, 0x01, 0x03, 0x00, 0x00, 0x02, 0x03, 0x05, 0xd7, 0xfa, 0x0c, 0x6c
     ]
 }
 
@@ -262,8 +276,7 @@ fn test_complete_data_payload_frm_payload() {
     assert!(phy.is_ok());
     assert_eq!(
         phy.unwrap().decrypted_payload(&key, 1),
-        Ok(FRMPayload::Data(String::from("hello").into_bytes()
-            as FRMDataPayload,))
+        Ok(FRMPayload::Data(String::from("hello").into_bytes() as FRMDataPayload,))
     );
 }
 
@@ -308,6 +321,100 @@ fn test_data_payload_creator() {
         &data_payload()[..]
     );
 }
+
+#[test]
+fn test_data_payload_creator_when_payload_and_fport_0() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([2; 16]);
+    let app_skey = AES128([1; 16]);
+    phy.set_f_port(0);
+    assert!(phy.build(b"hello", &nwk_skey, &app_skey).is_err());
+}
+
+#[test]
+fn test_data_payload_creator_when_fport_0_but_not_encrypt() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([2; 16]);
+    let app_skey = AES128([1; 16]);
+    phy.set_f_port(0).set_encrypt_mac_commands(false);
+    assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
+}
+
+#[test]
+fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([2; 16]);
+    let app_skey = AES128([1; 16]);
+    let new_channel_req = NewChannelReqPayload::new(&[0x00; 5]).unwrap().0;
+    let cmds: Vec<&SerializableMacCommand> =
+        vec![&new_channel_req, &new_channel_req, &new_channel_req];
+    phy.set_f_port(1).set_mac_commands(cmds);
+    assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
+}
+
+#[test]
+fn test_data_payload_creator_when_big_mac_commands_but_not_fport_0() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([2; 16]);
+    let app_skey = AES128([1; 16]);
+    phy.set_f_port(1).set_encrypt_mac_commands(true);
+    assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
+}
+
+#[test]
+fn test_data_payload_creator_when_payload_no_fport() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([2; 16]);
+    let app_skey = AES128([1; 16]);
+    assert!(phy.build(b"hello", &nwk_skey, &app_skey).is_err());
+}
+
+#[test]
+fn test_data_payload_creator_when_mac_commands_in_payload() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([1; 16]);
+    let mac_cmd1 = MacCommand::LinkCheckReq(LinkCheckReqPayload());
+    let mut mac_cmd2 = LinkADRAnsCreator::new();
+    mac_cmd2
+        .set_channel_mask_ack(true)
+        .set_data_rate_ack(false)
+        .set_tx_power_ack(true);
+    let cmds: Vec<&SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
+    phy.set_confirmed(false)
+        .set_uplink(true)
+        .set_f_port(0)
+        .set_dev_addr([1, 2, 3, 4])
+        .set_fcnt(0)
+        .set_mac_commands(cmds);
+    assert_eq!(
+        phy.build(b"", &nwk_skey, &nwk_skey).unwrap(),
+        &data_payload_with_fport_zero()[..]
+    );
+}
+
+#[test]
+fn test_data_payload_creator_when_mac_commands_in_f_opts() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([1; 16]);
+    let mac_cmd1 = MacCommand::LinkCheckReq(LinkCheckReqPayload());
+    let mut mac_cmd2 = LinkADRAnsCreator::new();
+    mac_cmd2
+        .set_channel_mask_ack(true)
+        .set_data_rate_ack(false)
+        .set_tx_power_ack(true);
+    let cmds: Vec<&SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
+    phy.set_confirmed(false)
+        .set_uplink(true)
+        .set_dev_addr([1, 2, 3, 4])
+        .set_fcnt(0)
+        .set_mac_commands(cmds);
+
+    assert_eq!(
+        phy.build(b"", &nwk_skey, &nwk_skey).unwrap(),
+        &data_payload_with_f_opts()[..]
+    );
+}
+// TODO: test data payload create with piggy_backed mac commands
 
 #[test]
 fn test_join_request_dev_eui_extraction() {
