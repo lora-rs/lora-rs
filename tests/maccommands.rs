@@ -177,7 +177,7 @@ fn test_dev_status_ans() {
 
 #[test]
 fn test_new_channel_req() {
-    let data = vec![0x03, 0x01, 0x02, 0x04, 0x5a];
+    let data = vec![0x03, 0x01, 0x02, 0x04, 0xa5];
     test_helper!(
         data,
         NewChannelReq,
@@ -185,7 +185,7 @@ fn test_new_channel_req() {
         5,
         (channel_index, 3),
         (frequency, Frequency::new_from_raw(&data[1..4])),
-        (data_rate_range, DataRateRange::new(data[4])),
+        (data_rate_range, DataRateRange::new_from_raw(data[4])),
     );
 }
 
@@ -310,10 +310,23 @@ fn frequency_payload() -> Vec<u8> {
 
 #[test]
 fn test_data_rate_range() {
+    let drr_raw = DataRateRange::new(0xa5);
+    assert!(drr_raw.is_ok());
+    let drr = drr_raw.unwrap();
+    assert_eq!(drr.max_data_rate(), 0x0a);
+    assert_eq!(drr.min_data_range(), 0x05);
+}
+
+#[test]
+fn test_data_rate_range_inversed_min_and_max() {
     let drr = DataRateRange::new(0x5a);
-    assert_eq!(drr.max_data_rate(), 0x05);
-    assert_eq!(drr.min_data_range(), 0x0a);
-    // TODO Check for invalid data rate range - lower and upper bounds inversed.
+    assert!(drr.is_err());
+}
+
+#[test]
+fn test_data_rate_range_max_equals_min() {
+    let drr_raw = DataRateRange::new(0x55);
+    assert!(drr_raw.is_ok());
 }
 
 #[test]

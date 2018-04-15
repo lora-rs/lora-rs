@@ -139,8 +139,8 @@ macro_rules! new_mac_cmd_helper {
     };
     ($name:ident, $type:ident, $len:expr) => {
         pub fn new<'b>(data: &'b [u8]) -> Result<(MacCommand<'b>, usize), String> {
-            if data.len() < $len {
-                return Err(format_error($len, data.len()));
+            if let Err(err) = Self::can_build_from(data) {
+                return Err(err);
             }
             let payload = array_ref![&data[..$len], 0, $len];
             Ok((MacCommand::$name($type(payload)), $len))
@@ -245,6 +245,9 @@ impl LinkCheckReqPayload {
     /// The len
     create_type_const_fn!(len, usize, 0);
 
+    /// Check if the bytes can be used to create LinkCheckReqPayload.
+    create_type_const_fn!(can_build_from);
+
     /// Constructs a new LinkCheckReqPayload.
     new_mac_cmd_helper!(LinkCheckReq, LinkCheckReqPayload, 0);
 }
@@ -262,6 +265,9 @@ impl<'a> LinkCheckAnsPayload<'a> {
 
     /// The len
     create_type_const_fn!(len, usize, 2);
+
+    /// Check if the bytes can be used to create LinkCheckAnsPayload.
+    create_type_const_fn!(can_build_from);
 
     /// Constructs a new LinkCheckAnsPayload from the provided data.
     new_mac_cmd_helper!(LinkCheckAns, LinkCheckAnsPayload, 2);
@@ -292,6 +298,9 @@ impl<'a> LinkADRReqPayload<'a> {
 
     /// The len
     create_type_const_fn!(len, usize, 4);
+
+    /// Check if the bytes can be used to create LinkADRReqPayload.
+    create_type_const_fn!(can_build_from);
 
     /// Constructs a new LinkADRReqPayload from the provided data.
     new_mac_cmd_helper!(LinkADRReq, LinkADRReqPayload, 4);
@@ -416,6 +425,9 @@ impl<'a> LinkADRAnsPayload<'a> {
     /// The len
     create_type_const_fn!(len, usize, 1);
 
+    /// Check if the bytes can be used to create LinkADRAnsPayload.
+    create_type_const_fn!(can_build_from);
+
     /// Constructs a new LinkADRAnsPayload from the provided data.
     new_mac_cmd_helper!(LinkADRAns, LinkADRAnsPayload, 1);
 
@@ -448,6 +460,9 @@ impl<'a> DutyCycleReqPayload<'a> {
     /// The len
     create_type_const_fn!(len, usize, 1);
 
+    /// Check if the bytes can be used to create DutyCycleReqPayload.
+    create_type_const_fn!(can_build_from);
+
     /// Constructs a new DutyCycleReqPayload from the provided data.
     new_mac_cmd_helper!(DutyCycleReq, DutyCycleReqPayload, 1);
 
@@ -477,6 +492,9 @@ impl DutyCycleAnsPayload {
     /// The len
     create_type_const_fn!(len, usize, 0);
 
+    /// Check if the bytes can be used to create DutyCycleAnsPayload.
+    create_type_const_fn!(can_build_from);
+
     /// Constructs a new DutyCycleAnsPayload from the provided data.
     new_mac_cmd_helper!(DutyCycleAns, DutyCycleAnsPayload, 0);
 }
@@ -494,6 +512,9 @@ impl<'a> RXParamSetupReqPayload<'a> {
 
     /// The len
     create_type_const_fn!(len, usize, 4);
+
+    /// Check if the bytes can be used to create RXParamSetupReqPayload.
+    create_type_const_fn!(can_build_from);
 
     /// Constructs a new RXParamSetupReqPayload from the provided data.
     new_mac_cmd_helper!(RXParamSetupReq, RXParamSetupReqPayload, 4);
@@ -596,6 +617,9 @@ impl<'a> RXParamSetupAnsPayload<'a> {
     /// The len
     create_type_const_fn!(len, usize, 1);
 
+    /// Check if the bytes can be used to create RXParamSetupAnsPayload.
+    create_type_const_fn!(can_build_from);
+
     /// Constructs a new RXParamSetupAnsPayload from the provided data.
     new_mac_cmd_helper!(RXParamSetupAns, RXParamSetupAnsPayload, 1);
 
@@ -628,6 +652,9 @@ impl DevStatusReqPayload {
     /// The len
     create_type_const_fn!(len, usize, 0);
 
+    /// Check if the bytes can be used to create DevStatusReqPayload.
+    create_type_const_fn!(can_build_from);
+
     /// Constructs a new DevStatusReqPayload from the provided data.
     new_mac_cmd_helper!(DevStatusReq, DevStatusReqPayload, 0);
 }
@@ -645,6 +672,9 @@ impl<'a> DevStatusAnsPayload<'a> {
 
     /// The len
     create_type_const_fn!(len, usize, 2);
+
+    /// Check if the bytes can be used to create DevStatusAnsPayload.
+    create_type_const_fn!(can_build_from);
 
     /// Constructs a new DevStatusAnsPayload from the provided data.
     new_mac_cmd_helper!(DevStatusAns, DevStatusAnsPayload, 2);
@@ -677,6 +707,15 @@ impl<'a> NewChannelReqPayload<'a> {
     /// The len
     create_type_const_fn!(len, usize, 5);
 
+    /// Check if the bytes can be used to create NewChannelReqPayload.
+    pub fn can_build_from(bytes: &[u8]) -> Result<(), String> {
+        if bytes.len() < Self::len() {
+            return Err(format_error(Self::len(), bytes.len()));
+        }
+
+        DataRateRange::can_build_from(bytes[4])
+    }
+
     /// Constructs a new NewChannelReqPayload from the provided data.
     new_mac_cmd_helper!(NewChannelReq, NewChannelReqPayload, 5);
 
@@ -690,7 +729,7 @@ impl<'a> NewChannelReqPayload<'a> {
 
     /// The data rate range specifies allowed data rates for the new or modified channel.
     pub fn data_rate_range(&self) -> DataRateRange {
-        DataRateRange::new(self.0[4])
+        DataRateRange::new_from_raw(self.0[4])
     }
 }
 
@@ -699,9 +738,28 @@ impl<'a> NewChannelReqPayload<'a> {
 pub struct DataRateRange(u8);
 
 impl DataRateRange {
-    /// Constructs a new DataRateRange from the provided byte.
-    pub fn new(byte: u8) -> DataRateRange {
+    /// Constructs a new DataRateRange from the provided byte, without checking for correctness.
+    pub fn new_from_raw(byte: u8) -> DataRateRange {
         DataRateRange(byte)
+    }
+
+    /// Constructs a new DataRateRange from the provided byte.
+    pub fn new(byte: u8) -> Result<DataRateRange, String> {
+        if let Err(err) = Self::can_build_from(byte) {
+            return Err(err);
+        }
+
+        Ok(Self::new_from_raw(byte))
+    }
+
+    /// Check if the byte can be used to create DataRateRange.
+    pub fn can_build_from(byte: u8) -> Result<(), String> {
+        if (byte >> 4) < (byte & 0x0f) {
+            return Err(String::from(
+                "data rate range can not have max data rate smaller than min data rate",
+            ));
+        }
+        Ok(())
     }
 
     /// The highest data rate allowed on this channel.
@@ -740,6 +798,9 @@ impl<'a> NewChannelAnsPayload<'a> {
     /// The len
     create_type_const_fn!(len, usize, 1);
 
+    /// Check if the bytes can be used to create NewChannelAnsPayload.
+    create_type_const_fn!(can_build_from);
+
     /// Constructs a new NewChannelAnsPayload from the provided data.
     new_mac_cmd_helper!(NewChannelAns, NewChannelAnsPayload, 1);
 
@@ -769,6 +830,9 @@ impl<'a> RXTimingSetupReqPayload<'a> {
     /// The len
     create_type_const_fn!(len, usize, 1);
 
+    /// Check if the bytes can be used to create RXTimingSetupReqPayload.
+    create_type_const_fn!(can_build_from);
+
     /// Constructs a new RXTimingSetupReqPayload from the provided data.
     new_mac_cmd_helper!(RXTimingSetupReq, RXTimingSetupReqPayload, 1);
 
@@ -791,6 +855,9 @@ impl RXTimingSetupAnsPayload {
 
     /// The len
     create_type_const_fn!(len, usize, 0);
+
+    /// Check if the bytes can be used to create RXTimingSetupAnsPayload
+    create_type_const_fn!(can_build_from);
 
     /// Constructs a new RXTimingSetupAnsPayload from the provided data.
     new_mac_cmd_helper!(RXTimingSetupAns, RXTimingSetupAnsPayload, 0);
