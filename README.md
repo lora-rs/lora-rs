@@ -30,7 +30,7 @@ The following structures are implemented (+ fields):
 * FRMPayload
 * FRMDataPayload
 * FRMMacCommands
-* MacCommand
+* MacCommand and creators for them
 * LinkCkeckReq
 * JoinRequestCreator
 * JoinAcceptCreator
@@ -38,8 +38,7 @@ The following structures are implemented (+ fields):
 
 MIC can be checked and FRMPayload and JoinAccept can be decrypted.
 
-JoinRequest, JoinAccept and DataPayload packets can be constructed (without MAC
-commands).
+JoinRequest, JoinAccept and DataPayload packets can be constructed.
 
 ## Next steps
 
@@ -47,8 +46,10 @@ I plan to implement soon:
 
 * [x] Finish with JoinAcceptPayload.
 * [x] Add packet creation functions.
-* [ ] Finish with the mac commands.
+* [x] Finish with the mac commands.
 * [ ] Add more tests.
+* [ ] Check if there are any creators that I have forgotten.
+* [ ] Calculate over the air time.
 
 ## Used code and inspiration
 
