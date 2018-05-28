@@ -12,6 +12,7 @@ use crypto::aessafe;
 use crypto::symmetriccipher::BlockEncryptor;
 
 use super::keys;
+use super::maccommands;
 use super::securityhelpers;
 
 /// Represents the complete structure for handling lorawan mac layer payload.
@@ -53,8 +54,7 @@ impl<'a> PhyPayload<'a> {
             MType::UnconfirmedDataUp | MType::ConfirmedDataUp => {
                 can_build = DataPayload::can_build_from(payload, true);
             }
-            MType::UnconfirmedDataDown |
-            MType::ConfirmedDataDown => {
+            MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
                 can_build = DataPayload::can_build_from(payload, true);
             }
             _ => return Err("unsupported message type"),
@@ -112,14 +112,12 @@ impl<'a> PhyPayload<'a> {
     /// Gives the MIC of the PhyPayload.
     pub fn mic(&self) -> keys::MIC {
         let len = self.0.len();
-        keys::MIC(
-            [
-                self.0[len - 4],
-                self.0[len - 3],
-                self.0[len - 2],
-                self.0[len - 1],
-            ],
-        )
+        keys::MIC([
+            self.0[len - 4],
+            self.0[len - 3],
+            self.0[len - 2],
+            self.0[len - 1],
+        ])
     }
 
     /// Gives the MacPayload of the PhyPayload.
@@ -132,8 +130,9 @@ impl<'a> PhyPayload<'a> {
             MType::UnconfirmedDataUp | MType::ConfirmedDataUp => {
                 MacPayload::Data(DataPayload::new(bytes, true).unwrap())
             }
-            MType::UnconfirmedDataDown |
-            MType::ConfirmedDataDown => MacPayload::Data(DataPayload::new(bytes, true).unwrap()),
+            MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
+                MacPayload::Data(DataPayload::new(bytes, true).unwrap())
+            }
             _ => panic!("unexpected message type passed through the new method"),
         }
     }
@@ -206,9 +205,10 @@ impl<'a> PhyPayload<'a> {
                 // the size guarantees the existance of f_port
                 Ok(FRMPayload::Data(clear_data.unwrap()))
             } else {
-                Ok(FRMPayload::MACCommands(
-                    FRMMacCommands::new(clear_data.unwrap(), self.is_uplink()),
-                ))
+                Ok(FRMPayload::MACCommands(FRMMacCommands::new(
+                    clear_data.unwrap(),
+                    self.is_uplink(),
+                )))
             }
         } else {
             Err("bad mac payload")
@@ -389,7 +389,6 @@ impl<'a> From<&'a [u8; 8]> for EUI64<'a> {
     }
 }
 
-
 /// DevNonce represents a 16 bit device nonce.
 #[derive(Debug, PartialEq)]
 pub struct DevNonce<'a>(&'a [u8; 2]);
@@ -514,72 +513,22 @@ impl<'a> JoinAcceptPayload<'a> {
     }
 
     /// Gives the downlink configuration.
-    pub fn dl_settings(&self) -> DLSettings {
-        DLSettings(self.0[10])
+    pub fn dl_settings(&self) -> maccommands::DLSettings {
+        maccommands::DLSettings::new(self.0[10])
     }
 
     pub fn rx_delay(&self) -> u8 {
         self.0[11] & 0x0f
     }
 
-    pub fn c_f_list(&self) -> Vec<Frequency> {
+    pub fn c_f_list(&self) -> Vec<maccommands::Frequency> {
         if self.0.len() == 12 {
             return Vec::new();
         }
         self.0[12..27]
             .chunks(3)
-            .map(|f| Frequency::new_from_raw(f))
+            .map(|f| maccommands::Frequency::new_from_raw(f))
             .collect()
-    }
-}
-
-/// DLSettings represents LoRaWAN DLSettings.
-#[derive(Debug, PartialEq)]
-pub struct DLSettings(u8);
-
-impl DLSettings {
-    pub fn new(byte: u8) -> DLSettings {
-        DLSettings(byte)
-    }
-
-    pub fn rx1_dr_offset(&self) -> u8 {
-        self.0 >> 4 & 0x07
-    }
-
-    pub fn rx2_data_rate(&self) -> u8 {
-        self.0 & 0x0f
-    }
-
-    pub fn raw_value(&self) -> u8 {
-        self.0
-    }
-}
-
-impl From<u8> for DLSettings {
-    fn from(v: u8) -> Self {
-        DLSettings(v)
-    }
-}
-
-
-#[derive(Debug, PartialEq)]
-pub struct Frequency<'a>(&'a [u8]);
-
-impl<'a> Frequency<'a> {
-    pub fn new_from_raw(bytes: &'a [u8]) -> Frequency {
-        Frequency(bytes)
-    }
-
-    pub fn new(bytes: &'a [u8]) -> Option<Frequency> {
-        if bytes.len() != 3 {
-            return None;
-        }
-
-        Some(Frequency(bytes))
-    }
-
-    pub fn value(&self) -> u32 {
-        (((self.0[2] as u32) << 16) + ((self.0[1] as u32) << 8) + (self.0[0] as u32)) * 100
     }
 }
 
@@ -658,10 +607,9 @@ impl<'a> FHDR<'a> {
         res
     }
 
-    pub fn fopts(&self) -> Vec<MacCommand> {
-        let res = Vec::new();
-
-        res
+    pub fn fopts(&self) -> Result<Vec<maccommands::MacCommand>, String> {
+        let f_opts_len = FCtrl(self.0[4], self.1).f_opts_len();
+        maccommands::parse_mac_commands(&self.0[7 as usize..(7 + f_opts_len) as usize], self.1)
     }
 }
 
@@ -719,37 +667,7 @@ impl FRMMacCommands {
         FRMMacCommands(uplink, bytes)
     }
 
-    pub fn mac_commands(&self) -> Vec<MacCommand> {
-        Vec::new()
-    }
-}
-
-/// MacCommand represents the enumeration of all LoRaWAN MACCommands.
-pub enum MacCommand<'a> {
-    LinkCheckReq(LinkCheckReqPayload<'a>),
-    // TODO(ivajloip): Finish :)
-    //LinkCheckAns
-    //LinkADRReq
-    //LinkADRAns
-    //DutyCycleReq
-    //DutyCycleAns
-    //RXParamSetupReq
-    //RXParamSetupAns
-    //DevStatusReq
-    //DevStatusAns
-    //NewChannelReq
-    //NewChannelAns
-    //RXTimingSetupReq
-    //RXTimingSetupAns
-    //Proprietary
-}
-
-/// LinkCheckReqPayload represents the LinkCheckReq LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct LinkCheckReqPayload<'a>(&'a [u8; 2]);
-
-impl<'a> From<&'a [u8; 2]> for LinkCheckReqPayload<'a> {
-    fn from(v: &'a [u8; 2]) -> Self {
-        LinkCheckReqPayload(v)
+    pub fn mac_commands(&self) -> Result<Vec<maccommands::MacCommand>, String> {
+        maccommands::parse_mac_commands(&self.1[..], self.0)
     }
 }

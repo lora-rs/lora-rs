@@ -8,134 +8,57 @@
 
 extern crate lorawan;
 
-use lorawan::keys::*;
-use lorawan::parser::*;
 use lorawan::creator::*;
+use lorawan::keys::*;
+use lorawan::maccommandcreator::*;
+use lorawan::maccommands::*;
+use lorawan::parser::*;
 
 fn phy_join_request_payload() -> Vec<u8> {
     vec![
-        0x00,
-        0x04,
-        0x03,
-        0x02,
-        0x01,
-        0x04,
-        0x03,
-        0x02,
-        0x01,
-        0x05,
-        0x04,
-        0x03,
-        0x02,
-        0x05,
-        0x04,
-        0x03,
-        0x02,
-        0x2d,
-        0x10,
-        0x6a,
-        0x99,
-        0x0e,
-        0x12,
+        0x00, 0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01, 0x05, 0x04, 0x03, 0x02, 0x05, 0x04,
+        0x03, 0x02, 0x2d, 0x10, 0x6a, 0x99, 0x0e, 0x12,
     ]
 }
 
 fn phy_join_accept_payload() -> Vec<u8> {
     vec![
-        0x20,
-        0x49,
-        0x3e,
-        0xeb,
-        0x51,
-        0xfb,
-        0xa2,
-        0x11,
-        0x6f,
-        0x81,
-        0x0e,
-        0xdb,
-        0x37,
-        0x42,
-        0x97,
-        0x51,
-        0x42,
+        0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37, 0x42, 0x97,
+        0x51, 0x42,
     ]
 }
 
 fn join_accept_payload_with_c_f_list() -> Vec<u8> {
     vec![
-        0x01,
-        0x01,
-        0x01,
-        0x02,
-        0x02,
-        0x02,
-        0x04,
-        0x03,
-        0x02,
-        0x01,
-        0x67,
-        0x09,
-        0x18,
-        0x4f,
-        0x84,
-        0xe8,
-        0x56,
-        0x84,
-        0xb8,
-        0x5e,
-        0x84,
-        0x88,
-        0x66,
-        0x84,
-        0x58,
-        0x6e,
-        0x84,
-        0,
+        0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x04, 0x03, 0x02, 0x01, 0x67, 0x09, 0x18, 0x4f, 0x84,
+        0xe8, 0x56, 0x84, 0xb8, 0x5e, 0x84, 0x88, 0x66, 0x84, 0x58, 0x6e, 0x84, 0,
     ]
     //867100000, 867300000, 867500000, 867700000, 867900000
 }
 
 fn data_payload() -> Vec<u8> {
     vec![
-        0x40,
-        0x04,
-        0x03,
-        0x02,
-        0x01,
-        0x80,
-        0x01,
-        0x00,
-        0x01,
-        0xa6,
-        0x94,
-        0x64,
-        0x26,
-        0x15,
-        0xd6,
-        0xc3,
-        0xb5,
-        0x82,
+        0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01, 0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6,
+        0xc3, 0xb5, 0x82,
+    ]
+}
+
+fn data_payload_with_fport_zero() -> Vec<u8> {
+    vec![
+        0x40, 0x04, 0x03, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x69, 0x36, 0x9e, 0xee, 0x6a, 0xa5,
+        0x08,
+    ]
+}
+
+fn data_payload_with_f_opts() -> Vec<u8> {
+    vec![
+        0x40, 0x04, 0x03, 0x02, 0x01, 0x03, 0x00, 0x00, 0x02, 0x03, 0x05, 0xd7, 0xfa, 0x0c, 0x6c
     ]
 }
 
 fn app_key() -> [u8; 16] {
     [
-        0x00,
-        0x11,
-        0x22,
-        0x33,
-        0x44,
-        0x55,
-        0x66,
-        0x77,
-        0x88,
-        0x99,
-        0xaa,
-        0xbb,
-        0xcc,
-        0xdd,
-        0xee,
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee,
         0xff,
     ]
 }
@@ -179,22 +102,11 @@ fn test_mic() {
 #[test]
 fn test_phy_payload_is_none_when_too_few_bytes() {
     let bytes = &vec![
-        0x80,
-        0x04,
-        0x03,
-        0x02,
-        0x01,
-        0x00,
-        0xff,
-        0x01,
-        0x02,
-        0x03,
-        0x04,
+        0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04
     ];
     let phy = PhyPayload::new(bytes);
     assert!(phy.is_err());
 }
-
 
 #[test]
 fn test_new_data_payload_is_none_if_bytes_too_short() {
@@ -300,18 +212,7 @@ fn test_new_frequency() {
 #[test]
 fn test_mac_payload_has_good_bytes_when_size_correct() {
     let bytes = &[
-        0x80,
-        0x04,
-        0x03,
-        0x02,
-        0x01,
-        0x00,
-        0xff,
-        0xff,
-        0x01,
-        0x02,
-        0x03,
-        0x04,
+        0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0xff, 0x01, 0x02, 0x03, 0x04
     ];
     let phy_res = PhyPayload::new(bytes);
     assert!(phy_res.is_ok());
@@ -375,9 +276,7 @@ fn test_complete_data_payload_frm_payload() {
     assert!(phy.is_ok());
     assert_eq!(
         phy.unwrap().decrypted_payload(&key, 1),
-        Ok(FRMPayload::Data(
-            String::from("hello").into_bytes() as FRMDataPayload,
-        ))
+        Ok(FRMPayload::Data(String::from("hello").into_bytes() as FRMDataPayload,))
     );
 }
 
@@ -422,6 +321,100 @@ fn test_data_payload_creator() {
         &data_payload()[..]
     );
 }
+
+#[test]
+fn test_data_payload_creator_when_payload_and_fport_0() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([2; 16]);
+    let app_skey = AES128([1; 16]);
+    phy.set_f_port(0);
+    assert!(phy.build(b"hello", &nwk_skey, &app_skey).is_err());
+}
+
+#[test]
+fn test_data_payload_creator_when_fport_0_but_not_encrypt() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([2; 16]);
+    let app_skey = AES128([1; 16]);
+    phy.set_f_port(0).set_encrypt_mac_commands(false);
+    assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
+}
+
+#[test]
+fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([2; 16]);
+    let app_skey = AES128([1; 16]);
+    let new_channel_req = NewChannelReqPayload::new(&[0x00; 5]).unwrap().0;
+    let cmds: Vec<&SerializableMacCommand> =
+        vec![&new_channel_req, &new_channel_req, &new_channel_req];
+    phy.set_f_port(1).set_mac_commands(cmds);
+    assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
+}
+
+#[test]
+fn test_data_payload_creator_when_big_mac_commands_but_not_fport_0() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([2; 16]);
+    let app_skey = AES128([1; 16]);
+    phy.set_f_port(1).set_encrypt_mac_commands(true);
+    assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
+}
+
+#[test]
+fn test_data_payload_creator_when_payload_no_fport() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([2; 16]);
+    let app_skey = AES128([1; 16]);
+    assert!(phy.build(b"hello", &nwk_skey, &app_skey).is_err());
+}
+
+#[test]
+fn test_data_payload_creator_when_mac_commands_in_payload() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([1; 16]);
+    let mac_cmd1 = MacCommand::LinkCheckReq(LinkCheckReqPayload());
+    let mut mac_cmd2 = LinkADRAnsCreator::new();
+    mac_cmd2
+        .set_channel_mask_ack(true)
+        .set_data_rate_ack(false)
+        .set_tx_power_ack(true);
+    let cmds: Vec<&SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
+    phy.set_confirmed(false)
+        .set_uplink(true)
+        .set_f_port(0)
+        .set_dev_addr([1, 2, 3, 4])
+        .set_fcnt(0)
+        .set_mac_commands(cmds);
+    assert_eq!(
+        phy.build(b"", &nwk_skey, &nwk_skey).unwrap(),
+        &data_payload_with_fport_zero()[..]
+    );
+}
+
+#[test]
+fn test_data_payload_creator_when_mac_commands_in_f_opts() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([1; 16]);
+    let mac_cmd1 = MacCommand::LinkCheckReq(LinkCheckReqPayload());
+    let mut mac_cmd2 = LinkADRAnsCreator::new();
+    mac_cmd2
+        .set_channel_mask_ack(true)
+        .set_data_rate_ack(false)
+        .set_tx_power_ack(true);
+    let cmds: Vec<&SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
+    phy.set_confirmed(false)
+        .set_uplink(true)
+        .set_dev_addr([1, 2, 3, 4])
+        .set_fcnt(0)
+        .set_mac_commands(cmds);
+
+    assert_eq!(
+        phy.build(b"", &nwk_skey, &nwk_skey).unwrap(),
+        &data_payload_with_f_opts()[..]
+    );
+}
+// TODO: test data payload create with piggy_backed mac commands
 
 #[test]
 fn test_join_request_dev_eui_extraction() {
