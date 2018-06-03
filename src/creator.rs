@@ -34,8 +34,8 @@ impl JoinAcceptCreator {
     /// let key = lorawan::keys::AES128([1; 16]);
     /// let app_nonce_bytes = [1; 3];
     /// phy.set_app_nonce(&app_nonce_bytes);
-    /// phy.set_net_id([1; 3]);
-    /// phy.set_dev_addr([1; 4]);
+    /// phy.set_net_id(&[1; 3]);
+    /// phy.set_dev_addr(&[1; 4]);
     /// phy.set_dl_settings(2);
     /// phy.set_rx_delay(1);
     /// phy.set_c_f_list(vec![lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap(),
@@ -73,11 +73,9 @@ impl JoinAcceptCreator {
     ///
     /// * net_id - instance of lorawan::parser::NwkAddr or anything that can
     ///   be converted into it.
-    pub fn set_net_id<T: Into<parser::NwkAddr>>(&mut self, net_id: T) -> &mut JoinAcceptCreator {
+    pub fn set_net_id<'a, T: Into<parser::NwkAddr<'a>>>(&mut self, net_id: T) -> &mut JoinAcceptCreator {
         let converted = net_id.into();
-        self.data[4] = converted.as_ref()[2];
-        self.data[5] = converted.as_ref()[1];
-        self.data[6] = converted.as_ref()[0];
+        self.data[4..7].copy_from_slice(converted.as_ref());
 
         self
     }
@@ -88,15 +86,12 @@ impl JoinAcceptCreator {
     ///
     /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can
     ///   be converted into it.
-    pub fn set_dev_addr<T: Into<parser::DevAddr>>(
+    pub fn set_dev_addr<'a, T: Into<parser::DevAddr<'a>>>(
         &mut self,
         dev_addr: T,
     ) -> &mut JoinAcceptCreator {
         let converted = dev_addr.into();
-        self.data[7] = converted.as_ref()[3];
-        self.data[8] = converted.as_ref()[2];
-        self.data[9] = converted.as_ref()[1];
-        self.data[10] = converted.as_ref()[0];
+        self.data[7..11].copy_from_slice(converted.as_ref());
 
         self
     }
@@ -298,7 +293,7 @@ impl DataPayloadCreator {
     /// phy.set_confirmed(false);
     /// phy.set_uplink(true);
     /// phy.set_f_port(1);
-    /// phy.set_dev_addr([1, 2, 3, 4]);
+    /// phy.set_dev_addr(&[4, 3, 2, 1]);
     /// phy.set_fctrl(&fctrl); // ADR: true, all others: false
     /// phy.set_fcnt(1);
     /// let payload = phy.build(b"hello", &nwk_skey, &app_skey).unwrap();
@@ -352,15 +347,12 @@ impl DataPayloadCreator {
     ///
     /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can
     ///   be converted into it.
-    pub fn set_dev_addr<T: Into<parser::DevAddr>>(
+    pub fn set_dev_addr<'a, T: Into<parser::DevAddr<'a>>>(
         &mut self,
         dev_addr: T,
     ) -> &mut DataPayloadCreator {
         let converted = dev_addr.into();
-        self.data[1] = converted.as_ref()[3];
-        self.data[2] = converted.as_ref()[2];
-        self.data[3] = converted.as_ref()[1];
-        self.data[4] = converted.as_ref()[0];
+        self.data[1..5].copy_from_slice(converted.as_ref());
 
         self
     }
