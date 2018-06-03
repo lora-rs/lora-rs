@@ -105,7 +105,7 @@ fn cmac_encrypt<C: BlockEncryptor>(
     let (head, tail) = if n_blocks == 0 {
         (&[] as &[u8], data)
     } else {
-        data.split_at((block_size * n_blocks))
+        data.split_at(block_size * n_blocks)
     };
 
     let mut mac: Vec<u8> = repeat(0).take(block_size).collect();

@@ -249,7 +249,7 @@ fn test_complete_data_payload_fhdr() {
     if let MacPayload::Data(data_payload) = phy.unwrap().mac_payload() {
         let fhdr = data_payload.fhdr();
 
-        assert_eq!(fhdr.dev_addr(), DevAddr::new(&[1, 2, 3, 4]));
+        assert_eq!(fhdr.dev_addr(), DevAddr::new(&[4, 3, 2, 1]).unwrap());
 
         assert_eq!(fhdr.fcnt(), 1u16);
 
@@ -312,7 +312,7 @@ fn test_data_payload_creator() {
     phy.set_confirmed(false)
         .set_uplink(true)
         .set_f_port(1)
-        .set_dev_addr([1, 2, 3, 4])
+        .set_dev_addr(&[4, 3, 2, 1])
         .set_fctrl(&fctrl) // ADR: true, all others: false
         .set_fcnt(1);
 
@@ -383,7 +383,7 @@ fn test_data_payload_creator_when_mac_commands_in_payload() {
     phy.set_confirmed(false)
         .set_uplink(true)
         .set_f_port(0)
-        .set_dev_addr([1, 2, 3, 4])
+        .set_dev_addr(&[4, 3, 2, 1])
         .set_fcnt(0)
         .set_mac_commands(cmds);
     assert_eq!(
@@ -405,7 +405,7 @@ fn test_data_payload_creator_when_mac_commands_in_f_opts() {
     let cmds: Vec<&SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
     phy.set_confirmed(false)
         .set_uplink(true)
-        .set_dev_addr([1, 2, 3, 4])
+        .set_dev_addr(&[4, 3, 2, 1])
         .set_fcnt(0)
         .set_mac_commands(cmds);
 
@@ -474,8 +474,8 @@ fn test_join_accept_creator() {
     let key = AES128(app_key());
     let app_nonce_bytes = [0xc7, 0x0b, 0x57];
     phy.set_app_nonce(&app_nonce_bytes)
-        .set_net_id([0x22, 0x11, 0x01])
-        .set_dev_addr([0x02, 0x03, 0x19, 0x80])
+        .set_net_id(&[0x01, 0x11, 0x22])
+        .set_dev_addr(&[0x80, 0x19, 0x03, 0x02])
         .set_dl_settings(0)
         .set_rx_delay(0);
 
@@ -491,4 +491,10 @@ fn test_join_request_creator() {
         .set_dev_nonce(&[0x2du8, 0x10]);
 
     assert_eq!(phy.build(&key).unwrap(), &phy_join_request_payload()[..]);
+}
+
+#[test]
+fn test_eui64_to_string() {
+    let eui = EUI64::new(&[0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xff]).unwrap();
+    assert_eq!(eui.to_string(), "123456789abcdeff".to_owned());
 }

@@ -379,7 +379,7 @@ impl AsRef<[u8]> for ChannelMask {
     }
 }
 
-/// Redundancy represents the ChannelMask from LoRaWAN.
+/// Redundancy represents the LinkADRReq Redundancy from LoRaWAN.
 #[derive(Debug, PartialEq)]
 pub struct Redundancy(u8);
 

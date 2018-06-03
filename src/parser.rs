@@ -7,6 +7,7 @@
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
 use std::convert::AsRef;
+use std::string::ToString;
 
 use crypto::aessafe;
 use crypto::symmetriccipher::BlockEncryptor;
@@ -14,6 +15,57 @@ use crypto::symmetriccipher::BlockEncryptor;
 use super::keys;
 use super::maccommands;
 use super::securityhelpers;
+
+const INT_TO_HEX_MAP: &'static [u8] = b"0123456789abcdef";
+
+macro_rules! fixed_len_struct {
+    (
+        $(#[$outer:meta])*
+        struct $type:ident[$size:expr];
+    ) => {
+        $(#[$outer])*
+        #[derive(Debug, PartialEq)]
+        pub struct $type<'a>(&'a [u8; $size]);
+
+        impl<'a> $type<'a> {
+            fn new_from_raw(bytes: &'a [u8]) -> $type {
+                $type(array_ref![bytes, 0, $size])
+            }
+
+            pub fn new(bytes: &'a [u8]) -> Option<$type> {
+                if bytes.len() != $size {
+                    None
+                } else {
+                    Some($type(array_ref![bytes, 0, $size]))
+                }
+            }
+        }
+
+        impl<'a> From<&'a [u8; $size]> for $type<'a> {
+            fn from(v: &'a [u8; $size]) -> Self {
+                $type(v)
+            }
+        }
+
+        impl<'a> AsRef<[u8]> for $type<'a> {
+            fn as_ref(&self) -> &[u8] {
+                &self.0[..]
+            }
+        }
+
+        impl<'a> ToString for $type<'a> {
+            fn to_string(&self) -> String {
+                let mut res = vec![0u8; 2 * $size];
+                for i in 0..$size {
+                    res[2 * i] = INT_TO_HEX_MAP[(self.0[i] >> 4) as usize];
+                    res[2 * i + 1] = INT_TO_HEX_MAP[(self.0[i] & 0x0f) as usize];
+                }
+
+                unsafe { String::from_utf8_unchecked(res) }
+            }
+        }
+    };
+}
 
 /// Represents the complete structure for handling lorawan mac layer payload.
 #[derive(Debug, PartialEq)]
@@ -359,94 +411,19 @@ impl<'a> DataPayload<'a> {
     }
 }
 
-/// EUI64 represents a 64 bit EUI.
-#[derive(Debug, PartialEq)]
-pub struct EUI64<'a>(&'a [u8; 8]);
-
-impl<'a> EUI64<'a> {
-    fn new_from_raw(bytes: &'a [u8]) -> EUI64 {
-        EUI64(array_ref![bytes, 0, 8])
-    }
-
-    pub fn new(bytes: &'a [u8]) -> Option<EUI64> {
-        if bytes.len() != 8 {
-            None
-        } else {
-            Some(EUI64(array_ref![bytes, 0, 8]))
-        }
-    }
+fixed_len_struct! {
+    /// EUI64 represents a 64 bit EUI.
+    struct EUI64[8];
 }
 
-impl<'a> AsRef<[u8]> for EUI64<'a> {
-    fn as_ref(&self) -> &[u8] {
-        &self.0[..]
-    }
+fixed_len_struct! {
+    /// DevNonce represents a 16 bit device nonce.
+    struct DevNonce[2];
 }
 
-impl<'a> From<&'a [u8; 8]> for EUI64<'a> {
-    fn from(v: &'a [u8; 8]) -> Self {
-        EUI64(&v)
-    }
-}
-
-/// DevNonce represents a 16 bit device nonce.
-#[derive(Debug, PartialEq)]
-pub struct DevNonce<'a>(&'a [u8; 2]);
-
-impl<'a> DevNonce<'a> {
-    fn new_from_raw(bytes: &'a [u8]) -> DevNonce {
-        DevNonce(array_ref![bytes, 0, 2])
-    }
-
-    pub fn new(bytes: &'a [u8]) -> Option<DevNonce> {
-        if bytes.len() != 2 {
-            None
-        } else {
-            Some(DevNonce(array_ref![bytes, 0, 2]))
-        }
-    }
-}
-
-impl<'a> AsRef<[u8]> for DevNonce<'a> {
-    fn as_ref(&self) -> &[u8] {
-        &self.0[..]
-    }
-}
-
-impl<'a> From<&'a [u8; 2]> for DevNonce<'a> {
-    fn from(v: &'a [u8; 2]) -> Self {
-        DevNonce(v)
-    }
-}
-
-/// AppNonce represents a 24 bit network server nonce.
-#[derive(Debug, PartialEq)]
-pub struct AppNonce<'a>(&'a [u8; 3]);
-
-impl<'a> AppNonce<'a> {
-    pub fn new_from_raw(bytes: &'a [u8]) -> AppNonce {
-        AppNonce(array_ref![bytes, 0, 3])
-    }
-
-    pub fn new(bytes: &'a [u8]) -> Option<AppNonce> {
-        if bytes.len() != 3 {
-            None
-        } else {
-            Some(AppNonce(array_ref![bytes, 0, 3]))
-        }
-    }
-}
-
-impl<'a> From<&'a [u8; 3]> for AppNonce<'a> {
-    fn from(v: &'a [u8; 3]) -> Self {
-        AppNonce(v)
-    }
-}
-
-impl<'a> AsRef<[u8]> for AppNonce<'a> {
-    fn as_ref(&self) -> &[u8] {
-        &self.0[..]
-    }
+fixed_len_struct! {
+    /// AppNonce represents a 24 bit network server nonce.
+    struct AppNonce[3];
 }
 
 /// JoinRequestPayload represents a join request MacPayload.
@@ -505,11 +482,11 @@ impl<'a> JoinAcceptPayload<'a> {
     }
 
     pub fn net_id(&self) -> NwkAddr {
-        NwkAddr([self.0[5], self.0[4], self.0[3]])
+        NwkAddr::new_from_raw(&self.0[3..6])
     }
 
     pub fn dev_addr(&self) -> DevAddr {
-        DevAddr([self.0[9], self.0[8], self.0[7], self.0[6]])
+        DevAddr::new_from_raw(&self.0[6..10])
     }
 
     /// Gives the downlink configuration.
@@ -532,46 +509,20 @@ impl<'a> JoinAcceptPayload<'a> {
     }
 }
 
-/// DevAddr represents a 32 bit device address.
-#[derive(Debug, PartialEq)]
-pub struct DevAddr([u8; 4]);
+fixed_len_struct! {
+    /// DevAddr represents a 32 bit device address.
+    struct DevAddr[4];
+}
 
-impl DevAddr {
-    pub fn new(bytes: &[u8; 4]) -> DevAddr {
-        DevAddr([bytes[0], bytes[1], bytes[2], bytes[3]])
-    }
-
+impl<'a> DevAddr<'a> {
     pub fn nwk_id(&self) -> u8 {
         self.0[0] >> 1
     }
 }
 
-impl From<[u8; 4]> for DevAddr {
-    fn from(v: [u8; 4]) -> Self {
-        DevAddr(v)
-    }
-}
-
-impl AsRef<[u8]> for DevAddr {
-    fn as_ref(&self) -> &[u8] {
-        &self.0[..]
-    }
-}
-
-/// NwkAddr represents a 24 bit network address.
-#[derive(Debug, PartialEq)]
-pub struct NwkAddr(pub [u8; 3]);
-
-impl AsRef<[u8]> for NwkAddr {
-    fn as_ref(&self) -> &[u8] {
-        &self.0[..]
-    }
-}
-
-impl From<[u8; 3]> for NwkAddr {
-    fn from(v: [u8; 3]) -> Self {
-        NwkAddr(v)
-    }
+fixed_len_struct! {
+    /// NwkAddr represents a 24 bit network address.
+    struct NwkAddr[3];
 }
 
 /// FHDR represents FHDR from DataPayload.
@@ -595,7 +546,7 @@ impl<'a> FHDR<'a> {
     }
 
     pub fn dev_addr(&self) -> DevAddr {
-        DevAddr([self.0[3], self.0[2], self.0[1], self.0[0]])
+        DevAddr::new_from_raw(&self.0[0..4])
     }
 
     pub fn fctrl(&self) -> FCtrl {
