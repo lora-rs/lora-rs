@@ -67,11 +67,15 @@ macro_rules! fixed_len_struct {
     };
 }
 
-/// Represents the complete structure for handling lorawan mac layer payload.
+/// GenericPhyPayload contains the common logic for parsing the complete lorawan package for any
+/// type that can be converted to bytes.
+///
+/// It has two versoins PhyPayload that uses borrowed bytes and PhysicalPayload that owns the bytes
+/// for simpler passing around.
 #[derive(Debug, PartialEq)]
-pub struct PhyPayload<'a>(&'a [u8]);
+pub struct GenericPhyPayload<T: AsRef<[u8]>>(T);
 
-impl<'a> PhyPayload<'a> {
+impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
     /// Creates a PhyPayload from bytes.
     ///
     /// # Argument
@@ -86,34 +90,37 @@ impl<'a> PhyPayload<'a> {
     ///     0x03u8, 0x02u8, 0x2du8, 0x10u8, 0x6au8, 0x99u8, 0x0eu8, 0x12];
     /// let phy = lorawan::parser::PhyPayload::new(&data[..]);
     /// ```
-    pub fn new(bytes: &[u8]) -> Result<PhyPayload, &str> {
-        // the smallest payload is a data payload without fport and FRMPayload
-        // which is 12 bytes long.
-        let len = bytes.len();
-        if len < 12 {
-            return Err("insufficient number of bytes");
-        }
-        let result = PhyPayload(bytes);
-        let can_build: bool;
-        let payload = &bytes[1..(len - 4)];
-        match result.mhdr().mtype() {
-            MType::JoinRequest => {
-                can_build = JoinRequestPayload::can_build_from(payload);
+    pub fn new(data: T) -> Result<GenericPhyPayload<T>, &'a str> {
+        let result = GenericPhyPayload(data);
+        {
+            let bytes = result.0.as_ref();
+            let len = bytes.len();
+            // the smallest payload is a data payload without fport and FRMPayload
+            // which is 12 bytes long.
+            if len < 12 {
+                return Err("insufficient number of bytes");
             }
-            MType::JoinAccept => {
-                can_build = JoinAcceptPayload::can_build_from(payload);
+            let can_build: bool;
+            let payload = &bytes[1..(len - 4)];
+            match result.mhdr().mtype() {
+                MType::JoinRequest => {
+                    can_build = JoinRequestPayload::can_build_from(payload);
+                }
+                MType::JoinAccept => {
+                    can_build = JoinAcceptPayload::can_build_from(payload);
+                }
+                MType::UnconfirmedDataUp | MType::ConfirmedDataUp => {
+                    can_build = DataPayload::can_build_from(payload, true);
+                }
+                MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
+                    can_build = DataPayload::can_build_from(payload, true);
+                }
+                _ => return Err("unsupported message type"),
             }
-            MType::UnconfirmedDataUp | MType::ConfirmedDataUp => {
-                can_build = DataPayload::can_build_from(payload, true);
-            }
-            MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
-                can_build = DataPayload::can_build_from(payload, true);
-            }
-            _ => return Err("unsupported message type"),
-        }
 
-        if !can_build {
-            return Err("mac payload incorrect");
+            if !can_build {
+                return Err("mac payload incorrect");
+            }
         }
 
         Ok(result)
@@ -136,46 +143,51 @@ impl<'a> PhyPayload<'a> {
     ///     0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
     /// let phy = lorawan::parser::PhyPayload::new_decrypted_join_accept(&mut data[..], &key);
     /// ```
-    pub fn new_decrypted_join_accept(
-        bytes: &'a mut [u8],
+    pub fn new_decrypted_join_accept<TT: AsRef<[u8]> + AsMut<[u8]>>(
+        mut data: TT,
         key: &'a keys::AES128,
-    ) -> Result<PhyPayload<'a>, &'a str> {
-        let len = bytes.len();
-        if len != 17 && len != 33 {
-            return Err("bytes have incorrect size");
-        }
-        let aes_enc = aessafe::AesSafe128Encryptor::new(&key.0[..]);
-        let mut tmp = vec![0; 16];
-        for i in 0..(len >> 4) {
-            let start = (i << 4) + 1;
-            aes_enc.encrypt_block(&bytes[start..(start + 16)], &mut tmp[..]);
-            for j in 0..16 {
-                bytes[start + j] = tmp[j];
+    ) -> Result<GenericPhyPayload<TT>, &'a str> {
+        {
+            let bytes = data.as_mut();
+            let len = bytes.len();
+            if len != 17 && len != 33 {
+                return Err("bytes have incorrect size");
+            }
+            let aes_enc = aessafe::AesSafe128Encryptor::new(&key.0[..]);
+            let mut tmp = vec![0; 16];
+            for i in 0..(len >> 4) {
+                let start = (i << 4) + 1;
+                aes_enc.encrypt_block(&bytes[start..(start + 16)], &mut tmp[..]);
+                for j in 0..16 {
+                    bytes[start + j] = tmp[j];
+                }
             }
         }
-        PhyPayload::new(&bytes[..])
+        GenericPhyPayload::new(data)
     }
 
     /// Gives the MHDR of the PhyPayload.
     pub fn mhdr(&self) -> MHDR {
-        MHDR(self.0[0])
+        MHDR(self.0.as_ref()[0])
     }
 
     /// Gives the MIC of the PhyPayload.
     pub fn mic(&self) -> keys::MIC {
-        let len = self.0.len();
+        let d = self.0.as_ref();
+        let len = d.len();
         keys::MIC([
-            self.0[len - 4],
-            self.0[len - 3],
-            self.0[len - 2],
-            self.0[len - 1],
+            d[len - 4],
+            d[len - 3],
+            d[len - 2],
+            d[len - 1],
         ])
     }
 
     /// Gives the MacPayload of the PhyPayload.
     pub fn mac_payload(&self) -> MacPayload {
-        let len = self.0.len();
-        let bytes = &self.0[1..(len - 4)];
+        let d = self.0.as_ref();
+        let len = d.len();
+        let bytes = &d[1..(len - 4)];
         match self.mhdr().mtype() {
             MType::JoinRequest => MacPayload::JoinRequest(JoinRequestPayload::new(bytes).unwrap()),
             MType::JoinAccept => MacPayload::JoinAccept(JoinAcceptPayload::new(bytes).unwrap()),
@@ -201,8 +213,9 @@ impl<'a> PhyPayload<'a> {
 
     fn calculate_data_mic(&self, key: &keys::AES128, fcnt: u32) -> Result<keys::MIC, &str> {
         if let MacPayload::Data(_) = self.mac_payload() {
+            let d = self.0.as_ref();
             Ok(securityhelpers::calculate_data_mic(
-                &self.0[..self.0.len() - 4],
+                &d[..d.len() - 4],
                 key,
                 fcnt,
             ))
@@ -227,8 +240,9 @@ impl<'a> PhyPayload<'a> {
             return Err("Incorrect message type is not join request/accept");
         }
 
+        let d = self.0.as_ref();
         Ok(securityhelpers::calculate_mic(
-            &self.0[..self.0.len() - 4],
+            &d[..d.len() - 4],
             key,
         ))
     }
@@ -242,7 +256,7 @@ impl<'a> PhyPayload<'a> {
             let fhdr = data_payload.fhdr();
             let full_fcnt = compute_fcnt(fcnt, fhdr.fcnt());
             let clear_data = securityhelpers::encrypt_frm_data_payload(
-                self.0,
+                self.0.as_ref(),
                 &data_payload.0[(fhdr_length + 1)..],
                 full_fcnt,
                 &key,
@@ -277,6 +291,16 @@ impl<'a> PhyPayload<'a> {
 fn compute_fcnt(old_fcnt: u32, fcnt: u16) -> u32 {
     ((old_fcnt >> 16) << 16) ^ (fcnt as u32)
 }
+
+/// Represents the complete structure for handling lorawan mac layer payload.
+///
+/// See GenericPhyPayload documentation for more information.
+pub type PhyPayload<'a> = GenericPhyPayload<&'a[u8]>;
+
+/// Represents the complete structure for handling lorawan mac layer payload.
+///
+/// See GenericPhyPayload documentation for more information.
+pub type PhysicalPayload = GenericPhyPayload<Vec<u8>>;
 
 /// MHDR represents LoRaWAN MHDR.
 #[derive(Debug, PartialEq)]

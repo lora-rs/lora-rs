@@ -127,14 +127,14 @@ fn test_f_port_could_be_absent_in_data_payload() {
 
 #[test]
 fn test_new_join_accept_payload_mic_validation() {
-    let mut data = phy_join_accept_payload();
+    let data = phy_join_accept_payload();
     let key = AES128(app_key());
     {
         let phy = PhyPayload::new(&data[..]).unwrap();
         assert_eq!(phy.validate_join_mic(&key), Ok(false));
     }
 
-    let decrypted_phy = PhyPayload::new_decrypted_join_accept(&mut data[..], &key).unwrap();
+    let decrypted_phy = PhysicalPayload::new_decrypted_join_accept(data, &key).unwrap();
     assert_eq!(decrypted_phy.validate_join_mic(&key), Ok(true));
 }
 
@@ -466,6 +466,19 @@ fn test_validate_join_request_mic_when_ok() {
 
     assert!(phy.is_ok());
     assert_eq!(phy.unwrap().validate_join_mic(&key), Ok(true));
+}
+
+#[test]
+fn test_phisycal_payload_join_request_dev_eui_extraction() {
+    let data = phy_join_request_payload();
+    let phy = PhysicalPayload::new(data.clone());
+
+    assert!(phy.is_ok());
+    if let MacPayload::JoinRequest(join_request) = phy.unwrap().mac_payload() {
+        assert_eq!(join_request.dev_eui(), EUI64::new(&data[9..17]).unwrap());
+    } else {
+        panic!("failed to parse JoinRequest mac payload");
+    }
 }
 
 #[test]
