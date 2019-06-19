@@ -14,8 +14,8 @@ use lorawan::maccommands::*;
 macro_rules! test_helper {
     ( $data:ident, $name:ident, $type:ident, $size:expr, $( ( $method:ident, $val:expr ) ,)*) => {{
         {
-            assert!($type::new(&$data[0..0]).is_err());
-            let mc = $type::new(&$data[..]);
+            assert!($type::new_as_mac_cmd(&$data[0..0]).is_err());
+            let mc = $type::new_as_mac_cmd(&$data[..]);
             assert!(mc.is_ok());
             if let (MacCommand::$name(res), size) = mc.unwrap() {
                 assert_eq!(size, $size);
@@ -31,7 +31,7 @@ macro_rules! test_helper {
     ( $name:ident, $type:ident ) => {{
         {
             let data = vec![];
-            let mc = $type::new(&data[..]);
+            let mc = $type::new_as_mac_cmd(&data[..]);
             assert!(mc.is_ok());
             if let (MacCommand::$name(_), size) = mc.unwrap() {
                 assert_eq!(size, 0);
@@ -85,9 +85,9 @@ fn test_link_adr_ans_new() {
         ([0x04], false, false, true, false),
         ([0x07], true, true, true, true),
     ];
-    assert!(LinkADRReqPayload::new(&examples[0].0[0..0]).is_err());
+    assert!(LinkADRReqPayload::new_as_mac_cmd(&examples[0].0[0..0]).is_err());
     for &(ref v, ref e_power, ref e_dr, ref e_cm, ref e_ack) in &examples {
-        let mc = LinkADRAnsPayload::new(&v[..]);
+        let mc = LinkADRAnsPayload::new_as_mac_cmd(&v[..]);
         assert!(mc.is_ok());
         if let (MacCommand::LinkADRAns(laa), size) = mc.unwrap() {
             assert_eq!(size, 1);
@@ -103,6 +103,7 @@ fn test_link_adr_ans_new() {
 
 #[test]
 fn test_duty_cycle_req_new() {
+    #![allow(clippy::float_cmp)]
     let data = vec![0x02];
     test_helper!(
         data,
@@ -141,9 +142,9 @@ fn test_rx_param_setup_ans_new() {
         ([0x04], false, false, true, false),
         ([0x07], true, true, true, true),
     ];
-    assert!(RXParamSetupAnsPayload::new(&examples[0].0[0..0]).is_err());
+    assert!(RXParamSetupAnsPayload::new_as_mac_cmd(&examples[0].0[0..0]).is_err());
     for &(ref v, ref e_ch, ref e_rx2_dr, ref e_rx1_dr_offset, ref e_ack) in &examples {
-        let mc = RXParamSetupAnsPayload::new(&v[..]);
+        let mc = RXParamSetupAnsPayload::new_as_mac_cmd(&v[..]);
         assert!(mc.is_ok());
         if let (MacCommand::RXParamSetupAns(psa), size) = mc.unwrap() {
             assert_eq!(size, 1);
@@ -197,9 +198,9 @@ fn test_new_channel_ans() {
         ([0x02], false, true, false),
         ([0x03], true, true, true),
     ];
-    assert!(NewChannelAnsPayload::new(&examples[0].0[0..0]).is_err());
+    assert!(NewChannelAnsPayload::new_as_mac_cmd(&examples[0].0[0..0]).is_err());
     for &(ref v, ref e_ch_freq, ref e_drr, ref e_ack) in &examples {
-        let mc = NewChannelAnsPayload::new(&v[..]);
+        let mc = NewChannelAnsPayload::new_as_mac_cmd(&v[..]);
         assert!(mc.is_ok());
         if let (MacCommand::NewChannelAns(nca), size) = mc.unwrap() {
             assert_eq!(size, 1);
@@ -251,7 +252,7 @@ fn test_parse_mac_commands_with_multiple_cmds() {
     let commands = mcs.unwrap();
     assert_eq!(commands.len(), 2);
     assert_eq!(commands[0], MacCommand::LinkCheckReq(LinkCheckReqPayload()));
-    let expected = LinkADRAnsPayload::new(&data[2..]).unwrap().0;
+    let expected = LinkADRAnsPayload::new_as_mac_cmd(&data[2..]).unwrap().0;
     assert_eq!(commands[1], expected);
 }
 
@@ -301,7 +302,7 @@ fn test_frequency_value() {
     let data = frequency_payload();
     let freq = Frequency::new(&data[..]);
     assert!(freq.is_some());
-    assert_eq!(freq.unwrap().value(), 26265700);
+    assert_eq!(freq.unwrap().value(), 26_265_700);
 }
 
 fn frequency_payload() -> Vec<u8> {
@@ -340,8 +341,8 @@ fn test_mac_commands_len_with_creators() {
 
 #[test]
 fn test_mac_commands_len_with_mac_cmds() {
-    let rx_timing_setup_req = RXTimingSetupReqPayload::new(&[0x02]).unwrap().0;
-    let dev_status_ans = DevStatusAnsPayload::new(&[0xfe, 0x3f]).unwrap().0;
+    let rx_timing_setup_req = RXTimingSetupReqPayload::new_as_mac_cmd(&[0x02]).unwrap().0;
+    let dev_status_ans = DevStatusAnsPayload::new_as_mac_cmd(&[0xfe, 0x3f]).unwrap().0;
     let cmds: Vec<&SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_ans];
 
     assert_eq!(mac_commands_len(&cmds[..]), 5);

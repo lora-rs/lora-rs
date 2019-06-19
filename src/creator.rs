@@ -19,6 +19,7 @@ const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
 /// JoinAcceptCreator serves for creating binary representation of Physical
 /// Payload of JoinAccept.
+#[derive(Default)]
 pub struct JoinAcceptCreator {
     data: Vec<u8>,
     encrypted: bool,
@@ -46,8 +47,8 @@ impl JoinAcceptCreator {
         let mut data = vec![0; 17];
         data[0] = 0x20;
         JoinAcceptCreator {
-            data: data,
-            encrypted: false,
+            data,
+            ..Default::default()
         }
     }
 
@@ -168,9 +169,7 @@ impl JoinAcceptCreator {
         for i in 0..(self.data.len() >> 4) {
             let start = (i << 4) + 1;
             aes_enc.decrypt_block(&self.data[start..(start + 16)], &mut tmp[..]);
-            for j in 0..16 {
-                self.data[start + j] = tmp[j];
-            }
+            self.data[start..(16 + start)].clone_from_slice(&tmp[..16])
         }
         self.encrypted = true;
     }
@@ -185,6 +184,7 @@ fn set_mic(data: &mut [u8], key: &keys::AES128) {
 
 /// JoinRequestCreator serves for creating binary representation of Physical
 /// Payload of JoinRequest.
+#[derive(Default)]
 pub struct JoinRequestCreator {
     data: Vec<u8>,
 }
@@ -205,7 +205,7 @@ impl JoinRequestCreator {
     pub fn new() -> JoinRequestCreator {
         let mut data = vec![0; 23];
         data[0] = 0x00;
-        JoinRequestCreator { data: data }
+        JoinRequestCreator { data }
     }
 
     /// Sets the application EUI of the JoinRequest to the provided value.
@@ -270,6 +270,7 @@ impl JoinRequestCreator {
 
 /// DataPayloadCreator serves for creating binary representation of Physical
 /// Payload of DataUp or DataDown messages.
+#[derive(Default)]
 pub struct DataPayloadCreator {
     data: Vec<u8>,
     mac_commands_bytes: Vec<u8>,
@@ -302,11 +303,8 @@ impl DataPayloadCreator {
         let mut data = vec![0; 12];
         data[0] = 0x40;
         DataPayloadCreator {
-            data: data,
-            mac_commands_bytes: Vec::new(),
-            encrypt_mac_commands: false,
-            data_f_port: None,
-            fcnt: 0,
+            data,
+            ..Default::default()
         }
     }
 
@@ -417,7 +415,7 @@ impl DataPayloadCreator {
     /// let cmds: Vec<&lorawan::maccommands::SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
     /// phy.set_mac_commands(cmds);
     /// ```
-    pub fn set_mac_commands<'a, 'b>(
+    pub fn set_mac_commands<'a>(
         &'a mut self,
         cmds: Vec<&maccommands::SerializableMacCommand>,
     ) -> &mut DataPayloadCreator {
@@ -436,7 +434,7 @@ impl DataPayloadCreator {
     }
 
     /// Whether a set of mac commands can be piggybacked.
-    pub fn can_piggyback<'a>(cmds: Vec<&maccommands::SerializableMacCommand>) -> bool {
+    pub fn can_piggyback(cmds: Vec<&maccommands::SerializableMacCommand>) -> bool {
         maccommands::mac_commands_len(&cmds[..]) <= PIGGYBACK_MAC_COMMANDS_MAX_LEN
     }
 
@@ -482,7 +480,7 @@ impl DataPayloadCreator {
             return Err("fport must be provided when there is FRMPayload");
         }
         // Set FOptsLen if present
-        if !self.encrypt_mac_commands && self.mac_commands_bytes.len() > 0 {
+        if !self.encrypt_mac_commands && !self.mac_commands_bytes.is_empty() {
             let mac_cmds_len = self.mac_commands_bytes.len();
             self.data[5] |= mac_cmds_len as u8 & 0x0f;
             self.data[last_filled..last_filled + mac_cmds_len]
@@ -495,23 +493,22 @@ impl DataPayloadCreator {
         }
 
         // Encrypt FRMPayload
-        let encrypted_payload;
-        if has_fport_zero {
+        let encrypted_payload = if has_fport_zero {
             payload_len = self.mac_commands_bytes.len();
-            encrypted_payload = securityhelpers::encrypt_frm_data_payload(
+            securityhelpers::encrypt_frm_data_payload(
                 &self.data[..],
                 &self.mac_commands_bytes[..],
                 self.fcnt,
                 nwk_skey,
-            )?;
+            )?
         } else {
-            encrypted_payload = securityhelpers::encrypt_frm_data_payload(
+            securityhelpers::encrypt_frm_data_payload(
                 &self.data[..],
                 payload,
                 self.fcnt,
                 app_skey,
-            )?;
-        }
+            )?
+        };
 
         // Set payload if possible, otherwise return error
         let additional_bytes_needed = last_filled + payload_len + 4 - self.data.len();

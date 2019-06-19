@@ -28,6 +28,7 @@ pub enum MacCommand<'a> {
 }
 
 impl<'a> MacCommand<'a> {
+    #![allow(clippy::clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         match *self {
             MacCommand::LinkCheckReq(_) => LinkCheckReqPayload::len(),
@@ -117,7 +118,7 @@ macro_rules! mac_cmds_map  {
         {
             let mut tmp: HashMap<(u8, bool), NewMacCommandFn> = HashMap::new();
             $(
-                tmp.insert(($x::cid(), $x::uplink()), Box::new($x::new));
+                tmp.insert(($x::cid(), $x::uplink()), Box::new($x::new_as_mac_cmd));
             )*
             tmp
         }
@@ -133,12 +134,13 @@ fn format_error(expected: usize, actual: usize) -> String {
 
 macro_rules! new_mac_cmd_helper {
     ($name:ident, $type:ident,0) => {
-        pub fn new<'a>(_: &'a [u8]) -> Result<(MacCommand<'a>, usize), String> {
+        pub fn new_as_mac_cmd(_: &[u8]) -> Result<(MacCommand, usize), String> {
             Ok((MacCommand::$name($type()), 0))
         }
     };
     ($name:ident, $type:ident, $len:expr) => {
-        pub fn new<'b>(data: &'b [u8]) -> Result<(MacCommand<'b>, usize), String> {
+        pub fn new_as_mac_cmd(data: &[u8]) -> Result<(MacCommand, usize), String> {
+            #![allow(clippy::range_plus_one)]
             if let Err(err) = Self::can_build_from(data) {
                 return Err(err);
             }
@@ -587,7 +589,7 @@ impl<'a> Frequency<'a> {
 
     /// Provides the decimal value in Hz of the frequency.
     pub fn value(&self) -> u32 {
-        (((self.0[2] as u32) << 16) + ((self.0[1] as u32) << 8) + (self.0[0] as u32)) * 100
+        ((u32::from(self.0[2]) << 16) + (u32::from(self.0[1]) << 8) + u32::from(self.0[0])) * 100
     }
 }
 

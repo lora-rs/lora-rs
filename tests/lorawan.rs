@@ -206,7 +206,7 @@ fn test_new_frequency() {
     let freq = Frequency::new(&[0x18, 0x4F, 0x84]);
 
     assert!(freq.is_some());
-    assert_eq!(freq.unwrap().value(), 867100000);
+    assert_eq!(freq.unwrap().value(), 867_100_000);
 }
 
 #[test]
@@ -304,6 +304,23 @@ fn test_validate_data_mic_when_type_not_ok() {
 }
 
 #[test]
+fn test_fctrl_uplink_complete() {
+    let byte = 0xff;
+    let uplink_fctrl = FCtrl::new(byte, true);
+    assert_eq!(uplink_fctrl.ack(), true);
+    assert_eq!(uplink_fctrl.adr(), true);
+    assert_eq!(uplink_fctrl.adr_ack_req(), true);
+    assert_eq!(uplink_fctrl.f_opts_len(), 15);
+    assert_eq!(uplink_fctrl.raw_value(), byte);
+}
+
+#[test]
+fn test_fctrl_downlink_complete() {
+    let downlink_fctrl = FCtrl::new(0xff, false);
+    assert_eq!(downlink_fctrl.f_pending(), true);
+}
+
+#[test]
 fn test_data_payload_creator() {
     let mut phy = DataPayloadCreator::new();
     let nwk_skey = AES128([2; 16]);
@@ -345,7 +362,7 @@ fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
     let mut phy = DataPayloadCreator::new();
     let nwk_skey = AES128([2; 16]);
     let app_skey = AES128([1; 16]);
-    let new_channel_req = NewChannelReqPayload::new(&[0x00; 5]).unwrap().0;
+    let new_channel_req = NewChannelReqPayload::new_as_mac_cmd(&[0x00; 5]).unwrap().0;
     let cmds: Vec<&SerializableMacCommand> =
         vec![&new_channel_req, &new_channel_req, &new_channel_req];
     phy.set_f_port(1).set_mac_commands(cmds);

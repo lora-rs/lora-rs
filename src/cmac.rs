@@ -80,8 +80,8 @@ fn do_inplace_xor(a: &[u8], b: &mut [u8]) {
 fn do_pad(data: &mut [u8], len: usize, block_size: usize) {
     data[len] = 0x80;
 
-    for i in (len + 1)..block_size {
-        data[i] = 0x00;
+    for item in data.iter_mut().take(block_size).skip(len + 1) {
+        *item = 0x00;
     }
 }
 
@@ -94,7 +94,7 @@ fn cmac_encrypt<C: BlockEncryptor>(
 ) -> Vec<u8> {
     let block_size = cipher.block_size();
 
-    let n_blocks = if data.len() == 0 {
+    let n_blocks = if data.is_empty() {
         0
     } else {
         (data.len() + (block_size - 1)) / block_size - 1
@@ -120,7 +120,7 @@ fn cmac_encrypt<C: BlockEncryptor>(
 
     work_block.truncate(0);
     if remaining_bytes == 0 {
-        if data.len() != 0 {
+        if !data.is_empty() {
             work_block.extend_from_slice(tail);
             do_inplace_xor(key_one, work_block.as_mut_slice());
         } else {
@@ -151,9 +151,9 @@ impl<C: BlockEncryptor> Cmac<C> {
 
         Cmac {
             result: Vec::with_capacity(cipher.block_size()), // NOTE(adma): try to use a FixedBuffer
-            cipher: cipher,
-            key_one: key_one,
-            key_two: key_two,
+            cipher,
+            key_one,
+            key_two,
             finished: false,
         }
         // NOTE(adma): cipher should be either AES or TDEA

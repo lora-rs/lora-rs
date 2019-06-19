@@ -16,7 +16,7 @@ use super::keys;
 use super::maccommands;
 use super::securityhelpers;
 
-const INT_TO_HEX_MAP: &'static [u8] = b"0123456789abcdef";
+const INT_TO_HEX_MAP: &[u8] = b"0123456789abcdef";
 
 macro_rules! fixed_len_struct {
     (
@@ -158,9 +158,7 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
             for i in 0..(len >> 4) {
                 let start = (i << 4) + 1;
                 aes_enc.encrypt_block(&bytes[start..(start + 16)], &mut tmp[..]);
-                for j in 0..16 {
-                    bytes[start + j] = tmp[j];
-                }
+                bytes[start..(16+start)].clone_from_slice(&tmp[..16])
             }
         }
         GenericPhyPayload::new(data)
@@ -289,7 +287,7 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
 }
 
 fn compute_fcnt(old_fcnt: u32, fcnt: u16) -> u32 {
-    ((old_fcnt >> 16) << 16) ^ (fcnt as u32)
+    ((old_fcnt >> 16) << 16) ^ u32::from(fcnt)
 }
 
 /// Represents the complete structure for handling lorawan mac layer payload.
@@ -327,7 +325,7 @@ impl MHDR {
 
     /// Gives the version of LoRaWAN payload format.
     pub fn major(&self) -> Major {
-        if self.0 & 3 == 0 {
+        if self.0.trailing_zeros() >= 2 {
             Major::LoRaWANR1
         } else {
             Major::RFU
@@ -370,7 +368,7 @@ pub enum MacPayload<'a> {
 }
 
 // *NOTE*: data should have at least 5 elements
-fn fhdr_length<'a>(bytes: &'a [u8], uplink: bool) -> usize {
+fn fhdr_length(bytes: &[u8], uplink: bool) -> usize {
     7 + FCtrl(bytes[4], uplink).f_opts_len() as usize
 }
 
@@ -578,8 +576,7 @@ impl<'a> FHDR<'a> {
     }
 
     pub fn fcnt(&self) -> u16 {
-        let res = ((self.0[6] as u16) << 8) | (self.0[5] as u16);
-        res
+        (u16::from(self.0[6]) << 8) | u16::from(self.0[5])
     }
 
     pub fn fopts(&self) -> Result<Vec<maccommands::MacCommand>, String> {
@@ -602,15 +599,15 @@ impl FCtrl {
     }
 
     pub fn adr_ack_req(&self) -> bool {
-        self.1 && self.0 & (1 << 6) == 1
+        self.1 && self.0 & (1 << 6) != 0
     }
 
     pub fn ack(&self) -> bool {
-        self.0 & (1 << 5) == 1
+        self.0 & (1 << 5) != 0
     }
 
     pub fn f_pending(&self) -> bool {
-        !self.1 && self.0 & (1 << 4) == 1
+        !self.1 && self.0 & (1 << 4) != 0
     }
 
     pub fn f_opts_len(&self) -> u8 {

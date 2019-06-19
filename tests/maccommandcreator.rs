@@ -170,8 +170,8 @@ fn test_rx_timing_setup_ans_creator() {
 
 #[test]
 fn test_build_mac_commands() {
-    let rx_timing_setup_req = RXTimingSetupReqPayload::new(&[0x02]).unwrap().0;
-    let dev_status_ans = DevStatusAnsPayload::new(&[0xfe, 0x3f]).unwrap().0;
+    let rx_timing_setup_req = RXTimingSetupReqPayload::new_as_mac_cmd(&[0x02]).unwrap().0;
+    let dev_status_ans = DevStatusAnsPayload::new_as_mac_cmd(&[0xfe, 0x3f]).unwrap().0;
     let cmds: Vec<&SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_ans];
 
     assert_eq!(

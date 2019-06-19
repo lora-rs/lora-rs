@@ -10,10 +10,16 @@ use super::maccommands;
 
 macro_rules! impl_mac_cmd_creator_boilerplate {
     ($type:ident, $cid:expr) => {
+        impl Default for $type {
+            fn default() -> Self {
+                Self {}
+            }
+        }
+
         impl $type {
             /// Creates a new instance of the class.
             pub fn new() -> Self {
-                Self {}
+                Default::default()
             }
 
             /// Returns the serialized version of the class as bytes.
@@ -26,6 +32,13 @@ macro_rules! impl_mac_cmd_creator_boilerplate {
     };
 
     ($type:ident, $cid:expr, $len:expr) => {
+        impl Default for $type {
+            fn default() -> Self {
+                let data = [0; $len];
+                Self { data }
+            }
+        }
+
         impl $type {
             /// Creates a new instance of the class.
             pub fn new() -> Self {
