@@ -304,6 +304,23 @@ fn test_validate_data_mic_when_type_not_ok() {
 }
 
 #[test]
+fn test_fctrl_uplink_complete() {
+    let byte = 0xff;
+    let uplink_fctrl = FCtrl::new(byte, true);
+    assert_eq!(uplink_fctrl.ack(), true);
+    assert_eq!(uplink_fctrl.adr(), true);
+    assert_eq!(uplink_fctrl.adr_ack_req(), true);
+    assert_eq!(uplink_fctrl.f_opts_len(), 15);
+    assert_eq!(uplink_fctrl.raw_value(), byte);
+}
+
+#[test]
+fn test_fctrl_downlink_complete() {
+    let downlink_fctrl = FCtrl::new(0xff, false);
+    assert_eq!(downlink_fctrl.f_pending(), true);
+}
+
+#[test]
 fn test_data_payload_creator() {
     let mut phy = DataPayloadCreator::new();
     let nwk_skey = AES128([2; 16]);

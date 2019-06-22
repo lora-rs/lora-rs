@@ -251,7 +251,7 @@ impl MHDR {
 
     /// Gives the version of LoRaWAN payload format.
     pub fn major(&self) -> Major {
-        if self.0 & 3 == 0 {
+        if self.0.trailing_zeros() >= 2 {
             Major::LoRaWANR1
         } else {
             Major::RFU
@@ -294,7 +294,7 @@ pub enum MacPayload<'a> {
 }
 
 // *NOTE*: data should have at least 5 elements
-fn fhdr_length<'a>(bytes: &'a [u8], uplink: bool) -> usize {
+fn fhdr_length(bytes: &[u8], uplink: bool) -> usize {
     7 + FCtrl(bytes[4], uplink).f_opts_len() as usize
 }
 
@@ -603,8 +603,7 @@ impl<'a> FHDR<'a> {
     }
 
     pub fn fcnt(&self) -> u16 {
-        let res = ((self.0[6] as u16) << 8) | (self.0[5] as u16);
-        res
+        (u16::from(self.0[6]) << 8) | u16::from(self.0[5])
     }
 
     pub fn fopts(&self) -> Result<Vec<maccommands::MacCommand>, String> {
@@ -627,15 +626,15 @@ impl FCtrl {
     }
 
     pub fn adr_ack_req(&self) -> bool {
-        self.1 && self.0 & (1 << 6) == 1
+        self.1 && self.0 & (1 << 6) != 0
     }
 
     pub fn ack(&self) -> bool {
-        self.0 & (1 << 5) == 1
+        self.0 & (1 << 5) != 0
     }
 
     pub fn f_pending(&self) -> bool {
-        !self.1 && self.0 & (1 << 4) == 1
+        !self.1 && self.0 & (1 << 4) != 0
     }
 
     pub fn f_opts_len(&self) -> u8 {
