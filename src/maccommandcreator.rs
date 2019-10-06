@@ -619,7 +619,7 @@ pub struct RXTimingSetupAnsCreator {}
 
 impl_mac_cmd_creator_boilerplate!(RXTimingSetupAnsCreator, 0x08);
 
-pub fn build_mac_commands(cmds: &[&maccommands::SerializableMacCommand]) -> Vec<u8> {
+pub fn build_mac_commands(cmds: &[&dyn maccommands::SerializableMacCommand]) -> Vec<u8> {
     let mut res = vec![];
     for mc in cmds {
         res.push(mc.cid());

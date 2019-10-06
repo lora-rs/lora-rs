@@ -417,7 +417,7 @@ impl DataPayloadCreator {
     /// ```
     pub fn set_mac_commands<'a>(
         &'a mut self,
-        cmds: Vec<&maccommands::SerializableMacCommand>,
+        cmds: Vec<&dyn maccommands::SerializableMacCommand>,
     ) -> &mut DataPayloadCreator {
         self.mac_commands_bytes = maccommandcreator::build_mac_commands(&cmds[..]);
 
@@ -434,7 +434,7 @@ impl DataPayloadCreator {
     }
 
     /// Whether a set of mac commands can be piggybacked.
-    pub fn can_piggyback(cmds: Vec<&maccommands::SerializableMacCommand>) -> bool {
+    pub fn can_piggyback(cmds: Vec<&dyn maccommands::SerializableMacCommand>) -> bool {
         maccommands::mac_commands_len(&cmds[..]) <= PIGGYBACK_MAC_COMMANDS_MAX_LEN
     }
 

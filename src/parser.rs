@@ -259,8 +259,8 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
                 full_fcnt,
                 &key,
             );
-            if clear_data.is_err() {
-                return Err(clear_data.unwrap_err());
+            if let Result::Err(err) = clear_data {
+                return Err(err);
             }
             // we have more bytes than fhdr + fport
             if data_payload.0.len() <= fhdr_length + 1 {

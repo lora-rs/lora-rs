@@ -104,11 +104,11 @@ impl<'a> SerializableMacCommand for MacCommand<'a> {
 }
 
 /// Calculates the len in bytes of a sequence of mac commands, including th CIDs.
-pub fn mac_commands_len(cmds: &[&SerializableMacCommand]) -> usize {
+pub fn mac_commands_len(cmds: &[&dyn SerializableMacCommand]) -> usize {
     cmds.iter().map(|mc| mc.payload_len() + 1).sum()
 }
 
-type NewMacCommandFn = Box<for<'b> Fn(&'b [u8]) -> Result<(MacCommand<'b>, usize), String>>;
+type NewMacCommandFn = Box<dyn for<'b> Fn(&'b [u8]) -> Result<(MacCommand<'b>, usize), String>>;
 
 // Helper macro for adding all the default mac command types to a HashMap.
 // See https://doc.rust-lang.org/std/macro.vec.html if you want it to work

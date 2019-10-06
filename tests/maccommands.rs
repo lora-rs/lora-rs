@@ -334,7 +334,7 @@ fn test_data_rate_range_max_equals_min() {
 fn test_mac_commands_len_with_creators() {
     let rx_timing_setup_req = RXTimingSetupReqCreator::new();
     let dev_status_req = DevStatusReqCreator::new();
-    let cmds: Vec<&SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_req];
+    let cmds: Vec<&dyn SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_req];
 
     assert_eq!(mac_commands_len(&cmds[..]), 3);
 }
@@ -343,7 +343,7 @@ fn test_mac_commands_len_with_creators() {
 fn test_mac_commands_len_with_mac_cmds() {
     let rx_timing_setup_req = RXTimingSetupReqPayload::new_as_mac_cmd(&[0x02]).unwrap().0;
     let dev_status_ans = DevStatusAnsPayload::new_as_mac_cmd(&[0xfe, 0x3f]).unwrap().0;
-    let cmds: Vec<&SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_ans];
+    let cmds: Vec<&dyn SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_ans];
 
     assert_eq!(mac_commands_len(&cmds[..]), 5);
 }

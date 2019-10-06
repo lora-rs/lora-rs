@@ -363,7 +363,7 @@ fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
     let nwk_skey = AES128([2; 16]);
     let app_skey = AES128([1; 16]);
     let new_channel_req = NewChannelReqPayload::new_as_mac_cmd(&[0x00; 5]).unwrap().0;
-    let cmds: Vec<&SerializableMacCommand> =
+    let cmds: Vec<&dyn SerializableMacCommand> =
         vec![&new_channel_req, &new_channel_req, &new_channel_req];
     phy.set_f_port(1).set_mac_commands(cmds);
     assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
@@ -396,7 +396,7 @@ fn test_data_payload_creator_when_mac_commands_in_payload() {
         .set_channel_mask_ack(true)
         .set_data_rate_ack(false)
         .set_tx_power_ack(true);
-    let cmds: Vec<&SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
+    let cmds: Vec<&dyn SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
     phy.set_confirmed(false)
         .set_uplink(true)
         .set_f_port(0)
@@ -419,7 +419,7 @@ fn test_data_payload_creator_when_mac_commands_in_f_opts() {
         .set_channel_mask_ack(true)
         .set_data_rate_ack(false)
         .set_tx_power_ack(true);
-    let cmds: Vec<&SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
+    let cmds: Vec<&dyn SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
     phy.set_confirmed(false)
         .set_uplink(true)
         .set_dev_addr(&[4, 3, 2, 1])
