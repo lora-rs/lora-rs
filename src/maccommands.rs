@@ -6,7 +6,11 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use std::collections::HashMap;
+use heapless::FnvIndexMap;
+use heapless::consts::*;
+
+type HashMap<K, V> = FnvIndexMap<K, V, U64>;
+type Vec<T> = heapless::Vec<T,U256>;
 
 /// MacCommand represents the enumeration of all LoRaWAN MACCommands.
 #[derive(Debug, PartialEq)]
@@ -108,7 +112,7 @@ pub fn mac_commands_len(cmds: &[&dyn SerializableMacCommand]) -> usize {
     cmds.iter().map(|mc| mc.payload_len() + 1).sum()
 }
 
-type NewMacCommandFn = Box<dyn for<'b> Fn(&'b [u8]) -> Result<(MacCommand<'b>, usize), String>>;
+type NewMacCommandFn<'b> = &'b dyn Fn(&'b [u8]) -> Result<(MacCommand<'b>, usize), &str>;
 
 // Helper macro for adding all the default mac command types to a HashMap.
 // See https://doc.rust-lang.org/std/macro.vec.html if you want it to work
@@ -118,28 +122,23 @@ macro_rules! mac_cmds_map  {
         {
             let mut tmp: HashMap<(u8, bool), NewMacCommandFn> = HashMap::new();
             $(
-                tmp.insert(($x::cid(), $x::uplink()), Box::new($x::new_as_mac_cmd));
+                if tmp.insert(($x::cid(), $x::uplink()), &$x::new_as_mac_cmd).is_err() {
+                    return Err("failed to insert mac cmd");
+                }
             )*
             tmp
         }
     }};
 }
 
-fn format_error(expected: usize, actual: usize) -> String {
-    format!(
-        "not enough bytes to read: needs {}, given {}",
-        expected, actual
-    )
-}
-
 macro_rules! new_mac_cmd_helper {
     ($name:ident, $type:ident,0) => {
-        pub fn new_as_mac_cmd(_: &[u8]) -> Result<(MacCommand, usize), String> {
+        pub fn new_as_mac_cmd(_: &[u8]) -> Result<(MacCommand, usize), &str> {
             Ok((MacCommand::$name($type()), 0))
         }
     };
     ($name:ident, $type:ident, $len:expr) => {
-        pub fn new_as_mac_cmd(data: &[u8]) -> Result<(MacCommand, usize), String> {
+        pub fn new_as_mac_cmd(data: &[u8]) -> Result<(MacCommand, usize), &str> {
             #![allow(clippy::range_plus_one)]
             if let Err(err) = Self::can_build_from(data) {
                 return Err(err);
@@ -152,9 +151,9 @@ macro_rules! new_mac_cmd_helper {
 
 macro_rules! create_type_const_fn {
     (can_build_from) => {
-        pub fn can_build_from(bytes: &[u8]) -> Result<(), String> {
+        pub fn can_build_from(bytes: &[u8]) -> Result<(), &str> {
             if bytes.len() < Self::len() {
-                return Err(format_error(Self::len(), bytes.len()));
+                return Err("not enough bytes to read");
             }
             Ok(())
         }
@@ -201,7 +200,7 @@ macro_rules! create_value_reader_fn {
 pub fn parse_mac_commands<'a>(
     bytes: &'a [u8],
     uplink: bool,
-) -> Result<Vec<MacCommand<'a>>, String> {
+) -> Result<Vec<MacCommand<'a>>, &str> {
     let cid_to_parser = mac_cmds_map![
         LinkCheckReqPayload,
         LinkCheckAnsPayload,
@@ -224,7 +223,7 @@ pub fn parse_mac_commands<'a>(
         if let Some(f) = cid_to_parser.get(&(bytes[i], uplink)) {
             i += 1;
             let t = f(&bytes[i..])?;
-            res.push(t.0);
+            res.push(t.0).unwrap();
             i += t.1;
         } else {
             break;
@@ -335,9 +334,9 @@ pub struct ChannelMask([u8; 2]);
 
 impl ChannelMask {
     /// Constructs a new ChannelMask from the provided data.
-    pub fn new(data: &[u8]) -> Result<ChannelMask, String> {
+    pub fn new(data: &[u8]) -> Result<ChannelMask, &str> {
         if data.len() < 2 {
-            return Err(format_error(2, data.len()));
+            return Err("not enough bytes to read");
         }
         Ok(Self::new_from_raw(data))
     }
@@ -356,9 +355,9 @@ impl ChannelMask {
     }
 
     /// Verifies if a given channel is enabled.
-    pub fn is_enabled(&self, index: usize) -> Result<bool, String> {
+    pub fn is_enabled(&self, index: usize) -> Result<bool, &str> {
         if index > 15 {
-            return Err(String::from("index should be between 0 and 15"));
+            return Err("index should be between 0 and 15");
         }
         Ok(self.channel_enabled(index))
     }
@@ -710,9 +709,9 @@ impl<'a> NewChannelReqPayload<'a> {
     create_type_const_fn!(len, usize, 5);
 
     /// Check if the bytes can be used to create NewChannelReqPayload.
-    pub fn can_build_from(bytes: &[u8]) -> Result<(), String> {
+    pub fn can_build_from(bytes: &[u8]) -> Result<(), &str> {
         if bytes.len() < Self::len() {
-            return Err(format_error(Self::len(), bytes.len()));
+            return Err("not enough bytes to read");
         }
 
         DataRateRange::can_build_from(bytes[4])
@@ -746,7 +745,7 @@ impl DataRateRange {
     }
 
     /// Constructs a new DataRateRange from the provided byte.
-    pub fn new(byte: u8) -> Result<DataRateRange, String> {
+    pub fn new(byte: u8) -> Result<DataRateRange, &'static str> {
         if let Err(err) = Self::can_build_from(byte) {
             return Err(err);
         }
@@ -755,11 +754,9 @@ impl DataRateRange {
     }
 
     /// Check if the byte can be used to create DataRateRange.
-    pub fn can_build_from(byte: u8) -> Result<(), String> {
+    pub fn can_build_from(byte: u8) -> Result<(), &'static str> {
         if (byte >> 4) < (byte & 0x0f) {
-            return Err(String::from(
-                "data rate range can not have max data rate smaller than min data rate",
-            ));
+            return Err("data rate range can not have max data rate smaller than min data rate");
         }
         Ok(())
     }

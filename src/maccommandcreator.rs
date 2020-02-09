@@ -6,6 +6,10 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
+use heapless;
+use heapless::consts::*;
+type Vec<T> = heapless::Vec<T,U256>;
+
 use super::maccommands;
 
 macro_rules! impl_mac_cmd_creator_boilerplate {
@@ -157,9 +161,9 @@ impl LinkADRReqCreator {
     /// # Argument
     ///
     /// * data_rate - data rate index of the ADR request. The value must be between 0 and 15.
-    pub fn set_data_rate(&mut self, data_rate: u8) -> Result<&mut Self, String> {
+    pub fn set_data_rate(&mut self, data_rate: u8) -> Result<&mut Self, &str> {
         if data_rate > 0x0f {
-            return Err(String::from("data_rate out of range"));
+            return Err("data_rate out of range");
         }
         self.data[1] &= 0x0f;
         self.data[1] |= data_rate << 4;
@@ -172,9 +176,9 @@ impl LinkADRReqCreator {
     /// # Argument
     ///
     /// * tx_power - TX power index. The value must be between 0 and 15.
-    pub fn set_tx_power(&mut self, tx_power: u8) -> Result<&mut Self, String> {
+    pub fn set_tx_power(&mut self, tx_power: u8) -> Result<&mut Self, &str> {
         if tx_power > 0x0f {
-            return Err(String::from("tx_power out of range"));
+            return Err("tx_power out of range");
         }
         self.data[1] &= 0xf0;
         self.data[1] |= tx_power & 0x0f;
@@ -290,7 +294,7 @@ impl DutyCycleReqCreator {
     ///
     /// * max_duty_cycle - the value used to determine the aggregated duty cycle using the formula
     /// `1 / (2 ** max_duty_cycle)`.
-    pub fn set_max_duty_cycle(&mut self, max_duty_cycle: u8) -> Result<&mut Self, String> {
+    pub fn set_max_duty_cycle(&mut self, max_duty_cycle: u8) -> Result<&mut Self, &str> {
         self.data[1] = max_duty_cycle;
 
         Ok(self)
@@ -461,9 +465,9 @@ impl DevStatusAnsCreator {
     /// # Argument
     ///
     /// * margin - the value to be used as margin.
-    pub fn set_margin(&mut self, margin: i8) -> Result<&mut Self, String> {
+    pub fn set_margin(&mut self, margin: i8) -> Result<&mut Self, &str> {
         if margin < -32 || margin > 31 {
-            return Err(String::from("margin out of range"));
+            return Err("margin out of range");
         }
         self.data[2] = ((margin << 2) as u8) >> 2;
 
@@ -596,9 +600,9 @@ impl RXTimingSetupReqCreator {
     /// # Argument
     ///
     /// * delay - the value to be used as delay.
-    pub fn set_delay(&mut self, delay: u8) -> Result<&mut Self, String> {
+    pub fn set_delay(&mut self, delay: u8) -> Result<&mut Self, &str> {
         if delay > 0x0f {
-            return Err(String::from("delay out of range"));
+            return Err("delay out of range");
         }
         self.data[1] &= 0xf0;
         self.data[1] |= delay;
@@ -619,11 +623,13 @@ pub struct RXTimingSetupAnsCreator {}
 
 impl_mac_cmd_creator_boilerplate!(RXTimingSetupAnsCreator, 0x08);
 
-pub fn build_mac_commands(cmds: &[&dyn maccommands::SerializableMacCommand]) -> Vec<u8> {
-    let mut res = vec![];
+pub fn build_mac_commands<'a, 'b, 'c>(cmds: &'a [&'b dyn maccommands::SerializableMacCommand]) -> Result<Vec<u8>, &'c str> {
+    let mut res = Vec::new();
     for mc in cmds {
-        res.push(mc.cid());
-        res.extend_from_slice(mc.payload_bytes())
+        res.push(mc.cid()).unwrap();
+        if res.extend_from_slice(mc.payload_bytes()).is_err() {
+            return Err("failed to serialize the mac commands - maybe they are too many");
+        }
     }
-    res
+    Ok(res)
 }

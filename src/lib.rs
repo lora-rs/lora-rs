@@ -8,6 +8,7 @@
 
 //! This module implements LoRaWAN packet handling and parsing.
 
+#![no_std]
 #[macro_use]
 extern crate arrayref;
 
@@ -16,5 +17,8 @@ pub mod keys;
 pub mod maccommandcreator;
 pub mod maccommands;
 pub mod parser;
+
+#[cfg(feature = "full")]
+pub mod extra;
 
 mod securityhelpers;

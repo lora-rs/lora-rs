@@ -175,7 +175,7 @@ fn test_build_mac_commands() {
     let cmds: Vec<&dyn SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_ans];
 
     assert_eq!(
-        build_mac_commands(&cmds[..]),
-        vec![0x08, 0x02, 0x06, 0xfe, 0x3f]
+        &build_mac_commands(&cmds[..]).unwrap()[..],
+        &vec![0x08, 0x02, 0x06, 0xfe, 0x3f][..]
     );
 }
