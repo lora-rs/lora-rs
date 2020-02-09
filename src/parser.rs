@@ -6,21 +6,20 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use std::convert::AsRef;
-use std::string::ToString;
+#[cfg(feature = "with-to-string")]
 
-use aes::block_cipher_trait::generic_array::GenericArray;
+use aes::block_cipher_trait::generic_array;
 use aes::block_cipher_trait::BlockCipher;
 use aes::Aes128;
 
-//use crypto::aessafe;
-//use crypto::symmetriccipher::BlockEncryptor;
+use heapless;
+use heapless::consts::*;
+
+type Vec<T> = heapless::Vec<T,U256>;
 
 use super::keys;
 use super::maccommands;
 use super::securityhelpers;
-
-const INT_TO_HEX_MAP: &[u8] = b"0123456789abcdef";
 
 macro_rules! fixed_len_struct {
     (
@@ -57,17 +56,6 @@ macro_rules! fixed_len_struct {
             }
         }
 
-        impl<'a> ToString for $type<'a> {
-            fn to_string(&self) -> String {
-                let mut res = vec![0u8; 2 * $size];
-                for i in 0..$size {
-                    res[2 * i] = INT_TO_HEX_MAP[(self.0[i] >> 4) as usize];
-                    res[2 * i + 1] = INT_TO_HEX_MAP[(self.0[i] & 0x0f) as usize];
-                }
-
-                unsafe { String::from_utf8_unchecked(res) }
-            }
-        }
     };
 }
 
@@ -157,7 +145,7 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
             if len != 17 && len != 33 {
                 return Err("bytes have incorrect size");
             }
-            let k = GenericArray::from_slice(&key.0[..]);
+            let k = generic_array::GenericArray::from_slice(&key.0[..]);
             let aes_enc = Aes128::new(k);
 
             //let aes_enc = aessafe::AesSafe128Encryptor::new(&key.0[..]);
@@ -166,7 +154,7 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
                 let start = (i << 4) + 1;
                 //aes_enc.encrypt_block(&bytes[start..(start + 16)], &mut tmp[..]);
                 //bytes[start..(16+start)].clone_from_slice(&tmp[..16])
-                let mut block = GenericArray::clone_from_slice(&bytes[start..(start + 16)]);
+                let mut block = generic_array::GenericArray::clone_from_slice(&bytes[start..(start + 16)]);
                 aes_enc.encrypt_block(&mut block);
                 bytes[start..(16+start)].clone_from_slice(&block[..16])
             }
@@ -589,7 +577,7 @@ impl<'a> FHDR<'a> {
         (u16::from(self.0[6]) << 8) | u16::from(self.0[5])
     }
 
-    pub fn fopts(&self) -> Result<Vec<maccommands::MacCommand>, String> {
+    pub fn fopts(&self) -> Result<Vec<maccommands::MacCommand>, &str> {
         let f_opts_len = FCtrl(self.0[4], self.1).f_opts_len();
         maccommands::parse_mac_commands(&self.0[7 as usize..(7 + f_opts_len) as usize], self.1)
     }
@@ -649,7 +637,7 @@ impl FRMMacCommands {
         FRMMacCommands(uplink, bytes)
     }
 
-    pub fn mac_commands(&self) -> Result<Vec<maccommands::MacCommand>, String> {
+    pub fn mac_commands(&self) -> Result<Vec<maccommands::MacCommand>, &str> {
         maccommands::parse_mac_commands(&self.1[..], self.0)
     }
 }

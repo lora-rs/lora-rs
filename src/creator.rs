@@ -6,26 +6,35 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
+use heapless;
+use heapless::consts::*;
+type Vec<T> = heapless::Vec<T,U256>;
+
 use super::keys;
 use super::maccommandcreator;
 use super::maccommands;
 use super::parser;
 use super::securityhelpers;
 
+#[cfg(feature = "with-downlink")]
 use aes::block_cipher_trait::generic_array::GenericArray;
+#[cfg(feature = "with-downlink")]
 use aes::block_cipher_trait::BlockCipher;
+#[cfg(feature = "with-downlink")]
 use aes::Aes128;
 
 const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
 /// JoinAcceptCreator serves for creating binary representation of Physical
 /// Payload of JoinAccept.
+#[cfg(feature = "with-downlink")]
 #[derive(Default)]
 pub struct JoinAcceptCreator {
     data: Vec<u8>,
     encrypted: bool,
 }
 
+#[cfg(feature = "with-downlink")]
 impl JoinAcceptCreator {
     /// Creates a well initialized JoinAcceptCreator.
     ///
@@ -40,12 +49,15 @@ impl JoinAcceptCreator {
     /// phy.set_dev_addr(&[1; 4]);
     /// phy.set_dl_settings(2);
     /// phy.set_rx_delay(1);
-    /// phy.set_c_f_list(vec![lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap(),
-    ///      lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()]);
+    /// let mut freqs: heapless::Vec<lorawan::maccommands::Frequency, heapless::consts::U256> = heapless::Vec::new();
+    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap()).unwrap();
+    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()).unwrap();
+    /// phy.set_c_f_list(freqs);
     /// let payload = phy.build(&key).unwrap();
     /// ```
     pub fn new() -> JoinAcceptCreator {
-        let mut data = vec![0; 17];
+        let mut data = Vec::new();
+        data.extend_from_slice(&[0; 17]).unwrap();
         data[0] = 0x20;
         JoinAcceptCreator {
             data,
@@ -138,7 +150,7 @@ impl JoinAcceptCreator {
             return Err("too many frequences");
         }
         if self.data.len() < 33 {
-            self.data.resize(33, 0);
+            self.data.resize(33, 0).unwrap();
         }
         ch_list.iter().enumerate().for_each(|(i, fr)| {
             let v = fr.value() / 100;
@@ -203,7 +215,8 @@ impl JoinRequestCreator {
     /// let payload = phy.build(&key).unwrap();
     /// ```
     pub fn new() -> JoinRequestCreator {
-        let mut data = vec![0; 23];
+        let mut data = Vec::new();
+        data.extend_from_slice(&[0; 23]).unwrap();
         data[0] = 0x00;
         JoinRequestCreator { data }
     }
@@ -300,7 +313,8 @@ impl DataPayloadCreator {
     /// let payload = phy.build(b"hello", &nwk_skey, &app_skey).unwrap();
     /// ```
     pub fn new() -> DataPayloadCreator {
-        let mut data = vec![0; 12];
+        let mut data = Vec::new();
+        data.extend_from_slice(&[0; 12]).unwrap();
         data[0] = 0x40;
         DataPayloadCreator {
             data,
@@ -412,16 +426,21 @@ impl DataPayloadCreator {
     ///     .set_channel_mask_ack(true)
     ///     .set_data_rate_ack(false)
     ///     .set_tx_power_ack(true);
-    /// let cmds: Vec<&lorawan::maccommands::SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
-    /// phy.set_mac_commands(cmds);
+    /// let mut cmds: heapless::Vec<&dyn lorawan::maccommands::SerializableMacCommand, heapless::consts::U256> = heapless::Vec::new();
+    /// cmds.push(&mac_cmd1);
+    /// cmds.push(&mac_cmd2);
+    /// phy.set_mac_commands(cmds).unwrap();
     /// ```
     pub fn set_mac_commands<'a>(
         &'a mut self,
         cmds: Vec<&dyn maccommands::SerializableMacCommand>,
-    ) -> &mut DataPayloadCreator {
-        self.mac_commands_bytes = maccommandcreator::build_mac_commands(&cmds[..]);
-
-        self
+    ) -> Result<&mut DataPayloadCreator, &str> {
+        if let Ok(result) = maccommandcreator::build_mac_commands(&cmds[..]) {
+            self.mac_commands_bytes = result;
+            Ok(self)
+        } else {
+            Err("failed to set mac commands - maybe they are too many")
+        }
     }
 
     /// Whether the mac commands should be encrypted.
@@ -513,10 +532,9 @@ impl DataPayloadCreator {
         // Set payload if possible, otherwise return error
         let additional_bytes_needed = last_filled + payload_len + 4 - self.data.len();
         if additional_bytes_needed > 0 {
-            // we don't have enough length to accomodate all the bytes
-            self.data.reserve_exact(additional_bytes_needed);
-            unsafe {
-                self.data.set_len(last_filled + payload_len + 4);
+            // we don't have enough length to accomodate all the bytes right now
+            if self.data.resize_default(last_filled + payload_len + 4).is_err() {
+                return Err("payload exceeds max allowed payload size");
             }
         }
         if payload_len > 0 {
