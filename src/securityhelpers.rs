@@ -6,11 +6,12 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use crypto::aessafe;
-use crypto::mac::Mac;
-use crypto::symmetriccipher::BlockEncryptor;
+use aes::block_cipher_trait::generic_array::GenericArray;
+use aes::block_cipher_trait::BlockCipher;
+use aes::Aes128;
 
-use super::cmac;
+use cmac::{Cmac, Mac}; 
+
 use super::keys;
 
 /// calculate_data_mic computes the MIC of a correct data packet.
@@ -43,8 +44,7 @@ fn generate_helper_block(data: &[u8], first: u8, fcnt: u32, res: &mut [u8]) {
 
 /// calculate_mic computes the MIC of a correct data packet.
 pub fn calculate_mic<'a>(data: &'a [u8], key: &keys::AES128) -> keys::MIC {
-    let aes_enc = aessafe::AesSafe128Encryptor::new(&key.0[..]);
-    let mut cipher = cmac::Cmac::new(aes_enc);
+    let mut cipher = Cmac::<Aes128>::new_varkey(&key.0[..]).unwrap();
 
     cipher.input(data);
     let result = cipher.result();
@@ -71,14 +71,14 @@ pub fn encrypt_frm_data_payload<'a>(
     let mut a = [0u8; 16];
     generate_helper_block(phy_payload, 0x01, fcnt, &mut a[..]);
 
-    let aes_enc = aessafe::AesSafe128Encryptor::new(&key.0[..]);
+    let aes_enc = Aes128::new(GenericArray::from_slice(&key.0[..]));
     let mut result: Vec<u8> = block
         .chunks(16)
         .enumerate()
         .flat_map(|(i, c)| {
-            let mut tmp = [0u8; 16];
             a[15] = (i + 1) as u8;
-            aes_enc.encrypt_block(&a[..], &mut tmp);
+            let mut tmp = GenericArray::from_mut_slice(&mut a[..]);
+            aes_enc.encrypt_block(&mut tmp);
             c.iter()
                 .enumerate()
                 .map(|(j, v)| v ^ tmp[j])

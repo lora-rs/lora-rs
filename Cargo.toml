@@ -1,6 +1,7 @@
 [package]
 name = "lorawan"
 version = "0.4.1"
+edition = "2018"
 authors = ["Ivaylo Petrov <ivajloip@gmail.com>"]
 description = "Crate lorawan provides structures and tools to read and write LoRaWAN messages from and to a slice of bytes."
 repository = "https://github.com/ivajloip/rust-lorawan"
@@ -9,4 +10,6 @@ keywords = ["lorawan", "iot", "lpwan", "parser"]
 
 [dependencies]
 arrayref = "0.3.5"
-rust-crypto = "^0.2"
+aes = "0.3.2"
+cmac = "0.2.0"
+generic-array = "0.12.0"

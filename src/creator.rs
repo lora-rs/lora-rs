@@ -6,14 +6,15 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use crypto::aessafe;
-use crypto::symmetriccipher::BlockDecryptor;
-
 use super::keys;
 use super::maccommandcreator;
 use super::maccommands;
 use super::parser;
 use super::securityhelpers;
+
+use aes::block_cipher_trait::generic_array::GenericArray;
+use aes::block_cipher_trait::BlockCipher;
+use aes::Aes128;
 
 const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
@@ -164,12 +165,11 @@ impl JoinAcceptCreator {
 
     fn encrypt_payload(&mut self, key: &keys::AES128) {
         set_mic(&mut self.data[..], key);
-        let aes_enc = aessafe::AesSafe128Decryptor::new(&key.0[..]);
-        let mut tmp = vec![0; 16];
+        let aes_enc = Aes128::new(GenericArray::from_slice(&key.0[..]));
         for i in 0..(self.data.len() >> 4) {
             let start = (i << 4) + 1;
-            aes_enc.decrypt_block(&self.data[start..(start + 16)], &mut tmp[..]);
-            self.data[start..(16 + start)].clone_from_slice(&tmp[..16])
+            let mut tmp = GenericArray::from_mut_slice(&mut self.data[start..(16 + start)]);
+            aes_enc.decrypt_block(&mut tmp);
         }
         self.encrypted = true;
     }

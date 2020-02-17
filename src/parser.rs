@@ -9,8 +9,12 @@
 use std::convert::AsRef;
 use std::string::ToString;
 
-use crypto::aessafe;
-use crypto::symmetriccipher::BlockEncryptor;
+use aes::block_cipher_trait::generic_array::GenericArray;
+use aes::block_cipher_trait::BlockCipher;
+use aes::Aes128;
+
+//use crypto::aessafe;
+//use crypto::symmetriccipher::BlockEncryptor;
 
 use super::keys;
 use super::maccommands;
@@ -153,12 +157,18 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
             if len != 17 && len != 33 {
                 return Err("bytes have incorrect size");
             }
-            let aes_enc = aessafe::AesSafe128Encryptor::new(&key.0[..]);
-            let mut tmp = vec![0; 16];
+            let k = GenericArray::from_slice(&key.0[..]);
+            let aes_enc = Aes128::new(k);
+
+            //let aes_enc = aessafe::AesSafe128Encryptor::new(&key.0[..]);
+            //let mut tmp = vec![0; 16];
             for i in 0..(len >> 4) {
                 let start = (i << 4) + 1;
-                aes_enc.encrypt_block(&bytes[start..(start + 16)], &mut tmp[..]);
-                bytes[start..(16+start)].clone_from_slice(&tmp[..16])
+                //aes_enc.encrypt_block(&bytes[start..(start + 16)], &mut tmp[..]);
+                //bytes[start..(16+start)].clone_from_slice(&tmp[..16])
+                let mut block = GenericArray::clone_from_slice(&bytes[start..(start + 16)]);
+                aes_enc.encrypt_block(&mut block);
+                bytes[start..(16+start)].clone_from_slice(&block[..16])
             }
         }
         GenericPhyPayload::new(data)

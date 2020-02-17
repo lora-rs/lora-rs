@@ -10,9 +10,7 @@
 
 #[macro_use]
 extern crate arrayref;
-extern crate crypto;
 
-pub mod cmac;
 pub mod creator;
 pub mod keys;
 pub mod maccommandcreator;
