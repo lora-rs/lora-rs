@@ -1,6 +1,6 @@
 [package]
 name = "lorawan"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2018"
 authors = ["Ivaylo Petrov <ivajloip@gmail.com>"]
 description = "Crate lorawan provides structures and tools to read and write LoRaWAN messages from and to a slice of bytes."
