@@ -127,6 +127,10 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
         Ok(result)
     }
 
+    pub fn inner_ref(&self) -> &T {
+        &self.0
+    }
+
     /// Creates a PhyPayload from the decrypted bytes of a JoinAccept.
     ///
     /// # Argument
