@@ -15,6 +15,17 @@ cmac = "0.2.0"
 generic-array = "0.12.0"
 heapless = "0.5.3"
 
+[dev-dependencies]
+criterion = "0.3"
+trallocator = { path = "./trallocator" }
+
+[[bench]]
+name = "lorawan"
+harness = false
+
+[profile.release]
+debug = true
+
 [features]
 default = ["full"]
 
