@@ -6,7 +6,26 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-#[cfg(feature = "with-to-string")]
+//! Provides types and methods for parsing LoRaWAN payloads.
+//!
+//! # Examples
+//!
+//! ```
+//! let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
+//!     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
+//! if let Ok(lorawan::parser::PhyPayload::DataPayload(
+//!         lorawan::parser::PhyDataPayload::EncryptedData(phy))) =
+//!                 lorawan::parser::parse(data) {
+//!     let key = lorawan::keys::AES128([1; 16]);
+//!     let decrypted = phy.decrypt(None, Some(&key), 1).unwrap();
+//!     if let Ok(lorawan::parser::FRMPayload::Data(data_payload)) =
+//!             decrypted.frm_payload() {
+//!         println!("{}", String::from_utf8_lossy(data_payload.0));
+//!     }
+//! } else {
+//!     panic!("failed to parse data payload");
+//! }
+//! ```
 
 use aes::block_cipher_trait::generic_array;
 use aes::block_cipher_trait::BlockCipher;
@@ -55,74 +74,344 @@ macro_rules! fixed_len_struct {
                 &self.0[..]
             }
         }
-
     };
 }
 
-/// GenericPhyPayload contains the common logic for parsing the complete lorawan package for any
-/// type that can be converted to bytes.
+/// PhyPayload is a type that represents a physical LoRaWAN payload.
 ///
-/// It has two versoins PhyPayload that uses borrowed bytes and PhysicalPayload that owns the bytes
-/// for simpler passing around.
+/// It can either be JoinRequest, JoinAccept, or DataPayload.
 #[derive(Debug, PartialEq)]
-pub struct GenericPhyPayload<T: AsRef<[u8]>>(T);
+pub enum PhyPayload<T: AsRef<[u8]> +  AsMut<[u8]>> {
+    JoinRequest(PhyJoinRequestPayload<T>),
+    JoinAccept(PhyJoinAcceptPayload<T>),
+    DataPayload(PhyDataPayload<T>)
+}
 
-impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
-    /// Creates a PhyPayload from bytes.
+/// PhyJoinAcceptPayload is a type that represents a JoinAccept.
+///
+/// It can either be encrypted for example as a result from the [parse](fn.parse.html)
+/// function or not.
+#[derive(Debug, PartialEq)]
+pub enum PhyJoinAcceptPayload<T: AsRef<[u8]> + AsMut<[u8]>> {
+    EncryptedJoinAccept(EncryptedPhyJoinAcceptPayload<T>),
+    DecryptedJoinAccept(DecryptedPhyJoinAcceptPayload<T>)
+}
+
+/// PhyDataPayload is a type that represents a ConfirmedDataUp, ConfirmedDataDown,
+/// UnconfirmedDataUp or UnconfirmedDataDown.
+///
+/// It can either be encrypted for example as a result from the [parse](fn.parse.html)
+/// function or not.
+#[derive(Debug, PartialEq)]
+pub enum PhyDataPayload<T: AsRef<[u8]> + AsMut<[u8]>> {
+    EncryptedData(EncryptedPhyDataPayload<T>),
+    DecryptedData(DecryptedPhyDataPayload<T>)
+}
+
+/// PhyJoinAcceptPayload represents a JoinRequest.
+///
+/// It can be built either directly through the [new](#method.new) or using the
+/// [parse](fn.parse.html) function.
+#[derive(Debug, PartialEq)]
+pub struct PhyJoinRequestPayload<T: AsRef<[u8]>>(T);
+
+impl<T: AsRef<[u8]>> PhyJoinRequestPayload<T> {
+    /// Creates a new PhyJoinRequestPayload if the provided data is acceptable.
     ///
     /// # Argument
     ///
-    /// * bytes - the data from which the PhyPayload is to be built.
+    /// * data - the bytes for the payload.
     ///
     /// # Examples
     ///
     /// ```
-    /// let data = vec![0x00u8, 0x04u8, 0x03u8, 0x02u8, 0x01u8, 0x04u8, 0x03u8,
-    ///     0x02u8, 0x01u8, 0x05u8, 0x04u8, 0x03u8, 0x02u8, 0x05u8, 0x04u8,
-    ///     0x03u8, 0x02u8, 0x2du8, 0x10u8, 0x6au8, 0x99u8, 0x0eu8, 0x12];
-    /// let phy = lorawan::parser::PhyPayload::new(&data[..]);
+    /// let data = vec![0x00, 0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01, 0x05, 0x04, 0x03,
+    ///     0x02, 0x05, 0x04, 0x03, 0x02, 0x2d, 0x10, 0x6a, 0x99, 0x0e, 0x12];
+    /// let phy = lorawan::parser::PhyJoinRequestPayload::new(data);
     /// ```
-    pub fn new(data: T) -> Result<GenericPhyPayload<T>, &'a str> {
-        let result = GenericPhyPayload(data);
-        {
-            let bytes = result.0.as_ref();
-            let len = bytes.len();
-            // the smallest payload is a data payload without fport and FRMPayload
-            // which is 12 bytes long.
-            if len < 12 {
-                return Err("insufficient number of bytes");
-            }
-            let can_build: bool;
-            let payload = &bytes[1..(len - 4)];
-            match result.mhdr().mtype() {
-                MType::JoinRequest => {
-                    can_build = JoinRequestPayload::can_build_from(payload);
-                }
-                MType::JoinAccept => {
-                    can_build = JoinAcceptPayload::can_build_from(payload);
-                }
-                MType::UnconfirmedDataUp | MType::ConfirmedDataUp => {
-                    can_build = DataPayload::can_build_from(payload, true);
-                }
-                MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
-                    can_build = DataPayload::can_build_from(payload, false);
-                }
-                _ => return Err("unsupported message type"),
-            }
-
-            if !can_build {
-                return Err("mac payload incorrect");
-            }
+    pub fn new<'a>(data: T) -> Result<Self, &'a str> {
+        if !PhyJoinRequestPayload::<T>::can_build_from(data.as_ref()) {
+            Err("can not build PhyJoinRequestPayload from the provided data")
+        } else {
+            Ok(Self(data))
         }
+    }
 
-        Ok(result)
+    fn can_build_from(bytes: &[u8]) -> bool {
+        bytes.len() == 23 && MHDR(bytes[0]).mtype() == MType::JoinRequest
+    }
+
+    /// Gives the APP EUI of the JoinRequest.
+    pub fn app_eui(&self) -> EUI64 {
+        EUI64::new_from_raw(&self.0.as_ref()[1..9])
+    }
+
+    /// Gives the DEV EUI of the JoinRequest.
+    pub fn dev_eui(&self) -> EUI64 {
+        EUI64::new_from_raw(&self.0.as_ref()[9..17])
+    }
+
+    /// Gives the DEV Nonce of the JoinRequest.
+    pub fn dev_nonce(&self) -> DevNonce {
+        DevNonce::new_from_raw(&self.0.as_ref()[17..19])
+    }
+
+    /// Gives the MIC of the JoinRequest.
+    pub fn mic(&self) -> keys::MIC {
+        mic_helper(self.0.as_ref())
+    }
+
+    /// Verifies that the JoinRequest has correct MIC.
+    pub fn validate_mic(&self, key: &keys::AES128) -> Result<bool, &str> {
+        Ok(self.mic() == self.calculate_mic(key)?)
+    }
+
+    fn calculate_mic(&self, key: &keys::AES128) -> Result<keys::MIC, &str> {
+        let d = self.0.as_ref();
+        Ok(securityhelpers::calculate_mic(&d[..d.len() - 4], key))
+    }
+}
+
+fn mic_helper(data: &[u8]) -> keys::MIC {
+    let len = data.len();
+    keys::MIC([data[len - 4], data[len - 3], data[len - 2], data[len - 1]])
+}
+
+/// EncryptedPhyJoinAcceptPayload represents an encrypted JoinAccept.
+///
+/// It can be built either directly through the [new](#method.new) or using the
+/// [parse](fn.parse.html) function.
+#[derive(Debug, PartialEq)]
+pub struct EncryptedPhyJoinAcceptPayload<T: AsRef<[u8]>>(T);
+
+impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedPhyJoinAcceptPayload<T> {
+    /// Creates a new EncryptedPhyJoinAcceptPayload if the provided data is acceptable.
+    ///
+    /// # Argument
+    ///
+    /// * data - the bytes for the payload.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb,
+    ///     0x37, 0x42, 0x97, 0x51, 0x42];
+    /// let phy = lorawan::parser::EncryptedPhyJoinAcceptPayload::new(data);
+    /// ```
+    pub fn new<'a>(data: T) -> Result<Self, &'a str> {
+        if EncryptedPhyJoinAcceptPayload::<T>::can_build_from(data.as_ref()) {
+            Ok(Self(data))
+        } else {
+            Err("can not build EncryptedPhyJoinAcceptPayload from the provided data")
+        }
+    }
+
+    fn can_build_from(bytes: &[u8]) -> bool {
+        bytes.len() == 17 || bytes.len() == 33 && MHDR(bytes[0]).mtype() == MType::JoinAccept
     }
 
     pub fn inner_ref(&self) -> &T {
         &self.0
     }
 
-    /// Creates a PhyPayload from the decrypted bytes of a JoinAccept.
+    /// Decrypts the EncryptedPhyJoinAcceptPayload producing a DecryptedPhyJoinAcceptPayload.
+    ///
+    /// This method consumes the EncryptedPhyJoinAcceptPayload as it reuses the underlying memory.
+    ///
+    /// # Argument
+    ///
+    /// * key - the key to be used for the decryption.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb,
+    ///     0x37, 0x42, 0x97, 0x51, 0x42];
+    /// let phy = lorawan::parser::EncryptedPhyJoinAcceptPayload::new(data);
+    /// let key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
+    /// let decrypted = phy.unwrap().decrypt(&key);
+    /// ```
+    pub fn decrypt<'a, 'b>(mut self, key: &'a keys::AES128) ->
+        Result<DecryptedPhyJoinAcceptPayload<T>, &'b str> {
+        {
+            let bytes = self.0.as_mut();
+            let len = bytes.len();
+            if len != 17 && len != 33 {
+                return Err("bytes have incorrect size");
+            }
+            let k = generic_array::GenericArray::from_slice(&key.0[..]);
+            let aes_enc = Aes128::new(k);
+
+            for i in 0..(len >> 4) {
+                let start = (i << 4) + 1;
+                // TODO: try to remove the copying
+                let mut block = generic_array::GenericArray::clone_from_slice(&bytes[start..(start + 16)]);
+                aes_enc.encrypt_block(&mut block);
+                bytes[start..(16+start)].clone_from_slice(&block[..16])
+            }
+        }
+        Ok(DecryptedPhyJoinAcceptPayload(self.0))
+    }
+}
+
+/// DecryptedPhyJoinAcceptPayload represents a decrypted JoinAccept.
+///
+/// It can be built either directly through the [new](#method.new) or using the
+/// [EncryptedPhyJoinAcceptPayload.decrypt](struct.EncryptedPhyJoinAcceptPayload.html#method.decrypt) function.
+#[derive(Debug, PartialEq)]
+pub struct DecryptedPhyJoinAcceptPayload<T: AsRef<[u8]>>(T);
+
+impl<T: AsRef<[u8]>> DecryptedPhyJoinAcceptPayload<T> {
+    pub fn inner_ref(&self) -> &T {
+        &self.0
+    }
+
+    /// Gives the MIC of the DecryptedPhyJoinAcceptPayload.
+    pub fn mic(&self) -> keys::MIC {
+        mic_helper(self.0.as_ref())
+    }
+
+    /// Verifies that the JoinAccept has correct MIC.
+    pub fn validate_mic<'a>(&self, key: &keys::AES128) -> Result<bool, &'a str> {
+        Ok(self.mic() == self.calculate_mic(key)?)
+    }
+
+    fn calculate_mic<'a>(&self, key: &keys::AES128) -> Result<keys::MIC, &'a str> {
+        let d = self.0.as_ref();
+        Ok(securityhelpers::calculate_mic(&d[..d.len() - 4], key))
+    }
+
+    /// Gives the app nonce of the JoinAccept.
+    pub fn app_nonce(&self) -> AppNonce {
+        AppNonce::new_from_raw(&self.0.as_ref()[1..4])
+    }
+
+    /// Gives the net ID of the JoinAccept.
+    pub fn net_id(&self) -> NwkAddr {
+        NwkAddr::new_from_raw(&self.0.as_ref()[4..7])
+    }
+
+    /// Gives the dev address of the JoinAccept.
+    pub fn dev_addr(&self) -> DevAddr {
+        DevAddr::new_from_raw(&self.0.as_ref()[7..11])
+    }
+
+    /// Gives the downlink configuration of the JoinAccept.
+    pub fn dl_settings(&self) -> maccommands::DLSettings {
+        maccommands::DLSettings::new(self.0.as_ref()[11])
+    }
+
+    /// Gives the RX delay of the JoinAccept.
+    pub fn rx_delay(&self) -> u8 {
+        self.0.as_ref()[12] & 0x0f
+    }
+
+    /// Gives the channel frequency list of the JoinAccept.
+    pub fn c_f_list(&self) -> Vec<maccommands::Frequency> {
+        if self.0.as_ref().len() == 17 {
+            return Vec::new();
+        }
+        self.0.as_ref()[13..28]
+            .chunks(3)
+            .map(|f| maccommands::Frequency::new_from_raw(f))
+            .collect()
+    }
+
+    /// Computes the network session key for a given device.
+    ///
+    /// # Argument
+    ///
+    /// * app_nonce - the network server nonce.
+    /// * nwk_addr - the address of the network.
+    /// * dev_nonce - the nonce from the device.
+    /// * key - the app key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let dev_nonce = vec![0xcc, 0xdd];
+    /// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37,
+    ///     0x42, 0x97, 0x51, 0x42];
+    /// let app_key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
+    /// let join_accept = lorawan::parser::DecryptedPhyJoinAcceptPayload::new(data, &app_key).unwrap();
+    ///
+    /// let nwk_skey = join_accept.derive_newskey(
+    ///     &lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
+    ///     &app_key,
+    /// );
+    /// ```
+    pub fn derive_newskey(&self, dev_nonce: &DevNonce, key: &keys::AES128) -> keys::AES128 {
+        self.derive_session_key(0x1, dev_nonce, key)
+    }
+
+    /// Computes the application session key for a given device.
+    ///
+    /// # Argument
+    ///
+    /// * app_nonce - the network server nonce.
+    /// * nwk_addr - the address of the network.
+    /// * dev_nonce - the nonce from the device.
+    /// * key - the app key.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let dev_nonce = vec![0xcc, 0xdd];
+    /// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37,
+    ///     0x42, 0x97, 0x51, 0x42];
+    /// let app_key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
+    /// let join_accept = lorawan::parser::DecryptedPhyJoinAcceptPayload::new(data, &app_key).unwrap();
+    ///
+    /// let app_skey = join_accept.derive_appskey(
+    ///     &lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
+    ///     &app_key,
+    /// );
+    /// ```
+    pub fn derive_appskey(&self, dev_nonce: &DevNonce, key: &keys::AES128) -> keys::AES128 {
+        self.derive_session_key(0x2, dev_nonce, key)
+    }
+
+    fn derive_session_key(&self,
+        first_byte: u8,
+        dev_nonce: &DevNonce,
+        key: &keys::AES128) -> keys::AES128 {
+
+        let key_arr = generic_array::GenericArray::from_slice(&key.0);
+        let cipher = Aes128::new(key_arr);
+
+        // note: AppNonce is 24 bit, NetId is 24 bit, DevNonce is 16 bit
+        let app_nonce = self.app_nonce();
+        let nwk_addr = self.net_id();
+        let (app_nonce_arr, nwk_addr_arr, dev_nonce_arr)
+            = (app_nonce.as_ref(), nwk_addr.as_ref(), dev_nonce.as_ref());
+
+        let mut block = [0u8; 16];
+        block[0] = first_byte;
+        block[1] = app_nonce_arr[0];
+        block[2] = app_nonce_arr[1];
+        block[3] = app_nonce_arr[2];
+        block[4] = nwk_addr_arr[0];
+        block[5] = nwk_addr_arr[1];
+        block[6] = nwk_addr_arr[2];
+        block[7] = dev_nonce_arr[0];
+        block[8] = dev_nonce_arr[1];
+
+        let mut input = generic_array::GenericArray::clone_from_slice(&block);
+        cipher.encrypt_block(&mut input);
+
+        let mut output_key = [0u8; 16];
+        output_key.copy_from_slice(&input[0..16]);
+        keys::AES128(output_key)
+    }
+}
+
+impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedPhyJoinAcceptPayload<T> {
+    /// Creates a DecryptedPhyJoinAcceptPayload from the bytes of a JoinAccept.
+    ///
+    /// The JoinAccept payload is automatically decrypted and the mic is verified.
     ///
     /// # Argument
     ///
@@ -137,33 +426,68 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
     ///     0x97u8, 0x51u8, 0x42u8];
     /// let key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
     ///     0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
-    /// let phy = lorawan::parser::PhyPayload::new_decrypted_join_accept(&mut data[..], &key);
+    /// let phy = lorawan::parser::DecryptedPhyJoinAcceptPayload::new(&mut data[..], &key);
     /// ```
-    pub fn new_decrypted_join_accept<TT: AsRef<[u8]> + AsMut<[u8]>>(
-        mut data: TT,
-        key: &'a keys::AES128,
-    ) -> Result<GenericPhyPayload<TT>, &'a str> {
-        {
-            let bytes = data.as_mut();
-            let len = bytes.len();
-            if len != 17 && len != 33 {
-                return Err("bytes have incorrect size");
-            }
-            let k = generic_array::GenericArray::from_slice(&key.0[..]);
-            let aes_enc = Aes128::new(k);
+    pub fn new<'a, 'b>(data: T, key: &'a keys::AES128) -> Result<Self, &'b str> {
+        let t = EncryptedPhyJoinAcceptPayload::new(data)?;
+        let res = t.decrypt(key)?;
+        if res.validate_mic(key)? {
+            Ok(res)
+        } else {
+            Err("MIC did not match")
+        }
+    }
+}
 
-            //let aes_enc = aessafe::AesSafe128Encryptor::new(&key.0[..]);
-            //let mut tmp = vec![0; 16];
-            for i in 0..(len >> 4) {
-                let start = (i << 4) + 1;
-                //aes_enc.encrypt_block(&bytes[start..(start + 16)], &mut tmp[..]);
-                //bytes[start..(16+start)].clone_from_slice(&tmp[..16])
-                let mut block = generic_array::GenericArray::clone_from_slice(&bytes[start..(start + 16)]);
-                aes_enc.encrypt_block(&mut block);
-                bytes[start..(16+start)].clone_from_slice(&block[..16])
+/// EncryptedPhyDataPayload represents an encrypted data payload.
+///
+/// It can be built either directly through the [new](#method.new) or using the
+/// [parse](fn.parse.html) function.
+#[derive(Debug, PartialEq)]
+pub struct EncryptedPhyDataPayload<T>(T);
+
+impl<T: AsRef<[u8]>> EncryptedPhyDataPayload<T> {
+    /// Creates a PhyPayload from bytes.
+    ///
+    /// # Argument
+    ///
+    /// * bytes - the data from which the PhyPayload is to be built.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
+    ///     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
+    /// let phy = lorawan::parser::EncryptedPhyDataPayload::new(data);
+    /// ```
+    pub fn new<'a>(data: T) -> Result<Self, &'a str> {
+        //// TODO(ivaylo): Check this bug?
+        //can_build = DataPayload::can_build_from(payload, false);
+        if Self::can_build_from(data.as_ref()) {
+            Ok(Self(data))
+        } else {
+            Err("can not build EncryptedPhyDataPayload from the provided data")
+        }
+    }
+
+    pub fn inner_ref(&self) -> &T {
+        &self.0
+    }
+
+    fn can_build_from(bytes: &[u8]) -> bool {
+        let has_acceptable_len = bytes.len() >= 12 && fhdr_length(&bytes[1..]) <= bytes.len();
+        if !has_acceptable_len {
+            return false;
+        }
+        match MHDR(bytes[0]).mtype() {
+            MType::ConfirmedDataUp | MType::ConfirmedDataDown |
+                MType::UnconfirmedDataUp | MType::UnconfirmedDataDown => {
+                true
+            }
+            _ => {
+                false
             }
         }
-        GenericPhyPayload::new(data)
     }
 
     /// Gives the MHDR of the PhyPayload.
@@ -171,113 +495,141 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
         MHDR(self.0.as_ref()[0])
     }
 
-    /// Gives the MIC of the PhyPayload.
-    pub fn mic(&self) -> keys::MIC {
-        let d = self.0.as_ref();
-        let len = d.len();
-        keys::MIC([
-            d[len - 4],
-            d[len - 3],
-            d[len - 2],
-            d[len - 1],
-        ])
-    }
-
     /// Gives the MacPayload of the PhyPayload.
-    pub fn mac_payload(&self) -> MacPayload {
+    pub fn mac_payload(&self) -> DataPayload {
         let d = self.0.as_ref();
         let len = d.len();
         let bytes = &d[1..(len - 4)];
         match self.mhdr().mtype() {
-            MType::JoinRequest => MacPayload::JoinRequest(JoinRequestPayload::new(bytes).unwrap()),
-            MType::JoinAccept => MacPayload::JoinAccept(JoinAcceptPayload::new(bytes).unwrap()),
             MType::UnconfirmedDataUp | MType::ConfirmedDataUp => {
-                MacPayload::Data(DataPayload::new(bytes, true).unwrap())
+                DataPayload(bytes, true)
             }
             MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
-                MacPayload::Data(DataPayload::new(bytes, false).unwrap())
+                DataPayload(bytes, false)
             }
             _ => panic!("unexpected message type passed through the new method"),
         }
     }
 
-    /// Verifies that the PhyPayload has correct MIC.
-    ///
-    /// The PhyPayload needs to contain DataPayload.
-    pub fn validate_data_mic(&self, key: &keys::AES128, fcnt: u32) -> Result<bool, &str> {
-        let expected_mic = self.calculate_data_mic(key, fcnt)?;
-        let actual_mic = self.mic();
-
-        Ok(actual_mic == expected_mic)
+    /// Gives the MIC of the EncryptedPhyDataPayload.
+    pub fn mic(&self) -> keys::MIC {
+        mic_helper(self.0.as_ref())
     }
 
-    fn calculate_data_mic(&self, key: &keys::AES128, fcnt: u32) -> Result<keys::MIC, &str> {
-        if let MacPayload::Data(_) = self.mac_payload() {
-            let d = self.0.as_ref();
-            Ok(securityhelpers::calculate_data_mic(
-                &d[..d.len() - 4],
-                key,
-                fcnt,
-            ))
-        } else {
-            Err("Could not read mac payload, maybe of incorrect type")
-        }
+    /// Verifies that the DataPayload has correct MIC.
+    pub fn validate_mic<'b>(&self, key: &keys::AES128, fcnt: u32) -> Result<bool, &'b str> {
+        Ok(self.mic() == self.calculate_mic(key, fcnt)?)
     }
 
-    /// Verifies that the PhyPayload has correct MIC.
-    ///
-    /// The PhyPayload needs to contain JoinRequest or JoinAccept.
-    pub fn validate_join_mic(&self, key: &keys::AES128) -> Result<bool, &str> {
-        let expected_mic = self.calculate_join_pkt_mic(key)?;
-        let actual_mic = self.mic();
-
-        Ok(actual_mic == expected_mic)
-    }
-
-    fn calculate_join_pkt_mic(&self, key: &keys::AES128) -> Result<keys::MIC, &str> {
-        let mtype = self.mhdr().mtype();
-        if mtype != MType::JoinRequest && mtype != MType::JoinAccept {
-            return Err("Incorrect message type is not join request/accept");
-        }
-
+    fn calculate_mic<'b>(&self, key: &keys::AES128, fcnt: u32) -> Result<keys::MIC, &'b str> {
         let d = self.0.as_ref();
-        Ok(securityhelpers::calculate_mic(
-            &d[..d.len() - 4],
-            key,
-        ))
+        Ok(securityhelpers::calculate_data_mic(&d[..d.len() - 4], key, fcnt))
+    }
+}
+
+impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedPhyDataPayload<T> {
+    /// Decrypts the EncryptedPhyDataPayload payload.
+    ///
+    /// This method consumes the EncryptedPhyDataPayload as it reuses the underlying memory.
+    ///
+    /// # Argument
+    ///
+    /// * nwk_skey - the Network Session key used to decrypt the mac commands in case the payload
+    ///     is transporting those.
+    /// * app_skey - the Application Session key used to decrypt the application payload in case
+    ///     the payload is transporting that.
+    /// * fcnt - the counter used to encrypt the payload.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
+    ///     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
+    /// let key = lorawan::keys::AES128([1; 16]);
+    /// let enc_phy = lorawan::parser::EncryptedPhyDataPayload::new(data).unwrap();
+    /// let dec_phy = enc_phy.decrypt(None, Some(&key), 1);
+    /// ```
+    pub fn decrypt<'a, 'b>(mut self,
+                   nwk_skey: Option<&'b keys::AES128>,
+                   app_skey: Option<&'b keys::AES128>,
+                   fcnt: u32) -> Result<DecryptedPhyDataPayload<T>, &'a str> {
+        let data_payload = self.mac_payload();
+        let fhdr_length = data_payload.fhdr_length();
+        let fhdr = data_payload.fhdr();
+        let full_fcnt = compute_fcnt(fcnt, fhdr.fcnt());
+        let key = if data_payload.f_port().is_some() && data_payload.f_port().unwrap() != 0{
+            app_skey
+        } else {
+            nwk_skey
+        };
+        if key.is_none() {
+            return Err("key needed to decrypt the frm data payload was None");
+        }
+        let clear_data = securityhelpers::encrypt_frm_data_payload(
+            self.0.as_ref(),
+            &data_payload.0[(fhdr_length + 1)..],
+            full_fcnt,
+            &key.unwrap(),
+        )?;
+        let len = self.0.as_ref().len();
+        self.0.as_mut()[(fhdr_length + 2)..(len - 4)].clone_from_slice(&clear_data[..]);
+        Ok(DecryptedPhyDataPayload(self.0))
+    }
+}
+
+fn compute_fcnt(old_fcnt: u32, fcnt: u16) -> u32 {
+    ((old_fcnt >> 16) << 16) ^ u32::from(fcnt)
+}
+
+/// DecryptedPhyDataPayload represents a decrypted DataPayload.
+///
+/// It can be built either directly through the [new](#method.new) or using the
+/// [EncryptedPhyDataPayload.decrypt](struct.EncryptedPhyDataPayload.html#method.decrypt) function.
+#[derive(Debug, PartialEq)]
+pub struct DecryptedPhyDataPayload<T: AsRef<[u8]>>(T);
+
+impl<T: AsRef<[u8]>> DecryptedPhyDataPayload<T> {
+    pub fn inner_ref(&self) -> &T {
+        &self.0
     }
 
-    /// Decrypts the DataPayload payload.
-    ///
-    /// The PhyPayload needs to contain DataPayload.
-    pub fn decrypted_payload(&self, key: &keys::AES128, fcnt: u32) -> Result<FRMPayload, &str> {
-        if let MacPayload::Data(data_payload) = self.mac_payload() {
-            let fhdr_length = data_payload.fhdr_length();
-            let fhdr = data_payload.fhdr();
-            let full_fcnt = compute_fcnt(fcnt, fhdr.fcnt());
-            let clear_data = securityhelpers::encrypt_frm_data_payload(
-                self.0.as_ref(),
-                &data_payload.0[(fhdr_length + 1)..],
-                full_fcnt,
-                &key,
-            );
-            if let Result::Err(err) = clear_data {
-                return Err(err);
+    /// Gives the MHDR of the PhyPayload.
+    pub fn mhdr(&self) -> MHDR {
+        MHDR(self.0.as_ref()[0])
+    }
+
+    /// Gives the MacPayload of the PhyPayload.
+    pub fn mac_payload(&self) -> DataPayload {
+        let d = self.0.as_ref();
+        let len = d.len();
+        let bytes = &d[1..(len - 4)];
+        match self.mhdr().mtype() {
+            MType::UnconfirmedDataUp | MType::ConfirmedDataUp => {
+                DataPayload(bytes, true)
             }
-            // we have more bytes than fhdr + fport
-            if data_payload.0.len() <= fhdr_length + 1 {
-                Err("insufficient number of bytes left")
-            } else if data_payload.f_port() != Some(0) {
-                // the size guarantees the existance of f_port
-                Ok(FRMPayload::Data(clear_data.unwrap()))
-            } else {
-                Ok(FRMPayload::MACCommands(FRMMacCommands::new(
-                    clear_data.unwrap(),
-                    self.is_uplink(),
-                )))
+            MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
+                DataPayload(bytes, false)
             }
+            _ => panic!("unexpected message type passed through the new method"),
+        }
+    }
+
+    /// Returns FRMPayload that can represent either application payload or mac commands if fport
+    /// is 0.
+    pub fn frm_payload(&self) -> Result<FRMPayload, &str> {
+        let data_payload = self.mac_payload();
+        let fhdr_length = data_payload.fhdr_length();
+        //we have more bytes than fhdr + fport
+        if data_payload.0.len() <= fhdr_length + 1 {
+            Err("insufficient number of bytes left")
+        } else if data_payload.f_port() != Some(0) {
+            // the size guarantees the existance of f_port
+            Ok(FRMPayload::Data(FRMDataPayload(&data_payload.0[(fhdr_length + 1)..])))
         } else {
-            Err("bad mac payload")
+            Ok(FRMPayload::MACCommands(FRMMacCommands::new(
+                &data_payload.0[(fhdr_length + 1)..],
+                self.is_uplink(),
+            )))
         }
     }
 
@@ -288,19 +640,83 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
     }
 }
 
-fn compute_fcnt(old_fcnt: u32, fcnt: u16) -> u32 {
-    ((old_fcnt >> 16) << 16) ^ u32::from(fcnt)
+impl<'a, T: 'a + AsRef<[u8]> + AsMut<[u8]>> DecryptedPhyDataPayload<T> {
+    /// Creates a DecryptedPhyDataPayload from the bytes of a DataPayload.
+    ///
+    /// The DataPayload payload is automatically decrypted and the mic is verified.
+    ///
+    /// # Argument
+    ///
+    /// * nwk_skey - the Network Session key used to decrypt the mac commands in case the payload
+    ///     is transporting those.
+    /// * app_skey - the Application Session key used to decrypt the application payload in case
+    ///     the payload is transporting that.
+    /// * fcnt - the counter used to encrypt the payload.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
+    ///     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
+    /// let nwk_skey = lorawan::keys::AES128([2; 16]);
+    /// let app_skey = lorawan::keys::AES128([1; 16]);
+    /// let dec_phy = lorawan::parser::DecryptedPhyDataPayload::new(data,
+    ///     &nwk_skey,
+    ///     Some(&app_skey),
+    ///     1).unwrap();
+    /// ```
+    pub fn new<'b>(data: T,
+                   nwk_skey: &keys::AES128,
+                   app_skey: Option<&keys::AES128>,
+                   fcnt: u32) -> Result<Self, &'b str> {
+        let t = EncryptedPhyDataPayload::new(data)?;
+        if !t.validate_mic(nwk_skey, fcnt)? {
+            return Err("invalid mic");
+        }
+        t.decrypt(Some(nwk_skey), app_skey, fcnt)
+    }
 }
 
-/// Represents the complete structure for handling lorawan mac layer payload.
+/// Parses a payload as LoRaWAN physical payload.
 ///
-/// See GenericPhyPayload documentation for more information.
-pub type PhyPayload<'a> = GenericPhyPayload<&'a[u8]>;
-
-/// Represents the complete structure for handling lorawan mac layer payload.
+/// # Argument
 ///
-/// See GenericPhyPayload documentation for more information.
-pub type PhysicalPayload = GenericPhyPayload<Vec<u8>>;
+/// * bytes - the data from which the PhyPayload is to be built.
+///
+/// # Examples
+///
+/// ```
+/// let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
+///     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
+/// if let Ok(lorawan::parser::PhyPayload::DataPayload(phy)) =
+///         lorawan::parser::parse(data) {
+///     println!("{:?}", phy);
+/// } else {
+///     panic!("failed to parse data payload");
+/// }
+/// ```
+pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(data: T) -> Result<PhyPayload<T>, &'a str> {
+    let bytes = data.as_ref();
+    let len = bytes.len();
+    // the smallest payload is a data payload without fport and FRMPayload
+    // which is 12 bytes long.
+    if len < 12 {
+        return Err("insufficient number of bytes");
+    }
+    match MHDR(bytes[0]).mtype() {
+        MType::JoinRequest => {
+            Ok(PhyPayload::JoinRequest(PhyJoinRequestPayload::new(data)?))
+        },
+        MType::JoinAccept => {
+            Ok(PhyPayload::JoinAccept(PhyJoinAcceptPayload::EncryptedJoinAccept(EncryptedPhyJoinAcceptPayload::new(data)?)))
+        },
+        MType::UnconfirmedDataUp | MType::ConfirmedDataUp |
+        MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
+            Ok(PhyPayload::DataPayload(PhyDataPayload::EncryptedData(EncryptedPhyDataPayload::new(data)?)))
+        },
+        _ => Err("unsupported message type")
+    }
+}
 
 /// MHDR represents LoRaWAN MHDR.
 #[derive(Debug, PartialEq)]
@@ -361,17 +777,9 @@ pub enum Major {
     RFU,
 }
 
-/// MacPayload represents all the possible mac payloads a PhyPayload can carry.
-#[derive(Debug, PartialEq)]
-pub enum MacPayload<'a> {
-    Data(DataPayload<'a>),
-    JoinRequest(JoinRequestPayload<'a>),
-    JoinAccept(JoinAcceptPayload<'a>),
-}
-
 // *NOTE*: data should have at least 5 elements
-fn fhdr_length(bytes: &[u8], uplink: bool) -> usize {
-    7 + FCtrl(bytes[4], uplink).f_opts_len() as usize
+fn fhdr_length(bytes: &[u8]) -> usize {
+    7 + FCtrl(bytes[4], true).f_opts_len() as usize
 }
 
 /// DataPayload represents a data MacPayload.
@@ -379,32 +787,8 @@ fn fhdr_length(bytes: &[u8], uplink: bool) -> usize {
 pub struct DataPayload<'a>(&'a [u8], bool);
 
 impl<'a> DataPayload<'a> {
-    /// Creates a DataPayload from data.
-    ///
-    /// # Argument
-    ///
-    /// * bytes - the data from which DataPayload is to be built.
-    ///
-    /// * uplink - whether the packet is uplink or downlink.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let data = vec![0x04u8, 0x03u8, 0x02u8, 0x01u8, 0x04u8, 0x03u8, 0x02u8,
-    ///     0x01u8, 0x05u8, 0x04u8, 0x03u8, 0x02u8, 0x05u8, 0x04u8, 0x03u8,
-    ///     0x02u8, 0x2du8, 0x10u8];
-    /// let data_payload = lorawan::parser::DataPayload::new(&data[..], true);
-    /// ```
-    pub fn new(bytes: &'a [u8], uplink: bool) -> Option<DataPayload> {
-        if DataPayload::can_build_from(bytes, uplink) {
-            Some(DataPayload(bytes, uplink))
-        } else {
-            None
-        }
-    }
-
-    fn can_build_from(bytes: &'a [u8], uplink: bool) -> bool {
-        bytes.len() >= 7 && fhdr_length(bytes, uplink) <= bytes.len()
+    pub fn new_from_raw(data: &'a [u8], uplink: bool) -> Self {
+        Self(data, uplink)
     }
 
     /// Gives the FHDR of the DataPayload.
@@ -431,7 +815,7 @@ impl<'a> DataPayload<'a> {
     }
 
     fn fhdr_length(&self) -> usize {
-        fhdr_length(self.0, self.1)
+        fhdr_length(self.0)
     }
 }
 
@@ -448,89 +832,6 @@ fixed_len_struct! {
 fixed_len_struct! {
     /// AppNonce represents a 24 bit network server nonce.
     struct AppNonce[3];
-}
-
-/// JoinRequestPayload represents a join request MacPayload.
-#[derive(Debug, PartialEq)]
-pub struct JoinRequestPayload<'a>(&'a [u8]);
-
-impl<'a> JoinRequestPayload<'a> {
-    pub fn new(bytes: &'a [u8]) -> Option<JoinRequestPayload> {
-        if !JoinRequestPayload::can_build_from(bytes) {
-            return None;
-        }
-        Some(JoinRequestPayload(bytes))
-    }
-
-    fn can_build_from(bytes: &'a [u8]) -> bool {
-        bytes.len() == 18
-    }
-
-    pub fn app_eui(&self) -> EUI64 {
-        EUI64::new_from_raw(&self.0[..8])
-    }
-
-    pub fn dev_eui(&self) -> EUI64 {
-        EUI64::new_from_raw(&self.0[8..16])
-    }
-
-    pub fn dev_nonce(&self) -> DevNonce {
-        DevNonce::new_from_raw(&self.0[16..18])
-    }
-}
-
-/// JoinAcceptPayload represents a join accept MacPayload.
-#[derive(Debug, PartialEq)]
-pub struct JoinAcceptPayload<'a>(&'a [u8]);
-
-impl<'a> JoinAcceptPayload<'a> {
-    pub fn new(bytes: &'a [u8]) -> Option<JoinAcceptPayload> {
-        if !JoinAcceptPayload::can_build_from(bytes) {
-            return None;
-        }
-
-        Some(JoinAcceptPayload(bytes))
-    }
-
-    pub fn new_from_raw(bytes: &'a [u8]) -> JoinAcceptPayload {
-        JoinAcceptPayload(bytes)
-    }
-
-    fn can_build_from(bytes: &'a [u8]) -> bool {
-        let data_len = bytes.len();
-        data_len == 12 || data_len == 28
-    }
-
-    pub fn app_nonce(&self) -> AppNonce {
-        AppNonce::new_from_raw(&self.0[0..3])
-    }
-
-    pub fn net_id(&self) -> NwkAddr {
-        NwkAddr::new_from_raw(&self.0[3..6])
-    }
-
-    pub fn dev_addr(&self) -> DevAddr {
-        DevAddr::new_from_raw(&self.0[6..10])
-    }
-
-    /// Gives the downlink configuration.
-    pub fn dl_settings(&self) -> maccommands::DLSettings {
-        maccommands::DLSettings::new(self.0[10])
-    }
-
-    pub fn rx_delay(&self) -> u8 {
-        self.0[11] & 0x0f
-    }
-
-    pub fn c_f_list(&self) -> Vec<maccommands::Frequency> {
-        if self.0.len() == 12 {
-            return Vec::new();
-        }
-        self.0[12..27]
-            .chunks(3)
-            .map(|f| maccommands::Frequency::new_from_raw(f))
-            .collect()
-    }
 }
 
 fixed_len_struct! {
@@ -563,24 +864,28 @@ impl<'a> FHDR<'a> {
         if data_len < 7 {
             return None;
         }
-        if data_len < fhdr_length(bytes, uplink) {
+        if data_len < fhdr_length(bytes) {
             return None;
         }
         Some(FHDR(bytes, uplink))
     }
 
+    /// Gives the device address associated with the given payload.
     pub fn dev_addr(&self) -> DevAddr {
         DevAddr::new_from_raw(&self.0[0..4])
     }
 
+    /// Gives the FCtrl associated with the given payload.
     pub fn fctrl(&self) -> FCtrl {
         FCtrl(self.0[4], self.1)
     }
 
+    /// Gives the truncated FCnt associated with the given payload.
     pub fn fcnt(&self) -> u16 {
         (u16::from(self.0[6]) << 8) | u16::from(self.0[5])
     }
 
+    /// Gives the piggy-backed MAC ommands associated with the given payload.
     pub fn fopts(&self) -> Result<Vec<maccommands::MacCommand>, &str> {
         let f_opts_len = FCtrl(self.0[4], self.1).f_opts_len();
         maccommands::parse_mac_commands(&self.0[7 as usize..(7 + f_opts_len) as usize], self.1)
@@ -596,26 +901,32 @@ impl FCtrl {
         FCtrl(bytes, uplink)
     }
 
+    /// Gives whether ADR is enabled or not.
     pub fn adr(&self) -> bool {
         self.0 >> 7 == 1
     }
 
+    /// Gives whether ADR ACK is requested.
     pub fn adr_ack_req(&self) -> bool {
         self.1 && self.0 & (1 << 6) != 0
     }
 
+    /// Gives whether ack bit is set.
     pub fn ack(&self) -> bool {
         self.0 & (1 << 5) != 0
     }
 
+    /// Gives whether there are more payloads pending.
     pub fn f_pending(&self) -> bool {
         !self.1 && self.0 & (1 << 4) != 0
     }
 
+    /// Gives the size of FOpts.
     pub fn f_opts_len(&self) -> u8 {
         self.0 & 0x0f
     }
 
+    /// Gives the binary representation of the FCtrl.
     pub fn raw_value(&self) -> u8 {
         self.0
     }
@@ -624,139 +935,27 @@ impl FCtrl {
 /// FRMPayload represents the FRMPayload that can either be the application
 /// data or mac commands.
 #[derive(Debug, PartialEq)]
-pub enum FRMPayload {
-    Data(FRMDataPayload),
-    MACCommands(FRMMacCommands),
+pub enum FRMPayload<'a> {
+    Data(FRMDataPayload<'a>),
+    MACCommands(FRMMacCommands<'a>),
 }
 
 /// FRMDataPayload represents the application data.
-pub type FRMDataPayload = Vec<u8>;
+#[derive(Debug, PartialEq)]
+pub struct FRMDataPayload<'a>(pub &'a [u8]);
 
 /// FRMMacCommands represents the mac commands.
 #[derive(Debug, PartialEq)]
-pub struct FRMMacCommands(bool, Vec<u8>);
+pub struct FRMMacCommands<'a>(bool, &'a [u8]);
 
-impl FRMMacCommands {
-    pub fn new(bytes: Vec<u8>, uplink: bool) -> FRMMacCommands {
+impl<'a> FRMMacCommands<'a> {
+    pub fn new(bytes: &'a [u8], uplink: bool) -> Self {
         FRMMacCommands(uplink, bytes)
     }
 
+    /// Gives the list of mac commands represented in the FRMPayload.
     pub fn mac_commands(&self) -> Result<Vec<maccommands::MacCommand>, &str> {
-        maccommands::parse_mac_commands(&self.1[..], self.0)
+        maccommands::parse_mac_commands(self.1, self.0)
     }
 }
 
-/// Computes the network session key for a given device.
-///
-/// # Argument
-///
-/// * app_nonce - the network server nonce.
-/// * nwk_addr - the address of the network.
-/// * dev_nonce - the nonce from the device.
-/// * key - the app key.
-///
-/// # Examples
-///
-/// ```
-/// let dev_nonce = vec![0xcc, 0xdd];
-/// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37,
-///     0x42, 0x97, 0x51, 0x42];
-/// let phy_join_accept = lorawan::parser::PhyPayload::new(&data[..]).unwrap();
-/// let app_key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
-///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
-///
-/// if let lorawan::parser::MacPayload::JoinAccept(join_accept) = phy_join_accept.mac_payload() {
-///     let nwk_skey = lorawan::parser::derive_newskey(
-///         &join_accept.app_nonce(),
-///         &join_accept.net_id(),
-///         &lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
-///         &app_key,
-///     );
-/// }
-/// ```
-pub fn derive_newskey(app_nonce: &AppNonce,
-    nwk_addr: &NwkAddr,
-    dev_nonce: &DevNonce,
-    key: &keys::AES128) -> keys::AES128 {
-
-    derive_session_key(0x1,
-        app_nonce,
-        nwk_addr,
-        dev_nonce,
-        key
-        )
-}
-
-/// Computes the application session key for a given device.
-///
-/// # Argument
-///
-/// * app_nonce - the network server nonce.
-/// * nwk_addr - the address of the network.
-/// * dev_nonce - the nonce from the device.
-/// * key - the app key.
-///
-/// # Examples
-///
-/// ```
-/// let dev_nonce = vec![0xcc, 0xdd];
-/// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37,
-///     0x42, 0x97, 0x51, 0x42];
-/// let phy_join_accept = lorawan::parser::PhyPayload::new(&data[..]).unwrap();
-/// let app_key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
-///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
-///
-/// if let lorawan::parser::MacPayload::JoinAccept(join_accept) = phy_join_accept.mac_payload() {
-///     let app_skey = lorawan::parser::derive_appskey(
-///         &join_accept.app_nonce(),
-///         &join_accept.net_id(),
-///         &lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
-///         &app_key,
-///     );
-/// }
-/// ```
-pub fn derive_appskey(app_nonce: &AppNonce,
-    nwk_addr: &NwkAddr,
-    dev_nonce: &DevNonce,
-    key: &keys::AES128) -> keys::AES128 {
-
-    derive_session_key(0x2,
-        app_nonce,
-        nwk_addr,
-        dev_nonce,
-        key
-        )
-}
-
-fn derive_session_key(
-    first_byte: u8,
-    app_nonce: &AppNonce,
-    nwk_addr: &NwkAddr,
-    dev_nonce: &DevNonce,
-    key: &keys::AES128) -> keys::AES128 {
-
-    let key_arr = GenericArray::from_slice(&key.0);
-    let cipher = Aes128::new(key_arr);
-
-    // note: AppNonce is 24 bit, NetId is 24 bit, DevNonce is 16 bit
-    let (app_nonce_arr, nwk_addr_arr, dev_nonce_arr)
-        = (app_nonce.as_ref(), nwk_addr.as_ref(), dev_nonce.as_ref());
-
-    let mut block = [0u8; 16];
-    block[0] = first_byte;
-    block[1] = app_nonce_arr[0];
-    block[2] = app_nonce_arr[1];
-    block[3] = app_nonce_arr[2];
-    block[4] = nwk_addr_arr[0];
-    block[5] = nwk_addr_arr[1];
-    block[6] = nwk_addr_arr[2];
-    block[7] = dev_nonce_arr[0];
-    block[8] = dev_nonce_arr[1];
-
-    let mut input = GenericArray::clone_from_slice(&block);
-    cipher.encrypt_block(&mut input);
-
-    let mut output_key = [0u8; 16];
-    output_key.copy_from_slice(&input[0..16]);
-    keys::AES128(output_key)
-}
