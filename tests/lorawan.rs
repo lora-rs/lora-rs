@@ -296,15 +296,15 @@ fn test_mac_command_in_downlink() {
             // there should only be one fopts
             assert_eq!(fopts.len(), 2);
 
-            for i in 0..2 {
-                match fopts[i] {
+            for cmd in fopts {
+                match cmd {
                     MacCommand::LinkADRReq(_) => (),
-                    _ => assert!(false),
+                    _ => panic!("incorrect mac cmd payload type: {:?}", cmd),
                 }
             }
         }
         _ => {
-            assert!(false)
+             panic!("incorrect mac payload type: {:?}", packet.mac_payload());
         }
     }
 }
