@@ -309,6 +309,28 @@ fn test_complete_data_payload_frm_payload() {
 
     assert_eq!(decrypted.frm_payload(), Ok(FRMPayload::Data(FRMDataPayload(&payload))));
 }
+#[test]
+fn test_mac_command_in_downlink() {
+    let data = [0x60, 0x5F, 0x3B, 0xD7, 0x4E, 0xA, 0x0, 0x0, 0x3, 0x0, 0x0,
+    0x0, 0x70, 0x3, 0x0, 0xFF, 0x0, 0x30, 0xCD, 0xDB, 0x22, 0xEE];
+    let packet = EncryptedPhyDataPayload::new(data).unwrap();
+
+    assert_eq!(packet.mhdr().mtype(), MType::UnconfirmedDataDown);
+
+    let data_payload = packet.mac_payload();
+    let fhdr = data_payload.fhdr();
+    let fopts = fhdr.fopts().unwrap();
+
+    // there should only be one fopts
+    assert_eq!(fopts.len(), 2);
+
+    for i in 0..2 {
+        match fopts[i] {
+            MacCommand::LinkADRReq(_) => (),
+            _ => panic!("incorrect payload type: {:?}", fopts[i]),
+        }
+    }
+}
 
 #[test]
 fn test_new_frequency() {
