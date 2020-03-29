@@ -117,7 +117,7 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
                     can_build = DataPayload::can_build_from(payload, true);
                 }
                 MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
-                    can_build = DataPayload::can_build_from(payload, true);
+                    can_build = DataPayload::can_build_from(payload, false);
                 }
                 _ => return Err("unsupported message type"),
             }
@@ -203,7 +203,7 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
                 MacPayload::Data(DataPayload::new(bytes, true).unwrap())
             }
             MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
-                MacPayload::Data(DataPayload::new(bytes, true).unwrap())
+                MacPayload::Data(DataPayload::new(bytes, false).unwrap())
             }
             _ => panic!("unexpected message type passed through the new method"),
         }
