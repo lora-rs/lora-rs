@@ -281,6 +281,35 @@ fn test_complete_data_payload_frm_payload() {
 }
 
 #[test]
+fn test_mac_command_in_downlink() {
+    let raw_data = [0x60, 0x5F, 0x3B, 0xD7, 0x4E, 0xA, 0x0, 0x0, 0x3, 0x0, 0x0,
+    0x0, 0x70, 0x3, 0x0, 0xFF, 0x0, 0x30, 0xCD, 0xDB, 0x22, 0xEE];
+    let packet = GenericPhyPayload::new(raw_data).unwrap();
+
+    assert_eq!(packet.mhdr().mtype(), MType::UnconfirmedDataDown);
+
+    match packet.mac_payload() {
+        MacPayload::Data(data) => {
+            let fhdr = data.fhdr();
+            let fopts = fhdr.fopts().unwrap();
+
+            // there should only be one fopts
+            assert_eq!(fopts.len(), 2);
+
+            for cmd in fopts {
+                match cmd {
+                    MacCommand::LinkADRReq(_) => (),
+                    _ => panic!("incorrect mac cmd payload type: {:?}", cmd),
+                }
+            }
+        }
+        _ => {
+             panic!("incorrect mac payload type: {:?}", packet.mac_payload());
+        }
+    }
+}
+
+#[test]
 fn test_validate_data_mic_when_ok() {
     let data = data_payload();
     let phy = PhyPayload::new(&data[..]);

@@ -412,7 +412,7 @@ impl DataPayloadCreator {
     ///     .set_channel_mask_ack(true)
     ///     .set_data_rate_ack(false)
     ///     .set_tx_power_ack(true);
-    /// let cmds: Vec<&lorawan::maccommands::SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
+    /// let cmds: Vec<&dyn lorawan::maccommands::SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
     /// phy.set_mac_commands(cmds);
     /// ```
     pub fn set_mac_commands<'a>(
