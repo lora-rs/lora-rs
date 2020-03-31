@@ -655,7 +655,35 @@ impl FRMMacCommands {
     }
 }
 
-pub fn derive_newskey(app_nonce: &AppNonce, 
+/// Computes the network session key for a given device.
+///
+/// # Argument
+///
+/// * app_nonce - the network server nonce.
+/// * nwk_addr - the address of the network.
+/// * dev_nonce - the nonce from the device.
+/// * key - the app key.
+///
+/// # Examples
+///
+/// ```
+/// let dev_nonce = vec![0xcc, 0xdd];
+/// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37,
+///     0x42, 0x97, 0x51, 0x42];
+/// let phy_join_accept = lorawan::parser::PhyPayload::new(&data[..]).unwrap();
+/// let app_key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
+///
+/// if let lorawan::parser::MacPayload::JoinAccept(join_accept) = phy_join_accept.mac_payload() {
+///     let nwk_skey = lorawan::parser::derive_newskey(
+///         &join_accept.app_nonce(),
+///         &join_accept.net_id(),
+///         &lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
+///         &app_key,
+///     );
+/// }
+/// ```
+pub fn derive_newskey(app_nonce: &AppNonce,
     nwk_addr: &NwkAddr,
     dev_nonce: &DevNonce,
     key: &keys::AES128) -> keys::AES128 {
@@ -668,7 +696,35 @@ pub fn derive_newskey(app_nonce: &AppNonce,
         )
 }
 
-pub fn derive_appskey(app_nonce: &AppNonce, 
+/// Computes the application session key for a given device.
+///
+/// # Argument
+///
+/// * app_nonce - the network server nonce.
+/// * nwk_addr - the address of the network.
+/// * dev_nonce - the nonce from the device.
+/// * key - the app key.
+///
+/// # Examples
+///
+/// ```
+/// let dev_nonce = vec![0xcc, 0xdd];
+/// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37,
+///     0x42, 0x97, 0x51, 0x42];
+/// let phy_join_accept = lorawan::parser::PhyPayload::new(&data[..]).unwrap();
+/// let app_key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
+///
+/// if let lorawan::parser::MacPayload::JoinAccept(join_accept) = phy_join_accept.mac_payload() {
+///     let app_skey = lorawan::parser::derive_appskey(
+///         &join_accept.app_nonce(),
+///         &join_accept.net_id(),
+///         &lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
+///         &app_key,
+///     );
+/// }
+/// ```
+pub fn derive_appskey(app_nonce: &AppNonce,
     nwk_addr: &NwkAddr,
     dev_nonce: &DevNonce,
     key: &keys::AES128) -> keys::AES128 {
@@ -683,7 +739,7 @@ pub fn derive_appskey(app_nonce: &AppNonce,
 
 fn derive_session_key(
     first_byte: u8,
-    app_nonce: &AppNonce, 
+    app_nonce: &AppNonce,
     nwk_addr: &NwkAddr,
     dev_nonce: &DevNonce,
     key: &keys::AES128) -> keys::AES128 {
@@ -692,7 +748,7 @@ fn derive_session_key(
     let cipher = Aes128::new(key_arr);
 
     // note: AppNonce is 24 bit, NetId is 24 bit, DevNonce is 16 bit
-    let (app_nonce_arr, nwk_addr_arr, dev_nonce_arr) 
+    let (app_nonce_arr, nwk_addr_arr, dev_nonce_arr)
         = (app_nonce.as_ref(), nwk_addr.as_ref(), dev_nonce.as_ref());
 
     let mut block = [0u8; 16];
