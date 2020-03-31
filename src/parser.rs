@@ -46,7 +46,7 @@ macro_rules! fixed_len_struct {
         struct $type:ident[$size:expr];
     ) => {
         $(#[$outer])*
-        #[derive(Debug, PartialEq)]
+        #[derive(Debug, PartialEq, Hash, Eq)]
         pub struct $type<'a>(&'a [u8; $size]);
 
         impl<'a> $type<'a> {
