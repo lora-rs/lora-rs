@@ -13,9 +13,6 @@ use aes::block_cipher_trait::generic_array::GenericArray;
 use aes::block_cipher_trait::BlockCipher;
 use aes::Aes128;
 
-//use crypto::aessafe;
-//use crypto::symmetriccipher::BlockEncryptor;
-
 use super::keys;
 use super::maccommands;
 use super::securityhelpers;
@@ -117,7 +114,7 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
                     can_build = DataPayload::can_build_from(payload, true);
                 }
                 MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
-                    can_build = DataPayload::can_build_from(payload, true);
+                    can_build = DataPayload::can_build_from(payload, false);
                 }
                 _ => return Err("unsupported message type"),
             }
@@ -128,6 +125,10 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
         }
 
         Ok(result)
+    }
+
+    pub fn inner_ref(&self) -> &T {
+        &self.0
     }
 
     /// Creates a PhyPayload from the decrypted bytes of a JoinAccept.
@@ -203,7 +204,7 @@ impl <'a, T: AsRef<[u8]>> GenericPhyPayload<T> {
                 MacPayload::Data(DataPayload::new(bytes, true).unwrap())
             }
             MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
-                MacPayload::Data(DataPayload::new(bytes, true).unwrap())
+                MacPayload::Data(DataPayload::new(bytes, false).unwrap())
             }
             _ => panic!("unexpected message type passed through the new method"),
         }
@@ -652,4 +653,63 @@ impl FRMMacCommands {
     pub fn mac_commands(&self) -> Result<Vec<maccommands::MacCommand>, String> {
         maccommands::parse_mac_commands(&self.1[..], self.0)
     }
+}
+
+pub fn derive_newskey(app_nonce: &AppNonce, 
+    nwk_addr: &NwkAddr,
+    dev_nonce: &DevNonce,
+    key: &keys::AES128) -> keys::AES128 {
+
+    derive_session_key(0x1,
+        app_nonce,
+        nwk_addr,
+        dev_nonce,
+        key
+        )
+}
+
+pub fn derive_appskey(app_nonce: &AppNonce, 
+    nwk_addr: &NwkAddr,
+    dev_nonce: &DevNonce,
+    key: &keys::AES128) -> keys::AES128 {
+
+    derive_session_key(0x2,
+        app_nonce,
+        nwk_addr,
+        dev_nonce,
+        key
+        )
+}
+
+fn derive_session_key(
+    first_byte: u8,
+    app_nonce: &AppNonce, 
+    nwk_addr: &NwkAddr,
+    dev_nonce: &DevNonce,
+    key: &keys::AES128) -> keys::AES128 {
+
+    let key_arr = GenericArray::from_slice(&key.0);
+    let cipher = Aes128::new(key_arr);
+
+    // note: AppNonce is 24 bit, NetId is 24 bit, DevNonce is 16 bit
+    let (app_nonce_arr, nwk_addr_arr, dev_nonce_arr) 
+        = (app_nonce.as_ref(), nwk_addr.as_ref(), dev_nonce.as_ref());
+
+    let mut block = [0u8; 16];
+    block[0] = first_byte;
+    block[1] = app_nonce_arr[0];
+    block[2] = app_nonce_arr[1];
+    block[3] = app_nonce_arr[2];
+    block[4] = nwk_addr_arr[0];
+    block[5] = nwk_addr_arr[1];
+    block[6] = nwk_addr_arr[2];
+    block[7] = dev_nonce_arr[0];
+    block[8] = dev_nonce_arr[1];
+
+    let mut input = GenericArray::clone_from_slice(&block);
+    cipher.encrypt_block(&mut input);
+
+    let mut output_key = [0u8; 16];
+    output_key.copy_from_slice(&input[0..16]);
+    keys::AES128(output_key)
 }

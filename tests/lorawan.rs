@@ -281,6 +281,35 @@ fn test_complete_data_payload_frm_payload() {
 }
 
 #[test]
+fn test_mac_command_in_downlink() {
+    let raw_data = [0x60, 0x5F, 0x3B, 0xD7, 0x4E, 0xA, 0x0, 0x0, 0x3, 0x0, 0x0,
+    0x0, 0x70, 0x3, 0x0, 0xFF, 0x0, 0x30, 0xCD, 0xDB, 0x22, 0xEE];
+    let packet = GenericPhyPayload::new(raw_data).unwrap();
+
+    assert_eq!(packet.mhdr().mtype(), MType::UnconfirmedDataDown);
+
+    match packet.mac_payload() {
+        MacPayload::Data(data) => {
+            let fhdr = data.fhdr();
+            let fopts = fhdr.fopts().unwrap();
+
+            // there should only be one fopts
+            assert_eq!(fopts.len(), 2);
+
+            for cmd in fopts {
+                match cmd {
+                    MacCommand::LinkADRReq(_) => (),
+                    _ => panic!("incorrect mac cmd payload type: {:?}", cmd),
+                }
+            }
+        }
+        _ => {
+             panic!("incorrect mac payload type: {:?}", packet.mac_payload());
+        }
+    }
+}
+
+#[test]
 fn test_validate_data_mic_when_ok() {
     let data = data_payload();
     let phy = PhyPayload::new(&data[..]);
@@ -521,6 +550,53 @@ fn test_join_request_creator() {
         .set_dev_nonce(&[0x2du8, 0x10]);
 
     assert_eq!(phy.build(&key).unwrap(), &phy_join_request_payload()[..]);
+}
+
+#[test]
+fn test_derive_newskey(){
+    let key = AES128(app_key());
+    let data = phy_join_request_payload();
+    let join_request = PhyPayload::new(&data[..]).unwrap();
+    let data = phy_join_accept_payload();
+    let join_accept = PhyPayload::new(&data[..]).unwrap();
+
+    if let (MacPayload::JoinRequest(join_request), MacPayload::JoinAccept(join_accept))
+     = (join_request.mac_payload(), join_accept.mac_payload()) {
+        let newskey = derive_newskey(
+            &join_accept.app_nonce(),
+            &join_accept.net_id(),
+            &join_request.dev_nonce(),
+            &key,
+        );
+        //AppNonce([49, 3e, eb]), NwkAddr([51, fb, a2]), DevNonce([2d, 10])
+        let expect = [0xFE, 0x3D, 0xC0, 0xD5, 0x43, 0xAF, 0xCC, 0x04,
+            0xF9, 0x1F, 0xCB, 0x95, 0xD4, 0x56, 0x22, 0x36];
+        assert_eq!(newskey.0, expect);
+     }
+}
+
+#[test]
+fn test_derive_appskey(){
+    let key = AES128(app_key());
+    let data = phy_join_request_payload();
+    let join_request = PhyPayload::new(&data[..]).unwrap();
+    let data = phy_join_accept_payload();
+    let join_accept = PhyPayload::new(&data[..]).unwrap();
+
+    if let (MacPayload::JoinRequest(join_request), MacPayload::JoinAccept(join_accept))
+     = (join_request.mac_payload(), join_accept.mac_payload()) {
+        let appskey = derive_appskey(
+            &join_accept.app_nonce(),
+            &join_accept.net_id(),
+            &join_request.dev_nonce(),
+            &key,
+        );
+        //AppNonce([49, 3e, eb]), NwkAddr([51, fb, a2]), DevNonce([2d, 10])
+        let expect = [0xD1, 0xDB, 0x68, 0x66, 0x50, 0x46, 0x0D, 0xBB,
+            0x2A, 0x84, 0x6C, 0x24, 0xE9, 0x53, 0xc1, 0x3b];
+
+        assert_eq!(appskey.0, expect);
+     }
 }
 
 #[test]
