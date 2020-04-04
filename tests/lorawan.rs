@@ -254,49 +254,35 @@ fn test_new_data_payload_is_none_if_bytes_too_short() {
 fn test_f_port_could_be_absent_in_data_payload() {
     let bytes = &[0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04];
     let data_payload = EncryptedPhyDataPayload::new(bytes).unwrap();
-    let mac_payload = data_payload.mac_payload();
-    assert!(mac_payload.f_port().is_none());
-}
-
-#[test]
-fn test_mac_payload_has_good_bytes_when_size_correct() {
-    let bytes = &[
-        0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0xff, 0x01, 0x02, 0x03, 0x04
-    ];
-    let phy = EncryptedPhyDataPayload::new(bytes).unwrap();
-    let data_payload = phy.mac_payload();
-    let expected_bytes = &[0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0xff];
-    let expected = DataPayload::new_from_raw(expected_bytes, true);
-
-    assert_eq!(data_payload, expected)
-}
-
-#[test]
-fn test_complete_data_payload_f_port() {
-    let phy = EncryptedPhyDataPayload::new(data_payload()).unwrap();
-
-    assert_eq!(phy.mac_payload().f_port(), Some(1))
+    assert!(data_payload.f_port().is_none());
 }
 
 #[test]
 fn test_complete_data_payload_fhdr() {
-    let phy = EncryptedPhyDataPayload::new(data_payload()).unwrap();
-    let data_payload = phy.mac_payload();
-    let fhdr = data_payload.fhdr();
+    let app_skey = AES128([1; 16]);
+    let nwk_skey = AES128([2; 16]);
+    let phys: std::vec::Vec<Box<dyn DataHeader>> =
+        vec![Box::new(EncryptedPhyDataPayload::new(data_payload()).unwrap()),
+            Box::new(DecryptedPhyDataPayload::new(data_payload(), &nwk_skey, Some(&app_skey), 1).unwrap())];
+    for phy in phys {
+        assert_eq!(phy.f_port(), Some(1));
 
-    assert_eq!(fhdr.dev_addr(), DevAddr::new(&[4, 3, 2, 1]).unwrap());
+        let fhdr = phy.fhdr();
 
-    assert_eq!(fhdr.fcnt(), 1u16);
+        assert_eq!(fhdr.dev_addr(), DevAddr::new(&[4, 3, 2, 1]).unwrap());
 
-    let fctrl = fhdr.fctrl();
+        assert_eq!(fhdr.fcnt(), 1u16);
 
-    assert_eq!(fctrl.f_opts_len(), 0);
+        let fctrl = fhdr.fctrl();
 
-    assert!(!fctrl.f_pending(), "no f_pending");
+        assert_eq!(fctrl.f_opts_len(), 0);
 
-    assert!(!fctrl.ack(), "no ack");
+        assert!(!fctrl.f_pending(), "no f_pending");
 
-    assert!(fctrl.adr(), "ADR");
+        assert!(!fctrl.ack(), "no ack");
+
+        assert!(fctrl.adr(), "ADR");
+    }
 }
 
 #[test]
@@ -307,7 +293,7 @@ fn test_complete_data_payload_frm_payload() {
     let mut payload = Vec::new();
     payload.extend_from_slice(&String::from("hello").into_bytes()[..]).unwrap();
 
-    assert_eq!(decrypted.frm_payload(), Ok(FRMPayload::Data(FRMDataPayload(&payload))));
+    assert_eq!(decrypted.frm_payload(), Ok(FRMPayload::Data(&payload)));
 }
 #[test]
 fn test_mac_command_in_downlink() {
@@ -317,8 +303,7 @@ fn test_mac_command_in_downlink() {
 
     assert_eq!(packet.mhdr().mtype(), MType::UnconfirmedDataDown);
 
-    let data_payload = packet.mac_payload();
-    let fhdr = data_payload.fhdr();
+    let fhdr = packet.fhdr();
     let fopts = fhdr.fopts().unwrap();
 
     // there should only be one fopts

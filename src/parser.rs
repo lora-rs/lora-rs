@@ -11,16 +11,17 @@
 //! # Examples
 //!
 //! ```
+//! use lorawan::parser::*;
+//! use lorawan::keys::*;
+//!
 //! let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
 //!     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
-//! if let Ok(lorawan::parser::PhyPayload::DataPayload(
-//!         lorawan::parser::PhyDataPayload::EncryptedData(phy))) =
-//!                 lorawan::parser::parse(data) {
-//!     let key = lorawan::keys::AES128([1; 16]);
+//! if let Ok(PhyPayload::DataPayload(PhyDataPayload::EncryptedData(phy))) = parse(data) {
+//!     let key = AES128([1; 16]);
 //!     let decrypted = phy.decrypt(None, Some(&key), 1).unwrap();
-//!     if let Ok(lorawan::parser::FRMPayload::Data(data_payload)) =
+//!     if let Ok(FRMPayload::Data(data_payload)) =
 //!             decrypted.frm_payload() {
-//!         println!("{}", String::from_utf8_lossy(data_payload.0));
+//!         println!("{}", String::from_utf8_lossy(data_payload));
 //!     }
 //! } else {
 //!     panic!("failed to parse data payload");
@@ -108,12 +109,60 @@ pub enum PhyDataPayload<T: AsRef<[u8]> + AsMut<[u8]>> {
     DecryptedData(DecryptedPhyDataPayload<T>)
 }
 
+/// Trait with the sole purpose to make clear distinction in some implementations between types
+/// that just happen to have AsRef and those that want to have the given implementations (like
+/// MICAble and MHDRAble).
+pub trait AsPhyPayloadBytes {
+    fn as_bytes(&self) -> &[u8];
+}
+
+impl AsRef<[u8]> for dyn AsPhyPayloadBytes {
+    fn as_ref(&self) -> &[u8] {
+        self.as_bytes()
+    }
+}
+
+/// Helper trait to add mic to all types that should have it.
+pub trait MICAble {
+    /// Gives the MIC of the PhyPayload.
+    fn mic(&self) -> keys::MIC;
+
+}
+
+impl<T: AsPhyPayloadBytes> MICAble for T {
+    fn mic(&self) -> keys::MIC {
+        let data = self.as_bytes();
+        let len = data.len();
+        keys::MIC([data[len - 4], data[len - 3], data[len - 2], data[len - 1]])
+    }
+}
+
+/// Helper trait to add mhdr to all types that should have it.
+pub trait MHDRAble {
+    /// Gives the MIC of the PhyPayload.
+    fn mhdr(&self) -> MHDR;
+}
+
+/// Assumes at least one byte in the data.
+impl<T: AsPhyPayloadBytes> MHDRAble for T {
+    fn mhdr(&self) -> MHDR {
+        let data = self.as_bytes();
+        MHDR(data[0])
+    }
+}
+
 /// PhyJoinAcceptPayload represents a JoinRequest.
 ///
 /// It can be built either directly through the [new](#method.new) or using the
 /// [parse](fn.parse.html) function.
 #[derive(Debug, PartialEq)]
 pub struct PhyJoinRequestPayload<T: AsRef<[u8]>>(T);
+
+impl<T: AsRef<[u8]>> AsPhyPayloadBytes for PhyJoinRequestPayload<T> {
+    fn as_bytes(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
 
 impl<T: AsRef<[u8]>> PhyJoinRequestPayload<T> {
     /// Creates a new PhyJoinRequestPayload if the provided data is acceptable.
@@ -156,25 +205,15 @@ impl<T: AsRef<[u8]>> PhyJoinRequestPayload<T> {
         DevNonce::new_from_raw(&self.0.as_ref()[17..19])
     }
 
-    /// Gives the MIC of the JoinRequest.
-    pub fn mic(&self) -> keys::MIC {
-        mic_helper(self.0.as_ref())
-    }
-
     /// Verifies that the JoinRequest has correct MIC.
     pub fn validate_mic(&self, key: &keys::AES128) -> Result<bool, &str> {
-        Ok(self.mic() == self.calculate_mic(key)?)
+        Ok(self.mic() == self.calculate_mic(key))
     }
 
-    fn calculate_mic(&self, key: &keys::AES128) -> Result<keys::MIC, &str> {
+    fn calculate_mic(&self, key: &keys::AES128) -> keys::MIC {
         let d = self.0.as_ref();
-        Ok(securityhelpers::calculate_mic(&d[..d.len() - 4], key))
+        securityhelpers::calculate_mic(&d[..d.len() - 4], key)
     }
-}
-
-fn mic_helper(data: &[u8]) -> keys::MIC {
-    let len = data.len();
-    keys::MIC([data[len - 4], data[len - 3], data[len - 2], data[len - 1]])
 }
 
 /// EncryptedPhyJoinAcceptPayload represents an encrypted JoinAccept.
@@ -183,6 +222,12 @@ fn mic_helper(data: &[u8]) -> keys::MIC {
 /// [parse](fn.parse.html) function.
 #[derive(Debug, PartialEq)]
 pub struct EncryptedPhyJoinAcceptPayload<T: AsRef<[u8]>>(T);
+
+impl<T: AsRef<[u8]>> AsPhyPayloadBytes for EncryptedPhyJoinAcceptPayload<T> {
+    fn as_bytes(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
 
 impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedPhyJoinAcceptPayload<T> {
     /// Creates a new EncryptedPhyJoinAcceptPayload if the provided data is acceptable.
@@ -208,10 +253,6 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedPhyJoinAcceptPayload<T> {
 
     fn can_build_from(bytes: &[u8]) -> bool {
         bytes.len() == 17 || bytes.len() == 33 && MHDR(bytes[0]).mtype() == MType::JoinAccept
-    }
-
-    pub fn inner_ref(&self) -> &T {
-        &self.0
     }
 
     /// Decrypts the EncryptedPhyJoinAcceptPayload producing a DecryptedPhyJoinAcceptPayload.
@@ -262,24 +303,21 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedPhyJoinAcceptPayload<T> {
 #[derive(Debug, PartialEq)]
 pub struct DecryptedPhyJoinAcceptPayload<T: AsRef<[u8]>>(T);
 
+impl<T: AsRef<[u8]>> AsPhyPayloadBytes for DecryptedPhyJoinAcceptPayload<T> {
+    fn as_bytes(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
 impl<T: AsRef<[u8]>> DecryptedPhyJoinAcceptPayload<T> {
-    pub fn inner_ref(&self) -> &T {
-        &self.0
-    }
-
-    /// Gives the MIC of the DecryptedPhyJoinAcceptPayload.
-    pub fn mic(&self) -> keys::MIC {
-        mic_helper(self.0.as_ref())
-    }
-
     /// Verifies that the JoinAccept has correct MIC.
     pub fn validate_mic<'a>(&self, key: &keys::AES128) -> Result<bool, &'a str> {
-        Ok(self.mic() == self.calculate_mic(key)?)
+        Ok(self.mic() == self.calculate_mic(key))
     }
 
-    fn calculate_mic<'a>(&self, key: &keys::AES128) -> Result<keys::MIC, &'a str> {
+    fn calculate_mic(&self, key: &keys::AES128) -> keys::MIC {
         let d = self.0.as_ref();
-        Ok(securityhelpers::calculate_mic(&d[..d.len() - 4], key))
+        securityhelpers::calculate_mic(&d[..d.len() - 4], key)
     }
 
     /// Gives the app nonce of the JoinAccept.
@@ -439,12 +477,65 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedPhyJoinAcceptPayload<T> {
     }
 }
 
+/// Helper trait for EncryptedPhyDataPayload and DecryptedPhyDataPayload.
+///
+/// NOTE: Does not check the payload size as that should be done prior to building the object of
+/// the implementing type.
+pub trait DataHeader {
+    /// Equivalent to AsRef<[u8]>.
+    fn as_data_bytes(&self) -> &[u8];
+
+    /// Gives the FHDR of the DataPayload.
+    fn fhdr(&self) -> FHDR {
+        FHDR::new_from_raw(&self.as_data_bytes()[1..(1 + self.fhdr_length())], self.is_uplink())
+    }
+
+
+    /// Gives whether the payload is uplink or not.
+    fn is_uplink(&self) -> bool {
+        let mhdr = MHDR(self.as_data_bytes()[0]);
+
+        mhdr.mtype() == MType::UnconfirmedDataUp || mhdr.mtype() == MType::ConfirmedDataUp
+    }
+
+    /// Gives the FPort of the DataPayload if there is one.
+    fn f_port(&self) -> Option<u8> {
+        let fhdr_length = self.fhdr_length();
+        let data = self.as_data_bytes();
+        if fhdr_length + 1 >= data.len() - 5 {
+            return None;
+        }
+        Some(data[1 + fhdr_length])
+    }
+
+    /// Gives the length of the FHDR field.
+    fn fhdr_length(&self) -> usize {
+        fhdr_length(FCtrl(self.as_data_bytes()[5], self.is_uplink()))
+    }
+}
+
+fn fhdr_length(fctrl: FCtrl) -> usize {
+    7 + fctrl.f_opts_len() as usize
+}
+
+impl<T: DataHeader> AsPhyPayloadBytes for T {
+    fn as_bytes(&self) -> &[u8] {
+        self.as_data_bytes()
+    }
+}
+
 /// EncryptedPhyDataPayload represents an encrypted data payload.
 ///
 /// It can be built either directly through the [new](#method.new) or using the
 /// [parse](fn.parse.html) function.
 #[derive(Debug, PartialEq)]
 pub struct EncryptedPhyDataPayload<T>(T);
+
+impl<T: AsRef<[u8]>> DataHeader for EncryptedPhyDataPayload<T> {
+    fn as_data_bytes(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
 
 impl<T: AsRef<[u8]>> EncryptedPhyDataPayload<T> {
     /// Creates a PhyPayload from bytes.
@@ -470,12 +561,9 @@ impl<T: AsRef<[u8]>> EncryptedPhyDataPayload<T> {
         }
     }
 
-    pub fn inner_ref(&self) -> &T {
-        &self.0
-    }
-
     fn can_build_from(bytes: &[u8]) -> bool {
-        let has_acceptable_len = bytes.len() >= 12 && fhdr_length(&bytes[1..]) <= bytes.len();
+        let has_acceptable_len = bytes.len() >= 12 &&
+            fhdr_length(FCtrl(bytes[5], true)) <= bytes.len();
         if !has_acceptable_len {
             return false;
         }
@@ -490,40 +578,14 @@ impl<T: AsRef<[u8]>> EncryptedPhyDataPayload<T> {
         }
     }
 
-    /// Gives the MHDR of the PhyPayload.
-    pub fn mhdr(&self) -> MHDR {
-        MHDR(self.0.as_ref()[0])
-    }
-
-    /// Gives the MacPayload of the PhyPayload.
-    pub fn mac_payload(&self) -> DataPayload {
-        let d = self.0.as_ref();
-        let len = d.len();
-        let bytes = &d[1..(len - 4)];
-        match self.mhdr().mtype() {
-            MType::UnconfirmedDataUp | MType::ConfirmedDataUp => {
-                DataPayload(bytes, true)
-            }
-            MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
-                DataPayload(bytes, false)
-            }
-            _ => panic!("unexpected message type passed through the new method"),
-        }
-    }
-
-    /// Gives the MIC of the EncryptedPhyDataPayload.
-    pub fn mic(&self) -> keys::MIC {
-        mic_helper(self.0.as_ref())
-    }
-
     /// Verifies that the DataPayload has correct MIC.
     pub fn validate_mic<'b>(&self, key: &keys::AES128, fcnt: u32) -> Result<bool, &'b str> {
-        Ok(self.mic() == self.calculate_mic(key, fcnt)?)
+        Ok(self.mic() == self.calculate_mic(key, fcnt))
     }
 
-    fn calculate_mic<'b>(&self, key: &keys::AES128, fcnt: u32) -> Result<keys::MIC, &'b str> {
+    fn calculate_mic(&self, key: &keys::AES128, fcnt: u32) -> keys::MIC {
         let d = self.0.as_ref();
-        Ok(securityhelpers::calculate_data_mic(&d[..d.len() - 4], key, fcnt))
+        securityhelpers::calculate_data_mic(&d[..d.len() - 4], key, fcnt)
     }
 }
 
@@ -553,11 +615,10 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedPhyDataPayload<T> {
                    nwk_skey: Option<&'b keys::AES128>,
                    app_skey: Option<&'b keys::AES128>,
                    fcnt: u32) -> Result<DecryptedPhyDataPayload<T>, &'a str> {
-        let data_payload = self.mac_payload();
-        let fhdr_length = data_payload.fhdr_length();
-        let fhdr = data_payload.fhdr();
+        let fhdr_length = self.fhdr_length();
+        let fhdr = self.fhdr();
         let full_fcnt = compute_fcnt(fcnt, fhdr.fcnt());
-        let key = if data_payload.f_port().is_some() && data_payload.f_port().unwrap() != 0{
+        let key = if self.f_port().is_some() && self.f_port().unwrap() != 0{
             app_skey
         } else {
             nwk_skey
@@ -565,9 +626,10 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedPhyDataPayload<T> {
         if key.is_none() {
             return Err("key needed to decrypt the frm data payload was None");
         }
+        let data = self.0.as_ref();
         let clear_data = securityhelpers::encrypt_frm_data_payload(
-            self.0.as_ref(),
-            &data_payload.0[(fhdr_length + 1)..],
+            data,
+            &data[(1 + fhdr_length + 1)..(data.len() - 4)],
             full_fcnt,
             &key.unwrap(),
         )?;
@@ -588,55 +650,31 @@ fn compute_fcnt(old_fcnt: u32, fcnt: u16) -> u32 {
 #[derive(Debug, PartialEq)]
 pub struct DecryptedPhyDataPayload<T: AsRef<[u8]>>(T);
 
+impl<T: AsRef<[u8]>> DataHeader for DecryptedPhyDataPayload<T> {
+    fn as_data_bytes(&self) -> &[u8] {
+        self.0.as_ref()
+    }
+}
+
 impl<T: AsRef<[u8]>> DecryptedPhyDataPayload<T> {
-    pub fn inner_ref(&self) -> &T {
-        &self.0
-    }
-
-    /// Gives the MHDR of the PhyPayload.
-    pub fn mhdr(&self) -> MHDR {
-        MHDR(self.0.as_ref()[0])
-    }
-
-    /// Gives the MacPayload of the PhyPayload.
-    pub fn mac_payload(&self) -> DataPayload {
-        let d = self.0.as_ref();
-        let len = d.len();
-        let bytes = &d[1..(len - 4)];
-        match self.mhdr().mtype() {
-            MType::UnconfirmedDataUp | MType::ConfirmedDataUp => {
-                DataPayload(bytes, true)
-            }
-            MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
-                DataPayload(bytes, false)
-            }
-            _ => panic!("unexpected message type passed through the new method"),
-        }
-    }
-
     /// Returns FRMPayload that can represent either application payload or mac commands if fport
     /// is 0.
     pub fn frm_payload(&self) -> Result<FRMPayload, &str> {
-        let data_payload = self.mac_payload();
-        let fhdr_length = data_payload.fhdr_length();
+        let data = self.as_data_bytes();
+        let len = data.len();
+        let fhdr_length = self.fhdr_length();
         //we have more bytes than fhdr + fport
-        if data_payload.0.len() <= fhdr_length + 1 {
-            Err("insufficient number of bytes left")
-        } else if data_payload.f_port() != Some(0) {
+        if len < fhdr_length + 6 {
+            Ok(FRMPayload::None)
+        } else if self.f_port() != Some(0) {
             // the size guarantees the existance of f_port
-            Ok(FRMPayload::Data(FRMDataPayload(&data_payload.0[(fhdr_length + 1)..])))
+            Ok(FRMPayload::Data(&data[(1 + fhdr_length + 1)..(len - 4)]))
         } else {
             Ok(FRMPayload::MACCommands(FRMMacCommands::new(
-                &data_payload.0[(fhdr_length + 1)..],
+                &data[(1 + fhdr_length + 1)..(len - 4)],
                 self.is_uplink(),
             )))
         }
-    }
-
-    fn is_uplink(&self) -> bool {
-        let mhdr = self.mhdr();
-
-        mhdr.mtype() == MType::UnconfirmedDataUp || mhdr.mtype() == MType::ConfirmedDataUp
     }
 }
 
@@ -777,48 +815,6 @@ pub enum Major {
     RFU,
 }
 
-// *NOTE*: data should have at least 5 elements
-fn fhdr_length(bytes: &[u8]) -> usize {
-    7 + FCtrl(bytes[4], true).f_opts_len() as usize
-}
-
-/// DataPayload represents a data MacPayload.
-#[derive(Debug, PartialEq)]
-pub struct DataPayload<'a>(&'a [u8], bool);
-
-impl<'a> DataPayload<'a> {
-    pub fn new_from_raw(data: &'a [u8], uplink: bool) -> Self {
-        Self(data, uplink)
-    }
-
-    /// Gives the FHDR of the DataPayload.
-    pub fn fhdr(&self) -> FHDR {
-        FHDR::new_from_raw(&self.0[0..self.fhdr_length()], self.1)
-    }
-
-    /// Gives the FPort of the DataPayload if there is one.
-    pub fn f_port(&self) -> Option<u8> {
-        let fhdr_length = self.fhdr_length();
-        if fhdr_length + 1 >= self.0.len() {
-            return None;
-        }
-        Some(self.0[self.fhdr_length()])
-    }
-
-    /// Gives the payload of the DataPayload if there is one.
-    pub fn encrypted_frm_payload(&self) -> &'a [u8] {
-        let fhdr_length = self.fhdr_length();
-        if fhdr_length + 2 >= self.0.len() {
-            return &self.0[0..0];
-        }
-        &self.0[(self.fhdr_length() + 1)..]
-    }
-
-    fn fhdr_length(&self) -> usize {
-        fhdr_length(self.0)
-    }
-}
-
 fixed_len_struct! {
     /// EUI64 represents a 64 bit EUI.
     struct EUI64[8];
@@ -864,7 +860,7 @@ impl<'a> FHDR<'a> {
         if data_len < 7 {
             return None;
         }
-        if data_len < fhdr_length(bytes) {
+        if data_len < fhdr_length(FCtrl(bytes[4], uplink)) {
             return None;
         }
         Some(FHDR(bytes, uplink))
@@ -936,13 +932,10 @@ impl FCtrl {
 /// data or mac commands.
 #[derive(Debug, PartialEq)]
 pub enum FRMPayload<'a> {
-    Data(FRMDataPayload<'a>),
+    Data(&'a [u8]),
     MACCommands(FRMMacCommands<'a>),
+    None,
 }
-
-/// FRMDataPayload represents the application data.
-#[derive(Debug, PartialEq)]
-pub struct FRMDataPayload<'a>(pub &'a [u8]);
 
 /// FRMMacCommands represents the mac commands.
 #[derive(Debug, PartialEq)]
@@ -958,4 +951,3 @@ impl<'a> FRMMacCommands<'a> {
         maccommands::parse_mac_commands(self.1, self.0)
     }
 }
-
