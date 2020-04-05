@@ -47,11 +47,20 @@ fn phy_join_accept_payload_with_c_f_list() -> Vec<u8> {
     //867100000, 867300000, 867500000, 867700000, 867900000
 }
 
-fn data_payload() -> Vec<u8> {
+fn phy_dataup_payload() -> Vec<u8> {
     let mut res = Vec::new();
     res.extend_from_slice(&[
         0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01, 0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6,
         0xc3, 0xb5, 0x82,
+    ]).unwrap();
+    res
+}
+
+fn phy_datadown_payload() -> Vec<u8> {
+    let mut res = Vec::new();
+    res.extend_from_slice(&[
+        0xa0, 0x04, 0x03, 0x02, 0x01, 0x80, 0xff, 0x2a, 0x2a, 0x0a, 0xf1, 0xa3, 0x6a, 0x05, 0xd0,
+        0x12, 0x5f, 0x88, 0x5d, 0x88, 0x1d, 0x49, 0xe1
     ]).unwrap();
     res
 }
@@ -137,11 +146,11 @@ fn test_parse_join_accept_payload() {
 
 #[test]
 fn test_parse_data_payload() {
-    let phy = parse(data_payload());
+    let phy = parse(phy_dataup_payload());
     assert_eq!(
         phy,
         Ok(PhyPayload::DataPayload(PhyDataPayload::EncryptedData(
-                    EncryptedPhyDataPayload::new(data_payload()).unwrap())))
+                    EncryptedPhyDataPayload::new(phy_dataup_payload()).unwrap())))
     );
 }
 
@@ -216,7 +225,7 @@ fn test_new_join_accept_payload_with_c_f_list() {
 
 #[test]
 fn test_mic_extraction() {
-    let bytes = &data_payload()[..];
+    let bytes = &phy_dataup_payload()[..];
     let phy = EncryptedPhyDataPayload::new(bytes);
 
     assert_eq!(phy.unwrap().mic(), MIC([0xd6, 0xc3, 0xb5, 0x82]));
@@ -224,7 +233,7 @@ fn test_mic_extraction() {
 
 #[test]
 fn test_validate_data_mic_when_ok() {
-    let phy = EncryptedPhyDataPayload::new(data_payload()).unwrap();
+    let phy = EncryptedPhyDataPayload::new(phy_dataup_payload()).unwrap();
     let key = AES128([2; 16]);
 
     assert_eq!(phy.validate_mic(&key, 1), Ok(true));
@@ -232,7 +241,7 @@ fn test_validate_data_mic_when_ok() {
 
 #[test]
 fn test_validate_data_mic_when_not_ok() {
-    let mut bytes = data_payload();
+    let mut bytes = phy_dataup_payload();
     bytes[8] = 0xee;
     let phy = EncryptedPhyDataPayload::new(bytes).unwrap();
     let key = AES128([2; 16]);
@@ -262,8 +271,8 @@ fn test_complete_data_payload_fhdr() {
     let app_skey = AES128([1; 16]);
     let nwk_skey = AES128([2; 16]);
     let phys: std::vec::Vec<Box<dyn DataHeader>> =
-        vec![Box::new(EncryptedPhyDataPayload::new(data_payload()).unwrap()),
-            Box::new(DecryptedPhyDataPayload::new(data_payload(), &nwk_skey, Some(&app_skey), 1).unwrap())];
+        vec![Box::new(EncryptedPhyDataPayload::new(phy_dataup_payload()).unwrap()),
+            Box::new(DecryptedPhyDataPayload::new(phy_dataup_payload(), &nwk_skey, Some(&app_skey), 1).unwrap())];
     for phy in phys {
         assert_eq!(phy.f_port(), Some(1));
 
@@ -286,8 +295,8 @@ fn test_complete_data_payload_fhdr() {
 }
 
 #[test]
-fn test_complete_data_payload_frm_payload() {
-    let phy = EncryptedPhyDataPayload::new(data_payload()).unwrap();
+fn test_complete_dataup_payload_frm_payload() {
+    let phy = EncryptedPhyDataPayload::new(phy_dataup_payload()).unwrap();
     let key = AES128([1; 16]);
     let decrypted = phy.decrypt(None, Some(&key), 1).unwrap();
     let mut payload = Vec::new();
@@ -295,6 +304,18 @@ fn test_complete_data_payload_frm_payload() {
 
     assert_eq!(decrypted.frm_payload(), Ok(FRMPayload::Data(&payload)));
 }
+
+#[test]
+fn test_complete_datadown_payload_frm_payload() {
+    let phy = EncryptedPhyDataPayload::new(phy_datadown_payload()).unwrap();
+    let key = AES128([1; 16]);
+    let decrypted = phy.decrypt(None, Some(&key), 76543).unwrap();
+    let mut payload = Vec::new();
+    payload.extend_from_slice(&String::from("hello lora").into_bytes()[..]).unwrap();
+
+    assert_eq!(decrypted.frm_payload(), Ok(FRMPayload::Data(&payload)));
+}
+
 #[test]
 fn test_mac_command_in_downlink() {
     let data = [0x60, 0x5f, 0x3b, 0xd7, 0x4e, 0x0a, 0x00, 0x00, 0x03, 0x00, 0x00,
@@ -343,7 +364,7 @@ fn test_fctrl_downlink_complete() {
 }
 
 #[test]
-fn test_data_payload_creator() {
+fn test_data_payload_uplink_creator() {
     let mut phy = DataPayloadCreator::new();
     let nwk_skey = AES128([2; 16]);
     let app_skey = AES128([1; 16]);
@@ -357,7 +378,26 @@ fn test_data_payload_creator() {
 
     assert_eq!(
         phy.build(b"hello", &nwk_skey, &app_skey).unwrap(),
-        &data_payload()[..]
+        &phy_dataup_payload()[..]
+    );
+}
+
+#[test]
+fn test_data_payload_downlink_creator() {
+    let mut phy = DataPayloadCreator::new();
+    let nwk_skey = AES128([2; 16]);
+    let app_skey = AES128([1; 16]);
+    let fctrl = FCtrl::new(0x80, true);
+    phy.set_confirmed(true)
+        .set_uplink(false)
+        .set_f_port(42)
+        .set_dev_addr(&[4, 3, 2, 1])
+        .set_fctrl(&fctrl) // ADR: true, all others: false
+        .set_fcnt(76543);
+
+    assert_eq!(
+        phy.build(b"hello lora", &nwk_skey, &app_skey).unwrap(),
+        &phy_datadown_payload()[..]
     );
 }
 
