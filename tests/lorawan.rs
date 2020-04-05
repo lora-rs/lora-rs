@@ -37,15 +37,15 @@ fn phy_join_accept_payload() -> Vec<u8> {
     res
 }
 
-//fn join_accept_payload_with_c_f_list() -> Vec<u8> {
-    //let mut res = Vec::new();
-    //res.extend_from_slice(&[
-        //0x01, 0x01, 0x01, 0x02, 0x02, 0x02, 0x04, 0x03, 0x02, 0x01, 0x67, 0x09, 0x18, 0x4f, 0x84,
-        //0xe8, 0x56, 0x84, 0xb8, 0x5e, 0x84, 0x88, 0x66, 0x84, 0x58, 0x6e, 0x84, 0,
-    //]).unwrap();
-    //res
-    ////867100000, 867300000, 867500000, 867700000, 867900000
-//}
+fn phy_join_accept_payload_with_c_f_list() -> Vec<u8> {
+    let mut res = Vec::new();
+    res.extend_from_slice(&[
+        0x20, 0xe4, 0x56, 0x73, 0xb6, 0x3c, 0xb4, 0xb9, 0xce, 0xcb, 0x2a, 0xa8, 0x3f, 0x03, 0x33,
+        0xe6, 0x15, 0xd2, 0xac, 0x89, 0xee, 0xa1, 0x65, 0x98, 0x37, 0xc3, 0xaa, 0x6d, 0xf9, 0x68,
+        0x98, 0x89, 0xcf]).unwrap();
+    res
+    //867100000, 867300000, 867500000, 867700000, 867900000
+}
 
 fn data_payload() -> Vec<u8> {
     let mut res = Vec::new();
@@ -149,46 +149,47 @@ fn test_parse_data_payload() {
 fn test_new_join_accept_payload_too_short() {
     let mut bytes = phy_join_accept_payload();
     let key = AES128(app_key());
-    assert!(DecryptedPhyJoinAcceptPayload::new(&mut bytes[1..], &key).is_err());
+    let len = bytes.len();
+    assert!(DecryptedPhyJoinAcceptPayload::new(&mut bytes[..(len - 1)], &key).is_err());
 }
 
 #[test]
 fn test_new_join_accept_payload_mic_validation() {
     let decrypted_phy = new_decrypted_join_accept();
-    assert_eq!(decrypted_phy.validate_mic(&AES128(app_key())), Ok(true));
+    assert_eq!(decrypted_phy.validate_mic(&AES128([1; 16])), Ok(true));
 }
 
 fn new_decrypted_join_accept() -> DecryptedPhyJoinAcceptPayload<Vec<u8>> {
-    let data = phy_join_accept_payload();
-    let key = AES128(app_key());
+    let data = phy_join_accept_payload_with_c_f_list();
+    let key = AES128([1; 16]);
     DecryptedPhyJoinAcceptPayload::new(data, &key).unwrap()
 }
 
 #[test]
 fn test_new_join_accept_c_f_list_empty() {
-    let decrypted_phy = new_decrypted_join_accept();
+    let data = phy_join_accept_payload();
+    let key = AES128(app_key());
+    let decrypted_phy = DecryptedPhyJoinAcceptPayload::new(data, &key).unwrap();
     assert_eq!(decrypted_phy.c_f_list(), Vec::new());
 }
 
 #[test]
 fn test_join_accept_app_nonce_extraction() {
     let decrypted_phy = new_decrypted_join_accept();
-    // TODO: Check
-    let expected = vec![199, 11, 87];
+    let expected = vec![3, 2, 1];
     assert_eq!(decrypted_phy.app_nonce(), AppNonce::new(&expected[..]).unwrap());
 }
 
 #[test]
 fn test_join_accept_rx_delay_extraction() {
     let decrypted_phy = new_decrypted_join_accept();
-    // TODO: Check
-    assert_eq!(decrypted_phy.rx_delay(), 0);
+    assert_eq!(decrypted_phy.rx_delay(), 3);
 }
 
 #[test]
 fn test_join_accept_dl_settings_extraction() {
     let decrypted_phy = new_decrypted_join_accept();
-    assert_eq!(decrypted_phy.dl_settings(), DLSettings::new(0));
+    assert_eq!(decrypted_phy.dl_settings(), DLSettings::new(0x12));
 }
 
 #[test]
@@ -198,21 +199,20 @@ fn test_dl_settings() {
     assert_eq!(dl_settings.rx2_data_rate(), 11);
 }
 
-//#[test]
-//fn test_new_join_accept_payload_with_c_f_list() {
-    //// TODO: fix
-    //let data = join_accept_payload_with_c_f_list();
-    //let key = AES128(app_key());
-    //let decrypted_phy = DecryptedPhyJoinAcceptPayload::new(data, &key).unwrap();
+#[test]
+fn test_new_join_accept_payload_with_c_f_list() {
+    let data = phy_join_accept_payload_with_c_f_list();
+    let key = AES128([1; 16]);
+    let decrypted_phy = DecryptedPhyJoinAcceptPayload::new(data, &key).unwrap();
 
-    //let mut expected_c_f_list = Vec::new();
-    //expected_c_f_list.push(Frequency::new_from_raw(&[0x18, 0x4F, 0x84])).unwrap();
-    //expected_c_f_list.push(Frequency::new_from_raw(&[0xE8, 0x56, 0x84])).unwrap();
-    //expected_c_f_list.push(Frequency::new_from_raw(&[0xB8, 0x5E, 0x84])).unwrap();
-    //expected_c_f_list.push(Frequency::new_from_raw(&[0x88, 0x66, 0x84])).unwrap();
-    //expected_c_f_list.push(Frequency::new_from_raw(&[0x58, 0x6E, 0x84])).unwrap();
-    //assert_eq!(decrypted_phy.c_f_list(), expected_c_f_list);
-//}
+    let mut expected_c_f_list = Vec::new();
+    expected_c_f_list.push(Frequency::new_from_raw(&[0x18, 0x4F, 0x84])).unwrap();
+    expected_c_f_list.push(Frequency::new_from_raw(&[0xE8, 0x56, 0x84])).unwrap();
+    expected_c_f_list.push(Frequency::new_from_raw(&[0xB8, 0x5E, 0x84])).unwrap();
+    expected_c_f_list.push(Frequency::new_from_raw(&[0x88, 0x66, 0x84])).unwrap();
+    expected_c_f_list.push(Frequency::new_from_raw(&[0x58, 0x6E, 0x84])).unwrap();
+    assert_eq!(decrypted_phy.c_f_list(), expected_c_f_list);
+}
 
 #[test]
 fn test_mic_extraction() {
@@ -297,8 +297,8 @@ fn test_complete_data_payload_frm_payload() {
 }
 #[test]
 fn test_mac_command_in_downlink() {
-    let data = [0x60, 0x5F, 0x3B, 0xD7, 0x4E, 0xA, 0x0, 0x0, 0x3, 0x0, 0x0,
-    0x0, 0x70, 0x3, 0x0, 0xFF, 0x0, 0x30, 0xCD, 0xDB, 0x22, 0xEE];
+    let data = [0x60, 0x5f, 0x3b, 0xd7, 0x4e, 0x0a, 0x00, 0x00, 0x03, 0x00, 0x00,
+    0x00, 0x70, 0x03, 0x00, 0xff, 0x00, 0x30, 0xcd, 0xdb, 0x22, 0xee];
     let packet = EncryptedPhyDataPayload::new(data).unwrap();
 
     assert_eq!(packet.mhdr().mtype(), MType::UnconfirmedDataDown);
@@ -309,10 +309,10 @@ fn test_mac_command_in_downlink() {
     // there should only be one fopts
     assert_eq!(fopts.len(), 2);
 
-    for i in 0..2 {
-        match fopts[i] {
+    for cmd in fopts {
+        match cmd {
             MacCommand::LinkADRReq(_) => (),
-            _ => panic!("incorrect payload type: {:?}", fopts[i]),
+            _ => panic!("incorrect payload type: {:?}", cmd),
         }
     }
 }
