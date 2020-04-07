@@ -10,7 +10,7 @@ macro_rules! fixed_len_struct_impl_to_string {
         $type:ident[$size:expr];
     ) => {
 
-        impl<'a> std::string::ToString for $type<'a> {
+        impl<T: AsRef<[u8]>> std::string::ToString for $type<T> {
             fn to_string(&self) -> std::string::String {
                 let mut res = std::vec::Vec::new();
                 let data = self.as_ref();

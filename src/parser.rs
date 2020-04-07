@@ -47,32 +47,39 @@ macro_rules! fixed_len_struct {
         struct $type:ident[$size:expr];
     ) => {
         $(#[$outer])*
-        #[derive(Debug, PartialEq, Hash, Eq)]
-        pub struct $type<'a>(&'a [u8; $size]);
+        #[derive(Debug, Eq)]
+        pub struct $type<T: AsRef<[u8]>>(T);
 
-        impl<'a> $type<'a> {
-            fn new_from_raw(bytes: &'a [u8]) -> $type {
-                $type(array_ref![bytes, 0, $size])
+        impl<T: AsRef<[u8]>> $type<T> {
+            fn new_from_raw(bytes: T) -> $type<T> {
+                $type(bytes)
             }
 
-            pub fn new(bytes: &'a [u8]) -> Option<$type> {
+            pub fn new(data: T) -> Option<$type<T>> {
+                let bytes = data.as_ref();
                 if bytes.len() != $size {
                     None
                 } else {
-                    Some($type(array_ref![bytes, 0, $size]))
+                    Some($type(data))
                 }
             }
         }
 
-        impl<'a> From<&'a [u8; $size]> for $type<'a> {
+        impl<T: AsRef<[u8]>, V: AsRef<[u8]>> PartialEq<$type<T>> for $type<V> {
+            fn eq(&self, other: &$type<T>) -> bool {
+                self.as_ref() == other.as_ref()
+            }
+        }
+
+        impl<'a> From<&'a [u8; $size]> for $type<&'a [u8; $size]> {
             fn from(v: &'a [u8; $size]) -> Self {
                 $type(v)
             }
         }
 
-        impl<'a> AsRef<[u8]> for $type<'a> {
+        impl<T: AsRef<[u8]>> AsRef<[u8]> for $type<T> {
             fn as_ref(&self) -> &[u8] {
-                &self.0[..]
+                self.0.as_ref()
             }
         }
     };
@@ -191,17 +198,17 @@ impl<T: AsRef<[u8]>> PhyJoinRequestPayload<T> {
     }
 
     /// Gives the APP EUI of the JoinRequest.
-    pub fn app_eui(&self) -> EUI64 {
+    pub fn app_eui(&self) -> EUI64<&[u8]> {
         EUI64::new_from_raw(&self.0.as_ref()[1..9])
     }
 
     /// Gives the DEV EUI of the JoinRequest.
-    pub fn dev_eui(&self) -> EUI64 {
+    pub fn dev_eui(&self) -> EUI64<&[u8]> {
         EUI64::new_from_raw(&self.0.as_ref()[9..17])
     }
 
     /// Gives the DEV Nonce of the JoinRequest.
-    pub fn dev_nonce(&self) -> DevNonce {
+    pub fn dev_nonce(&self) -> DevNonce<&[u8]> {
         DevNonce::new_from_raw(&self.0.as_ref()[17..19])
     }
 
@@ -321,17 +328,17 @@ impl<T: AsRef<[u8]>> DecryptedPhyJoinAcceptPayload<T> {
     }
 
     /// Gives the app nonce of the JoinAccept.
-    pub fn app_nonce(&self) -> AppNonce {
+    pub fn app_nonce(&self) -> AppNonce<&[u8]> {
         AppNonce::new_from_raw(&self.0.as_ref()[1..4])
     }
 
     /// Gives the net ID of the JoinAccept.
-    pub fn net_id(&self) -> NwkAddr {
+    pub fn net_id(&self) -> NwkAddr<&[u8]> {
         NwkAddr::new_from_raw(&self.0.as_ref()[4..7])
     }
 
     /// Gives the dev address of the JoinAccept.
-    pub fn dev_addr(&self) -> DevAddr {
+    pub fn dev_addr(&self) -> DevAddr<&[u8]> {
         DevAddr::new_from_raw(&self.0.as_ref()[7..11])
     }
 
@@ -380,7 +387,7 @@ impl<T: AsRef<[u8]>> DecryptedPhyJoinAcceptPayload<T> {
     ///     &app_key,
     /// );
     /// ```
-    pub fn derive_newskey(&self, dev_nonce: &DevNonce, key: &keys::AES128) -> keys::AES128 {
+    pub fn derive_newskey<TT: AsRef<[u8]>>(&self, dev_nonce: &DevNonce<TT>, key: &keys::AES128) -> keys::AES128 {
         self.derive_session_key(0x1, dev_nonce, key)
     }
 
@@ -408,13 +415,13 @@ impl<T: AsRef<[u8]>> DecryptedPhyJoinAcceptPayload<T> {
     ///     &app_key,
     /// );
     /// ```
-    pub fn derive_appskey(&self, dev_nonce: &DevNonce, key: &keys::AES128) -> keys::AES128 {
+    pub fn derive_appskey<TT: AsRef<[u8]>>(&self, dev_nonce: &DevNonce<TT>, key: &keys::AES128) -> keys::AES128 {
         self.derive_session_key(0x2, dev_nonce, key)
     }
 
-    fn derive_session_key(&self,
+    fn derive_session_key<TT: AsRef<[u8]>>(&self,
         first_byte: u8,
-        dev_nonce: &DevNonce,
+        dev_nonce: &DevNonce<TT>,
         key: &keys::AES128) -> keys::AES128 {
 
         let key_arr = generic_array::GenericArray::from_slice(&key.0);
@@ -835,9 +842,9 @@ fixed_len_struct! {
     struct DevAddr[4];
 }
 
-impl<'a> DevAddr<'a> {
+impl<T: AsRef<[u8]>> DevAddr<T> {
     pub fn nwk_id(&self) -> u8 {
-        self.0[0] >> 1
+        self.0.as_ref()[0] >> 1
     }
 }
 
@@ -867,7 +874,7 @@ impl<'a> FHDR<'a> {
     }
 
     /// Gives the device address associated with the given payload.
-    pub fn dev_addr(&self) -> DevAddr {
+    pub fn dev_addr(&self) -> DevAddr<&'a [u8]> {
         DevAddr::new_from_raw(&self.0[0..4])
     }
 

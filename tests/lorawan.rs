@@ -278,7 +278,7 @@ fn test_complete_data_payload_fhdr() {
 
         let fhdr = phy.fhdr();
 
-        assert_eq!(fhdr.dev_addr(), DevAddr::new(&[4, 3, 2, 1]).unwrap());
+        assert_eq!(fhdr.dev_addr(), DevAddr::new([4, 3, 2, 1]).unwrap());
 
         assert_eq!(fhdr.fcnt(), 1u16);
 

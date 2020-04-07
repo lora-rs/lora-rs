@@ -71,7 +71,7 @@ impl JoinAcceptCreator {
     ///
     /// * app_nonce - instance of lorawan::parser::AppNonce or anything that can
     ///   be converted into it.
-    pub fn set_app_nonce<'a, T: Into<parser::AppNonce<'a>>>(
+    pub fn set_app_nonce<H: AsRef<[u8]>, T: Into<parser::AppNonce<H>>>(
         &mut self,
         app_nonce: T,
     ) -> &mut JoinAcceptCreator {
@@ -87,7 +87,7 @@ impl JoinAcceptCreator {
     ///
     /// * net_id - instance of lorawan::parser::NwkAddr or anything that can
     ///   be converted into it.
-    pub fn set_net_id<'a, T: Into<parser::NwkAddr<'a>>>(&mut self, net_id: T) -> &mut JoinAcceptCreator {
+    pub fn set_net_id<H: AsRef<[u8]>, T: Into<parser::NwkAddr<H>>>(&mut self, net_id: T) -> &mut JoinAcceptCreator {
         let converted = net_id.into();
         self.data[4..7].copy_from_slice(converted.as_ref());
 
@@ -100,7 +100,7 @@ impl JoinAcceptCreator {
     ///
     /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can
     ///   be converted into it.
-    pub fn set_dev_addr<'a, T: Into<parser::DevAddr<'a>>>(
+    pub fn set_dev_addr<H: AsRef<[u8]>, T: Into<parser::DevAddr<H>>>(
         &mut self,
         dev_addr: T,
     ) -> &mut JoinAcceptCreator {
@@ -227,7 +227,7 @@ impl JoinRequestCreator {
     ///
     /// * app_eui - instance of lorawan::parser::EUI64 or anything that can
     ///   be converted into it.
-    pub fn set_app_eui<'a, T: Into<parser::EUI64<'a>>>(
+    pub fn set_app_eui<H: AsRef<[u8]>, T: Into<parser::EUI64<H>>>(
         &mut self,
         app_eui: T,
     ) -> &mut JoinRequestCreator {
@@ -243,7 +243,7 @@ impl JoinRequestCreator {
     ///
     /// * dev_eui - instance of lorawan::parser::EUI64 or anything that can
     ///   be converted into it.
-    pub fn set_dev_eui<'a, T: Into<parser::EUI64<'a>>>(
+    pub fn set_dev_eui<H: AsRef<[u8]>, T: Into<parser::EUI64<H>>>(
         &mut self,
         dev_eui: T,
     ) -> &mut JoinRequestCreator {
@@ -259,7 +259,7 @@ impl JoinRequestCreator {
     ///
     /// * dev_nonce - instance of lorawan::parser::DevNonce or anything that can
     ///   be converted into it.
-    pub fn set_dev_nonce<'a, T: Into<parser::DevNonce<'a>>>(
+    pub fn set_dev_nonce<H: AsRef<[u8]>, T: Into<parser::DevNonce<H>>>(
         &mut self,
         dev_nonce: T,
     ) -> &mut JoinRequestCreator {
@@ -359,7 +359,7 @@ impl DataPayloadCreator {
     ///
     /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can
     ///   be converted into it.
-    pub fn set_dev_addr<'a, T: Into<parser::DevAddr<'a>>>(
+    pub fn set_dev_addr<H: AsRef<[u8]>, T: Into<parser::DevAddr<H>>>(
         &mut self,
         dev_addr: T,
     ) -> &mut DataPayloadCreator {
