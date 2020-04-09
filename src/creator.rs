@@ -519,14 +519,14 @@ impl DataPayloadCreator {
                 &self.mac_commands_bytes[..],
                 self.fcnt,
                 nwk_skey,
-            )?
+            )
         } else {
             securityhelpers::encrypt_frm_data_payload(
                 &self.data[..],
                 payload,
                 self.fcnt,
                 app_skey,
-            )?
+            )
         };
 
         // Set payload if possible, otherwise return error

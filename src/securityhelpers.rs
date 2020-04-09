@@ -61,12 +61,12 @@ pub fn calculate_mic<'a>(data: &'a [u8], key: &keys::AES128) -> keys::MIC {
 }
 
 /// encrypt_frm_data_payload encrypts bytes
-pub fn encrypt_frm_data_payload<'a>(
+pub fn encrypt_frm_data_payload(
     phy_payload: &[u8],
     frm_payload: &[u8],
     fcnt: u32,
     key: &keys::AES128,
-) -> Result<Vec<u8>, &'a str> {
+) -> Vec<u8> {
     // make the block size a multiple of 16
     let block_size = ((frm_payload.len() + 15) / 16) * 16;
     let mut block = Vec::new();
@@ -93,5 +93,5 @@ pub fn encrypt_frm_data_payload<'a>(
 
     result.truncate(frm_payload.len());
 
-    Ok(result)
+    result
 }

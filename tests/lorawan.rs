@@ -130,7 +130,7 @@ fn test_parse_join_request_payload() {
     let phy = parse(phy_join_request_payload());
     assert_eq!(
         phy,
-        Ok(PhyPayload::JoinRequest(PhyJoinRequestPayload::new(phy_join_request_payload()).unwrap()))
+        Ok(PhyPayload::JoinRequest(JoinRequestPayload::new(phy_join_request_payload()).unwrap()))
     );
 }
 
@@ -139,8 +139,8 @@ fn test_parse_join_accept_payload() {
     let phy = parse(phy_join_accept_payload());
     assert_eq!(
         phy,
-        Ok(PhyPayload::JoinAccept(PhyJoinAcceptPayload::EncryptedJoinAccept(
-                    EncryptedPhyJoinAcceptPayload::new(phy_join_accept_payload()).unwrap())))
+        Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(
+                    EncryptedJoinAcceptPayload::new(phy_join_accept_payload()).unwrap())))
     );
 }
 
@@ -149,8 +149,8 @@ fn test_parse_data_payload() {
     let phy = parse(phy_dataup_payload());
     assert_eq!(
         phy,
-        Ok(PhyPayload::DataPayload(PhyDataPayload::EncryptedData(
-                    EncryptedPhyDataPayload::new(phy_dataup_payload()).unwrap())))
+        Ok(PhyPayload::Data(DataPayload::Encrypted(
+                    EncryptedDataPayload::new(phy_dataup_payload()).unwrap())))
     );
 }
 
@@ -159,7 +159,7 @@ fn test_new_join_accept_payload_too_short() {
     let mut bytes = phy_join_accept_payload();
     let key = AES128(app_key());
     let len = bytes.len();
-    assert!(DecryptedPhyJoinAcceptPayload::new(&mut bytes[..(len - 1)], &key).is_err());
+    assert!(DecryptedJoinAcceptPayload::new(&mut bytes[..(len - 1)], &key).is_err());
 }
 
 #[test]
@@ -168,17 +168,17 @@ fn test_new_join_accept_payload_mic_validation() {
     assert_eq!(decrypted_phy.validate_mic(&AES128([1; 16])), Ok(true));
 }
 
-fn new_decrypted_join_accept() -> DecryptedPhyJoinAcceptPayload<Vec<u8>> {
+fn new_decrypted_join_accept() -> DecryptedJoinAcceptPayload<Vec<u8>> {
     let data = phy_join_accept_payload_with_c_f_list();
     let key = AES128([1; 16]);
-    DecryptedPhyJoinAcceptPayload::new(data, &key).unwrap()
+    DecryptedJoinAcceptPayload::new(data, &key).unwrap()
 }
 
 #[test]
 fn test_new_join_accept_c_f_list_empty() {
     let data = phy_join_accept_payload();
     let key = AES128(app_key());
-    let decrypted_phy = DecryptedPhyJoinAcceptPayload::new(data, &key).unwrap();
+    let decrypted_phy = DecryptedJoinAcceptPayload::new(data, &key).unwrap();
     assert_eq!(decrypted_phy.c_f_list(), Vec::new());
 }
 
@@ -212,7 +212,7 @@ fn test_dl_settings() {
 fn test_new_join_accept_payload_with_c_f_list() {
     let data = phy_join_accept_payload_with_c_f_list();
     let key = AES128([1; 16]);
-    let decrypted_phy = DecryptedPhyJoinAcceptPayload::new(data, &key).unwrap();
+    let decrypted_phy = DecryptedJoinAcceptPayload::new(data, &key).unwrap();
 
     let mut expected_c_f_list = Vec::new();
     expected_c_f_list.push(Frequency::new_from_raw(&[0x18, 0x4F, 0x84])).unwrap();
@@ -226,14 +226,14 @@ fn test_new_join_accept_payload_with_c_f_list() {
 #[test]
 fn test_mic_extraction() {
     let bytes = &phy_dataup_payload()[..];
-    let phy = EncryptedPhyDataPayload::new(bytes);
+    let phy = EncryptedDataPayload::new(bytes);
 
     assert_eq!(phy.unwrap().mic(), MIC([0xd6, 0xc3, 0xb5, 0x82]));
 }
 
 #[test]
 fn test_validate_data_mic_when_ok() {
-    let phy = EncryptedPhyDataPayload::new(phy_dataup_payload()).unwrap();
+    let phy = EncryptedDataPayload::new(phy_dataup_payload()).unwrap();
     let key = AES128([2; 16]);
 
     assert_eq!(phy.validate_mic(&key, 1), Ok(true));
@@ -243,7 +243,7 @@ fn test_validate_data_mic_when_ok() {
 fn test_validate_data_mic_when_not_ok() {
     let mut bytes = phy_dataup_payload();
     bytes[8] = 0xee;
-    let phy = EncryptedPhyDataPayload::new(bytes).unwrap();
+    let phy = EncryptedDataPayload::new(bytes).unwrap();
     let key = AES128([2; 16]);
 
     assert_eq!(phy.validate_mic(&key, 1), Ok(false));
@@ -255,14 +255,14 @@ fn test_new_data_payload_is_none_if_bytes_too_short() {
     let bytes_with_fopts =
         &[0x00, 0x04, 0x03, 0x02, 0x01, 0x01, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04];
 
-    assert!(EncryptedPhyDataPayload::new(bytes).is_err());
-    assert!(EncryptedPhyDataPayload::new(bytes_with_fopts).is_err());
+    assert!(EncryptedDataPayload::new(bytes).is_err());
+    assert!(EncryptedDataPayload::new(bytes_with_fopts).is_err());
 }
 
 #[test]
 fn test_f_port_could_be_absent_in_data_payload() {
     let bytes = &[0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04];
-    let data_payload = EncryptedPhyDataPayload::new(bytes).unwrap();
+    let data_payload = EncryptedDataPayload::new(bytes).unwrap();
     assert!(data_payload.f_port().is_none());
 }
 
@@ -271,8 +271,8 @@ fn test_complete_data_payload_fhdr() {
     let app_skey = AES128([1; 16]);
     let nwk_skey = AES128([2; 16]);
     let phys: std::vec::Vec<Box<dyn DataHeader>> =
-        vec![Box::new(EncryptedPhyDataPayload::new(phy_dataup_payload()).unwrap()),
-            Box::new(DecryptedPhyDataPayload::new(phy_dataup_payload(), &nwk_skey, Some(&app_skey), 1).unwrap())];
+        vec![Box::new(EncryptedDataPayload::new(phy_dataup_payload()).unwrap()),
+            Box::new(DecryptedDataPayload::new(phy_dataup_payload(), &nwk_skey, Some(&app_skey), 1).unwrap())];
     for phy in phys {
         assert_eq!(phy.f_port(), Some(1));
 
@@ -296,7 +296,7 @@ fn test_complete_data_payload_fhdr() {
 
 #[test]
 fn test_complete_dataup_payload_frm_payload() {
-    let phy = EncryptedPhyDataPayload::new(phy_dataup_payload()).unwrap();
+    let phy = EncryptedDataPayload::new(phy_dataup_payload()).unwrap();
     let key = AES128([1; 16]);
     let decrypted = phy.decrypt(None, Some(&key), 1).unwrap();
     let mut payload = Vec::new();
@@ -307,7 +307,7 @@ fn test_complete_dataup_payload_frm_payload() {
 
 #[test]
 fn test_complete_datadown_payload_frm_payload() {
-    let phy = EncryptedPhyDataPayload::new(phy_datadown_payload()).unwrap();
+    let phy = EncryptedDataPayload::new(phy_datadown_payload()).unwrap();
     let key = AES128([1; 16]);
     let decrypted = phy.decrypt(None, Some(&key), 76543).unwrap();
     let mut payload = Vec::new();
@@ -320,7 +320,7 @@ fn test_complete_datadown_payload_frm_payload() {
 fn test_mac_command_in_downlink() {
     let data = [0x60, 0x5f, 0x3b, 0xd7, 0x4e, 0x0a, 0x00, 0x00, 0x03, 0x00, 0x00,
     0x00, 0x70, 0x03, 0x00, 0xff, 0x00, 0x30, 0xcd, 0xdb, 0x22, 0xee];
-    let packet = EncryptedPhyDataPayload::new(data).unwrap();
+    let packet = EncryptedDataPayload::new(data).unwrap();
 
     assert_eq!(packet.mhdr().mtype(), MType::UnconfirmedDataDown);
 
@@ -501,21 +501,21 @@ fn test_data_payload_creator_when_mac_commands_in_f_opts() {
 #[test]
 fn test_join_request_dev_eui_extraction() {
     let data = phy_join_request_payload();
-    let join_request = PhyJoinRequestPayload::new(&data[..]).unwrap();
+    let join_request = JoinRequestPayload::new(&data[..]).unwrap();
     assert_eq!(join_request.dev_eui(), EUI64::new(&data[9..17]).unwrap());
 }
 
 #[test]
 fn test_join_request_app_eui_extraction() {
     let data = phy_join_request_payload();
-    let join_request = PhyJoinRequestPayload::new(&data[..]).unwrap();
+    let join_request = JoinRequestPayload::new(&data[..]).unwrap();
     assert_eq!(join_request.app_eui(), EUI64::new(&data[1..9]).unwrap());
 }
 
 #[test]
 fn test_join_request_dev_nonce_extraction() {
     let data = phy_join_request_payload();
-    let join_request = PhyJoinRequestPayload::new(&data[..]).unwrap();
+    let join_request = JoinRequestPayload::new(&data[..]).unwrap();
     assert_eq!(
         join_request.dev_nonce(),
         DevNonce::new(&data[17..19]).unwrap()
@@ -525,7 +525,7 @@ fn test_join_request_dev_nonce_extraction() {
 #[test]
 fn test_validate_join_request_mic_when_ok() {
     let data = phy_join_request_payload();
-    let join_request = PhyJoinRequestPayload::new(&data[..]).unwrap();
+    let join_request = JoinRequestPayload::new(&data[..]).unwrap();
     let key = AES128([1; 16]);
     assert_eq!(join_request.validate_mic(&key), Ok(true));
 }
@@ -533,7 +533,7 @@ fn test_validate_join_request_mic_when_ok() {
 #[test]
 fn test_validate_join_request_mic_when_not_ok() {
     let data = phy_join_request_payload();
-    let join_request = PhyJoinRequestPayload::new(&data[..]).unwrap();
+    let join_request = JoinRequestPayload::new(&data[..]).unwrap();
     let key = AES128([2; 16]);
     assert_eq!(join_request.validate_mic(&key), Ok(false));
 }
@@ -568,8 +568,8 @@ fn test_join_request_creator() {
 #[test]
 fn test_derive_newskey(){
     let key = AES128(app_key());
-    let join_request = PhyJoinRequestPayload::new(phy_join_request_payload()).unwrap();
-    let join_accept = DecryptedPhyJoinAcceptPayload::new(phy_join_accept_payload(), &key).unwrap();
+    let join_request = JoinRequestPayload::new(phy_join_request_payload()).unwrap();
+    let join_accept = DecryptedJoinAcceptPayload::new(phy_join_accept_payload(), &key).unwrap();
 
     let newskey = join_accept.derive_newskey(&join_request.dev_nonce(), &key);
     //AppNonce([49, 3e, eb]), NwkAddr([51, fb, a2]), DevNonce([2d, 10])
@@ -581,8 +581,8 @@ fn test_derive_newskey(){
 #[test]
 fn test_derive_appskey(){
     let key = AES128(app_key());
-    let join_request = PhyJoinRequestPayload::new(phy_join_request_payload()).unwrap();
-    let join_accept = DecryptedPhyJoinAcceptPayload::new(phy_join_accept_payload(), &key).unwrap();
+    let join_request = JoinRequestPayload::new(phy_join_request_payload()).unwrap();
+    let join_accept = DecryptedJoinAcceptPayload::new(phy_join_accept_payload(), &key).unwrap();
 
     let appskey = join_accept.derive_appskey(&join_request.dev_nonce(), &key);
     //AppNonce([49, 3e, eb]), NwkAddr([51, fb, a2]), DevNonce([2d, 10])
