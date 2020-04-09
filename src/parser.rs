@@ -213,8 +213,8 @@ impl<T: AsRef<[u8]>> JoinRequestPayload<T> {
     }
 
     /// Verifies that the JoinRequest has correct MIC.
-    pub fn validate_mic(&self, key: &keys::AES128) -> Result<bool, &str> {
-        Ok(self.mic() == self.calculate_mic(key))
+    pub fn validate_mic(&self, key: &keys::AES128) -> bool {
+        self.mic() == self.calculate_mic(key)
     }
 
     fn calculate_mic(&self, key: &keys::AES128) -> keys::MIC {
@@ -315,8 +315,8 @@ impl<T: AsRef<[u8]>> AsPhyPayloadBytes for DecryptedJoinAcceptPayload<T> {
 
 impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     /// Verifies that the JoinAccept has correct MIC.
-    pub fn validate_mic<'a>(&self, key: &keys::AES128) -> Result<bool, &'a str> {
-        Ok(self.mic() == self.calculate_mic(key))
+    pub fn validate_mic(&self, key: &keys::AES128) -> bool {
+        self.mic() == self.calculate_mic(key)
     }
 
     fn calculate_mic(&self, key: &keys::AES128) -> keys::MIC {
@@ -473,7 +473,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedJoinAcceptPayload<T> {
     pub fn new<'a, 'b>(data: T, key: &'a keys::AES128) -> Result<Self, &'b str> {
         let t = EncryptedJoinAcceptPayload::new(data)?;
         let res = t.decrypt(key);
-        if res.validate_mic(key)? {
+        if res.validate_mic(key) {
             Ok(res)
         } else {
             Err("MIC did not match")
@@ -583,8 +583,8 @@ impl<T: AsRef<[u8]>> EncryptedDataPayload<T> {
     }
 
     /// Verifies that the DataPayload has correct MIC.
-    pub fn validate_mic<'b>(&self, key: &keys::AES128, fcnt: u32) -> Result<bool, &'b str> {
-        Ok(self.mic() == self.calculate_mic(key, fcnt))
+    pub fn validate_mic(&self, key: &keys::AES128, fcnt: u32) -> bool {
+        self.mic() == self.calculate_mic(key, fcnt)
     }
 
     fn calculate_mic(&self, key: &keys::AES128, fcnt: u32) -> keys::MIC {
@@ -714,7 +714,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedDataPayload<T> {
                    app_skey: Option<&'a keys::AES128>,
                    fcnt: u32) -> Result<Self, &'b str> {
         let t = EncryptedDataPayload::new(data)?;
-        if !t.validate_mic(nwk_skey, fcnt)? {
+        if !t.validate_mic(nwk_skey, fcnt) {
             return Err("invalid mic");
         }
         t.decrypt(Some(nwk_skey), app_skey, fcnt)

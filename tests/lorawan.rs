@@ -165,7 +165,7 @@ fn test_new_join_accept_payload_too_short() {
 #[test]
 fn test_new_join_accept_payload_mic_validation() {
     let decrypted_phy = new_decrypted_join_accept();
-    assert_eq!(decrypted_phy.validate_mic(&AES128([1; 16])), Ok(true));
+    assert_eq!(decrypted_phy.validate_mic(&AES128([1; 16])), true);
 }
 
 fn new_decrypted_join_accept() -> DecryptedJoinAcceptPayload<Vec<u8>> {
@@ -236,7 +236,7 @@ fn test_validate_data_mic_when_ok() {
     let phy = EncryptedDataPayload::new(phy_dataup_payload()).unwrap();
     let key = AES128([2; 16]);
 
-    assert_eq!(phy.validate_mic(&key, 1), Ok(true));
+    assert_eq!(phy.validate_mic(&key, 1), true);
 }
 
 #[test]
@@ -246,7 +246,7 @@ fn test_validate_data_mic_when_not_ok() {
     let phy = EncryptedDataPayload::new(bytes).unwrap();
     let key = AES128([2; 16]);
 
-    assert_eq!(phy.validate_mic(&key, 1), Ok(false));
+    assert_eq!(phy.validate_mic(&key, 1), false);
 }
 
 #[test]
@@ -527,7 +527,7 @@ fn test_validate_join_request_mic_when_ok() {
     let data = phy_join_request_payload();
     let join_request = JoinRequestPayload::new(&data[..]).unwrap();
     let key = AES128([1; 16]);
-    assert_eq!(join_request.validate_mic(&key), Ok(true));
+    assert_eq!(join_request.validate_mic(&key), true);
 }
 
 #[test]
@@ -535,7 +535,7 @@ fn test_validate_join_request_mic_when_not_ok() {
     let data = phy_join_request_payload();
     let join_request = JoinRequestPayload::new(&data[..]).unwrap();
     let key = AES128([2; 16]);
-    assert_eq!(join_request.validate_mic(&key), Ok(false));
+    assert_eq!(join_request.validate_mic(&key), false);
 }
 
 #[test]
