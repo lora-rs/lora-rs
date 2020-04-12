@@ -599,6 +599,11 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedDataPayload<T> {
     /// This method consumes the EncryptedDataPayload as it reuses the underlying memory. Please
     /// note that it does not verify the mic.
     ///
+    /// If used on the application server side for application payload decryption, the nwk_skey can
+    /// be None. If used on the network server side and the app_skey is not available, app_skey can
+    /// be None when fport is 0. Failure to meet those constraints will result in an Err being
+    /// returned.
+    ///
     /// # Argument
     ///
     /// * nwk_skey - the Network Session key used to decrypt the mac commands in case the payload
@@ -642,6 +647,24 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedDataPayload<T> {
 
         self.0.as_mut()[(fhdr_length + 2)..(len - 4)].clone_from_slice(&clear_data[..]);
         Ok(DecryptedDataPayload(self.0))
+    }
+
+    /// Verifies the mic and decrypts the EncryptedDataPayload payload if mic matches.
+    ///
+    /// This is helper method that combines validate_mic and decrypt. In case the mic is fine, it
+    /// consumes the EncryptedDataPayload and reuses the underlying memory to produce
+    /// DecryptedDataPayload. If the mic does not match, it returns the original
+    /// EncryptedDataPayload so that it can be tried against the keys of another device that shares
+    /// the same dev_addr. For an example please see [decrypt](#method.decrypt).
+    pub fn decrypt_if_mic_ok<'a>(self,
+                   nwk_skey: &'a keys::AES128,
+                   app_skey: &'a keys::AES128,
+                   fcnt: u32) -> Result<DecryptedDataPayload<T>, Self> {
+        if !self.validate_mic(nwk_skey, fcnt) {
+            Err(self)
+        } else {
+            Ok(self.decrypt(Some(nwk_skey), Some(app_skey), fcnt).unwrap())
+        }
     }
 }
 
