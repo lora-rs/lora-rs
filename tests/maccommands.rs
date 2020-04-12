@@ -276,7 +276,7 @@ fn test_channel_mask() {
     expected[12] = true;
     let chan_mask = ChannelMask::new(&data[..]);
     assert!(chan_mask.is_ok());
-    assert_eq!(chan_mask.unwrap().statuses(), expected);
+    assert_eq!(&chan_mask.unwrap().statuses()[..], &expected[..]);
 }
 
 #[test]

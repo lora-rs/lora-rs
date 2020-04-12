@@ -1,15 +1,25 @@
 [package]
 name = "lorawan"
-version = "0.4.2"
+version = "0.5.0"
 edition = "2018"
 authors = ["Ivaylo Petrov <ivajloip@gmail.com>"]
-description = "Crate lorawan provides structures and tools to read and write LoRaWAN messages from and to a slice of bytes."
+description = "Crate lorawan provides structures and tools for reading and writing LoRaWAN messages from and to a slice of bytes."
 repository = "https://github.com/ivajloip/rust-lorawan"
 license = "MIT"
-keywords = ["lorawan", "iot", "lpwan", "parser"]
+keywords = ["lorawan", "iot", "lpwan", "parser", "lightweight"]
 
 [dependencies]
 arrayref = "0.3.5"
 aes = "0.3.2"
 cmac = "0.2.0"
 generic-array = "0.12.0"
+heapless = "0.5.3"
+
+[features]
+default = ["full"]
+
+full = ["with-to-string", "with-downlink"]
+
+with-to-string = []
+
+with-downlink = []

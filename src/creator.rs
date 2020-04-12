@@ -6,26 +6,35 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
+use heapless;
+use heapless::consts::*;
+type Vec<T> = heapless::Vec<T,U256>;
+
 use super::keys;
 use super::maccommandcreator;
 use super::maccommands;
 use super::parser;
 use super::securityhelpers;
 
+#[cfg(feature = "with-downlink")]
 use aes::block_cipher_trait::generic_array::GenericArray;
+#[cfg(feature = "with-downlink")]
 use aes::block_cipher_trait::BlockCipher;
+#[cfg(feature = "with-downlink")]
 use aes::Aes128;
 
 const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
 /// JoinAcceptCreator serves for creating binary representation of Physical
 /// Payload of JoinAccept.
+#[cfg(feature = "with-downlink")]
 #[derive(Default)]
 pub struct JoinAcceptCreator {
     data: Vec<u8>,
     encrypted: bool,
 }
 
+#[cfg(feature = "with-downlink")]
 impl JoinAcceptCreator {
     /// Creates a well initialized JoinAcceptCreator.
     ///
@@ -40,12 +49,15 @@ impl JoinAcceptCreator {
     /// phy.set_dev_addr(&[1; 4]);
     /// phy.set_dl_settings(2);
     /// phy.set_rx_delay(1);
-    /// phy.set_c_f_list(vec![lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap(),
-    ///      lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()]);
+    /// let mut freqs: heapless::Vec<lorawan::maccommands::Frequency, heapless::consts::U256> = heapless::Vec::new();
+    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap()).unwrap();
+    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()).unwrap();
+    /// phy.set_c_f_list(freqs);
     /// let payload = phy.build(&key).unwrap();
     /// ```
     pub fn new() -> JoinAcceptCreator {
-        let mut data = vec![0; 17];
+        let mut data = Vec::new();
+        data.extend_from_slice(&[0; 17]).unwrap();
         data[0] = 0x20;
         JoinAcceptCreator {
             data,
@@ -59,7 +71,7 @@ impl JoinAcceptCreator {
     ///
     /// * app_nonce - instance of lorawan::parser::AppNonce or anything that can
     ///   be converted into it.
-    pub fn set_app_nonce<'a, T: Into<parser::AppNonce<'a>>>(
+    pub fn set_app_nonce<H: AsRef<[u8]>, T: Into<parser::AppNonce<H>>>(
         &mut self,
         app_nonce: T,
     ) -> &mut JoinAcceptCreator {
@@ -75,7 +87,7 @@ impl JoinAcceptCreator {
     ///
     /// * net_id - instance of lorawan::parser::NwkAddr or anything that can
     ///   be converted into it.
-    pub fn set_net_id<'a, T: Into<parser::NwkAddr<'a>>>(&mut self, net_id: T) -> &mut JoinAcceptCreator {
+    pub fn set_net_id<H: AsRef<[u8]>, T: Into<parser::NwkAddr<H>>>(&mut self, net_id: T) -> &mut JoinAcceptCreator {
         let converted = net_id.into();
         self.data[4..7].copy_from_slice(converted.as_ref());
 
@@ -88,7 +100,7 @@ impl JoinAcceptCreator {
     ///
     /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can
     ///   be converted into it.
-    pub fn set_dev_addr<'a, T: Into<parser::DevAddr<'a>>>(
+    pub fn set_dev_addr<H: AsRef<[u8]>, T: Into<parser::DevAddr<H>>>(
         &mut self,
         dev_addr: T,
     ) -> &mut JoinAcceptCreator {
@@ -138,7 +150,7 @@ impl JoinAcceptCreator {
             return Err("too many frequences");
         }
         if self.data.len() < 33 {
-            self.data.resize(33, 0);
+            self.data.resize(33, 0).unwrap();
         }
         ch_list.iter().enumerate().for_each(|(i, fr)| {
             let v = fr.value() / 100;
@@ -203,7 +215,8 @@ impl JoinRequestCreator {
     /// let payload = phy.build(&key).unwrap();
     /// ```
     pub fn new() -> JoinRequestCreator {
-        let mut data = vec![0; 23];
+        let mut data = Vec::new();
+        data.extend_from_slice(&[0; 23]).unwrap();
         data[0] = 0x00;
         JoinRequestCreator { data }
     }
@@ -214,7 +227,7 @@ impl JoinRequestCreator {
     ///
     /// * app_eui - instance of lorawan::parser::EUI64 or anything that can
     ///   be converted into it.
-    pub fn set_app_eui<'a, T: Into<parser::EUI64<'a>>>(
+    pub fn set_app_eui<H: AsRef<[u8]>, T: Into<parser::EUI64<H>>>(
         &mut self,
         app_eui: T,
     ) -> &mut JoinRequestCreator {
@@ -230,7 +243,7 @@ impl JoinRequestCreator {
     ///
     /// * dev_eui - instance of lorawan::parser::EUI64 or anything that can
     ///   be converted into it.
-    pub fn set_dev_eui<'a, T: Into<parser::EUI64<'a>>>(
+    pub fn set_dev_eui<H: AsRef<[u8]>, T: Into<parser::EUI64<H>>>(
         &mut self,
         dev_eui: T,
     ) -> &mut JoinRequestCreator {
@@ -246,7 +259,7 @@ impl JoinRequestCreator {
     ///
     /// * dev_nonce - instance of lorawan::parser::DevNonce or anything that can
     ///   be converted into it.
-    pub fn set_dev_nonce<'a, T: Into<parser::DevNonce<'a>>>(
+    pub fn set_dev_nonce<H: AsRef<[u8]>, T: Into<parser::DevNonce<H>>>(
         &mut self,
         dev_nonce: T,
     ) -> &mut JoinRequestCreator {
@@ -300,7 +313,8 @@ impl DataPayloadCreator {
     /// let payload = phy.build(b"hello", &nwk_skey, &app_skey).unwrap();
     /// ```
     pub fn new() -> DataPayloadCreator {
-        let mut data = vec![0; 12];
+        let mut data = Vec::new();
+        data.extend_from_slice(&[0; 12]).unwrap();
         data[0] = 0x40;
         DataPayloadCreator {
             data,
@@ -345,7 +359,7 @@ impl DataPayloadCreator {
     ///
     /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can
     ///   be converted into it.
-    pub fn set_dev_addr<'a, T: Into<parser::DevAddr<'a>>>(
+    pub fn set_dev_addr<H: AsRef<[u8]>, T: Into<parser::DevAddr<H>>>(
         &mut self,
         dev_addr: T,
     ) -> &mut DataPayloadCreator {
@@ -412,16 +426,21 @@ impl DataPayloadCreator {
     ///     .set_channel_mask_ack(true)
     ///     .set_data_rate_ack(false)
     ///     .set_tx_power_ack(true);
-    /// let cmds: Vec<&dyn lorawan::maccommands::SerializableMacCommand> = vec![&mac_cmd1, &mac_cmd2];
-    /// phy.set_mac_commands(cmds);
+    /// let mut cmds: heapless::Vec<&dyn lorawan::maccommands::SerializableMacCommand, heapless::consts::U256> = heapless::Vec::new();
+    /// cmds.push(&mac_cmd1);
+    /// cmds.push(&mac_cmd2);
+    /// phy.set_mac_commands(cmds).unwrap();
     /// ```
     pub fn set_mac_commands<'a>(
         &'a mut self,
         cmds: Vec<&dyn maccommands::SerializableMacCommand>,
-    ) -> &mut DataPayloadCreator {
-        self.mac_commands_bytes = maccommandcreator::build_mac_commands(&cmds[..]);
-
-        self
+    ) -> Result<&mut DataPayloadCreator, &str> {
+        if let Ok(result) = maccommandcreator::build_mac_commands(&cmds[..]) {
+            self.mac_commands_bytes = result;
+            Ok(self)
+        } else {
+            Err("failed to set mac commands - maybe they are too many")
+        }
     }
 
     /// Whether the mac commands should be encrypted.
@@ -500,23 +519,22 @@ impl DataPayloadCreator {
                 &self.mac_commands_bytes[..],
                 self.fcnt,
                 nwk_skey,
-            )?
+            )
         } else {
             securityhelpers::encrypt_frm_data_payload(
                 &self.data[..],
                 payload,
                 self.fcnt,
                 app_skey,
-            )?
+            )
         };
 
         // Set payload if possible, otherwise return error
         let additional_bytes_needed = last_filled + payload_len + 4 - self.data.len();
         if additional_bytes_needed > 0 {
-            // we don't have enough length to accomodate all the bytes
-            self.data.reserve_exact(additional_bytes_needed);
-            unsafe {
-                self.data.set_len(last_filled + payload_len + 4);
+            // we don't have enough length to accomodate all the bytes right now
+            if self.data.resize_default(last_filled + payload_len + 4).is_err() {
+                return Err("payload exceeds max allowed payload size");
             }
         }
         if payload_len > 0 {

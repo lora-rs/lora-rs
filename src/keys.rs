@@ -7,7 +7,7 @@
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
 /// AES128 represents 128 bit AES key.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct AES128(pub [u8; 16]);
 
 impl From<[u8; 16]> for AES128 {
@@ -17,7 +17,7 @@ impl From<[u8; 16]> for AES128 {
 }
 
 /// MIC represents LoRaWAN MIC.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default, PartialEq)]
 pub struct MIC(pub [u8; 4]);
 
 impl From<[u8; 4]> for MIC {

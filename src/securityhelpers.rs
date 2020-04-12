@@ -12,12 +12,17 @@ use aes::Aes128;
 
 use cmac::{Cmac, Mac}; 
 
+use heapless;
+use heapless::consts::*;
+
+type Vec<T> = heapless::Vec<T,U256>;
+
 use super::keys;
 
 /// calculate_data_mic computes the MIC of a correct data packet.
 pub fn calculate_data_mic<'a>(data: &'a [u8], key: &keys::AES128, fcnt: u32) -> keys::MIC {
-    let data_len = data.len();
-    let mut mic_bytes = vec![0; data_len + 16];
+    let mut mic_bytes = Vec::new();
+    mic_bytes.resize(data.len() + 16, 0).unwrap();
 
     // compute b0 from the spec
     generate_helper_block(data, 0x49, fcnt, &mut mic_bytes[..16]);
@@ -56,17 +61,17 @@ pub fn calculate_mic<'a>(data: &'a [u8], key: &keys::AES128) -> keys::MIC {
 }
 
 /// encrypt_frm_data_payload encrypts bytes
-pub fn encrypt_frm_data_payload<'a>(
+pub fn encrypt_frm_data_payload(
     phy_payload: &[u8],
     frm_payload: &[u8],
     fcnt: u32,
     key: &keys::AES128,
-) -> Result<Vec<u8>, &'a str> {
+) -> Vec<u8> {
     // make the block size a multiple of 16
     let block_size = ((frm_payload.len() + 15) / 16) * 16;
     let mut block = Vec::new();
-    block.extend_from_slice(frm_payload);
-    block.extend_from_slice(&vec![0u8; block_size - frm_payload.len()][..]);
+    block.extend_from_slice(frm_payload).unwrap();
+    block.resize(block_size, 0).unwrap();
 
     let mut a = [0u8; 16];
     generate_helper_block(phy_payload, 0x01, fcnt, &mut a[..]);
@@ -88,5 +93,5 @@ pub fn encrypt_frm_data_payload<'a>(
 
     result.truncate(frm_payload.len());
 
-    Ok(result)
+    result
 }
