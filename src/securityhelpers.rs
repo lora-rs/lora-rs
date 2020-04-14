@@ -62,36 +62,27 @@ pub fn calculate_mic<'a>(data: &'a [u8], key: &keys::AES128) -> keys::MIC {
 
 /// encrypt_frm_data_payload encrypts bytes
 pub fn encrypt_frm_data_payload(
-    phy_payload: &[u8],
-    frm_payload: &[u8],
+    phy_payload: &mut [u8],
+    start: usize,
+    end: usize,
     fcnt: u32,
     key: &keys::AES128,
-) -> Vec<u8> {
-    // make the block size a multiple of 16
-    let block_size = ((frm_payload.len() + 15) / 16) * 16;
-    let mut block = Vec::new();
-    block.extend_from_slice(frm_payload).unwrap();
-    block.resize(block_size, 0).unwrap();
+) {
+    let len = end - start;
 
     let mut a = [0u8; 16];
     generate_helper_block(phy_payload, 0x01, fcnt, &mut a[..]);
 
     let aes_enc = Aes128::new(GenericArray::from_slice(&key.0[..]));
-    let mut result: Vec<u8> = block
-        .chunks(16)
-        .enumerate()
-        .flat_map(|(i, c)| {
+
+    let mut tmp = GenericArray::from_mut_slice(&mut a[..]);
+    for i in 0..len {
+        let j = i & 0x0f;
+        if j == 0 {
             a[15] = (i + 1) as u8;
-            let mut tmp = GenericArray::from_mut_slice(&mut a[..]);
+            tmp = GenericArray::from_mut_slice(&mut a[..]);
             aes_enc.encrypt_block(&mut tmp);
-            c.iter()
-                .enumerate()
-                .map(|(j, v)| v ^ tmp[j])
-                .collect::<Vec<u8>>()
-        })
-        .collect();
-
-    result.truncate(frm_payload.len());
-
-    result
+        }
+        phy_payload[start + i] ^= tmp[j]
+    }
 }

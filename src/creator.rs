@@ -478,9 +478,7 @@ impl DataPayloadCreator {
         let has_fport_zero = has_fport && self.data_f_port.unwrap() == 0;
 
         // Set MAC Commands
-        if self.mac_commands_bytes.len() > PIGGYBACK_MAC_COMMANDS_MAX_LEN && has_fport
-            && self.data_f_port.unwrap() != 0
-        {
+        if self.mac_commands_bytes.len() > PIGGYBACK_MAC_COMMANDS_MAX_LEN && !has_fport_zero {
             return Err("mac commands are too big for FOpts");
         }
         if self.encrypt_mac_commands && has_fport && !has_fport_zero {
@@ -511,22 +509,13 @@ impl DataPayloadCreator {
             last_filled += 1;
         }
 
-        // Encrypt FRMPayload
-        let encrypted_payload = if has_fport_zero {
+        let mut enc_key = app_skey;
+        let data = if self.mac_commands_bytes.len() > 0 && has_fport_zero {
+            enc_key = nwk_skey;
             payload_len = self.mac_commands_bytes.len();
-            securityhelpers::encrypt_frm_data_payload(
-                &self.data[..],
-                &self.mac_commands_bytes[..],
-                self.fcnt,
-                nwk_skey,
-            )
+            &self.mac_commands_bytes[..]
         } else {
-            securityhelpers::encrypt_frm_data_payload(
-                &self.data[..],
-                payload,
-                self.fcnt,
-                app_skey,
-            )
+            payload
         };
 
         // Set payload if possible, otherwise return error
@@ -539,13 +528,20 @@ impl DataPayloadCreator {
         }
         if payload_len > 0 {
             self.data[last_filled..last_filled + payload_len]
-                .copy_from_slice(&encrypted_payload[..]);
+                .copy_from_slice(&data[..]);
         }
+        // Encrypt FRMPayload
+        securityhelpers::encrypt_frm_data_payload(
+            &mut self.data[..],
+            last_filled,
+            last_filled + payload_len,
+            self.fcnt,
+            enc_key,
+            );
 
         // MIC set
-        let len = self.data.len();
-        let mic = securityhelpers::calculate_data_mic(&self.data[..len - 4], nwk_skey, self.fcnt);
-        self.data[len - 4..].copy_from_slice(&mic.0[..]);
+        let mic = securityhelpers::calculate_data_mic(&self.data[..last_filled + payload_len], nwk_skey, self.fcnt);
+        self.data[last_filled + payload_len..].copy_from_slice(&mic.0[..]);
 
         Ok(&self.data[..])
     }

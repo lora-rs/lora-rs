@@ -497,9 +497,9 @@ pub trait DataHeader {
 
     /// Gives whether the payload is uplink or not.
     fn is_uplink(&self) -> bool {
-        let mhdr = MHDR(self.as_data_bytes()[0]);
+        let mtype = MHDR(self.as_data_bytes()[0]).mtype();
 
-        mhdr.mtype() == MType::UnconfirmedDataUp || mhdr.mtype() == MType::ConfirmedDataUp
+        mtype == MType::UnconfirmedDataUp || mtype == MType::ConfirmedDataUp
     }
 
     /// Gives the FPort of the DataPayload if there is one.
@@ -567,6 +567,7 @@ impl<T: AsRef<[u8]>> EncryptedDataPayload<T> {
 
     fn can_build_from(bytes: &[u8]) -> bool {
         let has_acceptable_len = bytes.len() >= 12 &&
+            // TODO: Bug related to possibly insufficient number of bytes
             fhdr_length(FCtrl(bytes[5], true)) <= bytes.len();
         if !has_acceptable_len {
             return false;
@@ -636,16 +637,16 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedDataPayload<T> {
         if key.is_none() {
             return Err("key needed to decrypt the frm data payload was None");
         }
-        let data = self.0.as_ref();
-        let clear_data = securityhelpers::encrypt_frm_data_payload(
-            data,
-            &data[(1 + fhdr_length + 1)..(data.len() - 4)],
+        let data = self.0.as_mut();
+        let len = data.len();
+        securityhelpers::encrypt_frm_data_payload(
+            &mut data[..],
+            1 + fhdr_length + 1,
+            len - 4,
             full_fcnt,
             &key.unwrap(),
         );
-        let len = self.0.as_ref().len();
 
-        self.0.as_mut()[(fhdr_length + 2)..(len - 4)].clone_from_slice(&clear_data[..]);
         Ok(DecryptedDataPayload(self.0))
     }
 
