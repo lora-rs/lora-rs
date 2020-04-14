@@ -132,12 +132,20 @@ macro_rules! mac_cmds_map  {
 }
 
 macro_rules! new_mac_cmd_helper {
-    ($name:ident, $type:ident,0) => {
+    (
+        $(#[$outer:meta])*
+        $name:ident, $type:ident,0
+    ) => {
+        $(#[$outer])*
         pub fn new_as_mac_cmd(_: &[u8]) -> Result<(MacCommand, usize), &str> {
             Ok((MacCommand::$name($type()), 0))
         }
     };
-    ($name:ident, $type:ident, $len:expr) => {
+    (
+        $(#[$outer:meta])*
+        $name:ident, $type:ident, $len:expr
+    ) => {
+        $(#[$outer])*
         pub fn new_as_mac_cmd(data: &[u8]) -> Result<(MacCommand, usize), &str> {
             #![allow(clippy::range_plus_one)]
             if let Err(err) = Self::can_build_from(data) {
@@ -150,7 +158,11 @@ macro_rules! new_mac_cmd_helper {
 }
 
 macro_rules! create_type_const_fn {
-    (can_build_from) => {
+    (
+        $(#[$outer:meta])*
+        can_build_from
+    ) => {
+        $(#[$outer])*
         pub fn can_build_from(bytes: &[u8]) -> Result<(), &str> {
             if bytes.len() < Self::len() {
                 return Err("not enough bytes to read");
@@ -159,7 +171,11 @@ macro_rules! create_type_const_fn {
         }
     };
 
-    ($name:ident, $type:ty, $val:expr) => {
+    (
+        $(#[$outer:meta])*
+        $name:ident, $type:ty, $val:expr
+    ) => {
+        $(#[$outer])*
         pub fn $name() -> $type {
             $val
         }
@@ -167,7 +183,11 @@ macro_rules! create_type_const_fn {
 }
 
 macro_rules! create_ack_fn {
-    ( $fn_name:ident, $offset:expr ) => (
+    (
+        $(#[$outer:meta])*
+        $fn_name:ident, $offset:expr
+    ) => (
+        $(#[$outer])*
         pub fn $fn_name(&self) -> bool {
             self.0[0] & (0x01 << $offset) != 0
         }
@@ -175,7 +195,11 @@ macro_rules! create_ack_fn {
 }
 
 macro_rules! create_value_reader_fn {
-    ( $fn_name:ident, $index:expr ) => (
+    (
+        $(#[$outer:meta])*
+        $fn_name:ident, $index:expr
+    ) => (
+        $(#[$outer])*
         pub fn $fn_name(&self) -> u8 {
             self.0[$index]
         }
@@ -237,20 +261,30 @@ pub fn parse_mac_commands<'a>(
 pub struct LinkCheckReqPayload();
 
 impl LinkCheckReqPayload {
-    /// Command identifier for LinkCheckReqPayload.
-    create_type_const_fn!(cid, u8, 0x02);
+    create_type_const_fn!(
+        /// Command identifier for LinkCheckReqPayload.
+        cid, u8, 0x02
+    );
 
-    /// Whether LinkCheckReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
+    create_type_const_fn!(
+        /// Whether LinkCheckReqPayload is sent by the device or NS.
+        uplink, bool, true
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 0);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 0
+    );
 
-    /// Check if the bytes can be used to create LinkCheckReqPayload.
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create LinkCheckReqPayload.
+        can_build_from
+    );
 
-    /// Constructs a new LinkCheckReqPayload.
-    new_mac_cmd_helper!(LinkCheckReq, LinkCheckReqPayload, 0);
+    new_mac_cmd_helper!(
+        /// Constructs a new LinkCheckReqPayload.
+        LinkCheckReq, LinkCheckReqPayload, 0
+    );
 }
 
 /// LinkCheckAnsPayload represents the LinkCheckAns LoRaWAN MACCommand.
@@ -258,26 +292,40 @@ impl LinkCheckReqPayload {
 pub struct LinkCheckAnsPayload<'a>(&'a [u8; 2]);
 
 impl<'a> LinkCheckAnsPayload<'a> {
-    /// Command identifier for LinkCheckAnsPayload.
-    create_type_const_fn!(cid, u8, 0x02);
+    create_type_const_fn!(
+        /// Command identifier for LinkCheckAnsPayload.
+        cid, u8, 0x02
+    );
 
-    /// Whether LinkCheckAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
+    create_type_const_fn!(
+        /// Whether LinkCheckAnsPayload is sent by the device or NS.
+        uplink, bool, false
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 2);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 2
+    );
 
-    /// Check if the bytes can be used to create LinkCheckAnsPayload.
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create LinkCheckAnsPayload.
+        can_build_from
+    );
 
-    /// Constructs a new LinkCheckAnsPayload from the provided data.
-    new_mac_cmd_helper!(LinkCheckAns, LinkCheckAnsPayload, 2);
+    new_mac_cmd_helper!(
+        /// Constructs a new LinkCheckAnsPayload from the provided data.
+        LinkCheckAns, LinkCheckAnsPayload, 2
+    );
 
-    /// The link margin in dB of the last successfully received LinkCheckReq command.
-    create_value_reader_fn!(margin, 0);
+    create_value_reader_fn!(
+        /// The link margin in dB of the last successfully received LinkCheckReq command.
+        margin, 0
+    );
 
-    /// The number of gateways that successfully received the last LinkCheckReq command.
-    create_value_reader_fn!(gateway_count, 1);
+    create_value_reader_fn!(
+        /// The number of gateways that successfully received the last LinkCheckReq command.
+        gateway_count, 1
+    );
 }
 
 impl<'a> From<&'a [u8; 2]> for LinkCheckAnsPayload<'a> {
@@ -291,20 +339,30 @@ impl<'a> From<&'a [u8; 2]> for LinkCheckAnsPayload<'a> {
 pub struct LinkADRReqPayload<'a>(&'a [u8; 4]);
 
 impl<'a> LinkADRReqPayload<'a> {
-    /// Command identifier for LinkADRReqPayload.
-    create_type_const_fn!(cid, u8, 0x03);
+    create_type_const_fn!(
+        /// Command identifier for LinkADRReqPayload.
+        cid, u8, 0x03
+    );
 
-    /// Whether LinkADRReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
+    create_type_const_fn!(
+        /// Whether LinkADRReqPayload is sent by the device or NS.
+        uplink, bool, false
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 4);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 4
+    );
 
-    /// Check if the bytes can be used to create LinkADRReqPayload.
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create LinkADRReqPayload.
+        can_build_from
+    );
 
-    /// Constructs a new LinkADRReqPayload from the provided data.
-    new_mac_cmd_helper!(LinkADRReq, LinkADRReqPayload, 4);
+    new_mac_cmd_helper!(
+        /// Constructs a new LinkADRReqPayload from the provided data.
+        LinkADRReq, LinkADRReqPayload, 4
+    );
 
     /// Data Rate that the device should use for its next transmissions.
     pub fn data_rate(&self) -> u8 {
@@ -417,29 +475,45 @@ impl From<u8> for Redundancy {
 pub struct LinkADRAnsPayload<'a>(&'a [u8; 1]);
 
 impl<'a> LinkADRAnsPayload<'a> {
-    /// Command identifier for LinkADRAnsPayload.
-    create_type_const_fn!(cid, u8, 0x03);
+    create_type_const_fn!(
+        /// Command identifier for LinkADRAnsPayload.
+        cid, u8, 0x03
+    );
 
-    /// Whether LinkADRAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
+    create_type_const_fn!(
+        /// Whether LinkADRAnsPayload is sent by the device or NS.
+        uplink, bool, true
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 1);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 1
+    );
 
-    /// Check if the bytes can be used to create LinkADRAnsPayload.
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create LinkADRAnsPayload.
+        can_build_from
+    );
 
-    /// Constructs a new LinkADRAnsPayload from the provided data.
-    new_mac_cmd_helper!(LinkADRAns, LinkADRAnsPayload, 1);
+    new_mac_cmd_helper!(
+        /// Constructs a new LinkADRAnsPayload from the provided data.
+        LinkADRAns, LinkADRAnsPayload, 1
+    );
 
-    /// Whether the channel mask change was applied successsfully.
-    create_ack_fn!(channel_mask_ack, 0);
+    create_ack_fn!(
+        /// Whether the channel mask change was applied successsfully.
+        channel_mask_ack, 0
+    );
 
-    /// Whether the data rate change was applied successsfully.
-    create_ack_fn!(data_rate_ack, 1);
+    create_ack_fn!(
+        /// Whether the data rate change was applied successsfully.
+        data_rate_ack, 1
+    );
 
-    /// Whether the power change was applied successsfully.
-    create_ack_fn!(powert_ack, 2);
+    create_ack_fn!(
+        /// Whether the power change was applied successsfully.
+        powert_ack, 2
+    );
 
     /// Whether the device has accepted the new parameters or not.
     pub fn ack(&self) -> bool {
@@ -452,20 +526,30 @@ impl<'a> LinkADRAnsPayload<'a> {
 pub struct DutyCycleReqPayload<'a>(&'a [u8; 1]);
 
 impl<'a> DutyCycleReqPayload<'a> {
-    /// Command identifier for DutyCycleReqPayload.
-    create_type_const_fn!(cid, u8, 0x04);
+    create_type_const_fn!(
+        /// Command identifier for DutyCycleReqPayload.
+        cid, u8, 0x04
+    );
 
-    /// Whether DutyCycleReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
+    create_type_const_fn!(
+        /// Whether DutyCycleReqPayload is sent by the device or NS.
+        uplink, bool, false
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 1);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 1
+    );
 
-    /// Check if the bytes can be used to create DutyCycleReqPayload.
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create DutyCycleReqPayload.
+        can_build_from
+    );
 
-    /// Constructs a new DutyCycleReqPayload from the provided data.
-    new_mac_cmd_helper!(DutyCycleReq, DutyCycleReqPayload, 1);
+    new_mac_cmd_helper!(
+        /// Constructs a new DutyCycleReqPayload from the provided data.
+        DutyCycleReq, DutyCycleReqPayload, 1
+    );
 
     /// Integer value of the max duty cycle field.
     pub fn max_duty_cycle_raw(&self) -> u8 {
@@ -484,20 +568,30 @@ impl<'a> DutyCycleReqPayload<'a> {
 pub struct DutyCycleAnsPayload();
 
 impl DutyCycleAnsPayload {
-    /// Command identifier for DutyCycleAnsPayload.
-    create_type_const_fn!(cid, u8, 0x04);
+    create_type_const_fn!(
+        /// Command identifier for DutyCycleAnsPayload.
+        cid, u8, 0x04
+    );
 
-    /// Whether DutyCycleAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
+    create_type_const_fn!(
+        /// Whether DutyCycleAnsPayload is sent by the device or NS.
+        uplink, bool, true
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 0);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 0
+    );
 
-    /// Check if the bytes can be used to create DutyCycleAnsPayload.
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create DutyCycleAnsPayload.
+        can_build_from
+    );
 
-    /// Constructs a new DutyCycleAnsPayload from the provided data.
-    new_mac_cmd_helper!(DutyCycleAns, DutyCycleAnsPayload, 0);
+    new_mac_cmd_helper!(
+        /// Constructs a new DutyCycleAnsPayload from the provided data.
+        DutyCycleAns, DutyCycleAnsPayload, 0
+    );
 }
 
 /// RXParamSetupReqPayload represents the RXParamSetupReq LoRaWAN MACCommand.
@@ -505,20 +599,30 @@ impl DutyCycleAnsPayload {
 pub struct RXParamSetupReqPayload<'a>(&'a [u8; 4]);
 
 impl<'a> RXParamSetupReqPayload<'a> {
-    /// Command identifier for RXParamSetupReqPayload.
-    create_type_const_fn!(cid, u8, 0x05);
+    create_type_const_fn!(
+        /// Command identifier for RXParamSetupReqPayload.
+        cid, u8, 0x05
+    );
 
-    /// Whether RXParamSetupReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
+    create_type_const_fn!(
+        /// Whether RXParamSetupReqPayload is sent by the device or NS.
+        uplink, bool, false
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 4);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 4
+    );
 
-    /// Check if the bytes can be used to create RXParamSetupReqPayload.
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create RXParamSetupReqPayload.
+        can_build_from
+    );
 
-    /// Constructs a new RXParamSetupReqPayload from the provided data.
-    new_mac_cmd_helper!(RXParamSetupReq, RXParamSetupReqPayload, 4);
+    new_mac_cmd_helper!(
+        /// Constructs a new RXParamSetupReqPayload from the provided data.
+        RXParamSetupReq, RXParamSetupReqPayload, 4
+    );
 
     /// Downlink settings - namely rx1_dr_offset and rx2_data_rate.
     pub fn dl_settings(&self) -> DLSettings {
@@ -609,29 +713,45 @@ impl<'a> AsRef<[u8]> for Frequency<'a> {
 pub struct RXParamSetupAnsPayload<'a>(&'a [u8; 1]);
 
 impl<'a> RXParamSetupAnsPayload<'a> {
-    /// Command identifier for RXParamSetupAnsPayload.
-    create_type_const_fn!(cid, u8, 0x05);
+    create_type_const_fn!(
+        /// Command identifier for RXParamSetupAnsPayload.
+        cid, u8, 0x05
+    );
 
-    /// Whether RXParamSetupAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
+    create_type_const_fn!(
+        /// Whether RXParamSetupAnsPayload is sent by the device or NS.
+        uplink, bool, true
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 1);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 1
+    );
 
-    /// Check if the bytes can be used to create RXParamSetupAnsPayload.
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create RXParamSetupAnsPayload.
+        can_build_from
+    );
 
-    /// Constructs a new RXParamSetupAnsPayload from the provided data.
-    new_mac_cmd_helper!(RXParamSetupAns, RXParamSetupAnsPayload, 1);
+    new_mac_cmd_helper!(
+        /// Constructs a new RXParamSetupAnsPayload from the provided data.
+        RXParamSetupAns, RXParamSetupAnsPayload, 1
+    );
 
-    /// Whether the channel change was applied successsfully.
-    create_ack_fn!(channel_ack, 0);
+    create_ack_fn!(
+        /// Whether the channel change was applied successsfully.
+        channel_ack, 0
+    );
 
-    /// Whether the rx2 data rate change was applied successsfully.
-    create_ack_fn!(rx2_data_rate_ack, 1);
+    create_ack_fn!(
+        /// Whether the rx2 data rate change was applied successsfully.
+        rx2_data_rate_ack, 1
+    );
 
-    /// Whether the rx1 data rate offset change was applied successsfully.
-    create_ack_fn!(rx1_dr_offset_ack, 2);
+    create_ack_fn!(
+        /// Whether the rx1 data rate offset change was applied successsfully.
+        rx1_dr_offset_ack, 2
+    );
 
     /// Whether the device has accepted the new parameters or not.
     pub fn ack(&self) -> bool {
@@ -644,20 +764,30 @@ impl<'a> RXParamSetupAnsPayload<'a> {
 pub struct DevStatusReqPayload();
 
 impl DevStatusReqPayload {
-    /// Command identifier for DevStatusReqPayload.
-    create_type_const_fn!(cid, u8, 0x06);
+    create_type_const_fn!(
+        /// Command identifier for DevStatusReqPayload.
+        cid, u8, 0x06
+    );
 
-    /// Whether DevStatusReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
+    create_type_const_fn!(
+        /// Whether DevStatusReqPayload is sent by the device or NS.
+        uplink, bool, false
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 0);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 0
+    );
 
-    /// Check if the bytes can be used to create DevStatusReqPayload.
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create DevStatusReqPayload.
+        can_build_from
+    );
 
-    /// Constructs a new DevStatusReqPayload from the provided data.
-    new_mac_cmd_helper!(DevStatusReq, DevStatusReqPayload, 0);
+    new_mac_cmd_helper!(
+        /// Constructs a new DevStatusReqPayload from the provided data.
+        DevStatusReq, DevStatusReqPayload, 0
+    );
 }
 
 /// DevStatusAnsPayload represents the DevStatusAns LoRaWAN MACCommand.
@@ -665,27 +795,39 @@ impl DevStatusReqPayload {
 pub struct DevStatusAnsPayload<'a>(&'a [u8; 2]);
 
 impl<'a> DevStatusAnsPayload<'a> {
-    /// Command identifier for DevStatusAnsPayload.
-    create_type_const_fn!(cid, u8, 0x06);
+    create_type_const_fn!(
+        /// Command identifier for DevStatusAnsPayload.
+        cid, u8, 0x06
+    );
 
-    /// Whether DevStatusAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
+    create_type_const_fn!(
+        /// Whether DevStatusAnsPayload is sent by the device or NS.
+        uplink, bool, true
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 2);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 2
+    );
 
-    /// Check if the bytes can be used to create DevStatusAnsPayload.
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create DevStatusAnsPayload.
+        can_build_from
+    );
 
-    /// Constructs a new DevStatusAnsPayload from the provided data.
-    new_mac_cmd_helper!(DevStatusAns, DevStatusAnsPayload, 2);
+    new_mac_cmd_helper!(
+        /// Constructs a new DevStatusAnsPayload from the provided data.
+        DevStatusAns, DevStatusAnsPayload, 2
+    );
 
-    /// The battery level of the device.
-    ///
-    /// Note: 0 means that the device is powered by an external source, 255 means that the device
-    /// was unable to measure its battery level, any other value represents the actual battery
-    /// level.
-    create_value_reader_fn!(battery, 0);
+    create_value_reader_fn!(
+        /// The battery level of the device.
+        ///
+        /// Note: 0 means that the device is powered by an external source, 255 means that the device
+        /// was unable to measure its battery level, any other value represents the actual battery
+        /// level.
+        battery, 0
+    );
 
     /// The margin is the demodulation signal-to-noise ratio in dB rounded to the nearest integer
     /// value for the last successfully received DevStatusReq command.
@@ -699,14 +841,20 @@ impl<'a> DevStatusAnsPayload<'a> {
 pub struct NewChannelReqPayload<'a>(&'a [u8; 5]);
 
 impl<'a> NewChannelReqPayload<'a> {
-    /// Command identifier for NewChannelReqPayload.
-    create_type_const_fn!(cid, u8, 0x07);
+    create_type_const_fn!(
+        /// Command identifier for NewChannelReqPayload.
+        cid, u8, 0x07
+    );
 
-    /// Whether NewChannelReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
+    create_type_const_fn!(
+        /// Whether NewChannelReqPayload is sent by the device or NS.
+        uplink, bool, false
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 5);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 5
+    );
 
     /// Check if the bytes can be used to create NewChannelReqPayload.
     pub fn can_build_from(bytes: &[u8]) -> Result<(), &str> {
@@ -717,11 +865,15 @@ impl<'a> NewChannelReqPayload<'a> {
         DataRateRange::can_build_from(bytes[4])
     }
 
-    /// Constructs a new NewChannelReqPayload from the provided data.
-    new_mac_cmd_helper!(NewChannelReq, NewChannelReqPayload, 5);
+    new_mac_cmd_helper!(
+        /// Constructs a new NewChannelReqPayload from the provided data.
+        NewChannelReq, NewChannelReqPayload, 5
+    );
 
-    /// The index of the channel being created or modified.
-    create_value_reader_fn!(channel_index, 0);
+    create_value_reader_fn!(
+        /// The index of the channel being created or modified.
+        channel_index, 0
+    );
 
     /// The frequency of the new or modified channel.
     pub fn frequency(&self) -> Frequency {
@@ -788,26 +940,40 @@ impl From<u8> for DataRateRange {
 pub struct NewChannelAnsPayload<'a>(&'a [u8; 1]);
 
 impl<'a> NewChannelAnsPayload<'a> {
-    /// Command identifier for NewChannelAnsPayload.
-    create_type_const_fn!(cid, u8, 0x07);
+    create_type_const_fn!(
+        /// Command identifier for NewChannelAnsPayload.
+        cid, u8, 0x07
+    );
 
-    /// Whether NewChannelAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
+    create_type_const_fn!(
+        /// Whether NewChannelAnsPayload is sent by the device or NS.
+        uplink, bool, true
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 1);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 1
+    );
 
-    /// Check if the bytes can be used to create NewChannelAnsPayload.
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create NewChannelAnsPayload.
+        can_build_from
+    );
 
-    /// Constructs a new NewChannelAnsPayload from the provided data.
-    new_mac_cmd_helper!(NewChannelAns, NewChannelAnsPayload, 1);
+    new_mac_cmd_helper!(
+        /// Constructs a new NewChannelAnsPayload from the provided data.
+        NewChannelAns, NewChannelAnsPayload, 1
+    );
 
-    /// Whether the channel frequency change was applied successsfully.
-    create_ack_fn!(channel_freq_ack, 0);
+    create_ack_fn!(
+        /// Whether the channel frequency change was applied successsfully.
+        channel_freq_ack, 0
+    );
 
-    /// Whether the data rate range change was applied successsfully.
-    create_ack_fn!(data_rate_range_ack, 1);
+    create_ack_fn!(
+        /// Whether the data rate range change was applied successsfully.
+        data_rate_range_ack, 1
+    );
 
     /// Whether the device has accepted the new channel.
     pub fn ack(&self) -> bool {
@@ -820,20 +986,30 @@ impl<'a> NewChannelAnsPayload<'a> {
 pub struct RXTimingSetupReqPayload<'a>(&'a [u8; 1]);
 
 impl<'a> RXTimingSetupReqPayload<'a> {
-    /// Command identifier for RXTimingSetupReqPayload.
-    create_type_const_fn!(cid, u8, 0x08);
+    create_type_const_fn!(
+        /// Command identifier for RXTimingSetupReqPayload.
+        cid, u8, 0x08
+    );
 
-    /// Whether RXTimingSetupReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
+    create_type_const_fn!(
+        /// Whether RXTimingSetupReqPayload is sent by the device or NS.
+        uplink, bool, false
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 1);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 1
+    );
 
-    /// Check if the bytes can be used to create RXTimingSetupReqPayload.
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create RXTimingSetupReqPayload.
+        can_build_from
+    );
 
-    /// Constructs a new RXTimingSetupReqPayload from the provided data.
-    new_mac_cmd_helper!(RXTimingSetupReq, RXTimingSetupReqPayload, 1);
+    new_mac_cmd_helper!(
+        /// Constructs a new RXTimingSetupReqPayload from the provided data.
+        RXTimingSetupReq, RXTimingSetupReqPayload, 1
+    );
 
     /// Delay before the first RX window.
     pub fn delay(&self) -> u8 {
@@ -846,18 +1022,28 @@ impl<'a> RXTimingSetupReqPayload<'a> {
 pub struct RXTimingSetupAnsPayload();
 
 impl RXTimingSetupAnsPayload {
-    /// Command identifier for RXTimingSetupAnsPayload.
-    create_type_const_fn!(cid, u8, 0x08);
+    create_type_const_fn!(
+        /// Command identifier for RXTimingSetupAnsPayload.
+        cid, u8, 0x08
+    );
 
-    /// Whether RXTimingSetupAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
+    create_type_const_fn!(
+        /// Whether RXTimingSetupAnsPayload is sent by the device or NS.
+        uplink, bool, true
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 0);
+    create_type_const_fn!(
+        /// The len
+        len, usize, 0
+    );
 
-    /// Check if the bytes can be used to create RXTimingSetupAnsPayload
-    create_type_const_fn!(can_build_from);
+    create_type_const_fn!(
+        /// Check if the bytes can be used to create RXTimingSetupAnsPayload
+        can_build_from
+    );
 
-    /// Constructs a new RXTimingSetupAnsPayload from the provided data.
-    new_mac_cmd_helper!(RXTimingSetupAns, RXTimingSetupAnsPayload, 0);
+    new_mac_cmd_helper!(
+        /// Constructs a new RXTimingSetupAnsPayload from the provided data.
+        RXTimingSetupAns, RXTimingSetupAnsPayload, 0
+    );
 }
