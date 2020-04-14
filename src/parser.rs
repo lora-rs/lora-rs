@@ -290,10 +290,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedJoinAcceptPayload<T> {
 
             for i in 0..(len >> 4) {
                 let start = (i << 4) + 1;
-                // TODO: try to remove the copying
-                let mut block = generic_array::GenericArray::clone_from_slice(&bytes[start..(start + 16)]);
+                let mut block = generic_array::GenericArray::from_mut_slice(&mut bytes[start..(start + 16)]);
                 aes_enc.encrypt_block(&mut block);
-                bytes[start..(16+start)].clone_from_slice(&block[..16])
             }
         }
         DecryptedJoinAcceptPayload(self.0)
