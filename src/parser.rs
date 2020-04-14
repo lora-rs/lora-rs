@@ -512,12 +512,12 @@ pub trait DataHeader {
 
     /// Gives the length of the FHDR field.
     fn fhdr_length(&self) -> usize {
-        fhdr_length(FCtrl(self.as_data_bytes()[5], self.is_uplink()))
+        fhdr_length(self.as_data_bytes()[5])
     }
 }
 
-fn fhdr_length(fctrl: FCtrl) -> usize {
-    7 + fctrl.f_opts_len() as usize
+fn fhdr_length(b: u8) -> usize {
+    7 + (b & 0x0f) as usize
 }
 
 impl<T: DataHeader> AsPhyPayloadBytes for T {
@@ -554,8 +554,6 @@ impl<T: AsRef<[u8]>> EncryptedDataPayload<T> {
     /// let phy = lorawan::parser::EncryptedDataPayload::new(data);
     /// ```
     pub fn new<'a>(data: T) -> Result<Self, &'a str> {
-        //// TODO(ivaylo): Check this bug?
-        //can_build = DataPayload::can_build_from(payload, false);
         if Self::can_build_from(data.as_ref()) {
             Ok(Self(data))
         } else {
@@ -566,7 +564,7 @@ impl<T: AsRef<[u8]>> EncryptedDataPayload<T> {
     fn can_build_from(bytes: &[u8]) -> bool {
         let has_acceptable_len = bytes.len() >= 12 &&
             // TODO: Bug related to possibly insufficient number of bytes
-            fhdr_length(FCtrl(bytes[5], true)) <= bytes.len();
+            fhdr_length(bytes[5]) <= bytes.len();
         if !has_acceptable_len {
             return false;
         }
@@ -887,7 +885,7 @@ impl<'a> FHDR<'a> {
         if data_len < 7 {
             return None;
         }
-        if data_len < fhdr_length(FCtrl(bytes[4], uplink)) {
+        if data_len < fhdr_length(bytes[4]) {
             return None;
         }
         Some(FHDR(bytes, uplink))
