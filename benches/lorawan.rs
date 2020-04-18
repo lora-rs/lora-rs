@@ -49,7 +49,7 @@ fn bench_complete_data_payload_fhdr(c: &mut Criterion) {
                 panic!("no way");
             }
             assert_eq!(fhdr.fcnt(), 1u16);
-            assert_eq!(fhdr.fopts().unwrap().len(), 0);
+            assert_eq!(fhdr.fopts().count(), 0);
 
             let fctrl = fhdr.fctrl();
 

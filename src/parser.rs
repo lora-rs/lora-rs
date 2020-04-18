@@ -907,7 +907,7 @@ impl<'a> FHDR<'a> {
     }
 
     /// Gives the piggy-backed MAC ommands associated with the given payload.
-    pub fn fopts(&self) -> Result<Vec<maccommands::MacCommand>, &str> {
+    pub fn fopts(&self) -> maccommands::MacCommandIterator {
         let f_opts_len = FCtrl(self.0[4], self.1).f_opts_len();
         maccommands::parse_mac_commands(&self.0[7 as usize..(7 + f_opts_len) as usize], self.1)
     }
@@ -972,7 +972,7 @@ impl<'a> FRMMacCommands<'a> {
     }
 
     /// Gives the list of mac commands represented in the FRMPayload.
-    pub fn mac_commands(&self) -> Result<Vec<maccommands::MacCommand>, &str> {
+    pub fn mac_commands(&self) -> maccommands::MacCommandIterator {
         maccommands::parse_mac_commands(self.1, self.0)
     }
 }

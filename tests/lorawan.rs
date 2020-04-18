@@ -325,12 +325,8 @@ fn test_mac_command_in_downlink() {
     assert_eq!(packet.mhdr().mtype(), MType::UnconfirmedDataDown);
 
     let fhdr = packet.fhdr();
-    let fopts = fhdr.fopts().unwrap();
-
-    // there should only be one fopts
-    assert_eq!(fopts.len(), 2);
-
-    for cmd in fopts {
+    assert_eq!(fhdr.fopts().count(), 2);
+    for cmd in fhdr.fopts() {
         match cmd {
             MacCommand::LinkADRReq(_) => (),
             _ => panic!("incorrect payload type: {:?}", cmd),

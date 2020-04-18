@@ -307,24 +307,39 @@ macro_rules! create_value_reader_fn {
 ///
 /// ```
 /// let mut data = vec![0x02, 0x03, 0x00];
-/// let mac_cmds = lorawan::maccommands::parse_mac_commands(&data[..], true);
+/// let mac_cmds: Vec<lorawan::maccommands::MacCommand> =
+///     lorawan::maccommands::parse_mac_commands(&data[..], true).collect();
 /// ```
-pub fn parse_mac_commands<'a, 'b>(
-    bytes: &'a [u8],
+pub fn parse_mac_commands(
+    data: &[u8],
     uplink: bool,
-) -> Result<Vec<MacCommand<'a>>, &'b str> {
-    let mut i = 0;
-    let mut res = Vec::new();
-    while i < bytes.len() {
-        if let Ok((l, v)) = parse_one_mac_cmd(&bytes[i..], uplink) {
-            i += 1;
-            res.push(v).unwrap();
-            i += l;
-        } else {
-            break;
-        }
+) -> MacCommandIterator {
+    MacCommandIterator{
+        index: 0,
+        data,
+        uplink,
     }
-    Ok(res)
+}
+
+/// Implementation of iterator for mac commands.
+pub struct MacCommandIterator<'a> {
+    data: &'a [u8],
+    index: usize,
+    uplink: bool,
+}
+
+impl<'a> Iterator for MacCommandIterator<'a> {
+    type Item = MacCommand<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.data.len() {
+            if let Ok((l, v)) = parse_one_mac_cmd(&self.data[self.index..], self.uplink) {
+                self.index += 1 + l;
+                return Some(v);
+            }
+        }
+        None
+    }
 }
 
 impl<'a> LinkCheckAnsPayload<'a> {
