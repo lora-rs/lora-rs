@@ -1,4 +1,4 @@
-// Copyright (c) 2017,2018 Ivaylo Petrov
+// Copyright (c) 2020 Ivaylo Petrov
 //
 // Licensed under the MIT license <LICENSE-MIT or
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
@@ -36,6 +36,9 @@ fn bench_complete_data_payload_fhdr(c: &mut Criterion) {
         let phy = parse(&mut data).unwrap();
 
         if let PhyPayload::Data(DataPayload::Encrypted(data_payload)) = phy {
+            let mhdr = data_payload.mhdr();
+            assert_eq!(mhdr.mtype(), MType::UnconfirmedDataUp);
+            assert_eq!(mhdr.major(), Major::LoRaWANR1);
             if data_payload.mic().0[0] < 1 {
                 panic!("no way");
             }
@@ -45,8 +48,8 @@ fn bench_complete_data_payload_fhdr(c: &mut Criterion) {
             if fhdr.dev_addr().as_ref()[0] < 1 {
                 panic!("no way");
             }
-
             assert_eq!(fhdr.fcnt(), 1u16);
+            assert_eq!(fhdr.fopts().unwrap().len(), 0);
 
             let fctrl = fhdr.fctrl();
 
@@ -61,8 +64,8 @@ fn bench_complete_data_payload_fhdr(c: &mut Criterion) {
             panic!("failed to parse DataPayload");
         }
     }));
-    let c = cnt.load(Ordering::SeqCst);
-    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.get_sum() / c, c);
+    let n = cnt.load(Ordering::SeqCst);
+    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.get_sum() / n, n);
 }
 
 fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
@@ -80,8 +83,8 @@ fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
             panic!("failed to parse DataPayload");
         }
     }));
-    let c = cnt.load(Ordering::SeqCst);
-    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.get_sum() / c, c);
+    let n = cnt.load(Ordering::SeqCst);
+    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.get_sum() / n, n);
 }
 
 fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
@@ -102,8 +105,8 @@ fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
             );
         }
     }));
-    let c = cnt.load(Ordering::SeqCst);
-    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.get_sum() / c, c);
+    let n = cnt.load(Ordering::SeqCst);
+    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.get_sum() / n, n);
 }
 
 criterion_group!(benches, bench_complete_data_payload_fhdr,
