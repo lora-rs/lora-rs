@@ -9,7 +9,6 @@ license = "MIT"
 keywords = ["lorawan", "iot", "lpwan", "parser", "lightweight"]
 
 [dependencies]
-arrayref = "0.3.5"
 aes = "0.3.2"
 cmac = "0.2.0"
 generic-array = "0.12.0"
