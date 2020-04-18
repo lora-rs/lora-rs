@@ -1,4 +1,4 @@
-// Copyright (c) 2017,2018 Ivaylo Petrov
+// Copyright (c) 2017-2020 Ivaylo Petrov
 //
 // Licensed under the MIT license <LICENSE-MIT or
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
