@@ -12,25 +12,17 @@ use aes::Aes128;
 
 use cmac::{Cmac, Mac}; 
 
-use heapless;
-use heapless::consts::*;
-
-type Vec<T> = heapless::Vec<T,U256>;
-
 use super::keys;
 
 /// calculate_data_mic computes the MIC of a correct data packet.
 pub fn calculate_data_mic<'a>(data: &'a [u8], key: &keys::AES128, fcnt: u32) -> keys::MIC {
-    let mut mic_bytes = Vec::new();
-    mic_bytes.resize(data.len() + 16, 0).unwrap();
+    let mut header = [0; 16];
 
     // compute b0 from the spec
-    generate_helper_block(data, 0x49, fcnt, &mut mic_bytes[..16]);
-    mic_bytes[15] = data.len() as u8;
+    generate_helper_block(data, 0x49, fcnt, &mut header[..16]);
+    header[15] = data.len() as u8;
 
-    mic_bytes[16..].copy_from_slice(data);
-
-    calculate_mic(&mic_bytes[..], key)
+    calculate_mic_with_header(&header[..], data, key)
 }
 
 fn generate_helper_block(data: &[u8], first: u8, fcnt: u32, res: &mut [u8]) {
@@ -47,10 +39,10 @@ fn generate_helper_block(data: &[u8], first: u8, fcnt: u32, res: &mut [u8]) {
     // res[15] is to be set later
 }
 
-/// calculate_mic computes the MIC of a correct data packet.
-pub fn calculate_mic<'a>(data: &'a [u8], key: &keys::AES128) -> keys::MIC {
+fn calculate_mic_with_header<'a, 'b>(header: &'a [u8], data: &'b [u8], key: &keys::AES128) -> keys::MIC {
     let mut cipher = Cmac::<Aes128>::new_varkey(&key.0[..]).unwrap();
 
+    cipher.input(header);
     cipher.input(data);
     let result = cipher.result();
 
@@ -58,6 +50,11 @@ pub fn calculate_mic<'a>(data: &'a [u8], key: &keys::AES128) -> keys::MIC {
     mic.copy_from_slice(&result.code()[0..4]);
 
     keys::MIC(mic)
+}
+
+/// calculate_mic computes the MIC of a correct data packet.
+pub fn calculate_mic<'a>(data: &'a [u8], key: &keys::AES128) -> keys::MIC {
+    calculate_mic_with_header(&[], data, key)
 }
 
 /// encrypt_frm_data_payload encrypts bytes
