@@ -7,15 +7,11 @@
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
 use aes::block_cipher_trait::generic_array::GenericArray;
-use aes::block_cipher_trait::BlockCipher;
-use aes::Aes128;
-
-use cmac::{Cmac, Mac}; 
 
 use super::keys;
 
 /// calculate_data_mic computes the MIC of a correct data packet.
-pub fn calculate_data_mic<'a>(data: &'a [u8], key: &keys::AES128, fcnt: u32) -> keys::MIC {
+pub fn calculate_data_mic<M: keys::Mac>(data: &[u8], key: M, fcnt: u32) -> keys::MIC {
     let mut header = [0; 16];
 
     // compute b0 from the spec
@@ -39,21 +35,20 @@ fn generate_helper_block(data: &[u8], first: u8, fcnt: u32, res: &mut [u8]) {
     // res[15] is to be set later
 }
 
-fn calculate_mic_with_header<'a, 'b>(header: &'a [u8], data: &'b [u8], key: &keys::AES128) -> keys::MIC {
-    let mut cipher = Cmac::<Aes128>::new_varkey(&key.0[..]).unwrap();
-
+fn calculate_mic_with_header<M: keys::Mac>(header: &[u8], data: &[u8], mic: M) -> keys::MIC {
+    let mut cipher = mic;
     cipher.input(header);
     cipher.input(data);
     let result = cipher.result();
 
     let mut mic = [0u8; 4];
-    mic.copy_from_slice(&result.code()[0..4]);
+    mic.copy_from_slice(&result[0..4]);
 
     keys::MIC(mic)
 }
 
 /// calculate_mic computes the MIC of a correct data packet.
-pub fn calculate_mic<'a>(data: &'a [u8], key: &keys::AES128) -> keys::MIC {
+pub fn calculate_mic<M: keys::Mac>(data: &[u8], key: M) -> keys::MIC {
     calculate_mic_with_header(&[], data, key)
 }
 
@@ -63,14 +58,12 @@ pub fn encrypt_frm_data_payload(
     start: usize,
     end: usize,
     fcnt: u32,
-    key: &keys::AES128,
+    aes_enc: &dyn keys::Encrypter,
 ) {
     let len = end - start;
 
     let mut a = [0u8; 16];
     generate_helper_block(phy_payload, 0x01, fcnt, &mut a[..]);
-
-    let aes_enc = Aes128::new(GenericArray::from_slice(&key.0[..]));
 
     let mut tmp = GenericArray::from_mut_slice(&mut a[..]);
     for i in 0..len {

@@ -32,11 +32,11 @@ use aes::block_cipher_trait::generic_array;
 use aes::block_cipher_trait::BlockCipher;
 use aes::Aes128;
 
-use heapless;
 use heapless::consts::*;
 
 type Vec<T> = heapless::Vec<T,U256>;
 
+use super::keys::{CryptoFactory, AES128, MIC};
 use super::keys;
 use super::maccommands;
 use super::securityhelpers;
@@ -89,10 +89,10 @@ macro_rules! fixed_len_struct {
 ///
 /// It can either be JoinRequest, JoinAccept, or DataPayload.
 #[derive(Debug, PartialEq)]
-pub enum PhyPayload<T: AsRef<[u8]> +  AsMut<[u8]>> {
-    JoinRequest(JoinRequestPayload<T>),
-    JoinAccept(JoinAcceptPayload<T>),
-    Data(DataPayload<T>)
+pub enum PhyPayload<T: AsRef<[u8]> +  AsMut<[u8]>, F> {
+    JoinRequest(JoinRequestPayload<T, F>),
+    JoinAccept(JoinAcceptPayload<T, F>),
+    Data(DataPayload<T, F>)
 }
 
 /// JoinAcceptPayload is a type that represents a JoinAccept.
@@ -100,9 +100,9 @@ pub enum PhyPayload<T: AsRef<[u8]> +  AsMut<[u8]>> {
 /// It can either be encrypted for example as a result from the [parse](fn.parse.html)
 /// function or not.
 #[derive(Debug, PartialEq)]
-pub enum JoinAcceptPayload<T: AsRef<[u8]> + AsMut<[u8]>> {
-    Encrypted(EncryptedJoinAcceptPayload<T>),
-    Decrypted(DecryptedJoinAcceptPayload<T>)
+pub enum JoinAcceptPayload<T: AsRef<[u8]> + AsMut<[u8]>, F> {
+    Encrypted(EncryptedJoinAcceptPayload<T, F>),
+    Decrypted(DecryptedJoinAcceptPayload<T, F>)
 }
 
 /// DataPayload is a type that represents a ConfirmedDataUp, ConfirmedDataDown,
@@ -111,8 +111,8 @@ pub enum JoinAcceptPayload<T: AsRef<[u8]> + AsMut<[u8]>> {
 /// It can either be encrypted for example as a result from the [parse](fn.parse.html)
 /// function or not.
 #[derive(Debug, PartialEq)]
-pub enum DataPayload<T: AsRef<[u8]> + AsMut<[u8]>> {
-    Encrypted(EncryptedDataPayload<T>),
+pub enum DataPayload<T: AsRef<[u8]> + AsMut<[u8]>, F> {
+    Encrypted(EncryptedDataPayload<T, F>),
     Decrypted(DecryptedDataPayload<T>)
 }
 
@@ -132,15 +132,14 @@ impl AsRef<[u8]> for dyn AsPhyPayloadBytes {
 /// Helper trait to add mic to all types that should have it.
 pub trait MICAble {
     /// Gives the MIC of the PhyPayload.
-    fn mic(&self) -> keys::MIC;
-
+    fn mic(&self) -> MIC;
 }
 
 impl<T: AsPhyPayloadBytes> MICAble for T {
-    fn mic(&self) -> keys::MIC {
+    fn mic(&self) -> MIC {
         let data = self.as_bytes();
         let len = data.len();
-        keys::MIC([data[len - 4], data[len - 3], data[len - 2], data[len - 1]])
+        MIC([data[len - 4], data[len - 3], data[len - 2], data[len - 1]])
     }
 }
 
@@ -163,15 +162,15 @@ impl<T: AsPhyPayloadBytes> MHDRAble for T {
 /// It can be built either directly through the [new](#method.new) or using the
 /// [parse](fn.parse.html) function.
 #[derive(Debug, PartialEq)]
-pub struct JoinRequestPayload<T: AsRef<[u8]>>(T);
+pub struct JoinRequestPayload<T: AsRef<[u8]>, F>(T, F);
 
-impl<T: AsRef<[u8]>> AsPhyPayloadBytes for JoinRequestPayload<T> {
+impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for JoinRequestPayload<T, F> {
     fn as_bytes(&self) -> &[u8] {
         self.0.as_ref()
     }
 }
 
-impl<T: AsRef<[u8]>> JoinRequestPayload<T> {
+impl<T: AsRef<[u8]>> JoinRequestPayload<T, keys::DefaultFactory> {
     /// Creates a new JoinRequestPayload if the provided data is acceptable.
     ///
     /// # Argument
@@ -186,10 +185,30 @@ impl<T: AsRef<[u8]>> JoinRequestPayload<T> {
     /// let phy = lorawan::parser::JoinRequestPayload::new(data);
     /// ```
     pub fn new<'a>(data: T) -> Result<Self, &'a str> {
-        if !JoinRequestPayload::<T>::can_build_from(data.as_ref()) {
+        Self::new_with_factory(data, keys::DefaultFactory)
+    }
+}
+
+impl<T: AsRef<[u8]>, F: CryptoFactory> JoinRequestPayload<T, F> {
+    /// Creates a new JoinRequestPayload if the provided data is acceptable.
+    ///
+    /// # Argument
+    ///
+    /// * data - the bytes for the payload.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let data = vec![0x00, 0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01, 0x05, 0x04, 0x03,
+    ///     0x02, 0x05, 0x04, 0x03, 0x02, 0x2d, 0x10, 0x6a, 0x99, 0x0e, 0x12];
+    /// let phy = lorawan::parser::JoinRequestPayload::new_with_factory(data,
+    ///     lorawan::keys::DefaultFactory);
+    /// ```
+    pub fn new_with_factory<'a>(data: T, factory: F) -> Result<Self, &'a str> {
+        if !Self::can_build_from(data.as_ref()) {
             Err("can not build JoinRequestPayload from the provided data")
         } else {
-            Ok(Self(data))
+            Ok(Self(data, factory))
         }
     }
 
@@ -213,13 +232,13 @@ impl<T: AsRef<[u8]>> JoinRequestPayload<T> {
     }
 
     /// Verifies that the JoinRequest has correct MIC.
-    pub fn validate_mic(&self, key: &keys::AES128) -> bool {
+    pub fn validate_mic(&self, key: &AES128) -> bool {
         self.mic() == self.calculate_mic(key)
     }
 
-    fn calculate_mic(&self, key: &keys::AES128) -> keys::MIC {
+    fn calculate_mic(&self, key: &AES128) -> MIC {
         let d = self.0.as_ref();
-        securityhelpers::calculate_mic(&d[..d.len() - 4], key)
+        securityhelpers::calculate_mic(&d[..d.len() - 4], self.1.new_mac(key))
     }
 }
 
@@ -228,15 +247,15 @@ impl<T: AsRef<[u8]>> JoinRequestPayload<T> {
 /// It can be built either directly through the [new](#method.new) or using the
 /// [parse](fn.parse.html) function.
 #[derive(Debug, PartialEq)]
-pub struct EncryptedJoinAcceptPayload<T: AsRef<[u8]>>(T);
+pub struct EncryptedJoinAcceptPayload<T: AsRef<[u8]>, F>(T, F);
 
-impl<T: AsRef<[u8]>> AsPhyPayloadBytes for EncryptedJoinAcceptPayload<T> {
+impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for EncryptedJoinAcceptPayload<T, F> {
     fn as_bytes(&self) -> &[u8] {
         self.0.as_ref()
     }
 }
 
-impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedJoinAcceptPayload<T> {
+impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedJoinAcceptPayload<T, keys::DefaultFactory> {
     /// Creates a new EncryptedJoinAcceptPayload if the provided data is acceptable.
     ///
     /// # Argument
@@ -251,8 +270,20 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedJoinAcceptPayload<T> {
     /// let phy = lorawan::parser::EncryptedJoinAcceptPayload::new(data);
     /// ```
     pub fn new<'a>(data: T) -> Result<Self, &'a str> {
-        if EncryptedJoinAcceptPayload::<T>::can_build_from(data.as_ref()) {
-            Ok(Self(data))
+        Self::new_with_factory(data, keys::DefaultFactory)
+    }
+}
+
+impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<T, F> {
+    /// Creates a new EncryptedJoinAcceptPayload if the provided data is acceptable.
+    ///
+    /// # Argument
+    ///
+    /// * data - the bytes for the payload.
+    /// * factory - the factory that shall be used to create object for crypto functions.
+    pub fn new_with_factory<'a>(data: T, factory: F) -> Result<Self, &'a str> {
+        if Self::can_build_from(data.as_ref()) {
+            Ok(Self(data, factory))
         } else {
             Err("can not build EncryptedJoinAcceptPayload from the provided data")
         }
@@ -281,7 +312,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedJoinAcceptPayload<T> {
     ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
     /// let decrypted = phy.unwrap().decrypt(&key);
     /// ```
-    pub fn decrypt(mut self, key: &keys::AES128) -> DecryptedJoinAcceptPayload<T> {
+    pub fn decrypt(mut self, key: &AES128) -> DecryptedJoinAcceptPayload<T, F> {
         {
             let bytes = self.0.as_mut();
             let len = bytes.len();
@@ -294,7 +325,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedJoinAcceptPayload<T> {
                 aes_enc.encrypt_block(&mut block);
             }
         }
-        DecryptedJoinAcceptPayload(self.0)
+        DecryptedJoinAcceptPayload(self.0, self.1)
     }
 }
 
@@ -303,25 +334,27 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedJoinAcceptPayload<T> {
 /// It can be built either directly through the [new](#method.new) or using the
 /// [EncryptedJoinAcceptPayload.decrypt](struct.EncryptedJoinAcceptPayload.html#method.decrypt) function.
 #[derive(Debug, PartialEq)]
-pub struct DecryptedJoinAcceptPayload<T: AsRef<[u8]>>(T);
+pub struct DecryptedJoinAcceptPayload<T: AsRef<[u8]>, F>(T, F);
 
-impl<T: AsRef<[u8]>> AsPhyPayloadBytes for DecryptedJoinAcceptPayload<T> {
+impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for DecryptedJoinAcceptPayload<T, F> {
     fn as_bytes(&self) -> &[u8] {
         self.0.as_ref()
     }
 }
 
-impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
+impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     /// Verifies that the JoinAccept has correct MIC.
-    pub fn validate_mic(&self, key: &keys::AES128) -> bool {
+    pub fn validate_mic(&self, key: &AES128) -> bool {
         self.mic() == self.calculate_mic(key)
     }
 
-    fn calculate_mic(&self, key: &keys::AES128) -> keys::MIC {
+    fn calculate_mic(&self, key: &AES128) -> MIC {
         let d = self.0.as_ref();
-        securityhelpers::calculate_mic(&d[..d.len() - 4], key)
+        securityhelpers::calculate_mic(&d[..d.len() - 4], self.1.new_mac(key))
     }
+}
 
+impl<T: AsRef<[u8]>, F> DecryptedJoinAcceptPayload<T, F> {
     /// Gives the app nonce of the JoinAccept.
     pub fn app_nonce(&self) -> AppNonce<&[u8]> {
         AppNonce::new_from_raw(&self.0.as_ref()[1..4])
@@ -382,7 +415,7 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     ///     &app_key,
     /// );
     /// ```
-    pub fn derive_newskey<TT: AsRef<[u8]>>(&self, dev_nonce: &DevNonce<TT>, key: &keys::AES128) -> keys::AES128 {
+    pub fn derive_newskey<TT: AsRef<[u8]>>(&self, dev_nonce: &DevNonce<TT>, key: &AES128) -> AES128 {
         self.derive_session_key(0x1, dev_nonce, key)
     }
 
@@ -410,14 +443,14 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     ///     &app_key,
     /// );
     /// ```
-    pub fn derive_appskey<TT: AsRef<[u8]>>(&self, dev_nonce: &DevNonce<TT>, key: &keys::AES128) -> keys::AES128 {
+    pub fn derive_appskey<TT: AsRef<[u8]>>(&self, dev_nonce: &DevNonce<TT>, key: &AES128) -> AES128 {
         self.derive_session_key(0x2, dev_nonce, key)
     }
 
     fn derive_session_key<TT: AsRef<[u8]>>(&self,
         first_byte: u8,
         dev_nonce: &DevNonce<TT>,
-        key: &keys::AES128) -> keys::AES128 {
+        key: &AES128) -> AES128 {
 
         let key_arr = generic_array::GenericArray::from_slice(&key.0);
         let cipher = Aes128::new(key_arr);
@@ -444,11 +477,11 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
 
         let mut output_key = [0u8; 16];
         output_key.copy_from_slice(&input[0..16]);
-        keys::AES128(output_key)
+        AES128(output_key)
     }
 }
 
-impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedJoinAcceptPayload<T> {
+impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedJoinAcceptPayload<T, keys::DefaultFactory> {
     /// Creates a DecryptedJoinAcceptPayload from the bytes of a JoinAccept.
     ///
     /// The JoinAccept payload is automatically decrypted and the mic is verified.
@@ -468,8 +501,24 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedJoinAcceptPayload<T> {
     ///     0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
     /// let phy = lorawan::parser::DecryptedJoinAcceptPayload::new(&mut data[..], &key);
     /// ```
-    pub fn new<'a, 'b>(data: T, key: &'a keys::AES128) -> Result<Self, &'b str> {
-        let t = EncryptedJoinAcceptPayload::new(data)?;
+    pub fn new<'a, 'b>(data: T, key: &'a AES128) -> Result<Self, &'b str> {
+        Self::new_with_factory(data, key, keys::DefaultFactory)
+    }
+}
+
+impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
+    /// Creates a DecryptedJoinAcceptPayload from the bytes of a JoinAccept.
+    ///
+    /// The JoinAccept payload is automatically decrypted and the mic is verified using the suplied
+    /// crypto factory implementation.
+    ///
+    /// # Argument
+    ///
+    /// * bytes - the data from which the PhyPayload is to be built.
+    /// * key - the key that is to be used to decrypt the payload.
+    /// * factory - the factory that shall be used to create object for crypto functions.
+    pub fn new_with_factory<'a, 'b>(data: T, key: &'a AES128, factory: F) -> Result<Self, &'b str> {
+        let t = EncryptedJoinAcceptPayload::new_with_factory(data, factory)?;
         let res = t.decrypt(key);
         if res.validate_mic(key) {
             Ok(res)
@@ -531,15 +580,21 @@ impl<T: DataHeader> AsPhyPayloadBytes for T {
 /// It can be built either directly through the [new](#method.new) or using the
 /// [parse](fn.parse.html) function.
 #[derive(Debug, PartialEq)]
-pub struct EncryptedDataPayload<T>(T);
+pub struct EncryptedDataPayload<T, F>(T, F);
 
-impl<T: AsRef<[u8]>> DataHeader for EncryptedDataPayload<T> {
+impl<T: AsRef<[u8]>, F> DataHeader for EncryptedDataPayload<T, F> {
     fn as_data_bytes(&self) -> &[u8] {
         self.0.as_ref()
     }
 }
 
-impl<T: AsRef<[u8]>> EncryptedDataPayload<T> {
+impl<T: AsRef<[u8]>> EncryptedDataPayload<T, keys::DefaultFactory> {
+    pub fn new<'a>(data: T) -> Result<Self, &'a str> {
+        Self::new_with_factory(data, keys::DefaultFactory)
+    }
+}
+
+impl<T: AsRef<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> {
     /// Creates a PhyPayload from bytes.
     ///
     /// # Argument
@@ -553,9 +608,9 @@ impl<T: AsRef<[u8]>> EncryptedDataPayload<T> {
     ///     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
     /// let phy = lorawan::parser::EncryptedDataPayload::new(data);
     /// ```
-    pub fn new<'a>(data: T) -> Result<Self, &'a str> {
+    pub fn new_with_factory<'a>(data: T, factory: F) -> Result<Self, &'a str> {
         if Self::can_build_from(data.as_ref()) {
-            Ok(Self(data))
+            Ok(Self(data, factory))
         } else {
             Err("can not build EncryptedDataPayload from the provided data")
         }
@@ -580,17 +635,17 @@ impl<T: AsRef<[u8]>> EncryptedDataPayload<T> {
     }
 
     /// Verifies that the DataPayload has correct MIC.
-    pub fn validate_mic(&self, key: &keys::AES128, fcnt: u32) -> bool {
+    pub fn validate_mic(&self, key: &AES128, fcnt: u32) -> bool {
         self.mic() == self.calculate_mic(key, fcnt)
     }
 
-    fn calculate_mic(&self, key: &keys::AES128, fcnt: u32) -> keys::MIC {
+    fn calculate_mic(&self, key: &AES128, fcnt: u32) -> MIC {
         let d = self.0.as_ref();
-        securityhelpers::calculate_data_mic(&d[..d.len() - 4], key, fcnt)
+        securityhelpers::calculate_data_mic(&d[..d.len() - 4], self.1.new_mac(key), fcnt)
     }
 }
 
-impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedDataPayload<T> {
+impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> {
     /// Decrypts the EncryptedDataPayload payload.
     ///
     /// This method consumes the EncryptedDataPayload as it reuses the underlying memory. Please
@@ -619,8 +674,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedDataPayload<T> {
     /// let dec_phy = enc_phy.decrypt(None, Some(&key), 1);
     /// ```
     pub fn decrypt<'a, 'b>(mut self,
-                   nwk_skey: Option<&'a keys::AES128>,
-                   app_skey: Option<&'a keys::AES128>,
+                   nwk_skey: Option<&'a AES128>,
+                   app_skey: Option<&'a AES128>,
                    fcnt: u32) -> Result<DecryptedDataPayload<T>, &'b str> {
         let fhdr_length = self.fhdr_length();
         let fhdr = self.fhdr();
@@ -640,7 +695,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedDataPayload<T> {
             1 + fhdr_length + 1,
             len - 4,
             full_fcnt,
-            &key.unwrap(),
+            &self.1.new_enc(&key.unwrap()),
         );
 
         Ok(DecryptedDataPayload(self.0))
@@ -654,8 +709,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedDataPayload<T> {
     /// EncryptedDataPayload so that it can be tried against the keys of another device that shares
     /// the same dev_addr. For an example please see [decrypt](#method.decrypt).
     pub fn decrypt_if_mic_ok<'a>(self,
-                   nwk_skey: &'a keys::AES128,
-                   app_skey: &'a keys::AES128,
+                   nwk_skey: &'a AES128,
+                   app_skey: &'a AES128,
                    fcnt: u32) -> Result<DecryptedDataPayload<T>, Self> {
         if !self.validate_mic(nwk_skey, fcnt) {
             Err(self)
@@ -730,8 +785,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedDataPayload<T> {
     ///     1).unwrap();
     /// ```
     pub fn new<'a, 'b>(data: T,
-                   nwk_skey: &'a keys::AES128,
-                   app_skey: Option<&'a keys::AES128>,
+                   nwk_skey: &'a AES128,
+                   app_skey: Option<&'a AES128>,
                    fcnt: u32) -> Result<Self, &'b str> {
         let t = EncryptedDataPayload::new(data)?;
         if !t.validate_mic(nwk_skey, fcnt) {
@@ -758,7 +813,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedDataPayload<T> {
 ///     panic!("failed to parse data payload");
 /// }
 /// ```
-pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(data: T) -> Result<PhyPayload<T>, &'a str> {
+pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(data: T) -> Result<PhyPayload<T, keys::DefaultFactory>, &'a str> {
     let bytes = data.as_ref();
     let len = bytes.len();
     // the smallest payload is a data payload without fport and FRMPayload

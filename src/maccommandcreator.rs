@@ -6,7 +6,6 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use heapless;
 use heapless::consts::*;
 type Vec<T> = heapless::Vec<T,U256>;
 

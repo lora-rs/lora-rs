@@ -8,7 +8,6 @@
 
 extern crate lorawan;
 
-use heapless;
 use heapless::consts::*;
 
 type Vec<T> = heapless::Vec<T,U256>;
@@ -168,7 +167,7 @@ fn test_new_join_accept_payload_mic_validation() {
     assert_eq!(decrypted_phy.validate_mic(&AES128([1; 16])), true);
 }
 
-fn new_decrypted_join_accept() -> DecryptedJoinAcceptPayload<Vec<u8>> {
+fn new_decrypted_join_accept() -> DecryptedJoinAcceptPayload<Vec<u8>, DefaultFactory> {
     let data = phy_join_accept_payload_with_c_f_list();
     let key = AES128([1; 16]);
     DecryptedJoinAcceptPayload::new(data, &key).unwrap()

@@ -11,7 +11,6 @@ use criterion::{criterion_group, criterion_main, Criterion};
 extern crate lorawan;
 extern crate std;
 
-use heapless;
 use heapless::consts::*;
 
 type Vec<T> = heapless::Vec<T,U256>;
@@ -19,7 +18,6 @@ type Vec<T> = heapless::Vec<T,U256>;
 use lorawan::keys::*;
 use lorawan::parser::*;
 
-use trallocator;
 use std::alloc::System;
 use std::sync::atomic::{AtomicU64, Ordering};
 
