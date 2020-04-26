@@ -18,4 +18,7 @@ pub mod parser;
 #[cfg(feature = "full")]
 pub mod extra;
 
+#[cfg(feature = "default-crypto")]
+pub mod default_crypto;
+
 mod securityhelpers;

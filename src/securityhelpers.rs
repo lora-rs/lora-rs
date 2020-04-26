@@ -6,7 +6,7 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use aes::block_cipher_trait::generic_array::GenericArray;
+use generic_array::{GenericArray};
 
 use super::keys;
 

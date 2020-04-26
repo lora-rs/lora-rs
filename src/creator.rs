@@ -14,14 +14,17 @@ use heapless::consts::*;
 type Vec<T> = heapless::Vec<T,U256>;
 
 use super::keys;
-use super::keys::{CryptoFactory, Decrypter};
+use super::keys::CryptoFactory;
 use super::maccommandcreator;
 use super::maccommands;
 use super::parser;
 use super::securityhelpers;
 
 #[cfg(feature = "with-downlink")]
-use aes::block_cipher_trait::generic_array::GenericArray;
+use super::keys::Decrypter;
+
+#[cfg(feature = "with-downlink")]
+use generic_array::GenericArray;
 
 const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
@@ -36,31 +39,6 @@ pub struct JoinAcceptCreator<F> {
 }
 
 #[cfg(feature = "with-downlink")]
-impl JoinAcceptCreator<keys::DefaultFactory> {
-    /// Creates a well initialized JoinAcceptCreator.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut phy = lorawan::creator::JoinAcceptCreator::new();
-    /// let key = lorawan::keys::AES128([1; 16]);
-    /// let app_nonce_bytes = [1; 3];
-    /// phy.set_app_nonce(&app_nonce_bytes);
-    /// phy.set_net_id(&[1; 3]);
-    /// phy.set_dev_addr(&[1; 4]);
-    /// phy.set_dl_settings(2);
-    /// phy.set_rx_delay(1);
-    /// let mut freqs: heapless::Vec<lorawan::maccommands::Frequency, heapless::consts::U256> = heapless::Vec::new();
-    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap()).unwrap();
-    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()).unwrap();
-    /// phy.set_c_f_list(freqs);
-    /// let payload = phy.build(&key).unwrap();
-    /// ```
-    pub fn new() -> Self {
-        Self::new_with_factory(keys::DefaultFactory)
-    }
-}
-
 impl<F: CryptoFactory + Default> JoinAcceptCreator<F> {
     /// Creates a well initialized JoinAcceptCreator with specific crypto functions.
     pub fn new_with_factory(factory: F) -> Self {
@@ -211,24 +189,6 @@ pub struct JoinRequestCreator<F> {
     factory: F,
 }
 
-impl JoinRequestCreator<keys::DefaultFactory> {
-    /// Creates a well initialized JoinRequestCreator.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut phy = lorawan::creator::JoinRequestCreator::new();
-    /// let key = lorawan::keys::AES128([7; 16]);
-    /// phy.set_app_eui(&[1; 8]);
-    /// phy.set_dev_eui(&[2; 8]);
-    /// phy.set_dev_nonce(&[3; 2]);
-    /// let payload = phy.build(&key).unwrap();
-    /// ```
-    pub fn new() -> Self {
-        Self::new_with_factory(keys::DefaultFactory)
-    }
-}
-
 impl<F: CryptoFactory> JoinRequestCreator<F> {
     /// Creates a well initialized JoinRequestCreator with specific crypto functions.
     pub fn new_with_factory(factory: F) -> Self {
@@ -308,31 +268,6 @@ pub struct DataPayloadCreator<F: CryptoFactory + Default> {
     data_f_port: Option<u8>,
     fcnt: u32,
     factory: F,
-}
-
-impl DataPayloadCreator<keys::DefaultFactory> {
-    /// Creates a well initialized DataPayloadCreator.
-    ///
-    /// By default the packet is unconfirmed data up packet.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut phy = lorawan::creator::DataPayloadCreator::new();
-    /// let nwk_skey = lorawan::keys::AES128([2; 16]);
-    /// let app_skey = lorawan::keys::AES128([1; 16]);
-    /// let fctrl = lorawan::parser::FCtrl::new(0x80, true);
-    /// phy.set_confirmed(false);
-    /// phy.set_uplink(true);
-    /// phy.set_f_port(1);
-    /// phy.set_dev_addr(&[4, 3, 2, 1]);
-    /// phy.set_fctrl(&fctrl); // ADR: true, all others: false
-    /// phy.set_fcnt(1);
-    /// let payload = phy.build(b"hello", &nwk_skey, &app_skey).unwrap();
-    /// ```
-    pub fn new() -> DataPayloadCreator<keys::DefaultFactory> {
-        Self::new_with_factory(keys::DefaultFactory)
-    }
 }
 
 impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
