@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Ivaylo Petrov
+// Copyright (c) 2018,2020 Ivaylo Petrov
 //
 // Licensed under the MIT license <LICENSE-MIT or
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
@@ -233,27 +233,22 @@ fn test_rx_timing_setup_ans() {
 #[test]
 fn test_parse_mac_commands_empty_downlink() {
     let data = mac_cmds_payload();
-    assert!(parse_mac_commands(&data[0..0], false).is_ok());
-    assert_eq!(parse_mac_commands(&data[0..0], false).unwrap().len(), 0);
+    assert_eq!(parse_mac_commands(&data[0..0], false).count(), 0);
 }
 
 #[test]
 fn test_parse_mac_commands_empty_uplink() {
     let data = mac_cmds_payload();
-    assert!(parse_mac_commands(&data[0..0], true).is_ok());
-    assert_eq!(parse_mac_commands(&data[0..0], true).unwrap().len(), 0);
+    assert_eq!(parse_mac_commands(&data[0..0], true).count(), 0);
 }
 
 #[test]
 fn test_parse_mac_commands_with_multiple_cmds() {
     let data = mac_cmds_payload();
-    let mcs = parse_mac_commands(&data[..], true);
-    assert!(mcs.is_ok());
-    let commands = mcs.unwrap();
-    assert_eq!(commands.len(), 2);
-    assert_eq!(commands[0], MacCommand::LinkCheckReq(LinkCheckReqPayload()));
+    let mut commands = parse_mac_commands(&data[..], true);
+    assert_eq!(commands.next(), Some(MacCommand::LinkCheckReq(LinkCheckReqPayload())));
     let expected = LinkADRAnsPayload::new_as_mac_cmd(&data[2..]).unwrap().0;
-    assert_eq!(commands[1], expected);
+    assert_eq!(commands.next(), Some(expected));
 }
 
 fn mac_cmds_payload() -> Vec<u8> {

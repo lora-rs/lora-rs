@@ -1,4 +1,4 @@
-// Copyright (c) 2017,2018 Ivaylo Petrov
+// Copyright (c) 2017,2018,2020 Ivaylo Petrov
 //
 // Licensed under the MIT license <LICENSE-MIT or
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
@@ -6,31 +6,19 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use aes::block_cipher_trait::generic_array::GenericArray;
-use aes::block_cipher_trait::BlockCipher;
-use aes::Aes128;
-
-use cmac::{Cmac, Mac}; 
-
-use heapless;
-use heapless::consts::*;
-
-type Vec<T> = heapless::Vec<T,U256>;
+use generic_array::{GenericArray};
 
 use super::keys;
 
 /// calculate_data_mic computes the MIC of a correct data packet.
-pub fn calculate_data_mic<'a>(data: &'a [u8], key: &keys::AES128, fcnt: u32) -> keys::MIC {
-    let mut mic_bytes = Vec::new();
-    mic_bytes.resize(data.len() + 16, 0).unwrap();
+pub fn calculate_data_mic<M: keys::Mac>(data: &[u8], key: M, fcnt: u32) -> keys::MIC {
+    let mut header = [0; 16];
 
     // compute b0 from the spec
-    generate_helper_block(data, 0x49, fcnt, &mut mic_bytes[..16]);
-    mic_bytes[15] = data.len() as u8;
+    generate_helper_block(data, 0x49, fcnt, &mut header[..16]);
+    header[15] = data.len() as u8;
 
-    mic_bytes[16..].copy_from_slice(data);
-
-    calculate_mic(&mic_bytes[..], key)
+    calculate_mic_with_header(&header[..], data, key)
 }
 
 fn generate_helper_block(data: &[u8], first: u8, fcnt: u32, res: &mut [u8]) {
@@ -47,51 +35,44 @@ fn generate_helper_block(data: &[u8], first: u8, fcnt: u32, res: &mut [u8]) {
     // res[15] is to be set later
 }
 
-/// calculate_mic computes the MIC of a correct data packet.
-pub fn calculate_mic<'a>(data: &'a [u8], key: &keys::AES128) -> keys::MIC {
-    let mut cipher = Cmac::<Aes128>::new_varkey(&key.0[..]).unwrap();
-
+fn calculate_mic_with_header<M: keys::Mac>(header: &[u8], data: &[u8], mic: M) -> keys::MIC {
+    let mut cipher = mic;
+    cipher.input(header);
     cipher.input(data);
     let result = cipher.result();
 
     let mut mic = [0u8; 4];
-    mic.copy_from_slice(&result.code()[0..4]);
+    mic.copy_from_slice(&result[0..4]);
 
     keys::MIC(mic)
 }
 
+/// calculate_mic computes the MIC of a correct data packet.
+pub fn calculate_mic<M: keys::Mac>(data: &[u8], key: M) -> keys::MIC {
+    calculate_mic_with_header(&[], data, key)
+}
+
 /// encrypt_frm_data_payload encrypts bytes
 pub fn encrypt_frm_data_payload(
-    phy_payload: &[u8],
-    frm_payload: &[u8],
+    phy_payload: &mut [u8],
+    start: usize,
+    end: usize,
     fcnt: u32,
-    key: &keys::AES128,
-) -> Vec<u8> {
-    // make the block size a multiple of 16
-    let block_size = ((frm_payload.len() + 15) / 16) * 16;
-    let mut block = Vec::new();
-    block.extend_from_slice(frm_payload).unwrap();
-    block.resize(block_size, 0).unwrap();
+    aes_enc: &dyn keys::Encrypter,
+) {
+    let len = end - start;
 
     let mut a = [0u8; 16];
     generate_helper_block(phy_payload, 0x01, fcnt, &mut a[..]);
 
-    let aes_enc = Aes128::new(GenericArray::from_slice(&key.0[..]));
-    let mut result: Vec<u8> = block
-        .chunks(16)
-        .enumerate()
-        .flat_map(|(i, c)| {
+    let mut tmp = GenericArray::from_mut_slice(&mut a[..]);
+    for i in 0..len {
+        let j = i & 0x0f;
+        if j == 0 {
             a[15] = (i + 1) as u8;
-            let mut tmp = GenericArray::from_mut_slice(&mut a[..]);
+            tmp = GenericArray::from_mut_slice(&mut a[..]);
             aes_enc.encrypt_block(&mut tmp);
-            c.iter()
-                .enumerate()
-                .map(|(j, v)| v ^ tmp[j])
-                .collect::<Vec<u8>>()
-        })
-        .collect();
-
-    result.truncate(frm_payload.len());
-
-    result
+        }
+        phy_payload[start + i] ^= tmp[j]
+    }
 }

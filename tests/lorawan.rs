@@ -1,4 +1,4 @@
-// Copyright (c) 2017,2018 Ivaylo Petrov
+// Copyright (c) 2017,2018,2020 Ivaylo Petrov
 //
 // Licensed under the MIT license <LICENSE-MIT or
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
@@ -8,7 +8,6 @@
 
 extern crate lorawan;
 
-use heapless;
 use heapless::consts::*;
 
 type Vec<T> = heapless::Vec<T,U256>;
@@ -18,6 +17,7 @@ use lorawan::keys::*;
 use lorawan::maccommandcreator::*;
 use lorawan::maccommands::*;
 use lorawan::parser::*;
+use lorawan::default_crypto::DefaultFactory;
 
 fn phy_join_request_payload() -> Vec<u8> {
     let mut res = Vec::new();
@@ -168,7 +168,7 @@ fn test_new_join_accept_payload_mic_validation() {
     assert_eq!(decrypted_phy.validate_mic(&AES128([1; 16])), true);
 }
 
-fn new_decrypted_join_accept() -> DecryptedJoinAcceptPayload<Vec<u8>> {
+fn new_decrypted_join_accept() -> DecryptedJoinAcceptPayload<Vec<u8>, DefaultFactory> {
     let data = phy_join_accept_payload_with_c_f_list();
     let key = AES128([1; 16]);
     DecryptedJoinAcceptPayload::new(data, &key).unwrap()
@@ -325,12 +325,8 @@ fn test_mac_command_in_downlink() {
     assert_eq!(packet.mhdr().mtype(), MType::UnconfirmedDataDown);
 
     let fhdr = packet.fhdr();
-    let fopts = fhdr.fopts().unwrap();
-
-    // there should only be one fopts
-    assert_eq!(fopts.len(), 2);
-
-    for cmd in fopts {
+    assert_eq!(fhdr.fopts().count(), 2);
+    for cmd in fhdr.fopts() {
         match cmd {
             MacCommand::LinkADRReq(_) => (),
             _ => panic!("incorrect payload type: {:?}", cmd),

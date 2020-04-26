@@ -1,4 +1,4 @@
-// Copyright (c) 2018 Ivaylo Petrov
+// Copyright (c) 2018,2020 Ivaylo Petrov
 //
 // Licensed under the MIT license <LICENSE-MIT or
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
@@ -6,10 +6,8 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use heapless::FnvIndexMap;
 use heapless::consts::*;
 
-type HashMap<K, V> = FnvIndexMap<K, V, U64>;
 type Vec<T> = heapless::Vec<T,U256>;
 
 /// MacCommand represents the enumeration of all LoRaWAN MACCommands.
@@ -112,62 +110,172 @@ pub fn mac_commands_len(cmds: &[&dyn SerializableMacCommand]) -> usize {
     cmds.iter().map(|mc| mc.payload_len() + 1).sum()
 }
 
-type NewMacCommandFn<'b> = &'b dyn Fn(&'b [u8]) -> Result<(MacCommand<'b>, usize), &str>;
+macro_rules! mac_cmd_zero_len {
+    (
 
-// Helper macro for adding all the default mac command types to a HashMap.
-// See https://doc.rust-lang.org/std/macro.vec.html if you want it to work
-// without the comma after the last item.
-macro_rules! mac_cmds_map  {
-    ( $( $x:ident ,)*) => {{
-        {
-            let mut tmp: HashMap<(u8, bool), NewMacCommandFn> = HashMap::new();
-            $(
-                if tmp.insert(($x::cid(), $x::uplink()), &$x::new_as_mac_cmd).is_err() {
-                    return Err("failed to insert mac cmd");
-                }
+        $(
+            $(#[$outer:meta])*
+            struct $type:ident[cmd=$name:ident, cid=$cid:expr, uplink=$uplink:expr]
             )*
-            tmp
+    ) => {
+        $(
+            $(#[$outer])*
+            pub struct $type();
+
+            impl $type {
+                pub fn new(_: &[u8]) -> Result<$type, &str> {
+                    Ok($type())
+                }
+
+                pub fn new_as_mac_cmd<'a>(data: &[u8]) -> Result<(MacCommand<'a>, usize), &str> {
+                    Ok((MacCommand::$name($type::new(data)?), 0))
+                }
+
+                pub const fn cid() -> u8 {
+                    $cid
+                }
+
+                pub const fn uplink() -> bool {
+                    $uplink
+                }
+
+                pub const fn len() -> usize {
+                    0
+                }
+            }
+        )*
+
+        fn parse_zero_len_mac_cmd<'a, 'b>(data: &'a [u8], uplink: bool) -> Result<(usize, MacCommand<'a>), &'b str> {
+            match (data[0], uplink) {
+                $(
+                    ($cid, $uplink) => Ok((0, MacCommand::$name($type::new(&[])?))),
+                )*
+                _ => Err("uknown mac command")
+            }
         }
-    }};
+    }
 }
 
-macro_rules! new_mac_cmd_helper {
-    ($name:ident, $type:ident,0) => {
-        pub fn new_as_mac_cmd(_: &[u8]) -> Result<(MacCommand, usize), &str> {
-            Ok((MacCommand::$name($type()), 0))
-        }
-    };
-    ($name:ident, $type:ident, $len:expr) => {
-        pub fn new_as_mac_cmd(data: &[u8]) -> Result<(MacCommand, usize), &str> {
-            #![allow(clippy::range_plus_one)]
-            if let Err(err) = Self::can_build_from(data) {
-                return Err(err);
+macro_rules! mac_cmds {
+    (
+
+        $(
+            $(#[$outer:meta])*
+            struct $type:ident[cmd=$name:ident, cid=$cid:expr, uplink=$uplink:expr, size=$size:expr]
+            )*
+    ) => {
+        $(
+            $(#[$outer])*
+            pub struct $type<'a>(&'a [u8]);
+
+            impl<'a> $type<'a> {
+                /// Creates a new instance of the mac command if there is enought data.
+                pub fn new<'b>(data: &'a [u8]) -> Result<$type<'a>, &'b str> {
+                    if data.len() < $size {
+                        Err("incorrect size for")
+                    } else {
+                        Ok($type(&data[..]))
+                    }
+                }
+
+                pub fn new_as_mac_cmd<'b>(data: &'a [u8]) -> Result<(MacCommand<'a>, usize), &'b str> {
+                    Ok((MacCommand::$name($type::new(data)?), $size))
+                }
+
+                /// Command identifier.
+                pub const fn cid() -> u8 {
+                    $cid
+                }
+
+                /// Sent by end device or sent by network server.
+                pub const fn uplink() -> bool {
+                    $uplink
+                }
+
+                /// length of the payload of the mac command.
+                pub const fn len() -> usize {
+                    $size
+                }
             }
-            let payload = array_ref![&data[..$len], 0, $len];
-            Ok((MacCommand::$name($type(payload)), $len))
+        )*
+
+        fn parse_one_mac_cmd<'a, 'b>(data: &'a [u8], uplink: bool) -> Result<(usize, MacCommand<'a>), &'b str> {
+            match (data[0], uplink) {
+                $(
+                    ($cid, $uplink) if data.len() > $size => Ok(($size, MacCommand::$name($type::new(&data[1..])?))),
+                )*
+                _ => parse_zero_len_mac_cmd(data, uplink)
+            }
         }
-    };
+    }
 }
 
-macro_rules! create_type_const_fn {
-    (can_build_from) => {
-        pub fn can_build_from(bytes: &[u8]) -> Result<(), &str> {
-            if bytes.len() < Self::len() {
-                return Err("not enough bytes to read");
-            }
-            Ok(())
-        }
-    };
+mac_cmd_zero_len! {
+    /// LinkCheckReqPayload represents the LinkCheckReq LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct LinkCheckReqPayload[cmd=LinkCheckReq, cid=0x02, uplink=true]
 
-    ($name:ident, $type:ty, $val:expr) => {
-        pub fn $name() -> $type {
-            $val
-        }
-    };
+    /// DutyCycleAnsPayload represents the DutyCycleAns LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct DutyCycleAnsPayload[cmd=DutyCycleAns, cid=0x04, uplink=true]
+
+    /// DevStatusReqPayload represents the DevStatusReq LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct DevStatusReqPayload[cmd=DevStatusReq, cid=0x06, uplink=false]
+
+    /// RXTimingSetupAnsPayload represents the RXTimingSetupAns LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct RXTimingSetupAnsPayload[cmd=RXTimingSetupAns, cid=0x08, uplink=true]
+}
+
+mac_cmds! {
+    /// LinkCheckAnsPayload represents the LinkCheckAns LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct LinkCheckAnsPayload[cmd=LinkCheckAns, cid=0x02, uplink=false, size=2]
+
+    /// LinkADRReqPayload represents the LinkADRReq LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct LinkADRReqPayload[cmd=LinkADRReq, cid=0x03, uplink=false, size=4]
+
+    /// LinkADRAnsPayload represents the LinkADRAns LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct LinkADRAnsPayload[cmd=LinkADRAns, cid=0x03, uplink=true, size=1]
+
+    /// DutyCycleReqPayload represents the DutyCycleReq LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct DutyCycleReqPayload[cmd=DutyCycleReq, cid=0x04, uplink=false, size=1]
+
+    /// RXParamSetupReqPayload represents the RXParamSetupReq LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct RXParamSetupReqPayload[cmd=RXParamSetupReq, cid=0x05, uplink=false, size=4]
+
+    /// RXParamSetupAnsPayload represents the RXParamSetupAns LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct RXParamSetupAnsPayload[cmd=RXParamSetupAns, cid=0x05, uplink=true, size=1]
+
+    /// DevStatusAnsPayload represents the DevStatusAns LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct DevStatusAnsPayload[cmd=DevStatusAns, cid=0x06, uplink=false, size=2]
+
+    /// NewChannelReqPayload represents the NewChannelReq LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct NewChannelReqPayload[cmd=NewChannelReq, cid=0x07, uplink=false, size=5]
+
+    /// NewChannelAnsPayload represents the NewChannelAns LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct NewChannelAnsPayload[cmd=NewChannelAns, cid=0x07, uplink=true, size=1]
+
+    /// RXTimingSetupReqPayload represents the RXTimingSetupReq LoRaWAN MACCommand.
+    #[derive(Debug, PartialEq)]
+    struct RXTimingSetupReqPayload[cmd=RXTimingSetupReq, cid=0x08, uplink=false, size=1]
 }
 
 macro_rules! create_ack_fn {
-    ( $fn_name:ident, $offset:expr ) => (
+    (
+        $(#[$outer:meta])*
+        $fn_name:ident, $offset:expr
+    ) => (
+        $(#[$outer])*
         pub fn $fn_name(&self) -> bool {
             self.0[0] & (0x01 << $offset) != 0
         }
@@ -175,7 +283,11 @@ macro_rules! create_ack_fn {
 }
 
 macro_rules! create_value_reader_fn {
-    ( $fn_name:ident, $index:expr ) => (
+    (
+        $(#[$outer:meta])*
+        $fn_name:ident, $index:expr
+    ) => (
+        $(#[$outer])*
         pub fn $fn_name(&self) -> u8 {
             self.0[$index]
         }
@@ -195,89 +307,51 @@ macro_rules! create_value_reader_fn {
 ///
 /// ```
 /// let mut data = vec![0x02, 0x03, 0x00];
-/// let mac_cmds = lorawan::maccommands::parse_mac_commands(&data[..], true);
+/// let mac_cmds: Vec<lorawan::maccommands::MacCommand> =
+///     lorawan::maccommands::parse_mac_commands(&data[..], true).collect();
 /// ```
-pub fn parse_mac_commands<'a>(
-    bytes: &'a [u8],
+pub fn parse_mac_commands(
+    data: &[u8],
     uplink: bool,
-) -> Result<Vec<MacCommand<'a>>, &str> {
-    let cid_to_parser = mac_cmds_map![
-        LinkCheckReqPayload,
-        LinkCheckAnsPayload,
-        LinkADRReqPayload,
-        LinkADRAnsPayload,
-        DutyCycleReqPayload,
-        DutyCycleAnsPayload,
-        RXParamSetupReqPayload,
-        RXParamSetupAnsPayload,
-        DevStatusReqPayload,
-        DevStatusAnsPayload,
-        NewChannelReqPayload,
-        NewChannelAnsPayload,
-        RXTimingSetupReqPayload,
-        RXTimingSetupAnsPayload,
-    ];
-    let mut i = 0;
-    let mut res = Vec::new();
-    while i < bytes.len() {
-        if let Some(f) = cid_to_parser.get(&(bytes[i], uplink)) {
-            i += 1;
-            let t = f(&bytes[i..])?;
-            res.push(t.0).unwrap();
-            i += t.1;
-        } else {
-            break;
-        }
+) -> MacCommandIterator {
+    MacCommandIterator{
+        index: 0,
+        data,
+        uplink,
     }
-    Ok(res)
 }
 
-/// LinkCheckReqPayload represents the LinkCheckReq LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct LinkCheckReqPayload();
-
-impl LinkCheckReqPayload {
-    /// Command identifier for LinkCheckReqPayload.
-    create_type_const_fn!(cid, u8, 0x02);
-
-    /// Whether LinkCheckReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
-
-    /// The len
-    create_type_const_fn!(len, usize, 0);
-
-    /// Check if the bytes can be used to create LinkCheckReqPayload.
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new LinkCheckReqPayload.
-    new_mac_cmd_helper!(LinkCheckReq, LinkCheckReqPayload, 0);
+/// Implementation of iterator for mac commands.
+pub struct MacCommandIterator<'a> {
+    data: &'a [u8],
+    index: usize,
+    uplink: bool,
 }
 
-/// LinkCheckAnsPayload represents the LinkCheckAns LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct LinkCheckAnsPayload<'a>(&'a [u8; 2]);
+impl<'a> Iterator for MacCommandIterator<'a> {
+    type Item = MacCommand<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.data.len() {
+            if let Ok((l, v)) = parse_one_mac_cmd(&self.data[self.index..], self.uplink) {
+                self.index += 1 + l;
+                return Some(v);
+            }
+        }
+        None
+    }
+}
 
 impl<'a> LinkCheckAnsPayload<'a> {
-    /// Command identifier for LinkCheckAnsPayload.
-    create_type_const_fn!(cid, u8, 0x02);
+    create_value_reader_fn!(
+        /// The link margin in dB of the last successfully received LinkCheckReq command.
+        margin, 0
+    );
 
-    /// Whether LinkCheckAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
-
-    /// The len
-    create_type_const_fn!(len, usize, 2);
-
-    /// Check if the bytes can be used to create LinkCheckAnsPayload.
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new LinkCheckAnsPayload from the provided data.
-    new_mac_cmd_helper!(LinkCheckAns, LinkCheckAnsPayload, 2);
-
-    /// The link margin in dB of the last successfully received LinkCheckReq command.
-    create_value_reader_fn!(margin, 0);
-
-    /// The number of gateways that successfully received the last LinkCheckReq command.
-    create_value_reader_fn!(gateway_count, 1);
+    create_value_reader_fn!(
+        /// The number of gateways that successfully received the last LinkCheckReq command.
+        gateway_count, 1
+    );
 }
 
 impl<'a> From<&'a [u8; 2]> for LinkCheckAnsPayload<'a> {
@@ -286,26 +360,7 @@ impl<'a> From<&'a [u8; 2]> for LinkCheckAnsPayload<'a> {
     }
 }
 
-/// LinkADRReqPayload represents the LinkADRReq LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct LinkADRReqPayload<'a>(&'a [u8; 4]);
-
 impl<'a> LinkADRReqPayload<'a> {
-    /// Command identifier for LinkADRReqPayload.
-    create_type_const_fn!(cid, u8, 0x03);
-
-    /// Whether LinkADRReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
-
-    /// The len
-    create_type_const_fn!(len, usize, 4);
-
-    /// Check if the bytes can be used to create LinkADRReqPayload.
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new LinkADRReqPayload from the provided data.
-    new_mac_cmd_helper!(LinkADRReq, LinkADRReqPayload, 4);
-
     /// Data Rate that the device should use for its next transmissions.
     pub fn data_rate(&self) -> u8 {
         self.0[0] >> 4
@@ -334,7 +389,7 @@ pub struct ChannelMask([u8; 2]);
 
 impl ChannelMask {
     /// Constructs a new ChannelMask from the provided data.
-    pub fn new(data: &[u8]) -> Result<ChannelMask, &str> {
+    pub fn new(data: &[u8]) -> Result<Self, &str> {
         if data.len() < 2 {
             return Err("not enough bytes to read");
         }
@@ -345,7 +400,7 @@ impl ChannelMask {
     /// admissible.
     ///
     /// Improper use of this method could lead to panic during runtime!
-    pub fn new_from_raw(data: &[u8]) -> ChannelMask {
+    pub fn new_from_raw(data: &[u8]) -> Self {
         let payload = [data[0], data[1]];
         ChannelMask(payload)
     }
@@ -386,7 +441,7 @@ pub struct Redundancy(u8);
 
 impl Redundancy {
     /// Constructs a new Redundancy from the provided data.
-    pub fn new(data: u8) -> Redundancy {
+    pub fn new(data: u8) -> Self {
         Redundancy(data)
     }
 
@@ -412,34 +467,21 @@ impl From<u8> for Redundancy {
     }
 }
 
-/// LinkADRAnsPayload represents the LinkADRAns LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct LinkADRAnsPayload<'a>(&'a [u8; 1]);
-
 impl<'a> LinkADRAnsPayload<'a> {
-    /// Command identifier for LinkADRAnsPayload.
-    create_type_const_fn!(cid, u8, 0x03);
+    create_ack_fn!(
+        /// Whether the channel mask change was applied successsfully.
+        channel_mask_ack, 0
+    );
 
-    /// Whether LinkADRAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
+    create_ack_fn!(
+        /// Whether the data rate change was applied successsfully.
+        data_rate_ack, 1
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 1);
-
-    /// Check if the bytes can be used to create LinkADRAnsPayload.
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new LinkADRAnsPayload from the provided data.
-    new_mac_cmd_helper!(LinkADRAns, LinkADRAnsPayload, 1);
-
-    /// Whether the channel mask change was applied successsfully.
-    create_ack_fn!(channel_mask_ack, 0);
-
-    /// Whether the data rate change was applied successsfully.
-    create_ack_fn!(data_rate_ack, 1);
-
-    /// Whether the power change was applied successsfully.
-    create_ack_fn!(powert_ack, 2);
+    create_ack_fn!(
+        /// Whether the power change was applied successsfully.
+        powert_ack, 2
+    );
 
     /// Whether the device has accepted the new parameters or not.
     pub fn ack(&self) -> bool {
@@ -447,26 +489,7 @@ impl<'a> LinkADRAnsPayload<'a> {
     }
 }
 
-/// DutyCycleReqPayload represents the DutyCycleReq LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct DutyCycleReqPayload<'a>(&'a [u8; 1]);
-
 impl<'a> DutyCycleReqPayload<'a> {
-    /// Command identifier for DutyCycleReqPayload.
-    create_type_const_fn!(cid, u8, 0x04);
-
-    /// Whether DutyCycleReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
-
-    /// The len
-    create_type_const_fn!(len, usize, 1);
-
-    /// Check if the bytes can be used to create DutyCycleReqPayload.
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new DutyCycleReqPayload from the provided data.
-    new_mac_cmd_helper!(DutyCycleReq, DutyCycleReqPayload, 1);
-
     /// Integer value of the max duty cycle field.
     pub fn max_duty_cycle_raw(&self) -> u8 {
         self.0[0] & 0x0f
@@ -479,47 +502,7 @@ impl<'a> DutyCycleReqPayload<'a> {
     }
 }
 
-/// DutyCycleAnsPayload represents the DutyCycleAns LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct DutyCycleAnsPayload();
-
-impl DutyCycleAnsPayload {
-    /// Command identifier for DutyCycleAnsPayload.
-    create_type_const_fn!(cid, u8, 0x04);
-
-    /// Whether DutyCycleAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
-
-    /// The len
-    create_type_const_fn!(len, usize, 0);
-
-    /// Check if the bytes can be used to create DutyCycleAnsPayload.
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new DutyCycleAnsPayload from the provided data.
-    new_mac_cmd_helper!(DutyCycleAns, DutyCycleAnsPayload, 0);
-}
-
-/// RXParamSetupReqPayload represents the RXParamSetupReq LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct RXParamSetupReqPayload<'a>(&'a [u8; 4]);
-
 impl<'a> RXParamSetupReqPayload<'a> {
-    /// Command identifier for RXParamSetupReqPayload.
-    create_type_const_fn!(cid, u8, 0x05);
-
-    /// Whether RXParamSetupReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
-
-    /// The len
-    create_type_const_fn!(len, usize, 4);
-
-    /// Check if the bytes can be used to create RXParamSetupReqPayload.
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new RXParamSetupReqPayload from the provided data.
-    new_mac_cmd_helper!(RXParamSetupReq, RXParamSetupReqPayload, 4);
-
     /// Downlink settings - namely rx1_dr_offset and rx2_data_rate.
     pub fn dl_settings(&self) -> DLSettings {
         DLSettings::new(self.0[0])
@@ -604,34 +587,21 @@ impl<'a> AsRef<[u8]> for Frequency<'a> {
     }
 }
 
-/// RXParamSetupAnsPayload represents the RXParamSetupAns LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct RXParamSetupAnsPayload<'a>(&'a [u8; 1]);
-
 impl<'a> RXParamSetupAnsPayload<'a> {
-    /// Command identifier for RXParamSetupAnsPayload.
-    create_type_const_fn!(cid, u8, 0x05);
+    create_ack_fn!(
+        /// Whether the channel change was applied successsfully.
+        channel_ack, 0
+    );
 
-    /// Whether RXParamSetupAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
+    create_ack_fn!(
+        /// Whether the rx2 data rate change was applied successsfully.
+        rx2_data_rate_ack, 1
+    );
 
-    /// The len
-    create_type_const_fn!(len, usize, 1);
-
-    /// Check if the bytes can be used to create RXParamSetupAnsPayload.
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new RXParamSetupAnsPayload from the provided data.
-    new_mac_cmd_helper!(RXParamSetupAns, RXParamSetupAnsPayload, 1);
-
-    /// Whether the channel change was applied successsfully.
-    create_ack_fn!(channel_ack, 0);
-
-    /// Whether the rx2 data rate change was applied successsfully.
-    create_ack_fn!(rx2_data_rate_ack, 1);
-
-    /// Whether the rx1 data rate offset change was applied successsfully.
-    create_ack_fn!(rx1_dr_offset_ack, 2);
+    create_ack_fn!(
+        /// Whether the rx1 data rate offset change was applied successsfully.
+        rx1_dr_offset_ack, 2
+    );
 
     /// Whether the device has accepted the new parameters or not.
     pub fn ack(&self) -> bool {
@@ -639,53 +609,15 @@ impl<'a> RXParamSetupAnsPayload<'a> {
     }
 }
 
-/// DevStatusReqPayload represents the DevStatusReq LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct DevStatusReqPayload();
-
-impl DevStatusReqPayload {
-    /// Command identifier for DevStatusReqPayload.
-    create_type_const_fn!(cid, u8, 0x06);
-
-    /// Whether DevStatusReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
-
-    /// The len
-    create_type_const_fn!(len, usize, 0);
-
-    /// Check if the bytes can be used to create DevStatusReqPayload.
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new DevStatusReqPayload from the provided data.
-    new_mac_cmd_helper!(DevStatusReq, DevStatusReqPayload, 0);
-}
-
-/// DevStatusAnsPayload represents the DevStatusAns LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct DevStatusAnsPayload<'a>(&'a [u8; 2]);
-
 impl<'a> DevStatusAnsPayload<'a> {
-    /// Command identifier for DevStatusAnsPayload.
-    create_type_const_fn!(cid, u8, 0x06);
-
-    /// Whether DevStatusAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
-
-    /// The len
-    create_type_const_fn!(len, usize, 2);
-
-    /// Check if the bytes can be used to create DevStatusAnsPayload.
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new DevStatusAnsPayload from the provided data.
-    new_mac_cmd_helper!(DevStatusAns, DevStatusAnsPayload, 2);
-
-    /// The battery level of the device.
-    ///
-    /// Note: 0 means that the device is powered by an external source, 255 means that the device
-    /// was unable to measure its battery level, any other value represents the actual battery
-    /// level.
-    create_value_reader_fn!(battery, 0);
+    create_value_reader_fn!(
+        /// The battery level of the device.
+        ///
+        /// Note: 0 means that the device is powered by an external source, 255 means that the device
+        /// was unable to measure its battery level, any other value represents the actual battery
+        /// level.
+        battery, 0
+    );
 
     /// The margin is the demodulation signal-to-noise ratio in dB rounded to the nearest integer
     /// value for the last successfully received DevStatusReq command.
@@ -694,34 +626,11 @@ impl<'a> DevStatusAnsPayload<'a> {
     }
 }
 
-/// NewChannelReqPayload represents the NewChannelReq LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct NewChannelReqPayload<'a>(&'a [u8; 5]);
-
 impl<'a> NewChannelReqPayload<'a> {
-    /// Command identifier for NewChannelReqPayload.
-    create_type_const_fn!(cid, u8, 0x07);
-
-    /// Whether NewChannelReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
-
-    /// The len
-    create_type_const_fn!(len, usize, 5);
-
-    /// Check if the bytes can be used to create NewChannelReqPayload.
-    pub fn can_build_from(bytes: &[u8]) -> Result<(), &str> {
-        if bytes.len() < Self::len() {
-            return Err("not enough bytes to read");
-        }
-
-        DataRateRange::can_build_from(bytes[4])
-    }
-
-    /// Constructs a new NewChannelReqPayload from the provided data.
-    new_mac_cmd_helper!(NewChannelReq, NewChannelReqPayload, 5);
-
-    /// The index of the channel being created or modified.
-    create_value_reader_fn!(channel_index, 0);
+    create_value_reader_fn!(
+        /// The index of the channel being created or modified.
+        channel_index, 0
+    );
 
     /// The frequency of the new or modified channel.
     pub fn frequency(&self) -> Frequency {
@@ -783,31 +692,16 @@ impl From<u8> for DataRateRange {
     }
 }
 
-/// NewChannelAnsPayload represents the NewChannelAns LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct NewChannelAnsPayload<'a>(&'a [u8; 1]);
-
 impl<'a> NewChannelAnsPayload<'a> {
-    /// Command identifier for NewChannelAnsPayload.
-    create_type_const_fn!(cid, u8, 0x07);
+    create_ack_fn!(
+        /// Whether the channel frequency change was applied successsfully.
+        channel_freq_ack, 0
+    );
 
-    /// Whether NewChannelAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
-
-    /// The len
-    create_type_const_fn!(len, usize, 1);
-
-    /// Check if the bytes can be used to create NewChannelAnsPayload.
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new NewChannelAnsPayload from the provided data.
-    new_mac_cmd_helper!(NewChannelAns, NewChannelAnsPayload, 1);
-
-    /// Whether the channel frequency change was applied successsfully.
-    create_ack_fn!(channel_freq_ack, 0);
-
-    /// Whether the data rate range change was applied successsfully.
-    create_ack_fn!(data_rate_range_ack, 1);
+    create_ack_fn!(
+        /// Whether the data rate range change was applied successsfully.
+        data_rate_range_ack, 1
+    );
 
     /// Whether the device has accepted the new channel.
     pub fn ack(&self) -> bool {
@@ -815,49 +709,9 @@ impl<'a> NewChannelAnsPayload<'a> {
     }
 }
 
-/// RXTimingSetupReqPayload represents the RXTimingSetupReq LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct RXTimingSetupReqPayload<'a>(&'a [u8; 1]);
-
 impl<'a> RXTimingSetupReqPayload<'a> {
-    /// Command identifier for RXTimingSetupReqPayload.
-    create_type_const_fn!(cid, u8, 0x08);
-
-    /// Whether RXTimingSetupReqPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, false);
-
-    /// The len
-    create_type_const_fn!(len, usize, 1);
-
-    /// Check if the bytes can be used to create RXTimingSetupReqPayload.
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new RXTimingSetupReqPayload from the provided data.
-    new_mac_cmd_helper!(RXTimingSetupReq, RXTimingSetupReqPayload, 1);
-
     /// Delay before the first RX window.
     pub fn delay(&self) -> u8 {
         self.0[0] & 0x0f
     }
-}
-
-/// RXTimingSetupAnsPayload represents the RXTimingSetupAns LoRaWAN MACCommand.
-#[derive(Debug, PartialEq)]
-pub struct RXTimingSetupAnsPayload();
-
-impl RXTimingSetupAnsPayload {
-    /// Command identifier for RXTimingSetupAnsPayload.
-    create_type_const_fn!(cid, u8, 0x08);
-
-    /// Whether RXTimingSetupAnsPayload is sent by the device or NS.
-    create_type_const_fn!(uplink, bool, true);
-
-    /// The len
-    create_type_const_fn!(len, usize, 0);
-
-    /// Check if the bytes can be used to create RXTimingSetupAnsPayload
-    create_type_const_fn!(can_build_from);
-
-    /// Constructs a new RXTimingSetupAnsPayload from the provided data.
-    new_mac_cmd_helper!(RXTimingSetupAns, RXTimingSetupAnsPayload, 0);
 }

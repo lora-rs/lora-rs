@@ -62,6 +62,59 @@ fn main() {
 }
 ```
 
+## Benchmarks
+
+Ran on Intel i7-8550U CPU @ 1.80GHz with 16GB RAM running Ubuntu 18.04.
+
+* Benchmarks brocaar/lorawan (the code for the benchmarks can be found
+  [here][3], results were obtained by running `go test -bench . -benchtime=5s`,
+  `go1.13.1`)
+
+```
+pkg: github.com/brocaar/lorawan
+BenchmarkDecode-8                  40410            150498 ns/op
+BenchmarkValidateMic-8              2959           2026736 ns/op
+BenchmarkDecrypt-8                  9390            648402 ns/op
+```
+
+* Benchmarks rust-lorawan (the code is inside `benches/lorawan.rs`, results are
+  obtained running `cargo bench --workspace`, `rustc 1.43.0`)
+
+```
+  Running target/release/deps/lorawan-32e80b41705c7d41
+Gnuplot not found, using plotters backend
+
+data_payload_headers_parsing
+      time:   [33.623 ns 33.670 ns 33.717 ns]
+      change: [-0.2772% -0.0100% +0.2129%] (p = 0.93 > 0.05)
+      No change in performance detected.
+Found 7 outliers among 100 measurements (7.00%)
+  5 (5.00%) low mild
+  2 (2.00%) high mild
+
+Approximate memory usage per iteration: 1 from 284778427
+
+data_payload_mic_validation
+      time:   [3.2744 us 3.2773 us 3.2799 us]
+      change: [-0.2880% +0.1842% +0.5481%] (p = 0.44 > 0.05)
+      No change in performance detected.
+Found 1 outliers among 100 measurements (1.00%)
+  1 (1.00%) high mild
+
+Approximate memory usage per iteration: 191 from 2588825
+
+data_payload_decrypt
+      time:   [2.0159 us 2.0197 us 2.0249 us]
+      change: [-4.9391% -4.6532% -4.2587%] (p = 0.00 < 0.05)
+      Performance has improved.
+Found 5 outliers among 100 measurements (5.00%)
+  1 (1.00%) low mild
+  1 (1.00%) high mild
+  3 (3.00%) high severe
+
+Approximate memory usage per iteration: 108 from 4576701
+```
+
 ## Contributing
 
 Please read [the contributing guidelines](CONTRIBUTING.md)
@@ -73,6 +126,7 @@ inspiration and useful examples.
 
 [1]: https://github.com/brocaar/lorawan
 [2]: https://github.com/brocaar
+[3]: https://gist.github.com/ivajloip/d63981e4caddaa68bd0b9c2390f4af90
 [Latest Version]: https://img.shields.io/crates/v/lorawan.svg
 [crates.io]: https://crates.io/crates/lorawan
 [Docs]: https://docs.rs/lorawan/badge.svg
