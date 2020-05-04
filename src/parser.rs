@@ -63,6 +63,15 @@ macro_rules! fixed_len_struct {
             }
         }
 
+        impl<T: AsRef<[u8]> + Clone> Clone for $type<T> {
+            fn clone(&self) -> Self {
+                Self(self.0.clone())
+            }
+        }
+
+        impl<T: AsRef<[u8]> + Copy> Copy for $type<T> {
+        }
+
         impl<T: AsRef<[u8]>, V: AsRef<[u8]>> PartialEq<$type<T>> for $type<V> {
             fn eq(&self, other: &$type<T>) -> bool {
                 self.as_ref() == other.as_ref()
@@ -80,6 +89,23 @@ macro_rules! fixed_len_struct {
                 self.0.as_ref()
             }
         }
+
+        impl<T: AsRef<[u8]>> $type<T> {
+            #[inline]
+            pub fn to_owned(&self) -> $type<[u8; $size]> {
+                let mut data = [0 as u8; $size];
+                data.copy_from_slice(self.0.as_ref());
+                $type(data)
+            }
+        }
+
+        impl<T: AsRef<[u8]> + Default> Default for $type<T> {
+            #[inline]
+            fn default() -> $type<T> {
+                $type(T::default())
+            }
+        }
+
     };
 }
 

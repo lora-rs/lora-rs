@@ -9,7 +9,7 @@
 use generic_array::{GenericArray, typenum::U16};
 
 /// AES128 represents 128 bit AES key.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub struct AES128(pub [u8; 16]);
 
 impl From<[u8; 16]> for AES128 {
@@ -19,7 +19,7 @@ impl From<[u8; 16]> for AES128 {
 }
 
 /// MIC represents LoRaWAN MIC.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub struct MIC(pub [u8; 4]);
 
 impl From<[u8; 4]> for MIC {
