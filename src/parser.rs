@@ -113,10 +113,20 @@ macro_rules! fixed_len_struct {
 ///
 /// It can either be JoinRequest, JoinAccept, or DataPayload.
 #[derive(Debug, PartialEq)]
-pub enum PhyPayload<T: AsRef<[u8]> +  AsMut<[u8]>, F> {
+pub enum PhyPayload<T, F> {
     JoinRequest(JoinRequestPayload<T, F>),
     JoinAccept(JoinAcceptPayload<T, F>),
     Data(DataPayload<T, F>)
+}
+
+impl<T: AsRef<[u8]>, F> AsRef<[u8]> for PhyPayload<T, F> {
+    fn as_ref(&self) -> &[u8] {
+        match self {
+            PhyPayload::JoinRequest(jr) => jr.as_bytes(),
+            PhyPayload::JoinAccept(ja) => ja.as_bytes(),
+            PhyPayload::Data(data) => data.as_bytes(),
+        }
+    }
 }
 
 /// JoinAcceptPayload is a type that represents a JoinAccept.
@@ -124,9 +134,18 @@ pub enum PhyPayload<T: AsRef<[u8]> +  AsMut<[u8]>, F> {
 /// It can either be encrypted for example as a result from the [parse](fn.parse.html)
 /// function or not.
 #[derive(Debug, PartialEq)]
-pub enum JoinAcceptPayload<T: AsRef<[u8]> + AsMut<[u8]>, F> {
+pub enum JoinAcceptPayload<T, F> {
     Encrypted(EncryptedJoinAcceptPayload<T, F>),
     Decrypted(DecryptedJoinAcceptPayload<T, F>)
+}
+
+impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for JoinAcceptPayload<T, F> {
+    fn as_bytes(&self) -> &[u8] {
+        match self {
+            JoinAcceptPayload::Encrypted(e) => e.as_bytes(),
+            JoinAcceptPayload::Decrypted(d) => d.as_bytes(),
+        }
+    }
 }
 
 /// DataPayload is a type that represents a ConfirmedDataUp, ConfirmedDataDown,
@@ -135,9 +154,18 @@ pub enum JoinAcceptPayload<T: AsRef<[u8]> + AsMut<[u8]>, F> {
 /// It can either be encrypted for example as a result from the [parse](fn.parse.html)
 /// function or not.
 #[derive(Debug, PartialEq)]
-pub enum DataPayload<T: AsRef<[u8]> + AsMut<[u8]>, F> {
+pub enum DataPayload<T, F> {
     Encrypted(EncryptedDataPayload<T, F>),
     Decrypted(DecryptedDataPayload<T>)
+}
+
+impl<T: AsRef<[u8]>, F> DataHeader for DataPayload<T, F> {
+    fn as_data_bytes(&self) -> &[u8] {
+        match self {
+            DataPayload::Encrypted(data) => data.as_data_bytes(),
+            DataPayload::Decrypted(data) => data.as_data_bytes()
+        }
+    }
 }
 
 /// Trait with the sole purpose to make clear distinction in some implementations between types
@@ -186,7 +214,7 @@ impl<T: AsPhyPayloadBytes> MHDRAble for T {
 /// It can be built either directly through the [new](#method.new) or using the
 /// [parse](fn.parse.html) function.
 #[derive(Debug, PartialEq)]
-pub struct JoinRequestPayload<T: AsRef<[u8]>, F>(T, F);
+pub struct JoinRequestPayload<T, F>(T, F);
 
 impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for JoinRequestPayload<T, F> {
     fn as_bytes(&self) -> &[u8] {
@@ -252,7 +280,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> JoinRequestPayload<T, F> {
 /// It can be built either directly through the [new](#method.new) or using the
 /// [parse](fn.parse.html) function.
 #[derive(Debug, PartialEq)]
-pub struct EncryptedJoinAcceptPayload<T: AsRef<[u8]>, F>(T, F);
+pub struct EncryptedJoinAcceptPayload<T, F>(T, F);
 
 impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for EncryptedJoinAcceptPayload<T, F> {
     fn as_bytes(&self) -> &[u8] {
@@ -319,7 +347,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
 /// It can be built either directly through the [new](#method.new) or using the
 /// [EncryptedJoinAcceptPayload.decrypt](struct.EncryptedJoinAcceptPayload.html#method.decrypt) function.
 #[derive(Debug, PartialEq)]
-pub struct DecryptedJoinAcceptPayload<T: AsRef<[u8]>, F>(T, F);
+pub struct DecryptedJoinAcceptPayload<T, F>(T, F);
 
 impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for DecryptedJoinAcceptPayload<T, F> {
     fn as_bytes(&self) -> &[u8] {
@@ -674,7 +702,7 @@ fn compute_fcnt(old_fcnt: u32, fcnt: u16) -> u32 {
 /// It can be built either directly through the [new](#method.new) or using the
 /// [EncryptedDataPayload.decrypt](struct.EncryptedDataPayload.html#method.decrypt) function.
 #[derive(Debug, PartialEq)]
-pub struct DecryptedDataPayload<T: AsRef<[u8]>>(T);
+pub struct DecryptedDataPayload<T>(T);
 
 impl<T: AsRef<[u8]>> DataHeader for DecryptedDataPayload<T> {
     fn as_data_bytes(&self) -> &[u8] {
