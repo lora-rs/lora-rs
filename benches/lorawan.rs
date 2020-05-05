@@ -77,7 +77,7 @@ fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
     c.bench_function("data_payload_mic_validation", |b| b.iter(|| {
         cnt.fetch_add(1u64, Ordering::SeqCst);
         let mut data = data_payload();
-        let phy = parse_with_factory(&mut data, factory.clone()).unwrap();
+        let phy = parse_with_factory(&mut data, &factory).unwrap();
 
         if let PhyPayload::Data(DataPayload::Encrypted(data_payload)) = phy {
             assert_eq!(data_payload.validate_mic(&mic_key, 1), true);
@@ -99,7 +99,7 @@ fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
     c.bench_function("data_payload_decrypt", |b| b.iter(|| {
         cnt.fetch_add(1u64, Ordering::SeqCst);
         let mut data = data_payload();
-        let phy = parse_with_factory(&mut data, factory.clone()).unwrap();
+        let phy = parse_with_factory(&mut data, &factory).unwrap();
 
         if let PhyPayload::Data(DataPayload::Encrypted(data_payload)) = phy {
             assert_eq!(
@@ -132,7 +132,7 @@ impl ConstFactory {
     }
 }
 
-impl CryptoFactory for ConstFactory {
+impl CryptoFactory for &ConstFactory {
     type E = Aes128;
     type D = Aes128;
     type M = Cmac;
