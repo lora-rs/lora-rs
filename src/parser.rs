@@ -28,12 +28,8 @@
 //! }
 //! ```
 
-use heapless::consts::*;
-
-type Vec<T> = heapless::Vec<T,U256>;
-
 use super::keys::{AES128, CryptoFactory, Encrypter, MIC};
-use super::maccommands;
+use super::maccommands::{DLSettings, Frequency, MacCommandIterator, parse_mac_commands};
 use super::securityhelpers;
 
 #[cfg(feature = "default-crypto")]
@@ -471,8 +467,8 @@ impl<T: AsRef<[u8]>, F> DecryptedJoinAcceptPayload<T, F> {
     }
 
     /// Gives the downlink configuration of the JoinAccept.
-    pub fn dl_settings(&self) -> maccommands::DLSettings {
-        maccommands::DLSettings::new(self.0.as_ref()[11])
+    pub fn dl_settings(&self) -> DLSettings {
+        DLSettings::new(self.0.as_ref()[11])
     }
 
     /// Gives the RX delay of the JoinAccept.
@@ -481,14 +477,15 @@ impl<T: AsRef<[u8]>, F> DecryptedJoinAcceptPayload<T, F> {
     }
 
     /// Gives the channel frequency list of the JoinAccept.
-    pub fn c_f_list(&self) -> Vec<maccommands::Frequency> {
+    pub fn c_f_list(&self) -> Option<[Frequency; 5]> {
         if self.0.as_ref().len() == 17 {
-            return Vec::new();
+            return None;
         }
-        self.0.as_ref()[13..28]
-            .chunks(3)
-            .map(|f| maccommands::Frequency::new_from_raw(f))
-            .collect()
+        let d = self.0.as_ref();
+        let res = [Frequency::new_from_raw(&d[13..16]), Frequency::new_from_raw(&d[16..19]),
+            Frequency::new_from_raw(&d[19..22]), Frequency::new_from_raw(&d[22..25]),
+            Frequency::new_from_raw(&d[25..28])];
+        Some(res)
     }
 }
 
@@ -915,9 +912,9 @@ impl<'a> FHDR<'a> {
     }
 
     /// Gives the piggy-backed MAC ommands associated with the given payload.
-    pub fn fopts(&self) -> maccommands::MacCommandIterator {
+    pub fn fopts(&self) -> MacCommandIterator {
         let f_opts_len = FCtrl(self.0[4], self.1).f_opts_len();
-        maccommands::parse_mac_commands(&self.0[7 as usize..(7 + f_opts_len) as usize], self.1)
+        parse_mac_commands(&self.0[7 as usize..(7 + f_opts_len) as usize], self.1)
     }
 }
 
@@ -980,7 +977,7 @@ impl<'a> FRMMacCommands<'a> {
     }
 
     /// Gives the list of mac commands represented in the FRMPayload.
-    pub fn mac_commands(&self) -> maccommands::MacCommandIterator {
-        maccommands::parse_mac_commands(self.1, self.0)
+    pub fn mac_commands(&self) -> MacCommandIterator {
+        parse_mac_commands(self.1, self.0)
     }
 }

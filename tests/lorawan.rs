@@ -179,7 +179,7 @@ fn test_new_join_accept_c_f_list_empty() {
     let data = phy_join_accept_payload();
     let key = AES128(app_key());
     let decrypted_phy = DecryptedJoinAcceptPayload::new(data, &key).unwrap();
-    assert_eq!(decrypted_phy.c_f_list(), Vec::new());
+    assert_eq!(decrypted_phy.c_f_list(), None);
 }
 
 #[test]
@@ -214,13 +214,10 @@ fn test_new_join_accept_payload_with_c_f_list() {
     let key = AES128([1; 16]);
     let decrypted_phy = DecryptedJoinAcceptPayload::new(data, &key).unwrap();
 
-    let mut expected_c_f_list = Vec::new();
-    expected_c_f_list.push(Frequency::new_from_raw(&[0x18, 0x4F, 0x84])).unwrap();
-    expected_c_f_list.push(Frequency::new_from_raw(&[0xE8, 0x56, 0x84])).unwrap();
-    expected_c_f_list.push(Frequency::new_from_raw(&[0xB8, 0x5E, 0x84])).unwrap();
-    expected_c_f_list.push(Frequency::new_from_raw(&[0x88, 0x66, 0x84])).unwrap();
-    expected_c_f_list.push(Frequency::new_from_raw(&[0x58, 0x6E, 0x84])).unwrap();
-    assert_eq!(decrypted_phy.c_f_list(), expected_c_f_list);
+    let expected_c_f_list = [Frequency::new_from_raw(&[0x18, 0x4F, 0x84]),
+        Frequency::new_from_raw(&[0xE8, 0x56, 0x84]), Frequency::new_from_raw(&[0xB8, 0x5E, 0x84]),
+        Frequency::new_from_raw(&[0x88, 0x66, 0x84]), Frequency::new_from_raw(&[0x58, 0x6E, 0x84])];
+    assert_eq!(decrypted_phy.c_f_list(), Some(expected_c_f_list));
 }
 
 #[test]

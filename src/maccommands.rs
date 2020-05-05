@@ -6,10 +6,6 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use heapless::consts::*;
-
-type Vec<T> = heapless::Vec<T,U256>;
-
 /// MacCommand represents the enumeration of all LoRaWAN MACCommands.
 #[derive(Debug, PartialEq)]
 pub enum MacCommand<'a> {
@@ -418,8 +414,12 @@ impl ChannelMask {
     }
 
     /// Provides information for each of the 16 channels if they are enabled.
-    pub fn statuses(&self) -> Vec<bool> {
-        (0..16).map(|v| self.channel_enabled(v)).collect()
+    pub fn statuses(&self) -> [bool; 16] {
+        let mut res = [false; 16];
+        for i in 0..16 {
+            res[i] = self.channel_enabled(i);
+        }
+        res
     }
 }
 
