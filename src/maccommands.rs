@@ -416,8 +416,8 @@ impl ChannelMask {
     /// Provides information for each of the 16 channels if they are enabled.
     pub fn statuses(&self) -> [bool; 16] {
         let mut res = [false; 16];
-        for i in 0..16 {
-            res[i] = self.channel_enabled(i);
+        for (i, c) in res.iter_mut().enumerate() {
+            *c = self.channel_enabled(i);
         }
         res
     }

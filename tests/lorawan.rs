@@ -370,7 +370,7 @@ fn test_data_payload_uplink_creator() {
         .set_fcnt(1);
 
     assert_eq!(
-        phy.build(b"hello", &nwk_skey, &app_skey).unwrap(),
+        phy.build(b"hello", &[], &nwk_skey, &app_skey).unwrap(),
         &phy_dataup_payload()[..]
     );
 }
@@ -380,7 +380,7 @@ fn test_data_payload_downlink_creator() {
     let mut phy = DataPayloadCreator::new();
     let nwk_skey = AES128([2; 16]);
     let app_skey = AES128([1; 16]);
-    let fctrl = FCtrl::new(0x80, true);
+    let fctrl = FCtrl::new(0x80, false);
     phy.set_confirmed(true)
         .set_uplink(false)
         .set_f_port(42)
@@ -389,7 +389,7 @@ fn test_data_payload_downlink_creator() {
         .set_fcnt(76543);
 
     assert_eq!(
-        phy.build(b"hello lora", &nwk_skey, &app_skey).unwrap(),
+        phy.build(b"hello lora", &[], &nwk_skey, &app_skey).unwrap(),
         &phy_datadown_payload()[..]
     );
 }
@@ -400,16 +400,7 @@ fn test_data_payload_creator_when_payload_and_fport_0() {
     let nwk_skey = AES128([2; 16]);
     let app_skey = AES128([1; 16]);
     phy.set_f_port(0);
-    assert!(phy.build(b"hello", &nwk_skey, &app_skey).is_err());
-}
-
-#[test]
-fn test_data_payload_creator_when_fport_0_but_not_encrypt() {
-    let mut phy = DataPayloadCreator::new();
-    let nwk_skey = AES128([2; 16]);
-    let app_skey = AES128([1; 16]);
-    phy.set_f_port(0).set_encrypt_mac_commands(false);
-    assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
+    assert!(phy.build(b"hello", &[], &nwk_skey, &app_skey).is_err());
 }
 
 #[test]
@@ -421,17 +412,8 @@ fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
 
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
     cmds.extend_from_slice(&[&new_channel_req, &new_channel_req, &new_channel_req]).unwrap();
-    phy.set_f_port(1).set_mac_commands(cmds).unwrap();
-    assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
-}
-
-#[test]
-fn test_data_payload_creator_when_big_mac_commands_but_not_fport_0() {
-    let mut phy = DataPayloadCreator::new();
-    let nwk_skey = AES128([2; 16]);
-    let app_skey = AES128([1; 16]);
-    phy.set_f_port(1).set_encrypt_mac_commands(true);
-    assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
+    phy.set_f_port(1);
+    assert!(phy.build(b"", &cmds[..], &nwk_skey, &app_skey).is_err());
 }
 
 #[test]
@@ -439,7 +421,7 @@ fn test_data_payload_creator_when_payload_no_fport() {
     let mut phy = DataPayloadCreator::new();
     let nwk_skey = AES128([2; 16]);
     let app_skey = AES128([1; 16]);
-    assert!(phy.build(b"hello", &nwk_skey, &app_skey).is_err());
+    assert!(phy.build(b"hello", &[], &nwk_skey, &app_skey).is_err());
 }
 
 #[test]
@@ -458,10 +440,9 @@ fn test_data_payload_creator_when_mac_commands_in_payload() {
         .set_uplink(true)
         .set_f_port(0)
         .set_dev_addr(&[4, 3, 2, 1])
-        .set_fcnt(0)
-        .set_mac_commands(cmds).unwrap();
+        .set_fcnt(0);
     assert_eq!(
-        phy.build(b"", &nwk_skey, &nwk_skey).unwrap(),
+        phy.build(b"", &cmds[..], &nwk_skey, &nwk_skey).unwrap(),
         &data_payload_with_fport_zero()[..]
     );
 }
@@ -481,11 +462,10 @@ fn test_data_payload_creator_when_mac_commands_in_f_opts() {
     phy.set_confirmed(false)
         .set_uplink(true)
         .set_dev_addr(&[4, 3, 2, 1])
-        .set_fcnt(0)
-        .set_mac_commands(cmds).unwrap();
+        .set_fcnt(0);
 
     assert_eq!(
-        phy.build(b"", &nwk_skey, &nwk_skey).unwrap(),
+        phy.build(b"", &cmds[..], &nwk_skey, &nwk_skey).unwrap(),
         &data_payload_with_f_opts()[..]
     );
 }

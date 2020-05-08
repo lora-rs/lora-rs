@@ -16,7 +16,7 @@ type Vec<T> = heapless::Vec<T,U256>;
 use super::keys;
 use super::keys::CryptoFactory;
 use super::maccommandcreator;
-use super::maccommands;
+use super::maccommands::{DLSettings, Frequency, mac_commands_len, SerializableMacCommand};
 use super::parser;
 use super::securityhelpers;
 
@@ -103,7 +103,7 @@ impl<F: CryptoFactory + Default> JoinAcceptCreator<F> {
     ///
     /// * dl_settings - instance of lorawan::maccommands::DLSettings or anything
     ///   that can be converted into it.
-    pub fn set_dl_settings<T: Into<maccommands::DLSettings>>(
+    pub fn set_dl_settings<T: Into<DLSettings>>(
         &mut self,
         dl_settings: T,
     ) -> &mut Self {
@@ -131,7 +131,7 @@ impl<F: CryptoFactory + Default> JoinAcceptCreator<F> {
     /// * ch_list - list of Frequences to be sent to the device.
     pub fn set_c_f_list(
         &mut self,
-        ch_list: Vec<maccommands::Frequency>,
+        ch_list: Vec<Frequency>,
     ) -> Result<&mut Self, &str> {
         if ch_list.len() > 5 {
             return Err("too many frequences");
@@ -260,10 +260,24 @@ impl<F: CryptoFactory> JoinRequestCreator<F> {
 
 /// DataPayloadCreator serves for creating binary representation of Physical
 /// Payload of DataUp or DataDown messages.
+///
+/// # Example
+///
+/// ```
+/// let mut phy = lorawan::creator::DataPayloadCreator::new();
+/// let nwk_skey = lorawan::keys::AES128([2; 16]);
+/// let app_skey = lorawan::keys::AES128([1; 16]);
+/// phy.set_confirmed(true)
+///     .set_uplink(true)
+///     .set_f_port(42)
+///     .set_dev_addr(&[4, 3, 2, 1])
+///     .set_fctrl(&lorawan::parser::FCtrl::new(0x80, true)) // ADR: true, all others: false
+///     .set_fcnt(76543);
+/// phy.build(b"hello lora", &[], &nwk_skey, &app_skey).unwrap();
+/// ```
 #[derive(Default)]
 pub struct DataPayloadCreator<F: CryptoFactory + Default> {
     data: Vec<u8>,
-    mac_commands_bytes: Vec<u8>,
     encrypt_mac_commands: bool,
     data_f_port: Option<u8>,
     fcnt: u32,
@@ -373,12 +387,24 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
         self
     }
 
-    /// Sets the mac commands to be used.
+    /// Whether a set of mac commands can be piggybacked.
+    pub fn can_piggyback(cmds: Vec<&dyn SerializableMacCommand>) -> bool {
+        mac_commands_len(&cmds[..]) <= PIGGYBACK_MAC_COMMANDS_MAX_LEN
+    }
+
+    /// Provides the binary representation of the DataPayload physical payload
+    /// with the MIC set and payload encrypted.
     ///
-    /// Based on f_port value and value of encrypt_mac_commands, the mac commands will be sent
-    /// either as payload or piggybacked.
+    /// # Argument
     ///
-    /// # Examples:
+    /// * payload - the FRMPayload (application) to be sent.
+    /// * nwk_skey - the key to be used for setting the MIC and possibly for
+    ///   MAC command encryption.
+    /// * app_skey - the key to be used for payload encryption if fport not 0,
+    ///   otherwise nwk_skey is only used.
+    ///
+    ///
+    /// # Example
     ///
     /// ```
     /// let mut phy = lorawan::creator::DataPayloadCreator::new();
@@ -392,56 +418,24 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
     /// let mut cmds: heapless::Vec<&dyn lorawan::maccommands::SerializableMacCommand, heapless::consts::U256> = heapless::Vec::new();
     /// cmds.push(&mac_cmd1);
     /// cmds.push(&mac_cmd2);
-    /// phy.set_mac_commands(cmds).unwrap();
+    /// let nwk_skey = lorawan::keys::AES128([2; 16]);
+    /// let app_skey = lorawan::keys::AES128([1; 16]);
+    /// phy.build(&[], &cmds[..], &nwk_skey, &app_skey).unwrap();
     /// ```
-    pub fn set_mac_commands<'a>(
-        &'a mut self,
-        cmds: Vec<&dyn maccommands::SerializableMacCommand>,
-    ) -> Result<&mut DataPayloadCreator<F>, &str> {
-        if let Ok(result) = maccommandcreator::build_mac_commands(&cmds[..]) {
-            self.mac_commands_bytes = result;
-            Ok(self)
-        } else {
-            Err("failed to set mac commands - maybe they are too many")
-        }
-    }
-
-    /// Whether the mac commands should be encrypted.
-    ///
-    /// NOTE: Setting the f_port to 0 implicitly sets the mac commands to be encrypted.
-    pub fn set_encrypt_mac_commands(&mut self, encrypt: bool) -> &mut DataPayloadCreator<F> {
-        self.encrypt_mac_commands = encrypt;
-
-        self
-    }
-
-    /// Whether a set of mac commands can be piggybacked.
-    pub fn can_piggyback(cmds: Vec<&dyn maccommands::SerializableMacCommand>) -> bool {
-        maccommands::mac_commands_len(&cmds[..]) <= PIGGYBACK_MAC_COMMANDS_MAX_LEN
-    }
-
-    /// Provides the binary representation of the DataPayload physical payload
-    /// with the MIC set and payload encrypted.
-    ///
-    /// # Argument
-    ///
-    /// * payload - the FRMPayload (application) to be sent.
-    /// * nwk_skey - the key to be used for setting the MIC and possibly for
-    ///   MAC command encryption.
-    /// * app_skey - the key to be used for payload encryption if fport not 0,
-    ///   otherwise nwk_skey is only used.
-    pub fn build(
+    pub fn build<'a, 'b, 'c, 'd, 'e>(
         &mut self,
         payload: &[u8],
-        nwk_skey: &keys::AES128,
-        app_skey: &keys::AES128,
-    ) -> Result<&[u8], &str> {
+        cmds: &'a [&'b dyn SerializableMacCommand],
+        nwk_skey: &'c keys::AES128,
+        app_skey: &'d keys::AES128,
+    ) -> Result<&[u8], &'e str> {
         let mut last_filled = 8; // MHDR + FHDR without the FOpts
         let has_fport = self.data_f_port.is_some();
         let has_fport_zero = has_fport && self.data_f_port.unwrap() == 0;
+        let mac_cmds_len = mac_commands_len(cmds);
 
         // Set MAC Commands
-        if self.mac_commands_bytes.len() > PIGGYBACK_MAC_COMMANDS_MAX_LEN && !has_fport_zero {
+        if mac_cmds_len > PIGGYBACK_MAC_COMMANDS_MAX_LEN && !has_fport_zero {
             return Err("mac commands are too big for FOpts");
         }
         if self.encrypt_mac_commands && has_fport && !has_fport_zero {
@@ -460,11 +454,11 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
             return Err("fport must be provided when there is FRMPayload");
         }
         // Set FOptsLen if present
-        if !self.encrypt_mac_commands && !self.mac_commands_bytes.is_empty() {
-            let mac_cmds_len = self.mac_commands_bytes.len();
+        if !self.encrypt_mac_commands && mac_cmds_len > 0 {
             self.data[5] |= mac_cmds_len as u8 & 0x0f;
-            self.data[last_filled..last_filled + mac_cmds_len]
-                .copy_from_slice(&self.mac_commands_bytes[..]);
+            self.data.resize_default(last_filled + mac_cmds_len).unwrap();
+            maccommandcreator::build_mac_commands(cmds,
+                    &mut self.data[last_filled..last_filled + mac_cmds_len]).unwrap();
             last_filled += mac_cmds_len;
         }
         if has_fport {
@@ -473,26 +467,18 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
         }
 
         let mut enc_key = app_skey;
-        let data = if self.mac_commands_bytes.len() > 0 && has_fport_zero {
+        if mac_cmds_len > 0 && has_fport_zero {
             enc_key = nwk_skey;
-            payload_len = self.mac_commands_bytes.len();
-            &self.mac_commands_bytes[..]
+            payload_len = mac_cmds_len;
+            self.data.resize_default(last_filled + payload_len + 4).unwrap();
+            maccommandcreator::build_mac_commands(cmds,
+                    &mut self.data[last_filled..last_filled + payload_len]).unwrap();
         } else {
-            payload
+            self.data.resize_default(last_filled + payload_len + 4).unwrap();
+            self.data[last_filled..last_filled + payload_len]
+                .copy_from_slice(payload);
         };
 
-        // Set payload if possible, otherwise return error
-        let additional_bytes_needed = last_filled + payload_len + 4 - self.data.len();
-        if additional_bytes_needed > 0 {
-            // we don't have enough length to accomodate all the bytes right now
-            if self.data.resize_default(last_filled + payload_len + 4).is_err() {
-                return Err("payload exceeds max allowed payload size");
-            }
-        }
-        if payload_len > 0 {
-            self.data[last_filled..last_filled + payload_len]
-                .copy_from_slice(&data[..]);
-        }
         // Encrypt FRMPayload
         securityhelpers::encrypt_frm_data_payload(
             &mut self.data[..],

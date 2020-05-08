@@ -120,13 +120,13 @@ impl DataPayloadCreator<DefaultFactory> {
     /// let nwk_skey = lorawan::keys::AES128([2; 16]);
     /// let app_skey = lorawan::keys::AES128([1; 16]);
     /// let fctrl = lorawan::parser::FCtrl::new(0x80, true);
-    /// phy.set_confirmed(false);
-    /// phy.set_uplink(true);
-    /// phy.set_f_port(1);
-    /// phy.set_dev_addr(&[4, 3, 2, 1]);
-    /// phy.set_fctrl(&fctrl); // ADR: true, all others: false
-    /// phy.set_fcnt(1);
-    /// let payload = phy.build(b"hello", &nwk_skey, &app_skey).unwrap();
+    /// phy.set_confirmed(false).
+    ///     set_uplink(true).
+    ///     set_f_port(1).
+    ///     set_dev_addr(&[4, 3, 2, 1]).
+    ///     set_fctrl(&fctrl). // ADR: true, all others: false
+    ///     set_fcnt(1);
+    /// let payload = phy.build(b"hello", &[], &nwk_skey, &app_skey).unwrap();
     /// ```
     pub fn new() -> DataPayloadCreator<DefaultFactory> {
         Self::new_with_factory(DefaultFactory)

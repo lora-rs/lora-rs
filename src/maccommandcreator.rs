@@ -4,12 +4,9 @@
 // http://opensource.org/licenses/MIT>, at your option. This file may not be
 // copied, modified, or distributed except according to those terms.
 //
-// author: Ivaylo Petrov <ivajloip@gmail.com>
+// Author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use heapless::consts::*;
-type Vec<T> = heapless::Vec<T,U256>;
-
-use super::maccommands;
+use super::maccommands::*;
 
 macro_rules! impl_mac_cmd_creator_boilerplate {
     ($type:ident, $cid:expr) => {
@@ -62,7 +59,7 @@ macro_rules! impl_mac_cmd_creator_boilerplate {
 
 macro_rules! impl_mac_cmd_payload {
     ($type:ident) => {
-        impl maccommands::SerializableMacCommand for $type {
+        impl SerializableMacCommand for $type {
             /// Bytes of the SerializableMacCommand without the cid.
             fn payload_bytes(&self) -> &[u8] {
                 &self.build()[1..]
@@ -191,7 +188,7 @@ impl LinkADRReqCreator {
     ///
     /// * channel_mask - instance of maccommands::ChannelMask or anything that can be converted
     /// into it.
-    pub fn set_channel_mask<T: Into<maccommands::ChannelMask>>(
+    pub fn set_channel_mask<T: Into<ChannelMask>>(
         &mut self,
         channel_mask: T,
     ) -> &mut Self {
@@ -208,7 +205,7 @@ impl LinkADRReqCreator {
     ///
     /// * redundancy - instance of maccommands::Redundancy or anything that can be converted
     /// into it.
-    pub fn set_redundancy<T: Into<maccommands::Redundancy>>(&mut self, redundancy: T) -> &mut Self {
+    pub fn set_redundancy<T: Into<Redundancy>>(&mut self, redundancy: T) -> &mut Self {
         let converted = redundancy.into();
         self.data[4] = converted.raw_value();
 
@@ -336,7 +333,7 @@ impl RXParamSetupReqCreator {
     ///
     /// * dl_settings - instance of maccommands::DLSettings or anything that can be converted
     /// into it.
-    pub fn set_dl_settings<T: Into<maccommands::DLSettings>>(
+    pub fn set_dl_settings<T: Into<DLSettings>>(
         &mut self,
         dl_settings: T,
     ) -> &mut Self {
@@ -352,7 +349,7 @@ impl RXParamSetupReqCreator {
     ///
     /// * frequency - instance of maccommands::Frequency or anything that can be converted
     /// into it.
-    pub fn set_frequency<'a, T: Into<maccommands::Frequency<'a>>>(
+    pub fn set_frequency<'a, T: Into<Frequency<'a>>>(
         &mut self,
         frequency: T,
     ) -> &mut Self {
@@ -510,7 +507,7 @@ impl NewChannelReqCreator {
     ///
     /// * frequency - instance of maccommands::Frequency or anything that can be converted
     /// into it.
-    pub fn set_frequency<'a, T: Into<maccommands::Frequency<'a>>>(
+    pub fn set_frequency<'a, T: Into<Frequency<'a>>>(
         &mut self,
         frequency: T,
     ) -> &mut Self {
@@ -526,7 +523,7 @@ impl NewChannelReqCreator {
     ///
     /// * data_rate_range - instance of maccommands::DataRateRange or anything that can be converted
     /// into it.
-    pub fn set_data_rate_range<T: Into<maccommands::DataRateRange>>(
+    pub fn set_data_rate_range<T: Into<DataRateRange>>(
         &mut self,
         data_rate_range: T,
     ) -> &mut Self {
@@ -622,13 +619,19 @@ pub struct RXTimingSetupAnsCreator {}
 
 impl_mac_cmd_creator_boilerplate!(RXTimingSetupAnsCreator, 0x08);
 
-pub fn build_mac_commands<'a, 'b, 'c>(cmds: &'a [&'b dyn maccommands::SerializableMacCommand]) -> Result<Vec<u8>, &'c str> {
-    let mut res = Vec::new();
-    for mc in cmds {
-        res.push(mc.cid()).unwrap();
-        if res.extend_from_slice(mc.payload_bytes()).is_err() {
-            return Err("failed to serialize the mac commands - maybe they are too many");
-        }
+pub fn build_mac_commands<'a, 'b, 'c, T: AsMut<[u8]>>(
+        cmds: &'a [&'b dyn SerializableMacCommand],
+        mut out: T) -> Result<usize, &'c str> {
+    let res = out.as_mut();
+    if mac_commands_len(cmds) > res.len() {
+        return Err("failed to serialize mac commands in provided buffer: too small");
     }
-    Ok(res)
+    let mut i = 0;
+    for mc in cmds {
+        res[i] = mc.cid();
+        let l = mc.payload_len();
+        res[i + 1..i+l + 1].copy_from_slice(mc.payload_bytes());
+        i += l + 1;
+    }
+    Ok(i)
 }
