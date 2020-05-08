@@ -12,7 +12,7 @@ use generic_array::{GenericArray, typenum::U16};
 use super::keys::*;
 use super::creator::{JoinRequestCreator, DataPayloadCreator};
 
-#[cfg(feature = "with-uplink")]
+#[cfg(feature = "with-downlink")]
 use super::creator::JoinAcceptCreator;
 
 use super::parser::{EncryptedJoinAcceptPayload, JoinRequestPayload, DecryptedJoinAcceptPayload, EncryptedDataPayload, DecryptedDataPayload};
