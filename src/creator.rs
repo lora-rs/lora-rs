@@ -10,21 +10,26 @@
 //!
 //! See [JoinAcceptCreator.new](struct.JoinAcceptCreator.html#method.new) for an example.
 
-use heapless::consts::*;
-type Vec<T> = heapless::Vec<T,U256>;
-
 use super::keys;
 use super::keys::CryptoFactory;
 use super::maccommandcreator;
-use super::maccommands::{DLSettings, Frequency, mac_commands_len, SerializableMacCommand};
+use super::maccommands::{mac_commands_len, SerializableMacCommand};
+#[cfg(feature = "with-downlink")]
+use super::maccommands::{DLSettings, Frequency};
 use super::parser;
 use super::securityhelpers;
+
+#[cfg(feature = "default-crypto")]
+use super::default_crypto::DefaultFactory;
 
 #[cfg(feature = "with-downlink")]
 use super::keys::Decrypter;
 
-#[cfg(feature = "with-downlink")]
-use generic_array::GenericArray;
+#[cfg(any(feature = "with-downlink", feature = "default-crypto"))]
+use generic_array::{GenericArray};
+
+#[cfg(feature = "default-crypto")]
+use generic_array::typenum::U256;
 
 const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
@@ -32,24 +37,30 @@ const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 /// Payload of JoinAccept.
 #[cfg(feature = "with-downlink")]
 #[derive(Default)]
-pub struct JoinAcceptCreator<F> {
-    data: Vec<u8>,
+pub struct JoinAcceptCreator<D, F> {
+    data: D,
+    with_c_f_list: bool,
     encrypted: bool,
     factory: F,
 }
 
 #[cfg(feature = "with-downlink")]
-impl<F: CryptoFactory + Default> JoinAcceptCreator<F> {
-    /// Creates a well initialized JoinAcceptCreator with specific crypto functions.
-    pub fn new_with_factory(factory: F) -> Self {
-        let mut data = Vec::new();
-        data.extend_from_slice(&[0; 17]).unwrap();
-        data[0] = 0x20;
-        Self {
-            data,
-            factory,
-            ..Default::default()
+impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
+    /// Creates a well initialized JoinAcceptCreator with specific data and crypto functions.
+    ///
+    /// TODO: Add more detials & and example
+    pub fn with_options<'a>(mut data: D, factory: F) -> Result<Self, &'a str> {
+        let d = data.as_mut();
+        if d.len() < 33 {
+            return Err("data slice is too short");
         }
+        d[0] = 0x20;
+        Ok(Self {
+            data,
+            with_c_f_list: false,
+            encrypted: false,
+            factory,
+        })
     }
 
     /// Sets the AppNonce of the JoinAccept to the provided value.
@@ -63,7 +74,7 @@ impl<F: CryptoFactory + Default> JoinAcceptCreator<F> {
         app_nonce: T,
     ) -> &mut Self {
         let converted = app_nonce.into();
-        self.data[1..4].copy_from_slice(converted.as_ref());
+        self.data.as_mut()[1..4].copy_from_slice(converted.as_ref());
 
         self
     }
@@ -76,7 +87,7 @@ impl<F: CryptoFactory + Default> JoinAcceptCreator<F> {
     ///   be converted into it.
     pub fn set_net_id<H: AsRef<[u8]>, T: Into<parser::NwkAddr<H>>>(&mut self, net_id: T) -> &mut Self {
         let converted = net_id.into();
-        self.data[4..7].copy_from_slice(converted.as_ref());
+        self.data.as_mut()[4..7].copy_from_slice(converted.as_ref());
 
         self
     }
@@ -92,7 +103,7 @@ impl<F: CryptoFactory + Default> JoinAcceptCreator<F> {
         dev_addr: T,
     ) -> &mut Self {
         let converted = dev_addr.into();
-        self.data[7..11].copy_from_slice(converted.as_ref());
+        self.data.as_mut()[7..11].copy_from_slice(converted.as_ref());
 
         self
     }
@@ -108,7 +119,7 @@ impl<F: CryptoFactory + Default> JoinAcceptCreator<F> {
         dl_settings: T,
     ) -> &mut Self {
         let converted = dl_settings.into();
-        self.data[11] = converted.raw_value();
+        self.data.as_mut()[11] = converted.raw_value();
 
         self
     }
@@ -119,7 +130,7 @@ impl<F: CryptoFactory + Default> JoinAcceptCreator<F> {
     ///
     /// * rx_delay - the rx delay for the first receive window.
     pub fn set_rx_delay(&mut self, rx_delay: u8) -> &mut Self {
-        self.data[12] = rx_delay;
+        self.data.as_mut()[12] = rx_delay;
 
         self
     }
@@ -129,21 +140,20 @@ impl<F: CryptoFactory + Default> JoinAcceptCreator<F> {
     /// # Argument
     ///
     /// * ch_list - list of Frequences to be sent to the device.
-    pub fn set_c_f_list(
+    pub fn set_c_f_list<'a, C: AsRef<[Frequency<'a>]>>(
         &mut self,
-        ch_list: Vec<Frequency>,
+        list: C,
     ) -> Result<&mut Self, &str> {
+        let ch_list = list.as_ref();
         if ch_list.len() > 5 {
             return Err("too many frequences");
         }
-        if self.data.len() < 33 {
-            self.data.resize(33, 0).unwrap();
-        }
+        let d = self.data.as_mut();
         ch_list.iter().enumerate().for_each(|(i, fr)| {
             let v = fr.value() / 100;
-            self.data[13 + i * 3] = (v & 0xff) as u8;
-            self.data[14 + i * 3] = ((v >> 8) & 0xff) as u8;
-            self.data[15 + i * 3] = ((v >> 16) & 0xff) as u8;
+            d[13 + i * 3] = (v & 0xff) as u8;
+            d[14 + i * 3] = ((v >> 8) & 0xff) as u8;
+            d[15 + i * 3] = ((v >> 16) & 0xff) as u8;
         });
 
         Ok(self)
@@ -159,18 +169,56 @@ impl<F: CryptoFactory + Default> JoinAcceptCreator<F> {
         if !self.encrypted {
             self.encrypt_payload(key);
         }
-        Ok(&self.data[..])
+        Ok(&self.data.as_mut()[..])
     }
 
     fn encrypt_payload(&mut self, key: &keys::AES128) {
-        set_mic(&mut self.data[..], key, &self.factory);
+        let d = if self.with_c_f_list {
+            self.data.as_mut()
+        } else {
+            &mut self.data.as_mut()[..17]
+        };
+        set_mic(d, key, &self.factory);
         let aes_enc = self.factory.new_dec(key);
-        for i in 0..(self.data.len() >> 4) {
+        for i in 0..(d.len() >> 4) {
             let start = (i << 4) + 1;
-            let mut tmp = GenericArray::from_mut_slice(&mut self.data[start..(16 + start)]);
+            let mut tmp = GenericArray::from_mut_slice(&mut d[start..(16 + start)]);
             aes_enc.decrypt_block(&mut tmp);
         }
         self.encrypted = true;
+    }
+}
+
+#[cfg(feature = "default-crypto,with-downlink")]
+impl JoinAcceptCreator<[u8; 33], DefaultFactory> {
+    /// Creates a well initialized JoinAcceptCreator.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut phy = lorawan::creator::JoinAcceptCreator::new();
+    /// let key = lorawan::keys::AES128([1; 16]);
+    /// let app_nonce_bytes = [1; 3];
+    /// phy.set_app_nonce(&app_nonce_bytes);
+    /// phy.set_net_id(&[1; 3]);
+    /// phy.set_dev_addr(&[1; 4]);
+    /// phy.set_dl_settings(2);
+    /// phy.set_rx_delay(1);
+    /// let mut freqs: Vec<lorawan::maccommands::Frequency> = Vec::new();
+    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap()).unwrap();
+    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()).unwrap();
+    /// phy.set_c_f_list(freqs);
+    /// let payload = phy.build(&key).unwrap();
+    /// ```
+    pub fn new() -> Self {
+        let mut data = [0; 33];
+        data[0] = 0x20;
+        Self {
+            data,
+            with_c_f_list: false,
+            encrypted: false,
+            factory: DefaultFactory,
+        }
     }
 }
 
@@ -184,18 +232,20 @@ fn set_mic<F: CryptoFactory>(data: &mut [u8], key: &keys::AES128, factory: &F) {
 /// JoinRequestCreator serves for creating binary representation of Physical
 /// Payload of JoinRequest.
 #[derive(Default)]
-pub struct JoinRequestCreator<F> {
-    data: Vec<u8>,
+pub struct JoinRequestCreator<D, F> {
+    data: D,
     factory: F,
 }
 
-impl<F: CryptoFactory> JoinRequestCreator<F> {
+impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     /// Creates a well initialized JoinRequestCreator with specific crypto functions.
-    pub fn new_with_factory(factory: F) -> Self {
-        let mut data = Vec::new();
-        data.extend_from_slice(&[0; 23]).unwrap();
-        data[0] = 0x00;
-        Self { data, factory }
+    pub fn with_options<'a>(mut data: D, factory: F) -> Result<Self, &'a str> {
+        let d = data.as_mut();
+        if d.len() < 23 {
+            return Err("data slice is too short");
+        }
+        d[0] = 0x00;
+        Ok(Self { data, factory })
     }
 
     /// Sets the application EUI of the JoinRequest to the provided value.
@@ -209,7 +259,7 @@ impl<F: CryptoFactory> JoinRequestCreator<F> {
         app_eui: T,
     ) -> &mut Self {
         let converted = app_eui.into();
-        self.data[1..9].copy_from_slice(converted.as_ref());
+        self.data.as_mut()[1..9].copy_from_slice(converted.as_ref());
 
         self
     }
@@ -225,7 +275,7 @@ impl<F: CryptoFactory> JoinRequestCreator<F> {
         dev_eui: T,
     ) -> &mut Self {
         let converted = dev_eui.into();
-        self.data[9..17].copy_from_slice(converted.as_ref());
+        self.data.as_mut()[9..17].copy_from_slice(converted.as_ref());
 
         self
     }
@@ -241,7 +291,7 @@ impl<F: CryptoFactory> JoinRequestCreator<F> {
         dev_nonce: T,
     ) -> &mut Self {
         let converted = dev_nonce.into();
-        self.data[17..19].copy_from_slice(converted.as_ref());
+        self.data.as_mut()[17..19].copy_from_slice(converted.as_ref());
 
         self
     }
@@ -253,8 +303,9 @@ impl<F: CryptoFactory> JoinRequestCreator<F> {
     ///
     /// * key - the key to be used for setting the MIC.
     pub fn build(&mut self, key: &keys::AES128) -> Result<&[u8], &str> {
-        set_mic(&mut self.data[..], key, &self.factory);
-        Ok(&self.data[..])
+        let d = self.data.as_mut();
+        set_mic(&mut d[..], key, &self.factory);
+        Ok(&d[..])
     }
 }
 
@@ -276,27 +327,29 @@ impl<F: CryptoFactory> JoinRequestCreator<F> {
 /// phy.build(b"hello lora", &[], &nwk_skey, &app_skey).unwrap();
 /// ```
 #[derive(Default)]
-pub struct DataPayloadCreator<F: CryptoFactory + Default> {
-    data: Vec<u8>,
-    encrypt_mac_commands: bool,
+pub struct DataPayloadCreator<D, F> {
+    data: D,
     data_f_port: Option<u8>,
     fcnt: u32,
     factory: F,
 }
 
-impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
+impl <D: AsMut<[u8]>, F: CryptoFactory + Default>DataPayloadCreator<D, F> {
     /// Creates a well initialized DataPayloadCreator with specific crypto functions.
     ///
     /// By default the packet is unconfirmed data up packet.
-    pub fn new_with_factory(factory: F) -> DataPayloadCreator<F> {
-        let mut data = Vec::new();
-        data.extend_from_slice(&[0; 12]).unwrap();
-        data[0] = 0x40;
-        DataPayloadCreator {
-            data,
-            factory,
-            ..Default::default()
+    pub fn with_options<'a>(mut data: D, factory: F) -> Result<Self, &'a str> {
+        let d = data.as_mut();
+        if d.len() < 255 {
+            return Err("data slice is too short");
         }
+        d[0] = 0x40;
+        Ok(DataPayloadCreator {
+            data,
+            data_f_port: None,
+            fcnt: 0,
+            factory,
+        })
     }
 
     /// Sets whether the packet is uplink or downlink.
@@ -304,11 +357,11 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
     /// # Argument
     ///
     /// * uplink - whether the packet is uplink or downlink.
-    pub fn set_uplink(&mut self, uplink: bool) -> &mut DataPayloadCreator<F> {
+    pub fn set_uplink(&mut self, uplink: bool) -> &mut Self {
         if uplink {
-            self.data[0] &= 0xdf;
+            self.data.as_mut()[0] &= 0xdf;
         } else {
-            self.data[0] |= 0x20;
+            self.data.as_mut()[0] |= 0x20;
         }
         self
     }
@@ -318,13 +371,14 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
     /// # Argument
     ///
     /// * confirmed - whether the packet is confirmed or unconfirmed.
-    pub fn set_confirmed(&mut self, confirmed: bool) -> &mut DataPayloadCreator<F> {
+    pub fn set_confirmed(&mut self, confirmed: bool) -> &mut Self {
+        let d = self.data.as_mut();
         if confirmed {
-            self.data[0] &= 0xbf;
-            self.data[0] |= 0x80;
+            d[0] &= 0xbf;
+            d[0] |= 0x80;
         } else {
-            self.data[0] &= 0x7f;
-            self.data[0] |= 0x40;
+            d[0] &= 0x7f;
+            d[0] |= 0x40;
         }
 
         self
@@ -339,9 +393,9 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
     pub fn set_dev_addr<H: AsRef<[u8]>, T: Into<parser::DevAddr<H>>>(
         &mut self,
         dev_addr: T,
-    ) -> &mut DataPayloadCreator<F> {
+    ) -> &mut Self {
         let converted = dev_addr.into();
-        self.data[1..5].copy_from_slice(converted.as_ref());
+        self.data.as_mut()[1..5].copy_from_slice(converted.as_ref());
 
         self
     }
@@ -351,8 +405,8 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
     /// # Argument
     ///
     /// * fctrl - the FCtrl to be set.
-    pub fn set_fctrl(&mut self, fctrl: &parser::FCtrl) -> &mut DataPayloadCreator<F> {
-        self.data[5] = fctrl.raw_value();
+    pub fn set_fctrl(&mut self, fctrl: &parser::FCtrl) -> &mut Self {
+        self.data.as_mut()[5] = fctrl.raw_value();
         self
     }
 
@@ -363,10 +417,11 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
     /// # Argument
     ///
     /// * fctrl - the FCtrl to be set.
-    pub fn set_fcnt(&mut self, fcnt: u32) -> &mut DataPayloadCreator<F> {
+    pub fn set_fcnt(&mut self, fcnt: u32) -> &mut Self {
+        let d = self.data.as_mut();
         self.fcnt = fcnt;
-        self.data[6] = (fcnt & (0xff as u32)) as u8;
-        self.data[7] = (fcnt >> 8) as u8;
+        d[6] = (fcnt & (0xff as u32)) as u8;
+        d[7] = (fcnt >> 8) as u8;
 
         self
     }
@@ -378,18 +433,15 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
     /// # Argument
     ///
     /// * f_port - the FPort to be set.
-    pub fn set_f_port(&mut self, f_port: u8) -> &mut DataPayloadCreator<F> {
-        if f_port == 0 {
-            self.encrypt_mac_commands = true;
-        }
+    pub fn set_f_port(&mut self, f_port: u8) -> &mut Self {
         self.data_f_port = Some(f_port);
 
         self
     }
 
     /// Whether a set of mac commands can be piggybacked.
-    pub fn can_piggyback(cmds: Vec<&dyn SerializableMacCommand>) -> bool {
-        mac_commands_len(&cmds[..]) <= PIGGYBACK_MAC_COMMANDS_MAX_LEN
+    pub fn can_piggyback(cmds: &[&dyn SerializableMacCommand]) -> bool {
+        mac_commands_len(cmds) <= PIGGYBACK_MAC_COMMANDS_MAX_LEN
     }
 
     /// Provides the binary representation of the DataPayload physical payload
@@ -415,7 +467,7 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
     ///     .set_channel_mask_ack(true)
     ///     .set_data_rate_ack(false)
     ///     .set_tx_power_ack(true);
-    /// let mut cmds: heapless::Vec<&dyn lorawan::maccommands::SerializableMacCommand, heapless::consts::U256> = heapless::Vec::new();
+    /// let mut cmds: Vec<&dyn lorawan::maccommands::SerializableMacCommand> = Vec::new();
     /// cmds.push(&mac_cmd1);
     /// cmds.push(&mac_cmd2);
     /// let nwk_skey = lorawan::keys::AES128([2; 16]);
@@ -429,6 +481,7 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
         nwk_skey: &'c keys::AES128,
         app_skey: &'d keys::AES128,
     ) -> Result<&[u8], &'e str> {
+        let d = self.data.as_mut();
         let mut last_filled = 8; // MHDR + FHDR without the FOpts
         let has_fport = self.data_f_port.is_some();
         let has_fport_zero = has_fport && self.data_f_port.unwrap() == 0;
@@ -437,12 +490,6 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
         // Set MAC Commands
         if mac_cmds_len > PIGGYBACK_MAC_COMMANDS_MAX_LEN && !has_fport_zero {
             return Err("mac commands are too big for FOpts");
-        }
-        if self.encrypt_mac_commands && has_fport && !has_fport_zero {
-            return Err("mac commands in payload require FPort == 0");
-        }
-        if !self.encrypt_mac_commands && has_fport_zero {
-            return Err("mac commands have to be encrypted when FPort is 0");
         }
 
         // Set FPort
@@ -454,15 +501,14 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
             return Err("fport must be provided when there is FRMPayload");
         }
         // Set FOptsLen if present
-        if !self.encrypt_mac_commands && mac_cmds_len > 0 {
-            self.data[5] |= mac_cmds_len as u8 & 0x0f;
-            self.data.resize_default(last_filled + mac_cmds_len).unwrap();
+        if !has_fport_zero && mac_cmds_len > 0 {
+            d[5] |= mac_cmds_len as u8 & 0x0f;
             maccommandcreator::build_mac_commands(cmds,
-                    &mut self.data[last_filled..last_filled + mac_cmds_len]).unwrap();
+                    &mut d[last_filled..last_filled + mac_cmds_len]).unwrap();
             last_filled += mac_cmds_len;
         }
         if has_fport {
-            self.data[last_filled] = self.data_f_port.unwrap();
+            d[last_filled] = self.data_f_port.unwrap();
             last_filled += 1;
         }
 
@@ -470,18 +516,15 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
         if mac_cmds_len > 0 && has_fport_zero {
             enc_key = nwk_skey;
             payload_len = mac_cmds_len;
-            self.data.resize_default(last_filled + payload_len + 4).unwrap();
             maccommandcreator::build_mac_commands(cmds,
-                    &mut self.data[last_filled..last_filled + payload_len]).unwrap();
+                    &mut d[last_filled..last_filled + payload_len]).unwrap();
         } else {
-            self.data.resize_default(last_filled + payload_len + 4).unwrap();
-            self.data[last_filled..last_filled + payload_len]
-                .copy_from_slice(payload);
+            d[last_filled..last_filled + payload_len].copy_from_slice(payload);
         };
 
         // Encrypt FRMPayload
         securityhelpers::encrypt_frm_data_payload(
-            &mut self.data[..],
+            &mut d[..],
             last_filled,
             last_filled + payload_len,
             self.fcnt,
@@ -489,11 +532,44 @@ impl <F: CryptoFactory + Default>DataPayloadCreator<F> {
             );
 
         // MIC set
-        let mic = securityhelpers::calculate_data_mic(&self.data[..last_filled + payload_len],
+        let mic = securityhelpers::calculate_data_mic(&d[..last_filled + payload_len],
                                                       self.factory.new_mac(nwk_skey),
                                                       self.fcnt);
-        self.data[last_filled + payload_len..].copy_from_slice(&mic.0[..]);
+        d[last_filled + payload_len..last_filled + payload_len + 4].copy_from_slice(&mic.0[..]);
 
-        Ok(&self.data[..])
+        Ok(&d[..last_filled + payload_len + 4])
+    }
+}
+
+#[cfg(feature = "default-crypto")]
+impl DataPayloadCreator<GenericArray<u8, U256>, DefaultFactory> {
+    /// Creates a well initialized DataPayloadCreator.
+    ///
+    /// By default the packet is unconfirmed data up packet.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut phy = lorawan::creator::DataPayloadCreator::new();
+    /// let nwk_skey = lorawan::keys::AES128([2; 16]);
+    /// let app_skey = lorawan::keys::AES128([1; 16]);
+    /// let fctrl = lorawan::parser::FCtrl::new(0x80, true);
+    /// phy.set_confirmed(false).
+    ///     set_uplink(true).
+    ///     set_f_port(1).
+    ///     set_dev_addr(&[4, 3, 2, 1]).
+    ///     set_fctrl(&fctrl). // ADR: true, all others: false
+    ///     set_fcnt(1);
+    /// let payload = phy.build(b"hello", &[], &nwk_skey, &app_skey).unwrap();
+    /// ```
+    pub fn new() -> Self {
+        let mut data: GenericArray<u8, U256> = GenericArray::default();
+        data[0] = 0x40;
+        Self {
+            data,
+            data_f_port: None,
+            fcnt: 0,
+            factory: DefaultFactory,
+        }
     }
 }

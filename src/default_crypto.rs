@@ -10,7 +10,7 @@ use aes::{Aes128, block_cipher_trait::BlockCipher};
 use generic_array::{GenericArray, typenum::U16};
 
 use super::keys::*;
-use super::creator::{JoinAcceptCreator, JoinRequestCreator, DataPayloadCreator};
+use super::creator::{JoinRequestCreator};
 use super::parser::{EncryptedJoinAcceptPayload, JoinRequestPayload, DecryptedJoinAcceptPayload, EncryptedDataPayload, DecryptedDataPayload};
 
 pub type Cmac = cmac::Cmac<Aes128>;
@@ -64,33 +64,7 @@ impl Mac for Cmac {
     }
 }
 
-#[cfg(feature = "with-downlink")]
-impl JoinAcceptCreator<DefaultFactory> {
-    /// Creates a well initialized JoinAcceptCreator.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut phy = lorawan::creator::JoinAcceptCreator::new();
-    /// let key = lorawan::keys::AES128([1; 16]);
-    /// let app_nonce_bytes = [1; 3];
-    /// phy.set_app_nonce(&app_nonce_bytes);
-    /// phy.set_net_id(&[1; 3]);
-    /// phy.set_dev_addr(&[1; 4]);
-    /// phy.set_dl_settings(2);
-    /// phy.set_rx_delay(1);
-    /// let mut freqs: heapless::Vec<lorawan::maccommands::Frequency, heapless::consts::U256> = heapless::Vec::new();
-    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap()).unwrap();
-    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()).unwrap();
-    /// phy.set_c_f_list(freqs);
-    /// let payload = phy.build(&key).unwrap();
-    /// ```
-    pub fn new() -> Self {
-        Self::new_with_factory(DefaultFactory)
-    }
-}
-
-impl JoinRequestCreator<DefaultFactory> {
+impl JoinRequestCreator<[u8; 23], DefaultFactory> {
     /// Creates a well initialized JoinRequestCreator.
     ///
     /// # Examples
@@ -104,32 +78,7 @@ impl JoinRequestCreator<DefaultFactory> {
     /// let payload = phy.build(&key).unwrap();
     /// ```
     pub fn new() -> Self {
-        Self::new_with_factory(DefaultFactory)
-    }
-}
-
-impl DataPayloadCreator<DefaultFactory> {
-    /// Creates a well initialized DataPayloadCreator.
-    ///
-    /// By default the packet is unconfirmed data up packet.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut phy = lorawan::creator::DataPayloadCreator::new();
-    /// let nwk_skey = lorawan::keys::AES128([2; 16]);
-    /// let app_skey = lorawan::keys::AES128([1; 16]);
-    /// let fctrl = lorawan::parser::FCtrl::new(0x80, true);
-    /// phy.set_confirmed(false).
-    ///     set_uplink(true).
-    ///     set_f_port(1).
-    ///     set_dev_addr(&[4, 3, 2, 1]).
-    ///     set_fctrl(&fctrl). // ADR: true, all others: false
-    ///     set_fcnt(1);
-    /// let payload = phy.build(b"hello", &[], &nwk_skey, &app_skey).unwrap();
-    /// ```
-    pub fn new() -> DataPayloadCreator<DefaultFactory> {
-        Self::new_with_factory(DefaultFactory)
+        Self::with_options([0; 23], DefaultFactory).unwrap()
     }
 }
 

@@ -11,10 +11,6 @@ use criterion::{criterion_group, criterion_main, Criterion};
 use std::alloc::System;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use heapless::consts::*;
-
-type Vec<T> = heapless::Vec<T,U256>;
-
 use aes::{Aes128, block_cipher_trait::BlockCipher};
 use generic_array::GenericArray;
 
@@ -91,7 +87,7 @@ fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
 
 fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
     let mut payload = Vec::new();
-    payload.extend_from_slice(&String::from("hello").into_bytes()[..]).unwrap();
+    payload.extend_from_slice(&String::from("hello").into_bytes()[..]);
     let key = AES128([1; 16]);
     let factory = ConstFactory::new(&key);
     let cnt = AtomicU64::new(0);
@@ -155,11 +151,7 @@ criterion_group!(benches, bench_complete_data_payload_fhdr,
                  bench_complete_data_payload_decrypt);
 criterion_main!(benches);
 
-fn data_payload() -> Vec<u8> {
-    let mut res = Vec::new();
-    res.extend_from_slice(&[
-        0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01, 0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6,
-        0xc3, 0xb5, 0x82,
-    ]).unwrap();
-    res
+fn data_payload() -> [u8; 18] {
+    [0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01, 0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6,
+        0xc3, 0xb5, 0x82]
 }
