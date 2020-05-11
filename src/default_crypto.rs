@@ -34,7 +34,8 @@ impl CryptoFactory for DefaultFactory {
 
     fn new_mac(&self, key: &AES128) -> Self::M {
         use cmac::Mac;
-        Cmac::new_varkey(&key.0[..]).unwrap()
+        let key = GenericArray::from_slice(&key.0);
+        Cmac::new(key)
     }
 }
 
