@@ -10,7 +10,11 @@ use aes::{Aes128, block_cipher_trait::BlockCipher};
 use generic_array::{GenericArray, typenum::U16};
 
 use super::keys::*;
-use super::creator::{JoinAcceptCreator, JoinRequestCreator, DataPayloadCreator};
+use super::creator::{JoinRequestCreator, DataPayloadCreator};
+
+#[cfg(feature = "with-downlink")]
+use super::creator::JoinAcceptCreator;
+
 use super::parser::{EncryptedJoinAcceptPayload, JoinRequestPayload, DecryptedJoinAcceptPayload, EncryptedDataPayload, DecryptedDataPayload};
 
 pub type Cmac = cmac::Cmac<Aes128>;
