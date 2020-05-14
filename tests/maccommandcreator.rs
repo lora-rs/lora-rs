@@ -173,9 +173,8 @@ fn test_build_mac_commands() {
     let rx_timing_setup_req = RXTimingSetupReqPayload::new_as_mac_cmd(&[0x02]).unwrap().0;
     let dev_status_ans = DevStatusAnsPayload::new_as_mac_cmd(&[0xfe, 0x3f]).unwrap().0;
     let cmds: Vec<&dyn SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_ans];
-
-    assert_eq!(
-        &build_mac_commands(&cmds[..]).unwrap()[..],
-        &vec![0x08, 0x02, 0x06, 0xfe, 0x3f][..]
-    );
+    let expected_len = mac_commands_len(&cmds[..]);
+    let mut res = vec![0; expected_len];
+    assert_eq!(build_mac_commands(&cmds[..], &mut res[..]), Ok(expected_len));
+    assert_eq!(res, &vec![0x08, 0x02, 0x06, 0xfe, 0x3f][..]);
 }

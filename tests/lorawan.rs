@@ -8,10 +8,6 @@
 
 extern crate lorawan;
 
-use heapless::consts::*;
-
-type Vec<T> = heapless::Vec<T,U256>;
-
 use lorawan::creator::*;
 use lorawan::keys::*;
 use lorawan::maccommandcreator::*;
@@ -24,7 +20,7 @@ fn phy_join_request_payload() -> Vec<u8> {
     res.extend_from_slice(&[
         0x00, 0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01, 0x05, 0x04, 0x03, 0x02, 0x05, 0x04,
         0x03, 0x02, 0x2d, 0x10, 0x6a, 0x99, 0x0e, 0x12,
-    ]).unwrap();
+    ]);
     res
 }
 
@@ -33,7 +29,7 @@ fn phy_join_accept_payload() -> Vec<u8> {
     res.extend_from_slice(&[
         0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37, 0x42, 0x97,
         0x51, 0x42,
-    ]).unwrap();
+    ]);
     res
 }
 
@@ -42,7 +38,7 @@ fn phy_join_accept_payload_with_c_f_list() -> Vec<u8> {
     res.extend_from_slice(&[
         0x20, 0xe4, 0x56, 0x73, 0xb6, 0x3c, 0xb4, 0xb9, 0xce, 0xcb, 0x2a, 0xa8, 0x3f, 0x03, 0x33,
         0xe6, 0x15, 0xd2, 0xac, 0x89, 0xee, 0xa1, 0x65, 0x98, 0x37, 0xc3, 0xaa, 0x6d, 0xf9, 0x68,
-        0x98, 0x89, 0xcf]).unwrap();
+        0x98, 0x89, 0xcf]);
     res
     //867100000, 867300000, 867500000, 867700000, 867900000
 }
@@ -52,7 +48,7 @@ fn phy_dataup_payload() -> Vec<u8> {
     res.extend_from_slice(&[
         0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01, 0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6,
         0xc3, 0xb5, 0x82,
-    ]).unwrap();
+    ]);
     res
 }
 
@@ -61,7 +57,7 @@ fn phy_datadown_payload() -> Vec<u8> {
     res.extend_from_slice(&[
         0xa0, 0x04, 0x03, 0x02, 0x01, 0x80, 0xff, 0x2a, 0x2a, 0x0a, 0xf1, 0xa3, 0x6a, 0x05, 0xd0,
         0x12, 0x5f, 0x88, 0x5d, 0x88, 0x1d, 0x49, 0xe1
-    ]).unwrap();
+    ]);
     res
 }
 
@@ -70,7 +66,7 @@ fn data_payload_with_fport_zero() -> Vec<u8> {
     res.extend_from_slice(&[
         0x40, 0x04, 0x03, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x69, 0x36, 0x9e, 0xee, 0x6a, 0xa5,
         0x08,
-    ]).unwrap();
+    ]);
     res
 }
 
@@ -78,7 +74,7 @@ fn data_payload_with_f_opts() -> Vec<u8> {
     let mut res = Vec::new();
     res.extend_from_slice(&[
         0x40, 0x04, 0x03, 0x02, 0x01, 0x03, 0x00, 0x00, 0x02, 0x03, 0x05, 0xd7, 0xfa, 0x0c, 0x6c
-    ]).unwrap();
+    ]);
     res
 }
 
@@ -179,7 +175,7 @@ fn test_new_join_accept_c_f_list_empty() {
     let data = phy_join_accept_payload();
     let key = AES128(app_key());
     let decrypted_phy = DecryptedJoinAcceptPayload::new(data, &key).unwrap();
-    assert_eq!(decrypted_phy.c_f_list(), Vec::new());
+    assert_eq!(decrypted_phy.c_f_list(), None);
 }
 
 #[test]
@@ -214,13 +210,10 @@ fn test_new_join_accept_payload_with_c_f_list() {
     let key = AES128([1; 16]);
     let decrypted_phy = DecryptedJoinAcceptPayload::new(data, &key).unwrap();
 
-    let mut expected_c_f_list = Vec::new();
-    expected_c_f_list.push(Frequency::new_from_raw(&[0x18, 0x4F, 0x84])).unwrap();
-    expected_c_f_list.push(Frequency::new_from_raw(&[0xE8, 0x56, 0x84])).unwrap();
-    expected_c_f_list.push(Frequency::new_from_raw(&[0xB8, 0x5E, 0x84])).unwrap();
-    expected_c_f_list.push(Frequency::new_from_raw(&[0x88, 0x66, 0x84])).unwrap();
-    expected_c_f_list.push(Frequency::new_from_raw(&[0x58, 0x6E, 0x84])).unwrap();
-    assert_eq!(decrypted_phy.c_f_list(), expected_c_f_list);
+    let expected_c_f_list = [Frequency::new_from_raw(&[0x18, 0x4F, 0x84]),
+        Frequency::new_from_raw(&[0xE8, 0x56, 0x84]), Frequency::new_from_raw(&[0xB8, 0x5E, 0x84]),
+        Frequency::new_from_raw(&[0x88, 0x66, 0x84]), Frequency::new_from_raw(&[0x58, 0x6E, 0x84])];
+    assert_eq!(decrypted_phy.c_f_list(), Some(expected_c_f_list));
 }
 
 #[test]
@@ -300,7 +293,7 @@ fn test_complete_dataup_payload_frm_payload() {
     let key = AES128([1; 16]);
     let decrypted = phy.decrypt(None, Some(&key), 1).unwrap();
     let mut payload = Vec::new();
-    payload.extend_from_slice(&String::from("hello").into_bytes()[..]).unwrap();
+    payload.extend_from_slice(&String::from("hello").into_bytes()[..]);
 
     assert_eq!(decrypted.frm_payload(), Ok(FRMPayload::Data(&payload)));
 }
@@ -311,7 +304,7 @@ fn test_complete_datadown_payload_frm_payload() {
     let key = AES128([1; 16]);
     let decrypted = phy.decrypt(None, Some(&key), 76543).unwrap();
     let mut payload = Vec::new();
-    payload.extend_from_slice(&String::from("hello lora").into_bytes()[..]).unwrap();
+    payload.extend_from_slice(&String::from("hello lora").into_bytes()[..]);
 
     assert_eq!(decrypted.frm_payload(), Ok(FRMPayload::Data(&payload)));
 }
@@ -373,7 +366,7 @@ fn test_data_payload_uplink_creator() {
         .set_fcnt(1);
 
     assert_eq!(
-        phy.build(b"hello", &nwk_skey, &app_skey).unwrap(),
+        phy.build(b"hello", &[], &nwk_skey, &app_skey).unwrap(),
         &phy_dataup_payload()[..]
     );
 }
@@ -383,7 +376,7 @@ fn test_data_payload_downlink_creator() {
     let mut phy = DataPayloadCreator::new();
     let nwk_skey = AES128([2; 16]);
     let app_skey = AES128([1; 16]);
-    let fctrl = FCtrl::new(0x80, true);
+    let fctrl = FCtrl::new(0x80, false);
     phy.set_confirmed(true)
         .set_uplink(false)
         .set_f_port(42)
@@ -392,7 +385,7 @@ fn test_data_payload_downlink_creator() {
         .set_fcnt(76543);
 
     assert_eq!(
-        phy.build(b"hello lora", &nwk_skey, &app_skey).unwrap(),
+        phy.build(b"hello lora", &[], &nwk_skey, &app_skey).unwrap(),
         &phy_datadown_payload()[..]
     );
 }
@@ -403,16 +396,7 @@ fn test_data_payload_creator_when_payload_and_fport_0() {
     let nwk_skey = AES128([2; 16]);
     let app_skey = AES128([1; 16]);
     phy.set_f_port(0);
-    assert!(phy.build(b"hello", &nwk_skey, &app_skey).is_err());
-}
-
-#[test]
-fn test_data_payload_creator_when_fport_0_but_not_encrypt() {
-    let mut phy = DataPayloadCreator::new();
-    let nwk_skey = AES128([2; 16]);
-    let app_skey = AES128([1; 16]);
-    phy.set_f_port(0).set_encrypt_mac_commands(false);
-    assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
+    assert!(phy.build(b"hello", &[], &nwk_skey, &app_skey).is_err());
 }
 
 #[test]
@@ -423,18 +407,9 @@ fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
     let new_channel_req = NewChannelReqPayload::new_as_mac_cmd(&[0x00; 5]).unwrap().0;
 
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
-    cmds.extend_from_slice(&[&new_channel_req, &new_channel_req, &new_channel_req]).unwrap();
-    phy.set_f_port(1).set_mac_commands(cmds).unwrap();
-    assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
-}
-
-#[test]
-fn test_data_payload_creator_when_big_mac_commands_but_not_fport_0() {
-    let mut phy = DataPayloadCreator::new();
-    let nwk_skey = AES128([2; 16]);
-    let app_skey = AES128([1; 16]);
-    phy.set_f_port(1).set_encrypt_mac_commands(true);
-    assert!(phy.build(b"", &nwk_skey, &app_skey).is_err());
+    cmds.extend_from_slice(&[&new_channel_req, &new_channel_req, &new_channel_req]);
+    phy.set_f_port(1);
+    assert!(phy.build(b"", &cmds[..], &nwk_skey, &app_skey).is_err());
 }
 
 #[test]
@@ -442,7 +417,7 @@ fn test_data_payload_creator_when_payload_no_fport() {
     let mut phy = DataPayloadCreator::new();
     let nwk_skey = AES128([2; 16]);
     let app_skey = AES128([1; 16]);
-    assert!(phy.build(b"hello", &nwk_skey, &app_skey).is_err());
+    assert!(phy.build(b"hello", &[], &nwk_skey, &app_skey).is_err());
 }
 
 #[test]
@@ -456,15 +431,14 @@ fn test_data_payload_creator_when_mac_commands_in_payload() {
         .set_data_rate_ack(false)
         .set_tx_power_ack(true);
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
-    cmds.extend_from_slice(&[&mac_cmd1, &mac_cmd2]).unwrap();
+    cmds.extend_from_slice(&[&mac_cmd1, &mac_cmd2]);
     phy.set_confirmed(false)
         .set_uplink(true)
         .set_f_port(0)
         .set_dev_addr(&[4, 3, 2, 1])
-        .set_fcnt(0)
-        .set_mac_commands(cmds).unwrap();
+        .set_fcnt(0);
     assert_eq!(
-        phy.build(b"", &nwk_skey, &nwk_skey).unwrap(),
+        phy.build(b"", &cmds[..], &nwk_skey, &nwk_skey).unwrap(),
         &data_payload_with_fport_zero()[..]
     );
 }
@@ -480,15 +454,14 @@ fn test_data_payload_creator_when_mac_commands_in_f_opts() {
         .set_data_rate_ack(false)
         .set_tx_power_ack(true);
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
-    cmds.extend_from_slice(&[&mac_cmd1, &mac_cmd2]).unwrap();
+    cmds.extend_from_slice(&[&mac_cmd1, &mac_cmd2]);
     phy.set_confirmed(false)
         .set_uplink(true)
         .set_dev_addr(&[4, 3, 2, 1])
-        .set_fcnt(0)
-        .set_mac_commands(cmds).unwrap();
+        .set_fcnt(0);
 
     assert_eq!(
-        phy.build(b"", &nwk_skey, &nwk_skey).unwrap(),
+        phy.build(b"", &cmds[..], &nwk_skey, &nwk_skey).unwrap(),
         &data_payload_with_f_opts()[..]
     );
 }
@@ -535,7 +508,7 @@ fn test_validate_join_request_mic_when_not_ok() {
 }
 
 #[test]
-#[cfg(feature = "with-downlink")]
+#[cfg(feature = "default-crypto,with-downlink")]
 fn test_join_accept_creator() {
     let mut phy = JoinAcceptCreator::new();
     let key = AES128(app_key());
@@ -550,7 +523,6 @@ fn test_join_accept_creator() {
 }
 
 #[test]
-#[cfg(feature = "with-downlink")]
 fn test_join_request_creator() {
     let mut phy = JoinRequestCreator::new();
     let key = AES128([1; 16]);
@@ -559,6 +531,21 @@ fn test_join_request_creator() {
         .set_dev_nonce(&[0x2du8, 0x10]);
 
     assert_eq!(phy.build(&key).unwrap(), &phy_join_request_payload()[..]);
+}
+
+#[test]
+fn test_join_request_creator_with_options() {
+    let mut data = [0; 23];
+    {
+        let mut phy = JoinRequestCreator::with_options(&mut data[..], DefaultFactory).unwrap();
+        let key = AES128([1; 16]);
+        phy.set_app_eui(&[0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01])
+            .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
+            .set_dev_nonce(&[0x2du8, 0x10]);
+
+        assert_eq!(phy.build(&key).unwrap(), &phy_join_request_payload()[..]);
+    }
+    assert_eq!(&data[..], &phy_join_request_payload()[..]);
 }
 
 #[test]
