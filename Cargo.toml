@@ -1,2 +1,8 @@
+[workspace]
+members = [
+    "encoding",
+    "device",
+]
+
 [profile.release]
 debug = true
