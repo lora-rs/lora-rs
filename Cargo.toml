@@ -1,6 +1,7 @@
 [workspace]
 members = [
-    "encoding"
+    "encoding",
+    "device",
 ]
 
 [profile.release]

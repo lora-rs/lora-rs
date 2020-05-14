@@ -1,0 +1,47 @@
+[package]
+name = "lorawan-device"
+version = "0.1.0"
+authors = ["Louis Thiery <louis@helium.com>"]
+edition = "2018"
+categories = [
+    "embedded",
+    "hardware-support",
+    "no-std",
+]
+license = "Apache 2.0"
+readme = "README.md"
+description = "A Rust LoRaWAN implementation"
+
+[dependencies]
+sx12xx = { git = "https://github.com/lthiery/sx12xx-rs.git", rev = "51e3a819"}
+#lorawan = { git = "https://github.com/lthiery/rust-lorawan.git", rev = "1f430b52", default-features = false, features = ["default-crypto"] }
+#lorawan = { path = "../rust-lorawan", default-features = false, features = ["default-crypto"] }
+lorawan = { git = "https://github.com/ivajloip/rust-lorawan.git", branch = "fix-tests", default-features = false, features = ["default-crypto"] }
+
+heapless = "0.5.4"
+generic-array = "0.13.2"
+
+#TODO: delete when stable
+[dependencies.stm32l0xx-hal]
+git                    = "https://github.com/stm32-rs/stm32l0xx-hal.git"
+features               = ["stm32l0x2","rt", "io-STM32L071"]
+version                = "0.6.2"
+
+
+
+[dev-dependencies]
+cortex-m = {version = "0.6.0", features = ["const-fn"] }
+cortex-m-rt = "0.6.7"
+cortex-m-semihosting = "0.3.2"
+cortex-m-rtfm = "0.5.0"
+void = { version = "1.0.2", default-features = false }
+cast = { version = "0.2.2", default-features = false }
+panic-semihosting       = "0.5.2"
+panic-halt = "0.2.0"
+embedded-hal = { version = "0.2.3", features = ["unproven"] }
+nb = "0.1.2"
+
+[dev-dependencies.stm32l0xx-hal]
+git                    = "https://github.com/stm32-rs/stm32l0xx-hal.git"
+features               = ["stm32l0x2","rt", "io-STM32L071"]
+version                = "0.6.2"
