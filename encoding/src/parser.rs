@@ -11,8 +11,8 @@
 //! # Examples
 //!
 //! ```
-//! use lorawan::parser::*;
-//! use lorawan::keys::*;
+//! use lorawan_encoding::parser::*;
+//! use lorawan_encoding::keys::*;
 //!
 //! let data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
 //!     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
@@ -28,8 +28,8 @@
 //! }
 //! ```
 
-use super::keys::{AES128, CryptoFactory, Encrypter, MIC};
-use super::maccommands::{DLSettings, Frequency, MacCommandIterator, parse_mac_commands};
+use super::keys::{CryptoFactory, Encrypter, AES128, MIC};
+use super::maccommands::{parse_mac_commands, DLSettings, Frequency, MacCommandIterator};
 use super::securityhelpers;
 
 #[cfg(feature = "default-crypto")]
@@ -112,7 +112,7 @@ macro_rules! fixed_len_struct {
 pub enum PhyPayload<T, F> {
     JoinRequest(JoinRequestPayload<T, F>),
     JoinAccept(JoinAcceptPayload<T, F>),
-    Data(DataPayload<T, F>)
+    Data(DataPayload<T, F>),
 }
 
 impl<T: AsRef<[u8]>, F> AsRef<[u8]> for PhyPayload<T, F> {
@@ -132,7 +132,7 @@ impl<T: AsRef<[u8]>, F> AsRef<[u8]> for PhyPayload<T, F> {
 #[derive(Debug, PartialEq)]
 pub enum JoinAcceptPayload<T, F> {
     Encrypted(EncryptedJoinAcceptPayload<T, F>),
-    Decrypted(DecryptedJoinAcceptPayload<T, F>)
+    Decrypted(DecryptedJoinAcceptPayload<T, F>),
 }
 
 impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for JoinAcceptPayload<T, F> {
@@ -152,14 +152,14 @@ impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for JoinAcceptPayload<T, F> {
 #[derive(Debug, PartialEq)]
 pub enum DataPayload<T, F> {
     Encrypted(EncryptedDataPayload<T, F>),
-    Decrypted(DecryptedDataPayload<T>)
+    Decrypted(DecryptedDataPayload<T>),
 }
 
 impl<T: AsRef<[u8]>, F> DataHeader for DataPayload<T, F> {
     fn as_data_bytes(&self) -> &[u8] {
         match self {
             DataPayload::Encrypted(data) => data.as_data_bytes(),
-            DataPayload::Decrypted(data) => data.as_data_bytes()
+            DataPayload::Decrypted(data) => data.as_data_bytes(),
         }
     }
 }
@@ -230,8 +230,8 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> JoinRequestPayload<T, F> {
     /// ```
     /// let data = vec![0x00, 0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01, 0x05, 0x04, 0x03,
     ///     0x02, 0x05, 0x04, 0x03, 0x02, 0x2d, 0x10, 0x6a, 0x99, 0x0e, 0x12];
-    /// let phy = lorawan::parser::JoinRequestPayload::new_with_factory(data,
-    ///     lorawan::default_crypto::DefaultFactory);
+    /// let phy = lorawan_encoding::parser::JoinRequestPayload::new_with_factory(data,
+    ///     lorawan_encoding::default_crypto::DefaultFactory);
     /// ```
     pub fn new_with_factory<'a>(data: T, factory: F) -> Result<Self, &'a str> {
         if !Self::can_build_from(data.as_ref()) {
@@ -317,8 +317,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
     /// ```
     /// let mut data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb,
     ///     0x37, 0x42, 0x97, 0x51, 0x42];
-    /// let phy = lorawan::parser::EncryptedJoinAcceptPayload::new(data);
-    /// let key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    /// let phy = lorawan_encoding::parser::EncryptedJoinAcceptPayload::new(data);
+    /// let key = lorawan_encoding::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
     ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
     /// let decrypted = phy.unwrap().decrypt(&key);
     /// ```
@@ -330,7 +330,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
 
             for i in 0..(len >> 4) {
                 let start = (i << 4) + 1;
-                let mut block = generic_array::GenericArray::from_mut_slice(&mut bytes[start..(start + 16)]);
+                let mut block =
+                    generic_array::GenericArray::from_mut_slice(&mut bytes[start..(start + 16)]);
                 aes_enc.encrypt_block(&mut block);
             }
         }
@@ -377,16 +378,20 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     /// let dev_nonce = vec![0xcc, 0xdd];
     /// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37,
     ///     0x42, 0x97, 0x51, 0x42];
-    /// let app_key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    /// let app_key = lorawan_encoding::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
     ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
-    /// let join_accept = lorawan::parser::DecryptedJoinAcceptPayload::new(data, &app_key).unwrap();
+    /// let join_accept = lorawan_encoding::parser::DecryptedJoinAcceptPayload::new(data, &app_key).unwrap();
     ///
     /// let nwk_skey = join_accept.derive_newskey(
-    ///     &lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
+    ///     &lorawan_encoding::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
     ///     &app_key,
     /// );
     /// ```
-    pub fn derive_newskey<TT: AsRef<[u8]>>(&self, dev_nonce: &DevNonce<TT>, key: &AES128) -> AES128 {
+    pub fn derive_newskey<TT: AsRef<[u8]>>(
+        &self,
+        dev_nonce: &DevNonce<TT>,
+        key: &AES128,
+    ) -> AES128 {
         self.derive_session_key(0x1, dev_nonce, key)
     }
 
@@ -405,30 +410,36 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     /// let dev_nonce = vec![0xcc, 0xdd];
     /// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37,
     ///     0x42, 0x97, 0x51, 0x42];
-    /// let app_key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    /// let app_key = lorawan_encoding::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
     ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
-    /// let join_accept = lorawan::parser::DecryptedJoinAcceptPayload::new(data, &app_key).unwrap();
+    /// let join_accept = lorawan_encoding::parser::DecryptedJoinAcceptPayload::new(data, &app_key).unwrap();
     ///
     /// let app_skey = join_accept.derive_appskey(
-    ///     &lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
+    ///     &lorawan_encoding::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
     ///     &app_key,
     /// );
     /// ```
-    pub fn derive_appskey<TT: AsRef<[u8]>>(&self, dev_nonce: &DevNonce<TT>, key: &AES128) -> AES128 {
+    pub fn derive_appskey<TT: AsRef<[u8]>>(
+        &self,
+        dev_nonce: &DevNonce<TT>,
+        key: &AES128,
+    ) -> AES128 {
         self.derive_session_key(0x2, dev_nonce, key)
     }
 
-    fn derive_session_key<TT: AsRef<[u8]>>(&self,
+    fn derive_session_key<TT: AsRef<[u8]>>(
+        &self,
         first_byte: u8,
         dev_nonce: &DevNonce<TT>,
-        key: &AES128) -> AES128 {
+        key: &AES128,
+    ) -> AES128 {
         let cipher = self.1.new_enc(key);
 
         // note: AppNonce is 24 bit, NetId is 24 bit, DevNonce is 16 bit
         let app_nonce = self.app_nonce();
         let nwk_addr = self.net_id();
-        let (app_nonce_arr, nwk_addr_arr, dev_nonce_arr)
-            = (app_nonce.as_ref(), nwk_addr.as_ref(), dev_nonce.as_ref());
+        let (app_nonce_arr, nwk_addr_arr, dev_nonce_arr) =
+            (app_nonce.as_ref(), nwk_addr.as_ref(), dev_nonce.as_ref());
 
         let mut block = [0u8; 16];
         block[0] = first_byte;
@@ -482,9 +493,13 @@ impl<T: AsRef<[u8]>, F> DecryptedJoinAcceptPayload<T, F> {
             return None;
         }
         let d = self.0.as_ref();
-        let res = [Frequency::new_from_raw(&d[13..16]), Frequency::new_from_raw(&d[16..19]),
-            Frequency::new_from_raw(&d[19..22]), Frequency::new_from_raw(&d[22..25]),
-            Frequency::new_from_raw(&d[25..28])];
+        let res = [
+            Frequency::new_from_raw(&d[13..16]),
+            Frequency::new_from_raw(&d[16..19]),
+            Frequency::new_from_raw(&d[19..22]),
+            Frequency::new_from_raw(&d[22..25]),
+            Frequency::new_from_raw(&d[25..28]),
+        ];
         Some(res)
     }
 }
@@ -521,9 +536,11 @@ pub trait DataHeader {
 
     /// Gives the FHDR of the DataPayload.
     fn fhdr(&self) -> FHDR {
-        FHDR::new_from_raw(&self.as_data_bytes()[1..(1 + self.fhdr_length())], self.is_uplink())
+        FHDR::new_from_raw(
+            &self.as_data_bytes()[1..(1 + self.fhdr_length())],
+            self.is_uplink(),
+        )
     }
-
 
     /// Gives whether the payload is uplink or not.
     fn is_uplink(&self) -> bool {
@@ -594,13 +611,11 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> {
             return false;
         }
         match MHDR(bytes[0]).mtype() {
-            MType::ConfirmedDataUp | MType::ConfirmedDataDown |
-                MType::UnconfirmedDataUp | MType::UnconfirmedDataDown => {
-                true
-            }
-            _ => {
-                false
-            }
+            MType::ConfirmedDataUp
+            | MType::ConfirmedDataDown
+            | MType::UnconfirmedDataUp
+            | MType::UnconfirmedDataDown => true,
+            _ => false,
         }
     }
 
@@ -639,18 +654,20 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
     /// ```
     /// let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
     ///     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
-    /// let key = lorawan::keys::AES128([1; 16]);
-    /// let enc_phy = lorawan::parser::EncryptedDataPayload::new(data).unwrap();
+    /// let key = lorawan_encoding::keys::AES128([1; 16]);
+    /// let enc_phy = lorawan_encoding::parser::EncryptedDataPayload::new(data).unwrap();
     /// let dec_phy = enc_phy.decrypt(None, Some(&key), 1);
     /// ```
-    pub fn decrypt<'a, 'b>(mut self,
-                   nwk_skey: Option<&'a AES128>,
-                   app_skey: Option<&'a AES128>,
-                   fcnt: u32) -> Result<DecryptedDataPayload<T>, &'b str> {
+    pub fn decrypt<'a, 'b>(
+        mut self,
+        nwk_skey: Option<&'a AES128>,
+        app_skey: Option<&'a AES128>,
+        fcnt: u32,
+    ) -> Result<DecryptedDataPayload<T>, &'b str> {
         let fhdr_length = self.fhdr_length();
         let fhdr = self.fhdr();
         let full_fcnt = compute_fcnt(fcnt, fhdr.fcnt());
-        let key = if self.f_port().is_some() && self.f_port().unwrap() != 0{
+        let key = if self.f_port().is_some() && self.f_port().unwrap() != 0 {
             app_skey
         } else {
             nwk_skey
@@ -682,10 +699,12 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
     /// DecryptedDataPayload. If the mic does not match, it returns the original
     /// EncryptedDataPayload so that it can be tried against the keys of another device that shares
     /// the same dev_addr. For an example please see [decrypt](#method.decrypt).
-    pub fn decrypt_if_mic_ok<'a>(self,
-                   nwk_skey: &'a AES128,
-                   app_skey: &'a AES128,
-                   fcnt: u32) -> Result<DecryptedDataPayload<T>, Self> {
+    pub fn decrypt_if_mic_ok<'a>(
+        self,
+        nwk_skey: &'a AES128,
+        app_skey: &'a AES128,
+        fcnt: u32,
+    ) -> Result<DecryptedDataPayload<T>, Self> {
         if !self.validate_mic(nwk_skey, fcnt) {
             Err(self)
         } else {
@@ -744,14 +763,16 @@ impl<T: AsRef<[u8]>> DecryptedDataPayload<T> {
 /// ```
 /// let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
 ///     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
-/// if let Ok(lorawan::parser::PhyPayload::Data(phy)) = lorawan::parser::parse(data) {
+/// if let Ok(lorawan_encoding::parser::PhyPayload::Data(phy)) = lorawan_encoding::parser::parse(data) {
 ///     println!("{:?}", phy);
 /// } else {
 ///     panic!("failed to parse data payload");
 /// }
 /// ```
 #[cfg(feature = "default-crypto")]
-pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(data: T) -> Result<PhyPayload<T, DefaultFactory>, &'a str> {
+pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(
+    data: T,
+) -> Result<PhyPayload<T, DefaultFactory>, &'a str> {
     parse_with_factory(data, DefaultFactory)
 }
 
@@ -764,8 +785,10 @@ pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(data: T) -> Result<PhyPayload<T, 
 /// * bytes - the data from which the PhyPayload is to be built.
 /// * factory - the factory that shall be used to create object for crypto functions.
 pub fn parse_with_factory<'a, T, F>(data: T, factory: F) -> Result<PhyPayload<T, F>, &'a str>
-where T: AsRef<[u8]> + AsMut<[u8]>,
-      F: CryptoFactory {
+where
+    T: AsRef<[u8]> + AsMut<[u8]>,
+    F: CryptoFactory,
+{
     let bytes = data.as_ref();
     let len = bytes.len();
     // the smallest payload is a data payload without fport and FRMPayload
@@ -774,19 +797,19 @@ where T: AsRef<[u8]> + AsMut<[u8]>,
         return Err("insufficient number of bytes");
     }
     match MHDR(bytes[0]).mtype() {
-        MType::JoinRequest => {
-            Ok(PhyPayload::JoinRequest(JoinRequestPayload::new_with_factory(data, factory)?))
-        },
-        MType::JoinAccept => {
-            Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(
-                        EncryptedJoinAcceptPayload::new_with_factory(data, factory)?)))
-        },
-        MType::UnconfirmedDataUp | MType::ConfirmedDataUp |
-        MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
-            Ok(PhyPayload::Data(DataPayload::Encrypted(
-                        EncryptedDataPayload::new_with_factory(data, factory)?)))
-        },
-        _ => Err("unsupported message type")
+        MType::JoinRequest => Ok(PhyPayload::JoinRequest(
+            JoinRequestPayload::new_with_factory(data, factory)?,
+        )),
+        MType::JoinAccept => Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(
+            EncryptedJoinAcceptPayload::new_with_factory(data, factory)?,
+        ))),
+        MType::UnconfirmedDataUp
+        | MType::ConfirmedDataUp
+        | MType::UnconfirmedDataDown
+        | MType::ConfirmedDataDown => Ok(PhyPayload::Data(DataPayload::Encrypted(
+            EncryptedDataPayload::new_with_factory(data, factory)?,
+        ))),
+        _ => Err("unsupported message type"),
     }
 }
 

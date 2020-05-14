@@ -6,14 +6,12 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-extern crate lorawan;
-
-use lorawan::creator::*;
-use lorawan::keys::*;
-use lorawan::maccommandcreator::*;
-use lorawan::maccommands::*;
-use lorawan::parser::*;
-use lorawan::default_crypto::DefaultFactory;
+use lorawan_encoding::creator::*;
+use lorawan_encoding::default_crypto::DefaultFactory;
+use lorawan_encoding::keys::*;
+use lorawan_encoding::maccommandcreator::*;
+use lorawan_encoding::maccommands::*;
+use lorawan_encoding::parser::*;
 
 fn phy_join_request_payload() -> Vec<u8> {
     let mut res = Vec::new();
@@ -38,7 +36,8 @@ fn phy_join_accept_payload_with_c_f_list() -> Vec<u8> {
     res.extend_from_slice(&[
         0x20, 0xe4, 0x56, 0x73, 0xb6, 0x3c, 0xb4, 0xb9, 0xce, 0xcb, 0x2a, 0xa8, 0x3f, 0x03, 0x33,
         0xe6, 0x15, 0xd2, 0xac, 0x89, 0xee, 0xa1, 0x65, 0x98, 0x37, 0xc3, 0xaa, 0x6d, 0xf9, 0x68,
-        0x98, 0x89, 0xcf]);
+        0x98, 0x89, 0xcf,
+    ]);
     res
     //867100000, 867300000, 867500000, 867700000, 867900000
 }
@@ -56,7 +55,7 @@ fn phy_datadown_payload() -> Vec<u8> {
     let mut res = Vec::new();
     res.extend_from_slice(&[
         0xa0, 0x04, 0x03, 0x02, 0x01, 0x80, 0xff, 0x2a, 0x2a, 0x0a, 0xf1, 0xa3, 0x6a, 0x05, 0xd0,
-        0x12, 0x5f, 0x88, 0x5d, 0x88, 0x1d, 0x49, 0xe1
+        0x12, 0x5f, 0x88, 0x5d, 0x88, 0x1d, 0x49, 0xe1,
     ]);
     res
 }
@@ -73,7 +72,7 @@ fn data_payload_with_fport_zero() -> Vec<u8> {
 fn data_payload_with_f_opts() -> Vec<u8> {
     let mut res = Vec::new();
     res.extend_from_slice(&[
-        0x40, 0x04, 0x03, 0x02, 0x01, 0x03, 0x00, 0x00, 0x02, 0x03, 0x05, 0xd7, 0xfa, 0x0c, 0x6c
+        0x40, 0x04, 0x03, 0x02, 0x01, 0x03, 0x00, 0x00, 0x02, 0x03, 0x05, 0xd7, 0xfa, 0x0c, 0x6c,
     ]);
     res
 }
@@ -115,7 +114,7 @@ fn test_mhdr_major() {
 #[test]
 fn test_parse_phy_payload_with_too_few_bytes_is_err() {
     let bytes = vec![
-        0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04
+        0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04,
     ];
     let phy = parse(bytes);
     assert!(phy.is_err());
@@ -126,7 +125,9 @@ fn test_parse_join_request_payload() {
     let phy = parse(phy_join_request_payload());
     assert_eq!(
         phy,
-        Ok(PhyPayload::JoinRequest(JoinRequestPayload::new(phy_join_request_payload()).unwrap()))
+        Ok(PhyPayload::JoinRequest(
+            JoinRequestPayload::new(phy_join_request_payload()).unwrap()
+        ))
     );
 }
 
@@ -136,7 +137,8 @@ fn test_parse_join_accept_payload() {
     assert_eq!(
         phy,
         Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(
-                    EncryptedJoinAcceptPayload::new(phy_join_accept_payload()).unwrap())))
+            EncryptedJoinAcceptPayload::new(phy_join_accept_payload()).unwrap()
+        )))
     );
 }
 
@@ -146,7 +148,8 @@ fn test_parse_data_payload() {
     assert_eq!(
         phy,
         Ok(PhyPayload::Data(DataPayload::Encrypted(
-                    EncryptedDataPayload::new(phy_dataup_payload()).unwrap())))
+            EncryptedDataPayload::new(phy_dataup_payload()).unwrap()
+        )))
     );
 }
 
@@ -182,7 +185,10 @@ fn test_new_join_accept_c_f_list_empty() {
 fn test_join_accept_app_nonce_extraction() {
     let decrypted_phy = new_decrypted_join_accept();
     let expected = vec![3, 2, 1];
-    assert_eq!(decrypted_phy.app_nonce(), AppNonce::new(&expected[..]).unwrap());
+    assert_eq!(
+        decrypted_phy.app_nonce(),
+        AppNonce::new(&expected[..]).unwrap()
+    );
 }
 
 #[test]
@@ -210,9 +216,13 @@ fn test_new_join_accept_payload_with_c_f_list() {
     let key = AES128([1; 16]);
     let decrypted_phy = DecryptedJoinAcceptPayload::new(data, &key).unwrap();
 
-    let expected_c_f_list = [Frequency::new_from_raw(&[0x18, 0x4F, 0x84]),
-        Frequency::new_from_raw(&[0xE8, 0x56, 0x84]), Frequency::new_from_raw(&[0xB8, 0x5E, 0x84]),
-        Frequency::new_from_raw(&[0x88, 0x66, 0x84]), Frequency::new_from_raw(&[0x58, 0x6E, 0x84])];
+    let expected_c_f_list = [
+        Frequency::new_from_raw(&[0x18, 0x4F, 0x84]),
+        Frequency::new_from_raw(&[0xE8, 0x56, 0x84]),
+        Frequency::new_from_raw(&[0xB8, 0x5E, 0x84]),
+        Frequency::new_from_raw(&[0x88, 0x66, 0x84]),
+        Frequency::new_from_raw(&[0x58, 0x6E, 0x84]),
+    ];
     assert_eq!(decrypted_phy.c_f_list(), Some(expected_c_f_list));
 }
 
@@ -244,9 +254,12 @@ fn test_validate_data_mic_when_not_ok() {
 
 #[test]
 fn test_new_data_payload_is_none_if_bytes_too_short() {
-    let bytes = &[0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04];
-    let bytes_with_fopts =
-        &[0x00, 0x04, 0x03, 0x02, 0x01, 0x01, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04];
+    let bytes = &[
+        0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04,
+    ];
+    let bytes_with_fopts = &[
+        0x00, 0x04, 0x03, 0x02, 0x01, 0x01, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04,
+    ];
 
     assert!(EncryptedDataPayload::new(bytes).is_err());
     assert!(EncryptedDataPayload::new(bytes_with_fopts).is_err());
@@ -254,7 +267,9 @@ fn test_new_data_payload_is_none_if_bytes_too_short() {
 
 #[test]
 fn test_f_port_could_be_absent_in_data_payload() {
-    let bytes = &[0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04];
+    let bytes = &[
+        0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04,
+    ];
     let data_payload = EncryptedDataPayload::new(bytes).unwrap();
     assert!(data_payload.f_port().is_none());
 }
@@ -263,9 +278,12 @@ fn test_f_port_could_be_absent_in_data_payload() {
 fn test_complete_data_payload_fhdr() {
     let app_skey = AES128([1; 16]);
     let nwk_skey = AES128([2; 16]);
-    let phys: std::vec::Vec<Box<dyn DataHeader>> =
-        vec![Box::new(EncryptedDataPayload::new(phy_dataup_payload()).unwrap()),
-            Box::new(DecryptedDataPayload::new(phy_dataup_payload(), &nwk_skey, Some(&app_skey), 1).unwrap())];
+    let phys: std::vec::Vec<Box<dyn DataHeader>> = vec![
+        Box::new(EncryptedDataPayload::new(phy_dataup_payload()).unwrap()),
+        Box::new(
+            DecryptedDataPayload::new(phy_dataup_payload(), &nwk_skey, Some(&app_skey), 1).unwrap(),
+        ),
+    ];
     for phy in phys {
         assert_eq!(phy.f_port(), Some(1));
 
@@ -311,8 +329,10 @@ fn test_complete_datadown_payload_frm_payload() {
 
 #[test]
 fn test_mac_command_in_downlink() {
-    let data = [0x60, 0x5f, 0x3b, 0xd7, 0x4e, 0x0a, 0x00, 0x00, 0x03, 0x00, 0x00,
-    0x00, 0x70, 0x03, 0x00, 0xff, 0x00, 0x30, 0xcd, 0xdb, 0x22, 0xee];
+    let data = [
+        0x60, 0x5f, 0x3b, 0xd7, 0x4e, 0x0a, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x70, 0x03, 0x00,
+        0xff, 0x00, 0x30, 0xcd, 0xdb, 0x22, 0xee,
+    ];
     let packet = EncryptedDataPayload::new(data).unwrap();
 
     assert_eq!(packet.mhdr().mtype(), MType::UnconfirmedDataDown);
@@ -563,28 +583,32 @@ fn test_join_request_creator_with_options() {
 }
 
 #[test]
-fn test_derive_newskey(){
+fn test_derive_newskey() {
     let key = AES128(app_key());
     let join_request = JoinRequestPayload::new(phy_join_request_payload()).unwrap();
     let join_accept = DecryptedJoinAcceptPayload::new(phy_join_accept_payload(), &key).unwrap();
 
     let newskey = join_accept.derive_newskey(&join_request.dev_nonce(), &key);
     //AppNonce([49, 3e, eb]), NwkAddr([51, fb, a2]), DevNonce([2d, 10])
-    let expect = [0x7b, 0xb2, 0x5f, 0x89, 0xe0, 0xd1, 0x37, 0x1e, 0x1f, 0xbf, 0x4d, 0x99, 0x7e,
-        0x14, 0x68, 0xa3];
+    let expect = [
+        0x7b, 0xb2, 0x5f, 0x89, 0xe0, 0xd1, 0x37, 0x1e, 0x1f, 0xbf, 0x4d, 0x99, 0x7e, 0x14, 0x68,
+        0xa3,
+    ];
     assert_eq!(newskey.0, expect);
 }
 
 #[test]
-fn test_derive_appskey(){
+fn test_derive_appskey() {
     let key = AES128(app_key());
     let join_request = JoinRequestPayload::new(phy_join_request_payload()).unwrap();
     let join_accept = DecryptedJoinAcceptPayload::new(phy_join_accept_payload(), &key).unwrap();
 
     let appskey = join_accept.derive_appskey(&join_request.dev_nonce(), &key);
     //AppNonce([49, 3e, eb]), NwkAddr([51, fb, a2]), DevNonce([2d, 10])
-    let expect = [0x14, 0x88, 0x20, 0xdf, 0xb1, 0xe0, 0xc9, 0xd6, 0x28, 0x9c, 0xde, 0x16, 0xc1,
-        0xaf, 0x24, 0x9f];
+    let expect = [
+        0x14, 0x88, 0x20, 0xdf, 0xb1, 0xe0, 0xc9, 0xd6, 0x28, 0x9c, 0xde, 0x16, 0xc1, 0xaf, 0x24,
+        0x9f,
+    ];
 
     assert_eq!(appskey.0, expect);
 }

@@ -83,7 +83,7 @@ macro_rules! impl_mac_cmd_payload {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan::maccommandcreator::LinkCheckReqCreator::new();
+/// let mut creator = lorawan_encoding::maccommandcreator::LinkCheckReqCreator::new();
 /// let res = creator.build();
 /// ```
 pub struct LinkCheckReqCreator {}
@@ -95,7 +95,7 @@ impl_mac_cmd_creator_boilerplate!(LinkCheckReqCreator, 0x02);
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan::maccommandcreator::LinkCheckAnsCreator::new();
+/// let mut creator = lorawan_encoding::maccommandcreator::LinkCheckAnsCreator::new();
 /// let res = creator.set_margin(253).set_gateway_count(254).build();
 /// ```
 pub struct LinkCheckAnsCreator {
@@ -134,7 +134,7 @@ impl LinkCheckAnsCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan::maccommandcreator::LinkADRReqCreator::new();
+/// let mut creator = lorawan_encoding::maccommandcreator::LinkADRReqCreator::new();
 /// let channel_mask_bytes = [0xc7, 0x0b];
 /// let res = creator
 ///     .set_data_rate(0x05)
@@ -188,10 +188,7 @@ impl LinkADRReqCreator {
     ///
     /// * channel_mask - instance of maccommands::ChannelMask or anything that can be converted
     /// into it.
-    pub fn set_channel_mask<T: Into<ChannelMask>>(
-        &mut self,
-        channel_mask: T,
-    ) -> &mut Self {
+    pub fn set_channel_mask<T: Into<ChannelMask>>(&mut self, channel_mask: T) -> &mut Self {
         let converted = channel_mask.into();
         self.data[2] = converted.as_ref()[0];
         self.data[3] = converted.as_ref()[1];
@@ -218,7 +215,7 @@ impl LinkADRReqCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan::maccommandcreator::LinkADRAnsCreator::new();
+/// let mut creator = lorawan_encoding::maccommandcreator::LinkADRAnsCreator::new();
 /// let res = creator
 ///     .set_channel_mask_ack(true)
 ///     .set_data_rate_ack(true)
@@ -274,7 +271,7 @@ impl LinkADRAnsCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan::maccommandcreator::DutyCycleReqCreator::new();
+/// let mut creator = lorawan_encoding::maccommandcreator::DutyCycleReqCreator::new();
 /// let res = creator.set_max_duty_cycle(0x0f).unwrap().build();
 /// ```
 pub struct DutyCycleReqCreator {
@@ -302,7 +299,7 @@ impl DutyCycleReqCreator {
 /// # Examples
 ///
 /// ```
-/// let creator = lorawan::maccommandcreator::DutyCycleAnsCreator::new();
+/// let creator = lorawan_encoding::maccommandcreator::DutyCycleAnsCreator::new();
 /// let res = creator.build();
 /// ```
 pub struct DutyCycleAnsCreator {}
@@ -314,7 +311,7 @@ impl_mac_cmd_creator_boilerplate!(DutyCycleAnsCreator, 0x04);
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan::maccommandcreator::RXParamSetupReqCreator::new();
+/// let mut creator = lorawan_encoding::maccommandcreator::RXParamSetupReqCreator::new();
 /// let res = creator
 ///     .set_dl_settings(0xcd)
 ///     .set_frequency(&[0x12, 0x34, 0x56])
@@ -333,10 +330,7 @@ impl RXParamSetupReqCreator {
     ///
     /// * dl_settings - instance of maccommands::DLSettings or anything that can be converted
     /// into it.
-    pub fn set_dl_settings<T: Into<DLSettings>>(
-        &mut self,
-        dl_settings: T,
-    ) -> &mut Self {
+    pub fn set_dl_settings<T: Into<DLSettings>>(&mut self, dl_settings: T) -> &mut Self {
         let converted = dl_settings.into();
         self.data[1] = converted.raw_value();
 
@@ -349,10 +343,7 @@ impl RXParamSetupReqCreator {
     ///
     /// * frequency - instance of maccommands::Frequency or anything that can be converted
     /// into it.
-    pub fn set_frequency<'a, T: Into<Frequency<'a>>>(
-        &mut self,
-        frequency: T,
-    ) -> &mut Self {
+    pub fn set_frequency<'a, T: Into<Frequency<'a>>>(&mut self, frequency: T) -> &mut Self {
         let converted = frequency.into();
         self.data[2..5].copy_from_slice(converted.as_ref());
 
@@ -365,7 +356,7 @@ impl RXParamSetupReqCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan::maccommandcreator::RXParamSetupAnsCreator::new();
+/// let mut creator = lorawan_encoding::maccommandcreator::RXParamSetupAnsCreator::new();
 /// let res = creator
 ///     .set_channel_ack(true)
 ///     .set_rx2_data_rate_ack(true)
@@ -421,7 +412,7 @@ impl RXParamSetupAnsCreator {
 /// # Examples
 ///
 /// ```
-/// let creator = lorawan::maccommandcreator::DevStatusReqCreator::new();
+/// let creator = lorawan_encoding::maccommandcreator::DevStatusReqCreator::new();
 /// let res = creator.build();
 /// ```
 pub struct DevStatusReqCreator {}
@@ -433,7 +424,7 @@ impl_mac_cmd_creator_boilerplate!(DevStatusReqCreator, 0x06);
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan::maccommandcreator::DevStatusAnsCreator::new();
+/// let mut creator = lorawan_encoding::maccommandcreator::DevStatusAnsCreator::new();
 /// let res = creator.set_battery(0xfe).set_margin(-32).unwrap().build();
 /// ```
 pub struct DevStatusAnsCreator {
@@ -476,7 +467,7 @@ impl DevStatusAnsCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan::maccommandcreator::NewChannelReqCreator::new();
+/// let mut creator = lorawan_encoding::maccommandcreator::NewChannelReqCreator::new();
 /// let res = creator
 ///     .set_channel_index(0x0f)
 ///     .set_frequency(&[0x12, 0x34, 0x56])
@@ -507,10 +498,7 @@ impl NewChannelReqCreator {
     ///
     /// * frequency - instance of maccommands::Frequency or anything that can be converted
     /// into it.
-    pub fn set_frequency<'a, T: Into<Frequency<'a>>>(
-        &mut self,
-        frequency: T,
-    ) -> &mut Self {
+    pub fn set_frequency<'a, T: Into<Frequency<'a>>>(&mut self, frequency: T) -> &mut Self {
         let converted = frequency.into();
         self.data[2..5].copy_from_slice(converted.as_ref());
 
@@ -523,10 +511,7 @@ impl NewChannelReqCreator {
     ///
     /// * data_rate_range - instance of maccommands::DataRateRange or anything that can be converted
     /// into it.
-    pub fn set_data_rate_range<T: Into<DataRateRange>>(
-        &mut self,
-        data_rate_range: T,
-    ) -> &mut Self {
+    pub fn set_data_rate_range<T: Into<DataRateRange>>(&mut self, data_rate_range: T) -> &mut Self {
         self.data[5] = data_rate_range.into().raw_value();
 
         self
@@ -538,7 +523,7 @@ impl NewChannelReqCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan::maccommandcreator::NewChannelAnsCreator::new();
+/// let mut creator = lorawan_encoding::maccommandcreator::NewChannelAnsCreator::new();
 /// let res = creator
 ///     .set_channel_frequency_ack(true)
 ///     .set_data_rate_range_ack(true)
@@ -581,7 +566,7 @@ impl NewChannelAnsCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan::maccommandcreator::RXTimingSetupReqCreator::new();
+/// let mut creator = lorawan_encoding::maccommandcreator::RXTimingSetupReqCreator::new();
 /// let res = creator.set_delay(0x0f).unwrap().build();
 /// ```
 pub struct RXTimingSetupReqCreator {
@@ -612,7 +597,7 @@ impl RXTimingSetupReqCreator {
 /// # Examples
 ///
 /// ```
-/// let creator = lorawan::maccommandcreator::RXTimingSetupAnsCreator::new();
+/// let creator = lorawan_encoding::maccommandcreator::RXTimingSetupAnsCreator::new();
 /// let res = creator.build();
 /// ```
 pub struct RXTimingSetupAnsCreator {}
@@ -620,8 +605,9 @@ pub struct RXTimingSetupAnsCreator {}
 impl_mac_cmd_creator_boilerplate!(RXTimingSetupAnsCreator, 0x08);
 
 pub fn build_mac_commands<'a, 'b, 'c, T: AsMut<[u8]>>(
-        cmds: &'a [&'b dyn SerializableMacCommand],
-        mut out: T) -> Result<usize, &'c str> {
+    cmds: &'a [&'b dyn SerializableMacCommand],
+    mut out: T,
+) -> Result<usize, &'c str> {
     let res = out.as_mut();
     if mac_commands_len(cmds) > res.len() {
         return Err("failed to serialize mac commands in provided buffer: too small");
@@ -630,7 +616,7 @@ pub fn build_mac_commands<'a, 'b, 'c, T: AsMut<[u8]>>(
     for mc in cmds {
         res[i] = mc.cid();
         let l = mc.payload_len();
-        res[i + 1..i+l + 1].copy_from_slice(mc.payload_bytes());
+        res[i + 1..i + l + 1].copy_from_slice(mc.payload_bytes());
         i += l + 1;
     }
     Ok(i)
