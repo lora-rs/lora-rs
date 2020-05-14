@@ -66,7 +66,7 @@ fn main() {
 
 Ran on Intel i7-8550U CPU @ 1.80GHz with 16GB RAM running Ubuntu 18.04.
 
-* Benchmarks brocaar/lorawan (the code for the benchmarks can be found
+* Benchmarks [brocaar/lorawan][4] (the code for the benchmarks can be found
   [here][3], results were obtained by running `go test -bench . -benchtime=5s`,
   `go1.13.1`)
 
@@ -85,34 +85,37 @@ BenchmarkDecrypt-8                  9390            648402 ns/op
 Gnuplot not found, using plotters backend
 
 data_payload_headers_parsing
-      time:   [33.623 ns 33.670 ns 33.717 ns]
-      change: [-0.2772% -0.0100% +0.2129%] (p = 0.93 > 0.05)
-      No change in performance detected.
-Found 7 outliers among 100 measurements (7.00%)
-  5 (5.00%) low mild
-  2 (2.00%) high mild
-
-Approximate memory usage per iteration: 1 from 284778427
-
-data_payload_mic_validation
-      time:   [3.2744 us 3.2773 us 3.2799 us]
-      change: [-0.2880% +0.1842% +0.5481%] (p = 0.44 > 0.05)
-      No change in performance detected.
+      time:   [30.354 ns 30.430 ns 30.497 ns]
+      change: [-5.5657% -5.1359% -4.7052%] (p = 0.00 < 0.05)
+      Performance has improved.
 Found 1 outliers among 100 measurements (1.00%)
   1 (1.00%) high mild
 
-Approximate memory usage per iteration: 191 from 2588825
+Approximate memory usage per iteration: 1 from 303847227
+
+data_payload_mic_validation
+      time:   [2.2334 us 2.2388 us 2.2476 us]
+      change: [-3.7708% -3.3970% -2.8941%] (p = 0.00 < 0.05)
+      Performance has improved.
+Found 20 outliers among 100 measurements (20.00%)
+  2 (2.00%) low severe
+  5 (5.00%) low mild
+  2 (2.00%) high mild
+  11 (11.00%) high severe
+
+Approximate memory usage per iteration: 114 from 4349451
 
 data_payload_decrypt
-      time:   [2.0159 us 2.0197 us 2.0249 us]
-      change: [-4.9391% -4.6532% -4.2587%] (p = 0.00 < 0.05)
-      Performance has improved.
-Found 5 outliers among 100 measurements (5.00%)
-  1 (1.00%) low mild
-  1 (1.00%) high mild
-  3 (3.00%) high severe
+      time:   [1.1179 us 1.1186 us 1.1193 us]
+      change: [-0.8167% -0.4650% -0.1514%] (p = 0.00 < 0.05)
+      Change within noise threshold.
+Found 8 outliers among 100 measurements (8.00%)
+  2 (2.00%) low severe
+  2 (2.00%) low mild
+  3 (3.00%) high mild
+  1 (1.00%) high severe
 
-Approximate memory usage per iteration: 108 from 4576701
+Approximate memory usage per iteration: 57 from 8668603
 ```
 
 ## Contributing
@@ -127,6 +130,7 @@ inspiration and useful examples.
 [1]: https://github.com/brocaar/lorawan
 [2]: https://github.com/brocaar
 [3]: https://gist.github.com/ivajloip/d63981e4caddaa68bd0b9c2390f4af90
+[4]: https://github.com/brocaar/lorawan/commit/6095d473cf605ce4da4584ae2b570bca8e1259ff
 [Latest Version]: https://img.shields.io/crates/v/lorawan.svg
 [crates.io]: https://crates.io/crates/lorawan
 [Docs]: https://docs.rs/lorawan/badge.svg
