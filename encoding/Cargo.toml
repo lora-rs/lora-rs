@@ -1,5 +1,5 @@
 [package]
-name = "lorawan"
+name = "lorawan-encoding"
 version = "0.6.0-rc0"
 edition = "2018"
 authors = ["Ivaylo Petrov <ivajloip@gmail.com>"]

@@ -1,6 +1,6 @@
 #![cfg_attr(not(test), no_std)]
 
-use lorawan::{
+use lorawan_encoding::{
     self,
     creator::{JoinRequestCreator, DataPayloadCreator},
     keys::AES128,
@@ -22,7 +22,7 @@ use radio::*;
 mod us915;
 use us915::Configuration as RegionalConfiguration;
 
-type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
+type DevNonce = lorawan_encoding::parser::DevNonce<[u8; 2]>;
 
 type FPort = u8;
 type Confirmed = bool;
