@@ -6,17 +6,20 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use aes::{Aes128, block_cipher_trait::BlockCipher};
-use generic_array::{GenericArray, typenum::U16};
+use aes::{block_cipher_trait::BlockCipher, Aes128};
+use generic_array::{typenum::U16, GenericArray};
 
+use super::creator::JoinRequestCreator;
 use super::keys::*;
-use super::creator::{JoinRequestCreator};
-use super::parser::{EncryptedJoinAcceptPayload, JoinRequestPayload, DecryptedJoinAcceptPayload, EncryptedDataPayload, DecryptedDataPayload};
+use super::parser::{
+    DecryptedDataPayload, DecryptedJoinAcceptPayload, EncryptedDataPayload,
+    EncryptedJoinAcceptPayload, JoinRequestPayload,
+};
 
 pub type Cmac = cmac::Cmac<Aes128>;
 
 /// Provides a default implementation for build object for using the crypto functions.
-#[derive(Default,Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq)]
 pub struct DefaultFactory;
 
 impl CryptoFactory for DefaultFactory {
@@ -71,8 +74,8 @@ impl JoinRequestCreator<[u8; 23], DefaultFactory> {
     /// # Examples
     ///
     /// ```
-    /// let mut phy = lorawan::creator::JoinRequestCreator::new();
-    /// let key = lorawan::keys::AES128([7; 16]);
+    /// let mut phy = lorawan_encoding::creator::JoinRequestCreator::new();
+    /// let key = lorawan_encoding::keys::AES128([7; 16]);
     /// phy.set_app_eui(&[1; 8]);
     /// phy.set_dev_eui(&[2; 8]);
     /// phy.set_dev_nonce(&[3; 2]);
@@ -95,7 +98,7 @@ impl<T: AsRef<[u8]>> JoinRequestPayload<T, DefaultFactory> {
     /// ```
     /// let data = vec![0x00, 0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01, 0x05, 0x04, 0x03,
     ///     0x02, 0x05, 0x04, 0x03, 0x02, 0x2d, 0x10, 0x6a, 0x99, 0x0e, 0x12];
-    /// let phy = lorawan::parser::JoinRequestPayload::new(data);
+    /// let phy = lorawan_encoding::parser::JoinRequestPayload::new(data);
     /// ```
     pub fn new<'a>(data: T) -> Result<Self, &'a str> {
         Self::new_with_factory(data, DefaultFactory)
@@ -114,7 +117,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedJoinAcceptPayload<T, DefaultFactory>
     /// ```
     /// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb,
     ///     0x37, 0x42, 0x97, 0x51, 0x42];
-    /// let phy = lorawan::parser::EncryptedJoinAcceptPayload::new(data);
+    /// let phy = lorawan_encoding::parser::EncryptedJoinAcceptPayload::new(data);
     /// ```
     pub fn new<'a>(data: T) -> Result<Self, &'a str> {
         Self::new_with_factory(data, DefaultFactory)
@@ -137,9 +140,9 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedJoinAcceptPayload<T, DefaultFactory>
     /// let mut data = vec![0x20u8, 0x49u8, 0x3eu8, 0xebu8, 0x51u8, 0xfbu8,
     ///     0xa2u8, 0x11u8, 0x6fu8, 0x81u8, 0x0eu8, 0xdbu8, 0x37u8, 0x42u8,
     ///     0x97u8, 0x51u8, 0x42u8];
-    /// let key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
+    /// let key = lorawan_encoding::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
     ///     0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
-    /// let phy = lorawan::parser::DecryptedJoinAcceptPayload::new(&mut data[..], &key);
+    /// let phy = lorawan_encoding::parser::DecryptedJoinAcceptPayload::new(&mut data[..], &key);
     /// ```
     pub fn new<'a, 'b>(data: T, key: &'a AES128) -> Result<Self, &'b str> {
         Self::new_with_factory(data, key, DefaultFactory)
@@ -158,7 +161,7 @@ impl<T: AsRef<[u8]>> EncryptedDataPayload<T, DefaultFactory> {
     /// ```
     /// let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
     ///     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
-    /// let phy = lorawan::parser::EncryptedDataPayload::new(data);
+    /// let phy = lorawan_encoding::parser::EncryptedDataPayload::new(data);
     /// ```
     pub fn new<'a>(data: T) -> Result<Self, &'a str> {
         Self::new_with_factory(data, DefaultFactory)
@@ -183,17 +186,19 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedDataPayload<T> {
     /// ```
     /// let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
     ///     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
-    /// let nwk_skey = lorawan::keys::AES128([2; 16]);
-    /// let app_skey = lorawan::keys::AES128([1; 16]);
-    /// let dec_phy = lorawan::parser::DecryptedDataPayload::new(data,
+    /// let nwk_skey = lorawan_encoding::keys::AES128([2; 16]);
+    /// let app_skey = lorawan_encoding::keys::AES128([1; 16]);
+    /// let dec_phy = lorawan_encoding::parser::DecryptedDataPayload::new(data,
     ///     &nwk_skey,
     ///     Some(&app_skey),
     ///     1).unwrap();
     /// ```
-    pub fn new<'a, 'b>(data: T,
-                   nwk_skey: &'a AES128,
-                   app_skey: Option<&'a AES128>,
-                   fcnt: u32) -> Result<Self, &'b str> {
+    pub fn new<'a, 'b>(
+        data: T,
+        nwk_skey: &'a AES128,
+        app_skey: Option<&'a AES128>,
+        fcnt: u32,
+    ) -> Result<Self, &'b str> {
         let t = EncryptedDataPayload::new(data)?;
         if !t.validate_mic(nwk_skey, fcnt) {
             return Err("invalid mic");

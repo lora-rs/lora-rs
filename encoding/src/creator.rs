@@ -26,7 +26,7 @@ use super::default_crypto::DefaultFactory;
 use super::keys::Decrypter;
 
 #[cfg(any(feature = "with-downlink", feature = "default-crypto"))]
-use generic_array::{GenericArray};
+use generic_array::GenericArray;
 
 #[cfg(feature = "default-crypto")]
 use generic_array::typenum::U256;
@@ -67,7 +67,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * app_nonce - instance of lorawan::parser::AppNonce or anything that can
+    /// * app_nonce - instance of lorawan_encoding::parser::AppNonce or anything that can
     ///   be converted into it.
     pub fn set_app_nonce<H: AsRef<[u8]>, T: Into<parser::AppNonce<H>>>(
         &mut self,
@@ -83,9 +83,12 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * net_id - instance of lorawan::parser::NwkAddr or anything that can
+    /// * net_id - instance of lorawan_encoding::parser::NwkAddr or anything that can
     ///   be converted into it.
-    pub fn set_net_id<H: AsRef<[u8]>, T: Into<parser::NwkAddr<H>>>(&mut self, net_id: T) -> &mut Self {
+    pub fn set_net_id<H: AsRef<[u8]>, T: Into<parser::NwkAddr<H>>>(
+        &mut self,
+        net_id: T,
+    ) -> &mut Self {
         let converted = net_id.into();
         self.data.as_mut()[4..7].copy_from_slice(converted.as_ref());
 
@@ -96,7 +99,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can
+    /// * dev_addr - instance of lorawan_encoding::parser::DevAddr or anything that can
     ///   be converted into it.
     pub fn set_dev_addr<H: AsRef<[u8]>, T: Into<parser::DevAddr<H>>>(
         &mut self,
@@ -112,12 +115,9 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * dl_settings - instance of lorawan::maccommands::DLSettings or anything
+    /// * dl_settings - instance of lorawan_encoding::maccommands::DLSettings or anything
     ///   that can be converted into it.
-    pub fn set_dl_settings<T: Into<DLSettings>>(
-        &mut self,
-        dl_settings: T,
-    ) -> &mut Self {
+    pub fn set_dl_settings<T: Into<DLSettings>>(&mut self, dl_settings: T) -> &mut Self {
         let converted = dl_settings.into();
         self.data.as_mut()[11] = converted.raw_value();
 
@@ -196,17 +196,17 @@ impl JoinAcceptCreator<[u8; 33], DefaultFactory> {
     /// # Examples
     ///
     /// ```
-    /// let mut phy = lorawan::creator::JoinAcceptCreator::new();
-    /// let key = lorawan::keys::AES128([1; 16]);
+    /// let mut phy = lorawan_encoding::creator::JoinAcceptCreator::new();
+    /// let key = lorawan_encoding::keys::AES128([1; 16]);
     /// let app_nonce_bytes = [1; 3];
     /// phy.set_app_nonce(&app_nonce_bytes);
     /// phy.set_net_id(&[1; 3]);
     /// phy.set_dev_addr(&[1; 4]);
     /// phy.set_dl_settings(2);
     /// phy.set_rx_delay(1);
-    /// let mut freqs: Vec<lorawan::maccommands::Frequency> = Vec::new();
-    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap()).unwrap();
-    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()).unwrap();
+    /// let mut freqs: Vec<lorawan_encoding::maccommands::Frequency> = Vec::new();
+    /// freqs.push(lorawan_encoding::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap()).unwrap();
+    /// freqs.push(lorawan_encoding::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()).unwrap();
     /// phy.set_c_f_list(freqs);
     /// let payload = phy.build(&key).unwrap();
     /// ```
@@ -252,7 +252,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * app_eui - instance of lorawan::parser::EUI64 or anything that can
+    /// * app_eui - instance of lorawan_encoding::parser::EUI64 or anything that can
     ///   be converted into it.
     pub fn set_app_eui<H: AsRef<[u8]>, T: Into<parser::EUI64<H>>>(
         &mut self,
@@ -268,7 +268,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * dev_eui - instance of lorawan::parser::EUI64 or anything that can
+    /// * dev_eui - instance of lorawan_encoding::parser::EUI64 or anything that can
     ///   be converted into it.
     pub fn set_dev_eui<H: AsRef<[u8]>, T: Into<parser::EUI64<H>>>(
         &mut self,
@@ -284,7 +284,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * dev_nonce - instance of lorawan::parser::DevNonce or anything that can
+    /// * dev_nonce - instance of lorawan_encoding::parser::DevNonce or anything that can
     ///   be converted into it.
     pub fn set_dev_nonce<H: AsRef<[u8]>, T: Into<parser::DevNonce<H>>>(
         &mut self,
@@ -315,14 +315,14 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
 /// # Example
 ///
 /// ```
-/// let mut phy = lorawan::creator::DataPayloadCreator::new();
-/// let nwk_skey = lorawan::keys::AES128([2; 16]);
-/// let app_skey = lorawan::keys::AES128([1; 16]);
+/// let mut phy = lorawan_encoding::creator::DataPayloadCreator::new();
+/// let nwk_skey = lorawan_encoding::keys::AES128([2; 16]);
+/// let app_skey = lorawan_encoding::keys::AES128([1; 16]);
 /// phy.set_confirmed(true)
 ///     .set_uplink(true)
 ///     .set_f_port(42)
 ///     .set_dev_addr(&[4, 3, 2, 1])
-///     .set_fctrl(&lorawan::parser::FCtrl::new(0x80, true)) // ADR: true, all others: false
+///     .set_fctrl(&lorawan_encoding::parser::FCtrl::new(0x80, true)) // ADR: true, all others: false
 ///     .set_fcnt(76543);
 /// phy.build(b"hello lora", &[], &nwk_skey, &app_skey).unwrap();
 /// ```
@@ -334,7 +334,7 @@ pub struct DataPayloadCreator<D, F> {
     factory: F,
 }
 
-impl <D: AsMut<[u8]>, F: CryptoFactory + Default>DataPayloadCreator<D, F> {
+impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     /// Creates a well initialized DataPayloadCreator with specific crypto functions.
     ///
     /// By default the packet is unconfirmed data up packet.
@@ -388,7 +388,7 @@ impl <D: AsMut<[u8]>, F: CryptoFactory + Default>DataPayloadCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can
+    /// * dev_addr - instance of lorawan_encoding::parser::DevAddr or anything that can
     ///   be converted into it.
     pub fn set_dev_addr<H: AsRef<[u8]>, T: Into<parser::DevAddr<H>>>(
         &mut self,
@@ -459,19 +459,19 @@ impl <D: AsMut<[u8]>, F: CryptoFactory + Default>DataPayloadCreator<D, F> {
     /// # Example
     ///
     /// ```
-    /// let mut phy = lorawan::creator::DataPayloadCreator::new();
-    /// let mac_cmd1 = lorawan::maccommands::MacCommand::LinkCheckReq(
-    ///     lorawan::maccommands::LinkCheckReqPayload());
-    /// let mut mac_cmd2 = lorawan::maccommandcreator::LinkADRAnsCreator::new();
+    /// let mut phy = lorawan_encoding::creator::DataPayloadCreator::new();
+    /// let mac_cmd1 = lorawan_encoding::maccommands::MacCommand::LinkCheckReq(
+    ///     lorawan_encoding::maccommands::LinkCheckReqPayload());
+    /// let mut mac_cmd2 = lorawan_encoding::maccommandcreator::LinkADRAnsCreator::new();
     /// mac_cmd2
     ///     .set_channel_mask_ack(true)
     ///     .set_data_rate_ack(false)
     ///     .set_tx_power_ack(true);
-    /// let mut cmds: Vec<&dyn lorawan::maccommands::SerializableMacCommand> = Vec::new();
+    /// let mut cmds: Vec<&dyn lorawan_encoding::maccommands::SerializableMacCommand> = Vec::new();
     /// cmds.push(&mac_cmd1);
     /// cmds.push(&mac_cmd2);
-    /// let nwk_skey = lorawan::keys::AES128([2; 16]);
-    /// let app_skey = lorawan::keys::AES128([1; 16]);
+    /// let nwk_skey = lorawan_encoding::keys::AES128([2; 16]);
+    /// let app_skey = lorawan_encoding::keys::AES128([1; 16]);
     /// phy.build(&[], &cmds[..], &nwk_skey, &app_skey).unwrap();
     /// ```
     pub fn build<'a, 'b, 'c, 'd, 'e>(
@@ -503,8 +503,11 @@ impl <D: AsMut<[u8]>, F: CryptoFactory + Default>DataPayloadCreator<D, F> {
         // Set FOptsLen if present
         if !has_fport_zero && mac_cmds_len > 0 {
             d[5] |= mac_cmds_len as u8 & 0x0f;
-            maccommandcreator::build_mac_commands(cmds,
-                    &mut d[last_filled..last_filled + mac_cmds_len]).unwrap();
+            maccommandcreator::build_mac_commands(
+                cmds,
+                &mut d[last_filled..last_filled + mac_cmds_len],
+            )
+            .unwrap();
             last_filled += mac_cmds_len;
         }
         if has_fport {
@@ -516,8 +519,11 @@ impl <D: AsMut<[u8]>, F: CryptoFactory + Default>DataPayloadCreator<D, F> {
         if mac_cmds_len > 0 && has_fport_zero {
             enc_key = nwk_skey;
             payload_len = mac_cmds_len;
-            maccommandcreator::build_mac_commands(cmds,
-                    &mut d[last_filled..last_filled + payload_len]).unwrap();
+            maccommandcreator::build_mac_commands(
+                cmds,
+                &mut d[last_filled..last_filled + payload_len],
+            )
+            .unwrap();
         } else {
             d[last_filled..last_filled + payload_len].copy_from_slice(payload);
         };
@@ -529,12 +535,14 @@ impl <D: AsMut<[u8]>, F: CryptoFactory + Default>DataPayloadCreator<D, F> {
             last_filled + payload_len,
             self.fcnt,
             &self.factory.new_enc(&enc_key),
-            );
+        );
 
         // MIC set
-        let mic = securityhelpers::calculate_data_mic(&d[..last_filled + payload_len],
-                                                      self.factory.new_mac(nwk_skey),
-                                                      self.fcnt);
+        let mic = securityhelpers::calculate_data_mic(
+            &d[..last_filled + payload_len],
+            self.factory.new_mac(nwk_skey),
+            self.fcnt,
+        );
         d[last_filled + payload_len..last_filled + payload_len + 4].copy_from_slice(&mic.0[..]);
 
         Ok(&d[..last_filled + payload_len + 4])
@@ -550,10 +558,10 @@ impl DataPayloadCreator<GenericArray<u8, U256>, DefaultFactory> {
     /// # Examples
     ///
     /// ```
-    /// let mut phy = lorawan::creator::DataPayloadCreator::new();
-    /// let nwk_skey = lorawan::keys::AES128([2; 16]);
-    /// let app_skey = lorawan::keys::AES128([1; 16]);
-    /// let fctrl = lorawan::parser::FCtrl::new(0x80, true);
+    /// let mut phy = lorawan_encoding::creator::DataPayloadCreator::new();
+    /// let nwk_skey = lorawan_encoding::keys::AES128([2; 16]);
+    /// let app_skey = lorawan_encoding::keys::AES128([1; 16]);
+    /// let fctrl = lorawan_encoding::parser::FCtrl::new(0x80, true);
     /// phy.set_confirmed(false).
     ///     set_uplink(true).
     ///     set_f_port(1).
