@@ -19,4 +19,4 @@ script:
   - (cd device && cargo clippy -- -D warnings)
   - cargo build --verbose --all
   - cargo test --verbose --workspace --exclude lorawan-device
-  - cargo build --example stm32l0x2
+  - (cd device && cargo build --example stm32l0x2)
