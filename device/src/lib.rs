@@ -65,6 +65,7 @@ struct Session {
     fcnt: u32,
 }
 
+#[derive(Debug)]
 pub enum Response {
     TimerRequest(usize),
     Error,
