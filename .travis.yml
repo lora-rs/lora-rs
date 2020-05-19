@@ -16,7 +16,7 @@ before_script:
 
 script:
   - (cd encoding && cargo clippy --all-targets --all-features -- -D warnings)
-  - (cd device && cargo clippy --all-features -- -D warnings)
+  - (cd device && cargo clippy -- -D warnings)
   - cargo build --verbose --all
-  - cargo test --verbose --all
+  - (cd encoding && cargo test --verbose --all)
   - cargo build --example stm32l0x2
