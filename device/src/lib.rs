@@ -2,7 +2,7 @@
 
 use lorawan_encoding::{
     self,
-    creator::{JoinRequestCreator, DataPayloadCreator},
+    creator::{DataPayloadCreator, JoinRequestCreator},
     keys::AES128,
     parser::DevAddr,
     parser::{parse as lorawan_parse, JoinAcceptPayload, PhyPayload, EUI64},
@@ -10,10 +10,7 @@ use lorawan_encoding::{
 
 use core::marker::PhantomData;
 use generic_array;
-use generic_array::GenericArray;
 use heapless::Vec;
-
-use heapless::consts::*;
 
 pub mod radio;
 pub use radio::Radio;
@@ -23,8 +20,6 @@ mod us915;
 use us915::Configuration as RegionalConfiguration;
 
 type DevNonce = lorawan_encoding::parser::DevNonce<[u8; 2]>;
-
-type FPort = u8;
 type Confirmed = bool;
 
 #[derive(Copy, Clone, Debug)]
@@ -109,7 +104,14 @@ impl<R: Radio, E> Device<R, E> {
         }
     }
 
-    pub fn send(&mut self, radio: &mut dyn Radio<Event = E>, data: &[u8], fport: u8, confirmed: bool, debug: &mut DebugUart){
+    pub fn send(
+        &mut self,
+        radio: &mut dyn Radio<Event = E>,
+        data: &[u8],
+        fport: u8,
+        confirmed: bool,
+        debug: &mut DebugUart,
+    ) {
         if let Data::Session(session) = &mut self.sm_data {
             let mut phy = DataPayloadCreator::new();
             phy.set_confirmed(confirmed)
@@ -121,22 +123,16 @@ impl<R: Radio, E> Device<R, E> {
             match phy.build(&data, &[], &session.newskey, &session.appskey) {
                 Ok(packet) => {
                     session.fcnt += 1;
-                    write!(debug, "Built and Sending\r\n").unwrap();
-                    radio.clear_buffer();
                     let buffer = radio.get_mut_buffer();
-                    write!(debug, "should be {}\r\n", buffer.len()).unwrap();
-
                     buffer.extend(packet);
-                    write!(debug, "now is {}\r\n", buffer.len()).unwrap();
 
                     (self.sm_handler)(self, radio, Event::SendData(confirmed), debug);
-                },
+                }
                 Err(output) => {
                     write!(debug, "{}\r\n", output).unwrap();
                 }
             }
         }
-
     }
 
     // TODO: no copies
@@ -189,8 +185,6 @@ impl<R: Radio, E> Device<R, E> {
         radio.set_rx();
     }
 
-    fn parse_join_accept(&mut self, buffer: &mut Vec<u8, U256>, devnonce: &DevNonce) {}
-
     pub fn handle_radio_event(
         &mut self,
         radio: &mut dyn Radio<Event = E>,
@@ -225,8 +219,8 @@ impl<R: Radio, E> Device<R, E> {
     // BELOW HERE ARE PRIVATE STATE MACHINE HANDLERS
     fn error(
         &mut self,
-        radio: &mut dyn Radio<Event = E>,
-        event: Event,
+        _radio: &mut dyn Radio<Event = E>,
+        _event: Event,
         debug: &mut DebugUart,
     ) -> Option<Response> {
         write!(debug, "Error?\r\n").unwrap();
@@ -299,7 +293,7 @@ impl<R: Radio, E> Device<R, E> {
         debug: &mut DebugUart,
     ) -> Option<Response> {
         match event {
-            Event::RxComplete(quality) => {
+            Event::RxComplete(_quality) => {
                 write!(debug, "RxComplete\r\n").unwrap();
                 if let Data::NoSession(_, devnonce) = self.sm_data {
                     let packet = lorawan_parse(radio.get_received_packet()).unwrap();
@@ -313,8 +307,6 @@ impl<R: Radio, E> Device<R, E> {
                                 write!(debug, "Decrypting complete\r\n").unwrap();
 
                                 if decrypt.validate_mic(&self.credentials.appkey) {
-                                    let devaddr_ref = decrypt.dev_addr().as_ref();
-
                                     let session = Session {
                                         newskey: decrypt
                                             .derive_newskey(&devnonce, &self.credentials.appkey),
@@ -325,7 +317,8 @@ impl<R: Radio, E> Device<R, E> {
                                             decrypt.dev_addr().as_ref()[1],
                                             decrypt.dev_addr().as_ref()[2],
                                             decrypt.dev_addr().as_ref()[3],
-                                        ]).unwrap(),
+                                        ])
+                                        .unwrap(),
                                         fcnt: 0,
                                     };
                                     write!(debug, "Session {:?}\r\n", session).unwrap();
@@ -339,9 +332,8 @@ impl<R: Radio, E> Device<R, E> {
 
                                 panic!("Cannot possibly be decrypted already")
                             }
-                            
                         }
-                         // it's just some other parseable packet, ignore
+                        // it's just some other parseable packet, ignore
                         _ => (),
                     }
                     None
@@ -360,7 +352,6 @@ impl<R: Radio, E> Device<R, E> {
         event: Event,
         debug: &mut DebugUart,
     ) -> Option<Response> {
-        
         if let Data::Session(_) = self.sm_data {
             match event {
                 Event::SendData(_) => {
@@ -380,10 +371,9 @@ impl<R: Radio, E> Device<R, E> {
 
                     None
                 }
-                _ =>  self.error(radio, event, debug),
+                _ => self.error(radio, event, debug),
             }
-        }
-        else {
+        } else {
             write!(debug, "Bad Data State\r\n").unwrap();
             self.error(radio, event, debug)
         }
@@ -395,7 +385,7 @@ impl<R: Radio, E> Device<R, E> {
         event: Event,
         debug: &mut DebugUart,
     ) -> Option<Response> {
-         match event {
+        match event {
             Event::TxComplete => {
                 self.sm_handler = Device::joined_idle;
                 None

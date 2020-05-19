@@ -45,7 +45,6 @@ pub trait Radio {
     fn set_frequency(&mut self, frequency_mhz: u32);
     fn get_mut_buffer(&mut self) -> &mut Vec<u8, U256>;
     fn get_received_packet(&mut self) -> &mut Vec<u8, U256>;
-    fn clear_buffer(&mut self);
     fn configure_tx(
         &mut self,
         power: i8,
@@ -70,11 +69,6 @@ impl Radio for sx12xx::Sx12xx {
         self.send(buffer)
     }
 
-    fn clear_buffer(&mut self) {
-        self.clear_buffer()
-    }
-
-
     fn send_buffer(&mut self) {
         self.send_buffer()
     }
@@ -84,6 +78,7 @@ impl Radio for sx12xx::Sx12xx {
     }
 
     fn get_mut_buffer(&mut self) -> &mut Vec<u8, U256> {
+        self.clear_buffer();
         self.get_mut_buffer()
     }
 

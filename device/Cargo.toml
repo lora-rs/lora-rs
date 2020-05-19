@@ -13,13 +13,8 @@ readme = "README.md"
 description = "A Rust LoRaWAN implementation"
 
 [dependencies]
-sx12xx = { git = "https://github.com/lthiery/sx12xx-rs.git", rev = "51e3a819"}
-#lorawan = { git = "https://github.com/lthiery/rust-lorawan.git", rev = "1f430b52", default-features = false, features = ["default-crypto"] }
-#lorawan = { path = "../rust-lorawan", default-features = false, features = ["default-crypto"] }
-#lorawan = { git = "https://github.com/ivajloip/rust-lorawan.git", branch = "fix-tests", default-features = false, features = ["default-crypto"] }
-
+sx12xx = { git = "https://github.com/lthiery/sx12xx-rs.git", rev = "d26bdb91004976d8703bd29fb74688acac2c96ac"}
 lorawan-encoding = { path = "../encoding", default-features = false, features = ["default-crypto"] }
-
 heapless = "0.5.4"
 generic-array = "0.13.2"
 
