@@ -1,3 +1,5 @@
+dist: bionic
+
 language: rust
 rust:
   - stable
@@ -5,6 +7,11 @@ rust:
 cache: cargo
 
 before_script:
+  - echo "deb http://cz.archive.ubuntu.com/ubuntu disco main universe" | sudo tee -a /etc/apt/sources.list
+  - sudo apt-get update
+  - sudo apt-get install cmake doxygen xdot
+  - sudo apt-get install g++-multilib libc6-dev-i386 gcc-arm-none-eabi libnewlib-arm-none-eabi
+  - rustup target add thumbv6m-none-eabi
   - rustup component add clippy
 
 script:
