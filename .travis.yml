@@ -8,6 +8,8 @@ before_script:
   - rustup component add clippy
 
 script:
-  - cargo clippy --all-targets --all-features -- -D warnings
+  - (cd encoding && cargo clippy --all-targets --all-features -- -D warnings)
+  - (cd device && cargo clippy --all-features -- -D warnings)
   - cargo build --verbose --all
   - cargo test --verbose --all
+  - cargo build --example stm32l0x2

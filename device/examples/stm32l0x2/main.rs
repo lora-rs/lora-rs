@@ -137,7 +137,7 @@ const APP: () = {
         // Return the initialised resources.
         init::LateResources {
             int: exti,
-            radio_irq: radio_irq,
+            radio_irq,
             debug_uart: tx,
             uart_rx: rx,
             sx12xx,

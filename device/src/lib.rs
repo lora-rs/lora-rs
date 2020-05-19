@@ -38,13 +38,15 @@ enum Data {
     Session(Session),
 }
 
+type SmHandler<R,E> = fn(&mut Device<R, E>, &mut dyn Radio<Event = E>, Event) -> Option<Response>;
+
 pub struct Device<R: Radio, E> {
     _radio: PhantomData<R>,
     // TODO: do something nicer
     get_random: fn() -> u32,
     credentials: Credentials,
     region: RegionalConfiguration,
-    sm_handler: fn(&mut Device<R, E>, &mut dyn Radio<Event = E>, Event) -> Option<Response>,
+    sm_handler: SmHandler<R,E>,
     sm_data: Data,
 }
 
@@ -83,8 +85,8 @@ impl<R: Radio, E> Device<R, E> {
 
         Device {
             credentials: Credentials {
-                deveui: deveui,
-                appeui: appeui,
+                deveui,
+                appeui,
                 appkey: appkey.into(),
             },
             region,
@@ -255,35 +257,34 @@ impl<R: Radio, E> Device<R, E> {
             Event::RxComplete(_quality) => {
                 if let Data::NoSession(_, devnonce) = self.sm_data {
                     let packet = lorawan_parse(radio.get_received_packet()).unwrap();
-                    match packet {
-                        PhyPayload::JoinAccept(join_accept) => {
-                            if let JoinAcceptPayload::Encrypted(encrypted) = join_accept {
-                                let decrypt = encrypted.decrypt(&self.credentials.appkey);
-                                if decrypt.validate_mic(&self.credentials.appkey) {
-                                    let session = Session {
-                                        newskey: decrypt
-                                            .derive_newskey(&devnonce, &self.credentials.appkey),
-                                        appskey: decrypt
-                                            .derive_appskey(&devnonce, &self.credentials.appkey),
-                                        devaddr: DevAddr::new([
-                                            decrypt.dev_addr().as_ref()[0],
-                                            decrypt.dev_addr().as_ref()[1],
-                                            decrypt.dev_addr().as_ref()[2],
-                                            decrypt.dev_addr().as_ref()[3],
-                                        ])
-                                        .unwrap(),
-                                        fcnt: 0,
-                                    };
-                                    self.sm_handler = Device::joined_idle;
-                                    self.sm_data = Data::Session(session);
-                                } else {
-                                }
+
+                    if let PhyPayload::JoinAccept(join_accept) = packet {
+                        if let JoinAcceptPayload::Encrypted(encrypted) = join_accept {
+                            let decrypt = encrypted.decrypt(&self.credentials.appkey);
+                            if decrypt.validate_mic(&self.credentials.appkey) {
+                                let session = Session {
+                                    newskey: decrypt
+                                        .derive_newskey(&devnonce, &self.credentials.appkey),
+                                    appskey: decrypt
+                                        .derive_appskey(&devnonce, &self.credentials.appkey),
+                                    devaddr: DevAddr::new([
+                                        decrypt.dev_addr().as_ref()[0],
+                                        decrypt.dev_addr().as_ref()[1],
+                                        decrypt.dev_addr().as_ref()[2],
+                                        decrypt.dev_addr().as_ref()[3],
+                                    ])
+                                    .unwrap(),
+                                    fcnt: 0,
+                                };
+                                self.sm_handler = Device::joined_idle;
+                                self.sm_data = Data::Session(session);
                             } else {
-                                panic!("Cannot possibly be decrypted already")
                             }
+                        } else {
+                            panic!("Cannot possibly be decrypted already")
                         }
-                        // it's just some other parseable packet, ignore
-                        _ => (),
+                    } else {
+                        // just some other packet, ignore
                     }
                     None
                 } else {
