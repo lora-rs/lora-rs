@@ -17,7 +17,6 @@ macro_rules! fixed_len_struct_impl_to_string {
         $(#[$outer:meta])*
         $type:ident[$size:expr];
     ) => {
-
         impl<T: AsRef<[u8]>> std::string::ToString for $type<T> {
             fn to_string(&self) -> std::string::String {
                 let mut res = std::vec::Vec::new();
@@ -31,7 +30,6 @@ macro_rules! fixed_len_struct_impl_to_string {
                 unsafe { std::string::String::from_utf8_unchecked(res) }
             }
         }
-
     };
 }
 
