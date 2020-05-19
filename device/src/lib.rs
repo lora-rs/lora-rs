@@ -9,7 +9,6 @@ use lorawan_encoding::{
 };
 
 use core::marker::PhantomData;
-use generic_array;
 use heapless::Vec;
 
 pub mod radio;

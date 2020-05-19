@@ -1,6 +1,5 @@
 use heapless::consts::*;
 use heapless::Vec;
-use sx12xx;
 
 pub enum Bandwidth {
     _125KHZ,
@@ -152,16 +151,6 @@ impl Into<sx12xx::LoRaCodingRate> for CodingRate {
         }
     }
 }
-
-// impl Into<sx12xx::State> for State {
-//     fn from(self: State) -> sx12xx::State {
-//         match self {
-//             State::Busy =>  sx12xx::State::Sx12xxState_Busy,
-//             State::TxDone => sx12xx::State::Sx12xxState_TxDone,
-//             State::RxDone => sx12xx::State::Sx12xxState_RxDone,
-//         }
-//     }
-// }
 
 impl From<sx12xx::State> for State {
     fn from(state: sx12xx::State) -> State {
