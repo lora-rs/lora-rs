@@ -18,5 +18,5 @@ script:
   - (cd encoding && cargo clippy --all-targets --all-features -- -D warnings)
   - (cd device && cargo clippy -- -D warnings)
   - cargo build --verbose --all
-  - (cd encoding && cargo test --verbose --all)
+  - cargo test --verbose --workspace --exclude lorawan-device
   - cargo build --example stm32l0x2
