@@ -1,4 +1,4 @@
-dist: disco
+dist: bionic
 
 language: rust
 rust:
@@ -7,6 +7,7 @@ rust:
 cache: cargo
 
 before_script:
+  - echo "deb http://cz.archive.ubuntu.com/ubuntu eoan main universe" | sudo tee -a /etc/apt/sources.list
   - sudo apt-get update
   - sudo apt-get install cmake doxygen xdot
   - sudo apt-get install g++-multilib libc6-dev-i386 gcc-arm-none-eabi libnewlib-arm-none-eabi
