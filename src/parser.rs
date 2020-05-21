@@ -28,8 +28,8 @@
 //! }
 //! ```
 
-use super::keys::{AES128, CryptoFactory, Encrypter, MIC};
-use super::maccommands::{DLSettings, Frequency, MacCommandIterator, parse_mac_commands};
+use super::keys::{CryptoFactory, Encrypter, AES128, MIC};
+use super::maccommands::{parse_mac_commands, DLSettings, Frequency, MacCommandIterator};
 use super::securityhelpers;
 
 #[cfg(feature = "default-crypto")]
@@ -112,7 +112,7 @@ macro_rules! fixed_len_struct {
 pub enum PhyPayload<T, F> {
     JoinRequest(JoinRequestPayload<T, F>),
     JoinAccept(JoinAcceptPayload<T, F>),
-    Data(DataPayload<T, F>)
+    Data(DataPayload<T, F>),
 }
 
 impl<T: AsRef<[u8]>, F> AsRef<[u8]> for PhyPayload<T, F> {
@@ -132,7 +132,7 @@ impl<T: AsRef<[u8]>, F> AsRef<[u8]> for PhyPayload<T, F> {
 #[derive(Debug, PartialEq)]
 pub enum JoinAcceptPayload<T, F> {
     Encrypted(EncryptedJoinAcceptPayload<T, F>),
-    Decrypted(DecryptedJoinAcceptPayload<T, F>)
+    Decrypted(DecryptedJoinAcceptPayload<T, F>),
 }
 
 impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for JoinAcceptPayload<T, F> {
@@ -152,14 +152,14 @@ impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for JoinAcceptPayload<T, F> {
 #[derive(Debug, PartialEq)]
 pub enum DataPayload<T, F> {
     Encrypted(EncryptedDataPayload<T, F>),
-    Decrypted(DecryptedDataPayload<T>)
+    Decrypted(DecryptedDataPayload<T>),
 }
 
 impl<T: AsRef<[u8]>, F> DataHeader for DataPayload<T, F> {
     fn as_data_bytes(&self) -> &[u8] {
         match self {
             DataPayload::Encrypted(data) => data.as_data_bytes(),
-            DataPayload::Decrypted(data) => data.as_data_bytes()
+            DataPayload::Decrypted(data) => data.as_data_bytes(),
         }
     }
 }
@@ -330,7 +330,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
 
             for i in 0..(len >> 4) {
                 let start = (i << 4) + 1;
-                let mut block = generic_array::GenericArray::from_mut_slice(&mut bytes[start..(start + 16)]);
+                let mut block =
+                    generic_array::GenericArray::from_mut_slice(&mut bytes[start..(start + 16)]);
                 aes_enc.encrypt_block(&mut block);
             }
         }
@@ -386,7 +387,11 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     ///     &app_key,
     /// );
     /// ```
-    pub fn derive_newskey<TT: AsRef<[u8]>>(&self, dev_nonce: &DevNonce<TT>, key: &AES128) -> AES128 {
+    pub fn derive_newskey<TT: AsRef<[u8]>>(
+        &self,
+        dev_nonce: &DevNonce<TT>,
+        key: &AES128,
+    ) -> AES128 {
         self.derive_session_key(0x1, dev_nonce, key)
     }
 
@@ -414,21 +419,27 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     ///     &app_key,
     /// );
     /// ```
-    pub fn derive_appskey<TT: AsRef<[u8]>>(&self, dev_nonce: &DevNonce<TT>, key: &AES128) -> AES128 {
+    pub fn derive_appskey<TT: AsRef<[u8]>>(
+        &self,
+        dev_nonce: &DevNonce<TT>,
+        key: &AES128,
+    ) -> AES128 {
         self.derive_session_key(0x2, dev_nonce, key)
     }
 
-    fn derive_session_key<TT: AsRef<[u8]>>(&self,
+    fn derive_session_key<TT: AsRef<[u8]>>(
+        &self,
         first_byte: u8,
         dev_nonce: &DevNonce<TT>,
-        key: &AES128) -> AES128 {
+        key: &AES128,
+    ) -> AES128 {
         let cipher = self.1.new_enc(key);
 
         // note: AppNonce is 24 bit, NetId is 24 bit, DevNonce is 16 bit
         let app_nonce = self.app_nonce();
         let nwk_addr = self.net_id();
-        let (app_nonce_arr, nwk_addr_arr, dev_nonce_arr)
-            = (app_nonce.as_ref(), nwk_addr.as_ref(), dev_nonce.as_ref());
+        let (app_nonce_arr, nwk_addr_arr, dev_nonce_arr) =
+            (app_nonce.as_ref(), nwk_addr.as_ref(), dev_nonce.as_ref());
 
         let mut block = [0u8; 16];
         block[0] = first_byte;
@@ -482,9 +493,13 @@ impl<T: AsRef<[u8]>, F> DecryptedJoinAcceptPayload<T, F> {
             return None;
         }
         let d = self.0.as_ref();
-        let res = [Frequency::new_from_raw(&d[13..16]), Frequency::new_from_raw(&d[16..19]),
-            Frequency::new_from_raw(&d[19..22]), Frequency::new_from_raw(&d[22..25]),
-            Frequency::new_from_raw(&d[25..28])];
+        let res = [
+            Frequency::new_from_raw(&d[13..16]),
+            Frequency::new_from_raw(&d[16..19]),
+            Frequency::new_from_raw(&d[19..22]),
+            Frequency::new_from_raw(&d[22..25]),
+            Frequency::new_from_raw(&d[25..28]),
+        ];
         Some(res)
     }
 }
@@ -521,9 +536,11 @@ pub trait DataHeader {
 
     /// Gives the FHDR of the DataPayload.
     fn fhdr(&self) -> FHDR {
-        FHDR::new_from_raw(&self.as_data_bytes()[1..(1 + self.fhdr_length())], self.is_uplink())
+        FHDR::new_from_raw(
+            &self.as_data_bytes()[1..(1 + self.fhdr_length())],
+            self.is_uplink(),
+        )
     }
-
 
     /// Gives whether the payload is uplink or not.
     fn is_uplink(&self) -> bool {
@@ -594,13 +611,11 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> {
             return false;
         }
         match MHDR(bytes[0]).mtype() {
-            MType::ConfirmedDataUp | MType::ConfirmedDataDown |
-                MType::UnconfirmedDataUp | MType::UnconfirmedDataDown => {
-                true
-            }
-            _ => {
-                false
-            }
+            MType::ConfirmedDataUp
+            | MType::ConfirmedDataDown
+            | MType::UnconfirmedDataUp
+            | MType::UnconfirmedDataDown => true,
+            _ => false,
         }
     }
 
@@ -643,14 +658,16 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
     /// let enc_phy = lorawan::parser::EncryptedDataPayload::new(data).unwrap();
     /// let dec_phy = enc_phy.decrypt(None, Some(&key), 1);
     /// ```
-    pub fn decrypt<'a, 'b>(mut self,
-                   nwk_skey: Option<&'a AES128>,
-                   app_skey: Option<&'a AES128>,
-                   fcnt: u32) -> Result<DecryptedDataPayload<T>, &'b str> {
+    pub fn decrypt<'a, 'b>(
+        mut self,
+        nwk_skey: Option<&'a AES128>,
+        app_skey: Option<&'a AES128>,
+        fcnt: u32,
+    ) -> Result<DecryptedDataPayload<T>, &'b str> {
         let fhdr_length = self.fhdr_length();
         let fhdr = self.fhdr();
         let full_fcnt = compute_fcnt(fcnt, fhdr.fcnt());
-        let key = if self.f_port().is_some() && self.f_port().unwrap() != 0{
+        let key = if self.f_port().is_some() && self.f_port().unwrap() != 0 {
             app_skey
         } else {
             nwk_skey
@@ -660,13 +677,17 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
         }
         let data = self.0.as_mut();
         let len = data.len();
-        securityhelpers::encrypt_frm_data_payload(
-            &mut data[..],
-            1 + fhdr_length + 1,
-            len - 4,
-            full_fcnt,
-            &self.1.new_enc(&key.unwrap()),
-        );
+        let start = 1 + fhdr_length + 1;
+        let end = len - 4;
+        if start < end {
+            securityhelpers::encrypt_frm_data_payload(
+                &mut data[..],
+                start,
+                end,
+                full_fcnt,
+                &self.1.new_enc(&key.unwrap()),
+            );
+        }
 
         Ok(DecryptedDataPayload(self.0))
     }
@@ -678,10 +699,12 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
     /// DecryptedDataPayload. If the mic does not match, it returns the original
     /// EncryptedDataPayload so that it can be tried against the keys of another device that shares
     /// the same dev_addr. For an example please see [decrypt](#method.decrypt).
-    pub fn decrypt_if_mic_ok<'a>(self,
-                   nwk_skey: &'a AES128,
-                   app_skey: &'a AES128,
-                   fcnt: u32) -> Result<DecryptedDataPayload<T>, Self> {
+    pub fn decrypt_if_mic_ok<'a>(
+        self,
+        nwk_skey: &'a AES128,
+        app_skey: &'a AES128,
+        fcnt: u32,
+    ) -> Result<DecryptedDataPayload<T>, Self> {
         if !self.validate_mic(nwk_skey, fcnt) {
             Err(self)
         } else {
@@ -747,7 +770,9 @@ impl<T: AsRef<[u8]>> DecryptedDataPayload<T> {
 /// }
 /// ```
 #[cfg(feature = "default-crypto")]
-pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(data: T) -> Result<PhyPayload<T, DefaultFactory>, &'a str> {
+pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(
+    data: T,
+) -> Result<PhyPayload<T, DefaultFactory>, &'a str> {
     parse_with_factory(data, DefaultFactory)
 }
 
@@ -760,8 +785,10 @@ pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(data: T) -> Result<PhyPayload<T, 
 /// * bytes - the data from which the PhyPayload is to be built.
 /// * factory - the factory that shall be used to create object for crypto functions.
 pub fn parse_with_factory<'a, T, F>(data: T, factory: F) -> Result<PhyPayload<T, F>, &'a str>
-where T: AsRef<[u8]> + AsMut<[u8]>,
-      F: CryptoFactory {
+where
+    T: AsRef<[u8]> + AsMut<[u8]>,
+    F: CryptoFactory,
+{
     let bytes = data.as_ref();
     let len = bytes.len();
     // the smallest payload is a data payload without fport and FRMPayload
@@ -770,19 +797,19 @@ where T: AsRef<[u8]> + AsMut<[u8]>,
         return Err("insufficient number of bytes");
     }
     match MHDR(bytes[0]).mtype() {
-        MType::JoinRequest => {
-            Ok(PhyPayload::JoinRequest(JoinRequestPayload::new_with_factory(data, factory)?))
-        },
-        MType::JoinAccept => {
-            Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(
-                        EncryptedJoinAcceptPayload::new_with_factory(data, factory)?)))
-        },
-        MType::UnconfirmedDataUp | MType::ConfirmedDataUp |
-        MType::UnconfirmedDataDown | MType::ConfirmedDataDown => {
-            Ok(PhyPayload::Data(DataPayload::Encrypted(
-                        EncryptedDataPayload::new_with_factory(data, factory)?)))
-        },
-        _ => Err("unsupported message type")
+        MType::JoinRequest => Ok(PhyPayload::JoinRequest(
+            JoinRequestPayload::new_with_factory(data, factory)?,
+        )),
+        MType::JoinAccept => Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(
+            EncryptedJoinAcceptPayload::new_with_factory(data, factory)?,
+        ))),
+        MType::UnconfirmedDataUp
+        | MType::ConfirmedDataUp
+        | MType::UnconfirmedDataDown
+        | MType::ConfirmedDataDown => Ok(PhyPayload::Data(DataPayload::Encrypted(
+            EncryptedDataPayload::new_with_factory(data, factory)?,
+        ))),
+        _ => Err("unsupported message type"),
     }
 }
 
