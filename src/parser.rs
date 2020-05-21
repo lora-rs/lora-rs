@@ -660,13 +660,17 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
         }
         let data = self.0.as_mut();
         let len = data.len();
-        securityhelpers::encrypt_frm_data_payload(
-            &mut data[..],
-            1 + fhdr_length + 1,
-            len - 4,
-            full_fcnt,
-            &self.1.new_enc(&key.unwrap()),
-        );
+        let start = 1 + fhdr_length + 1;
+        let end = len - 4;
+        if start < end {
+            securityhelpers::encrypt_frm_data_payload(
+                &mut data[..],
+                start,
+                end,
+                full_fcnt,
+                &self.1.new_enc(&key.unwrap()),
+            );
+        }
 
         Ok(DecryptedDataPayload(self.0))
     }
