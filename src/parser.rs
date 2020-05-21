@@ -637,15 +637,19 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedDataPayload<T> {
             return Err("key needed to decrypt the frm data payload was None");
         }
         let data = self.0.as_ref();
-        let clear_data = securityhelpers::encrypt_frm_data_payload(
-            data,
-            &data[(1 + fhdr_length + 1)..(data.len() - 4)],
-            full_fcnt,
-            &key.unwrap(),
-        );
-        let len = self.0.as_ref().len();
-
-        self.0.as_mut()[(fhdr_length + 2)..(len - 4)].clone_from_slice(&clear_data[..]);
+        let len = data.len();
+        let start = 1 + fhdr_length + 1;
+        let end = len - 4;
+        if start < end {
+            let clear_data = securityhelpers::encrypt_frm_data_payload(
+                data,
+                &data[start..end],
+                full_fcnt,
+                &key.unwrap(),
+            );
+            let len = self.0.as_ref().len();
+            self.0.as_mut()[(fhdr_length + 2)..(len - 4)].clone_from_slice(&clear_data[..]);
+        }
         Ok(DecryptedDataPayload(self.0))
     }
 

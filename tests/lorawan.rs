@@ -339,6 +339,20 @@ fn test_mac_command_in_downlink() {
 }
 
 #[test]
+fn test_decrypt_downlink_missing_f_port_bug() {
+    let encrypted_payload = EncryptedDataPayload::new([
+        0x60, 0x0, 0x0, 0x0, 0x48, 0xa, 0x0, 0x0, 0x3, 0x0, 0x0, 0x0, 0x70, 0x3, 0x0, 0x0, 0xff,
+        0x0, 0xfc, 0x68, 0xf4, 0x5e,
+    ])
+    .unwrap();
+    let key = AES128([1; 16]);
+    let fcnt = 0;
+    assert!(encrypted_payload
+        .decrypt(Some(&key), None, fcnt as u32)
+        .is_ok());
+}
+
+#[test]
 fn test_new_frequency() {
     let freq = Frequency::new(&[0x18, 0x4F, 0x84]);
 
