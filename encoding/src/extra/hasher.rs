@@ -17,7 +17,6 @@ macro_rules! fixed_len_struct_impl_hash {
         $(#[$outer:meta])*
         $type:ident[$size:expr];
     ) => {
-
         impl<T: AsRef<[u8]>> Hash for $type<T> {
             fn hash<H: Hasher>(&self, state: &mut H) {
                 self.as_ref().hash(state);

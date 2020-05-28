@@ -81,7 +81,6 @@ const APP: () = {
         let gpioc = device.GPIOC.split(&mut rcc);
 
         let (tx_pin, rx_pin, serial_peripheral) = (gpioa.pa2, gpioa.pa3, device.USART2);
-        //let (tx_pin, rx_pin, serial_peripheral) = (gpioa.pa9, gpioa.pa10, device.USART1);
 
         let mut serial = serial_peripheral
             .usart(tx_pin, rx_pin, serial::Config::default(), &mut rcc)
@@ -94,6 +93,7 @@ const APP: () = {
         write!(tx, "LongFi Device Test\r\n").unwrap();
 
         let mut exti = Exti::new(device.EXTI);
+
         // constructor initializes 48 MHz clock that RNG requires
         // Initialize 48 MHz clock and RNG
         let hsi48 = rcc.enable_hsi48(&mut syscfg, device.CRS);
@@ -137,7 +137,7 @@ const APP: () = {
         // Return the initialised resources.
         init::LateResources {
             int: exti,
-            radio_irq: radio_irq,
+            radio_irq,
             debug_uart: tx,
             uart_rx: rx,
             sx12xx,
@@ -155,8 +155,8 @@ const APP: () = {
             _ => write!(debug, "Unexpected!\r\n").unwrap(),
         }
 
-        if let Some(response) = lorawan.handle_radio_event(sx12xx, event, debug) {
-            ctx.spawn.lorawan_response(response);
+        if let Some(response) = lorawan.handle_radio_event(sx12xx, event) {
+            ctx.spawn.lorawan_response(response).unwrap();
         }
     }
 
@@ -172,8 +172,8 @@ const APP: () = {
             _ => (),
         }
 
-        if let Some(response) = lorawan.handle_event(sx12xx, event, debug) {
-            ctx.spawn.lorawan_response(response);
+        if let Some(response) = lorawan.handle_event(sx12xx, event) {
+            ctx.spawn.lorawan_response(response).unwrap();
         }
     }
 
@@ -182,7 +182,6 @@ const APP: () = {
         match response {
             LoRaWanResponse::TimerRequest(ms) => {
                 write!(ctx.resources.debug_uart, "Arming Timer {:} ms \r\n", ms).unwrap();
-
                 // grab a lock on timer and arm a timeout
                 ctx.resources.timer_context.target = ms as u16;
                 ctx.resources.timer_context.count = 0;
@@ -205,7 +204,7 @@ const APP: () = {
         let data: [u8; 5] = [0xDE, 0xAD, 0xBE, 0xEF, *ctx.resources.count];
         *ctx.resources.count += 1;
 
-        lorawan.send(sx12xx, &data, 1, false, debug);
+        lorawan.send(sx12xx, &data, 1, false);
     }
 
     #[task(binds = USART2, priority=1, resources = [uart_rx], spawn = [send_ping])]

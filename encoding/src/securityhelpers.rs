@@ -6,7 +6,7 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use generic_array::{GenericArray};
+use generic_array::GenericArray;
 
 use super::keys;
 

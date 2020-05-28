@@ -1,6 +1,5 @@
 use heapless::consts::*;
 use heapless::Vec;
-use sx12xx;
 
 pub enum Bandwidth {
     _125KHZ,
@@ -45,7 +44,6 @@ pub trait Radio {
     fn set_frequency(&mut self, frequency_mhz: u32);
     fn get_mut_buffer(&mut self) -> &mut Vec<u8, U256>;
     fn get_received_packet(&mut self) -> &mut Vec<u8, U256>;
-    fn clear_buffer(&mut self);
     fn configure_tx(
         &mut self,
         power: i8,
@@ -70,11 +68,6 @@ impl Radio for sx12xx::Sx12xx {
         self.send(buffer)
     }
 
-    fn clear_buffer(&mut self) {
-        self.clear_buffer()
-    }
-
-
     fn send_buffer(&mut self) {
         self.send_buffer()
     }
@@ -84,6 +77,7 @@ impl Radio for sx12xx::Sx12xx {
     }
 
     fn get_mut_buffer(&mut self) -> &mut Vec<u8, U256> {
+        self.clear_buffer();
         self.get_mut_buffer()
     }
 
@@ -157,16 +151,6 @@ impl Into<sx12xx::LoRaCodingRate> for CodingRate {
         }
     }
 }
-
-// impl Into<sx12xx::State> for State {
-//     fn from(self: State) -> sx12xx::State {
-//         match self {
-//             State::Busy =>  sx12xx::State::Sx12xxState_Busy,
-//             State::TxDone => sx12xx::State::Sx12xxState_TxDone,
-//             State::RxDone => sx12xx::State::Sx12xxState_RxDone,
-//         }
-//     }
-// }
 
 impl From<sx12xx::State> for State {
     fn from(state: sx12xx::State) -> State {
