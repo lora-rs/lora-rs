@@ -2,18 +2,14 @@
 
 use lorawan_encoding::{
     self,
-    creator::{JoinRequestCreator, DataPayloadCreator},
+    creator::{DataPayloadCreator, JoinRequestCreator},
     keys::AES128,
     parser::DevAddr,
     parser::{parse as lorawan_parse, JoinAcceptPayload, PhyPayload, EUI64},
 };
 
 use core::marker::PhantomData;
-use generic_array;
-use generic_array::GenericArray;
 use heapless::Vec;
-
-use heapless::consts::*;
 
 pub mod radio;
 pub use radio::Radio;
@@ -23,8 +19,6 @@ mod us915;
 use us915::Configuration as RegionalConfiguration;
 
 type DevNonce = lorawan_encoding::parser::DevNonce<[u8; 2]>;
-
-type FPort = u8;
 type Confirmed = bool;
 
 #[derive(Copy, Clone, Debug)]
@@ -43,18 +37,15 @@ enum Data {
     Session(Session),
 }
 
+type SmHandler<R,E> = fn(&mut Device<R, E>, &mut dyn Radio<Event = E>, Event) -> Option<Response>;
+
 pub struct Device<R: Radio, E> {
     _radio: PhantomData<R>,
     // TODO: do something nicer
     get_random: fn() -> u32,
     credentials: Credentials,
     region: RegionalConfiguration,
-    sm_handler: fn(
-        &mut Device<R, E>,
-        &mut dyn Radio<Event = E>,
-        Event,
-        debug: &mut DebugUart,
-    ) -> Option<Response>,
+    sm_handler: SmHandler<R,E>,
     sm_data: Data,
 }
 
@@ -75,15 +66,11 @@ struct Session {
     fcnt: u32,
 }
 
+#[derive(Debug)]
 pub enum Response {
     TimerRequest(usize),
     Error,
 }
-
-use core::fmt::Write;
-use stm32l0xx_hal;
-use stm32l0xx_hal::serial::USART2 as DebugUsart;
-type DebugUart = stm32l0xx_hal::serial::Tx<DebugUsart>;
 
 impl<R: Radio, E> Device<R, E> {
     pub fn new(
@@ -97,8 +84,8 @@ impl<R: Radio, E> Device<R, E> {
 
         Device {
             credentials: Credentials {
-                deveui: deveui,
-                appeui: appeui,
+                deveui,
+                appeui,
                 appkey: appkey.into(),
             },
             region,
@@ -109,34 +96,31 @@ impl<R: Radio, E> Device<R, E> {
         }
     }
 
-    pub fn send(&mut self, radio: &mut dyn Radio<Event = E>, data: &[u8], fport: u8, confirmed: bool, debug: &mut DebugUart){
+    pub fn send(
+        &mut self,
+        radio: &mut dyn Radio<Event = E>,
+        data: &[u8],
+        fport: u8,
+        confirmed: bool,
+    ) {
         if let Data::Session(session) = &mut self.sm_data {
             let mut phy = DataPayloadCreator::new();
             phy.set_confirmed(confirmed)
                 .set_f_port(fport)
                 .set_dev_addr(session.devaddr)
                 .set_fcnt(session.fcnt);
-            write!(debug, "Ready to build\r\n").unwrap();
 
             match phy.build(&data, &[], &session.newskey, &session.appskey) {
                 Ok(packet) => {
                     session.fcnt += 1;
-                    write!(debug, "Built and Sending\r\n").unwrap();
-                    radio.clear_buffer();
                     let buffer = radio.get_mut_buffer();
-                    write!(debug, "should be {}\r\n", buffer.len()).unwrap();
-
                     buffer.extend(packet);
-                    write!(debug, "now is {}\r\n", buffer.len()).unwrap();
 
-                    (self.sm_handler)(self, radio, Event::SendData(confirmed), debug);
-                },
-                Err(output) => {
-                    write!(debug, "{}\r\n", output).unwrap();
+                    (self.sm_handler)(self, radio, Event::SendData(confirmed));
                 }
+                Err(_output) => {}
             }
         }
-
     }
 
     // TODO: no copies
@@ -189,27 +173,19 @@ impl<R: Radio, E> Device<R, E> {
         radio.set_rx();
     }
 
-    fn parse_join_accept(&mut self, buffer: &mut Vec<u8, U256>, devnonce: &DevNonce) {}
-
     pub fn handle_radio_event(
         &mut self,
         radio: &mut dyn Radio<Event = E>,
         event: E,
-        debug: &mut DebugUart,
     ) -> Option<Response> {
         let radio_state = radio.handle_event(event);
 
         match radio_state {
             radio::State::Busy => None,
-            radio::State::TxDone => self.handle_event(radio, Event::TxComplete, debug),
-            radio::State::RxDone(quality) => {
-                self.handle_event(radio, Event::RxComplete(quality), debug)
-            }
+            radio::State::TxDone => self.handle_event(radio, Event::TxComplete),
+            radio::State::RxDone(quality) => self.handle_event(radio, Event::RxComplete(quality)),
             radio::State::TxError => None,
-            radio::State::RxError => {
-                write!(debug, "radio::State::RxError\r\n").unwrap();
-                None
-            }
+            radio::State::RxError => None,
         }
     }
 
@@ -217,30 +193,17 @@ impl<R: Radio, E> Device<R, E> {
         &mut self,
         radio: &mut dyn Radio<Event = E>,
         event: Event,
-        debug: &mut DebugUart,
     ) -> Option<Response> {
-        (self.sm_handler)(self, radio, event, debug)
+        (self.sm_handler)(self, radio, event)
     }
 
     // BELOW HERE ARE PRIVATE STATE MACHINE HANDLERS
-    fn error(
-        &mut self,
-        radio: &mut dyn Radio<Event = E>,
-        event: Event,
-        debug: &mut DebugUart,
-    ) -> Option<Response> {
-        write!(debug, "Error?\r\n").unwrap();
-
+    fn error(&mut self, _radio: &mut dyn Radio<Event = E>, _event: Event) -> Option<Response> {
         // can do a richer implementation later
         Some(Response::Error)
     }
 
-    fn not_joined(
-        &mut self,
-        radio: &mut dyn Radio<Event = E>,
-        event: Event,
-        debug: &mut DebugUart,
-    ) -> Option<Response> {
+    fn not_joined(&mut self, radio: &mut dyn Radio<Event = E>, event: Event) -> Option<Response> {
         match event {
             Event::StartJoin => {
                 if let Data::NoSession(attempts, _) = self.sm_data {
@@ -249,27 +212,23 @@ impl<R: Radio, E> Device<R, E> {
                     self.sm_data = Data::NoSession(attempts + 1, devnonce);
                     None
                 } else {
-                    self.error(radio, event, debug)
+                    self.error(radio, event)
                 }
             }
-            _ => self.error(radio, event, debug),
+            _ => self.error(radio, event),
         }
     }
 
-    fn join_sent(
-        &mut self,
-        radio: &mut dyn Radio<Event = E>,
-        event: Event,
-        debug: &mut DebugUart,
-    ) -> Option<Response> {
+    fn join_sent(&mut self, radio: &mut dyn Radio<Event = E>, event: Event) -> Option<Response> {
         match event {
             Event::TxComplete => {
                 self.sm_handler = Device::waiting_join_delay1;
                 Some(Response::TimerRequest(
+                    // TODO: determine this error adjustment more scientifically
                     self.region.get_join_accept_delay1() * 1000 - 150,
                 ))
             }
-            _ => self.error(radio, event, debug),
+            _ => self.error(radio, event),
         }
     }
 
@@ -277,18 +236,14 @@ impl<R: Radio, E> Device<R, E> {
         &mut self,
         radio: &mut dyn Radio<Event = E>,
         event: Event,
-        debug: &mut DebugUart,
     ) -> Option<Response> {
         match event {
             Event::TimerFired => {
                 self.sm_handler = Device::waiting_join_accept1;
                 self.set_join_accept_rx(radio);
                 None
-                // CONFIGURE RX
-                //self.sm_handler = Device::join_sent;
-                //Some(Response::TimerRequest(self.region.get_join_accept_delay1()))
             }
-            _ => self.error(radio, event, debug),
+            _ => self.error(radio, event),
         }
     }
 
@@ -296,76 +251,53 @@ impl<R: Radio, E> Device<R, E> {
         &mut self,
         radio: &mut dyn Radio<Event = E>,
         event: Event,
-        debug: &mut DebugUart,
     ) -> Option<Response> {
         match event {
-            Event::RxComplete(quality) => {
-                write!(debug, "RxComplete\r\n").unwrap();
+            Event::RxComplete(_quality) => {
                 if let Data::NoSession(_, devnonce) = self.sm_data {
                     let packet = lorawan_parse(radio.get_received_packet()).unwrap();
-                    match packet {
-                        PhyPayload::JoinAccept(join_accept) => {
-                            if let JoinAcceptPayload::Encrypted(encrypted) = join_accept {
-                                // this is a workaround to avoid the crypto crash
-                                write!(debug, "Decrypting...").unwrap();
 
-                                let decrypt = encrypted.decrypt(&self.credentials.appkey);
-                                write!(debug, "Decrypting complete\r\n").unwrap();
-
-                                if decrypt.validate_mic(&self.credentials.appkey) {
-                                    let devaddr_ref = decrypt.dev_addr().as_ref();
-
-                                    let session = Session {
-                                        newskey: decrypt
-                                            .derive_newskey(&devnonce, &self.credentials.appkey),
-                                        appskey: decrypt
-                                            .derive_appskey(&devnonce, &self.credentials.appkey),
-                                        devaddr: DevAddr::new([
-                                            decrypt.dev_addr().as_ref()[0],
-                                            decrypt.dev_addr().as_ref()[1],
-                                            decrypt.dev_addr().as_ref()[2],
-                                            decrypt.dev_addr().as_ref()[3],
-                                        ]).unwrap(),
-                                        fcnt: 0,
-                                    };
-                                    write!(debug, "Session {:?}\r\n", session).unwrap();
-                                    self.sm_handler = Device::joined_idle;
-                                    self.sm_data = Data::Session(session);
-                                } else {
-                                    write!(debug, "MIC validation failed").unwrap();
-                                }
+                    if let PhyPayload::JoinAccept(join_accept) = packet {
+                        if let JoinAcceptPayload::Encrypted(encrypted) = join_accept {
+                            let decrypt = encrypted.decrypt(&self.credentials.appkey);
+                            if decrypt.validate_mic(&self.credentials.appkey) {
+                                let session = Session {
+                                    newskey: decrypt
+                                        .derive_newskey(&devnonce, &self.credentials.appkey),
+                                    appskey: decrypt
+                                        .derive_appskey(&devnonce, &self.credentials.appkey),
+                                    devaddr: DevAddr::new([
+                                        decrypt.dev_addr().as_ref()[0],
+                                        decrypt.dev_addr().as_ref()[1],
+                                        decrypt.dev_addr().as_ref()[2],
+                                        decrypt.dev_addr().as_ref()[3],
+                                    ])
+                                    .unwrap(),
+                                    fcnt: 0,
+                                };
+                                self.sm_handler = Device::joined_idle;
+                                self.sm_data = Data::Session(session);
                             } else {
-                                write!(debug, "Cannot possibly be decrypted already\r\n").unwrap();
-
-                                panic!("Cannot possibly be decrypted already")
                             }
-                            
+                        } else {
+                            panic!("Cannot possibly be decrypted already")
                         }
-                         // it's just some other parseable packet, ignore
-                        _ => (),
+                    } else {
+                        // just some other packet, ignore
                     }
                     None
                 } else {
-                    write!(debug, "Bad Data State\r\n").unwrap();
-                    self.error(radio, event, debug)
+                    self.error(radio, event)
                 }
             }
-            _ => self.error(radio, event, debug),
+            _ => self.error(radio, event),
         }
     }
 
-    fn joined_idle(
-        &mut self,
-        radio: &mut dyn Radio<Event = E>,
-        event: Event,
-        debug: &mut DebugUart,
-    ) -> Option<Response> {
-        
+    fn joined_idle(&mut self, radio: &mut dyn Radio<Event = E>, event: Event) -> Option<Response> {
         if let Data::Session(_) = self.sm_data {
             match event {
                 Event::SendData(_) => {
-                    write!(debug, "Event::SendData\r\n").unwrap();
-
                     radio.configure_tx(
                         14,
                         Bandwidth::_125KHZ,
@@ -376,16 +308,13 @@ impl<R: Radio, E> Device<R, E> {
                     radio.set_frequency(self.region.get_data_frequency(random as u8));
                     radio.send_buffer();
                     self.sm_handler = Device::joined_sending;
-                    write!(debug, "self.sm_handler = Device::joined_sending\r\n").unwrap();
 
                     None
                 }
-                _ =>  self.error(radio, event, debug),
+                _ => self.error(radio, event),
             }
-        }
-        else {
-            write!(debug, "Bad Data State\r\n").unwrap();
-            self.error(radio, event, debug)
+        } else {
+            self.error(radio, event)
         }
     }
 
@@ -393,17 +322,13 @@ impl<R: Radio, E> Device<R, E> {
         &mut self,
         radio: &mut dyn Radio<Event = E>,
         event: Event,
-        debug: &mut DebugUart,
     ) -> Option<Response> {
-         match event {
+        match event {
             Event::TxComplete => {
                 self.sm_handler = Device::joined_idle;
                 None
             }
-            _ => {
-                write!(debug, "Unhandled Event\r\n").unwrap();
-                self.error(radio, event, debug)
-            }
+            _ => self.error(radio, event),
         }
     }
 }

@@ -6,7 +6,7 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use generic_array::{GenericArray, typenum::U16};
+use generic_array::{typenum::U16, GenericArray};
 
 /// AES128 represents 128 bit AES key.
 #[derive(Debug, Default, PartialEq, Clone, Copy)]

@@ -1,9 +1,9 @@
 // Found on the internet and slightly modified it.
 
 extern crate std;
+use std::alloc::System;
 use std::alloc::{GlobalAlloc, Layout};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::alloc::System;
 
 pub struct Trallocator(System, AtomicU64, AtomicU64);
 
@@ -12,7 +12,6 @@ unsafe impl GlobalAlloc for Trallocator {
         self.1.fetch_add(l.size() as u64, Ordering::SeqCst);
         self.2.fetch_add(l.size() as u64, Ordering::SeqCst);
         self.0.alloc(l)
-
     }
     unsafe fn dealloc(&self, ptr: *mut u8, l: Layout) {
         self.0.dealloc(ptr, l);

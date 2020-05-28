@@ -112,8 +112,7 @@ extern "C" fn spi_in_out(out_data: u8) -> u8 {
     unsafe {
         if let Some(spi) = &mut SPI {
             spi.send(out_data).unwrap();
-            let in_data = block!(spi.read()).unwrap();
-            in_data
+            block!(spi.read()).unwrap()
         } else {
             0
         }

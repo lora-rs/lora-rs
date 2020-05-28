@@ -8,6 +8,6 @@
 
 pub extern crate std;
 
+pub mod hasher;
 #[cfg(feature = "with-to-string")]
 pub mod to_string;
-pub mod hasher;
