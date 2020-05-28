@@ -1,5 +1,7 @@
 # lorawan-device-rs
 
+Experimental implementation of a device stack.
+
 ## Cloning, building, testing
 
 You can use cargo to build:

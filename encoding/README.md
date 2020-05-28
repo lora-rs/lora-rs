@@ -118,17 +118,6 @@ Found 8 outliers among 100 measurements (8.00%)
 Approximate memory usage per iteration: 57 from 8668603
 ```
 
-## Contributing
-
-Please read [the contributing guidelines](CONTRIBUTING.md)
-
-## Used code and inspiration
-
-I would like to thank the projects [lorawan][1] by [brocaar][2] for the
-inspiration and useful examples.
-
-[1]: https://github.com/brocaar/lorawan
-[2]: https://github.com/brocaar
 [3]: https://gist.github.com/ivajloip/d63981e4caddaa68bd0b9c2390f4af90
 [4]: https://github.com/brocaar/lorawan/commit/6095d473cf605ce4da4584ae2b570bca8e1259ff
 [Latest Version]: https://img.shields.io/crates/v/lorawan.svg
