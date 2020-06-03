@@ -39,10 +39,9 @@ pub enum State {
 
 pub trait Radio {
     type Event;
-    fn send(&mut self, buffer: &[u8]);
-    fn send_buffer(&mut self);
+    fn send(&mut self, buffer: &mut [u8]);
     fn set_frequency(&mut self, frequency_mhz: u32);
-    fn get_mut_buffer(&mut self) -> &mut Vec<u8, U256>;
+    // we require mutability so we may decrypt in place
     fn get_received_packet(&mut self) -> &mut Vec<u8, U256>;
     fn configure_tx(
         &mut self,
@@ -64,25 +63,16 @@ pub trait Radio {
 impl Radio for sx12xx::Sx12xx {
     type Event = sx12xx::Event;
 
-    fn send(&mut self, buffer: &[u8]) {
+    fn send(&mut self, buffer: &mut [u8]) {
         self.send(buffer)
-    }
-
-    fn send_buffer(&mut self) {
-        self.send_buffer()
     }
 
     fn set_frequency(&mut self, frequency_mhz: u32) {
         self.set_frequency(frequency_mhz)
     }
 
-    fn get_mut_buffer(&mut self) -> &mut Vec<u8, U256> {
-        self.clear_buffer();
-        self.get_mut_buffer()
-    }
-
     fn get_received_packet(&mut self) -> &mut Vec<u8, U256> {
-        self.get_mut_buffer()
+        self.get_rx()
     }
 
     fn configure_tx(

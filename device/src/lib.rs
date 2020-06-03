@@ -7,9 +7,9 @@ use lorawan_encoding::{
     parser::DevAddr,
     parser::{parse as lorawan_parse, JoinAcceptPayload, PhyPayload, EUI64},
 };
-
 use core::marker::PhantomData;
 use heapless::Vec;
+use heapless::consts::*;
 
 pub mod radio;
 pub use radio::Radio;
@@ -41,12 +41,13 @@ type SmHandler<R,E> = fn(&mut Device<R, E>, &mut dyn Radio<Event = E>, Event) ->
 
 pub struct Device<R: Radio, E> {
     _radio: PhantomData<R>,
-    // TODO: do something nicer
+    // TODO: do something nicer for randomness
     get_random: fn() -> u32,
     credentials: Credentials,
     region: RegionalConfiguration,
     sm_handler: SmHandler<R,E>,
     sm_data: Data,
+    buffer: Vec<u8, U256>,
 }
 
 type AppEui = [u8; 8];
@@ -93,6 +94,7 @@ impl<R: Radio, E> Device<R, E> {
             _radio: PhantomData::default(),
             sm_handler: Self::not_joined,
             sm_data: Data::NoSession(0, DevNonce::new([0, 0]).unwrap()),
+            buffer: Vec::new(),
         }
     }
 
@@ -113,9 +115,8 @@ impl<R: Radio, E> Device<R, E> {
             match phy.build(&data, &[], &session.newskey, &session.appskey) {
                 Ok(packet) => {
                     session.fcnt += 1;
-                    let buffer = radio.get_mut_buffer();
-                    buffer.extend(packet);
-
+                    self.buffer.clear();
+                    self.buffer.extend(packet);
                     (self.sm_handler)(self, radio, Event::SendData(confirmed));
                 }
                 Err(_output) => {}
@@ -124,12 +125,11 @@ impl<R: Radio, E> Device<R, E> {
     }
 
     // TODO: no copies
-    fn create_join_request<S: generic_array::ArrayLength<u8>>(
-        &self,
-        buffer: &mut Vec<u8, S>,
+    fn create_join_request(
+        &mut self,
         devnonce: u16,
     ) -> DevNonce {
-        buffer.clear();
+        self.buffer.clear();
         let mut phy = JoinRequestCreator::new();
         let creds = &self.credentials;
 
@@ -141,7 +141,7 @@ impl<R: Radio, E> Device<R, E> {
 
         let devnonce_ret = DevNonce::new(devnonce).unwrap();
         for el in vec {
-            buffer.push(*el).unwrap();
+            self.buffer.push(*el).unwrap();
         }
         devnonce_ret
     }
@@ -161,8 +161,9 @@ impl<R: Radio, E> Device<R, E> {
         random >>= 16;
         radio.set_frequency(self.region.get_join_frequency(random as u8));
         // prepares the buffer
-        let devnonce = self.create_join_request(radio.get_mut_buffer(), devnonce);
-        radio.send_buffer();
+        let devnonce = self.create_join_request(devnonce);
+        radio.send(&mut self.buffer);
+
         devnonce
     }
 
@@ -306,7 +307,7 @@ impl<R: Radio, E> Device<R, E> {
                     );
                     let random = (self.get_random)();
                     radio.set_frequency(self.region.get_data_frequency(random as u8));
-                    radio.send_buffer();
+                    radio.send(&mut self.buffer);
                     self.sm_handler = Device::joined_sending;
 
                     None
