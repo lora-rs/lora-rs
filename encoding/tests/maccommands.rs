@@ -252,6 +252,26 @@ fn test_parse_mac_commands_with_multiple_cmds() {
     assert_eq!(commands.next(), Some(expected));
 }
 
+#[test]
+fn test_parse_mac_commands_with_multiple_cmds_with_payloads() {
+    let data = vec![3, 0, 0, 0, 112, 3, 0, 0, 255, 0];
+    let mut commands = parse_mac_commands(&data, false);
+
+    assert_eq!(
+        commands.next(),
+        Some(MacCommand::LinkADRReq(
+            LinkADRReqPayload::new(&[0, 0, 0, 112]).unwrap()
+        ))
+    );
+
+    assert_eq!(
+        commands.next(),
+        Some(MacCommand::LinkADRReq(
+            LinkADRReqPayload::new(&[0, 0, 255, 0]).unwrap()
+        ))
+    );
+}
+
 fn mac_cmds_payload() -> Vec<u8> {
     vec![LinkCheckReqPayload::cid(), LinkADRAnsPayload::cid(), 0x00]
 }
