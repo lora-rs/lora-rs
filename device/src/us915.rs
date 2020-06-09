@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use lorawan_encoding::maccommands::ChannelMask;
+
 const UPLINK_CHANNEL_MAP: [[u32; 8]; 8] = [
     [
         902_300_000, 902_500_000, 902_700_000, 902_900_000, 903_100_000, 903_300_000, 903_500_000, 903_700_000,
@@ -50,6 +52,10 @@ impl Configuration {
             subband: None,
             last_tx: (0, 0),
         }
+    }
+
+    pub fn set_channel_mask(&mut self, chmask: ChannelMask) {
+
     }
 
     pub fn set_subband(&mut self, subband: u8) {

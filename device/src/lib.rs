@@ -6,6 +6,7 @@ use lorawan_encoding::{
     keys::AES128,
     parser::DevAddr,
     parser::{parse as lorawan_parse, *},
+    maccommands::SerializableMacCommand
 };
 use core::marker::PhantomData;
 use heapless::Vec;
@@ -14,6 +15,8 @@ use heapless::consts::*;
 pub mod radio;
 pub use radio::Radio;
 use radio::*;
+mod mac;
+use mac::*;
 
 mod us915;
 use us915::Configuration as RegionalConfiguration;
@@ -48,6 +51,7 @@ pub struct Device<R: Radio, E> {
     sm_handler: SmHandler<R,E>,
     sm_data: Data,
     buffer: Vec<u8, U256>,
+    mac: Mac,
 }
 
 type AppEui = [u8; 8];
@@ -65,6 +69,7 @@ struct Session {
     appskey: AES128,
     devaddr: DevAddr<[u8; 4]>,
     fcnt: u32,
+    ack_desired: bool
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -100,6 +105,8 @@ impl Response {
     }
 }
 
+use as_slice::AsSlice;
+
 impl<R: Radio, E> Device<R, E> {
     pub fn new(
         deveui: [u8; 8],
@@ -122,6 +129,7 @@ impl<R: Radio, E> Device<R, E> {
             sm_handler: Self::not_joined,
             sm_data: Data::NoSession(0, DevNonce::new([0, 0]).unwrap()),
             buffer: Vec::new(),
+            mac: Mac::default(),
         }
     }
 
@@ -133,13 +141,25 @@ impl<R: Radio, E> Device<R, E> {
         confirmed: bool,
     ) {
         if let Data::Session(session) = &mut self.sm_data {
+            session.ack_desired = confirmed;
             let mut phy = DataPayloadCreator::new();
             phy.set_confirmed(confirmed)
                 .set_f_port(fport)
                 .set_dev_addr(session.devaddr)
                 .set_fcnt(session.fcnt);
 
-            match phy.build(&data, &[], &session.newskey, &session.appskey) {
+            let mut cmds = Vec::new();
+            self.mac.get_cmds(&mut cmds);
+
+            let mut dyn_cmds: Vec<&dyn SerializableMacCommand, U8> = Vec::new();
+
+            for cmd in &cmds {
+                if let Err(e) =dyn_cmds.push(cmd) {
+                    panic!("dyn_cmds too small compared to cmds")
+                }
+            }
+
+            match phy.build(&data,  dyn_cmds.as_slice(), &session.newskey, &session.appskey) {
                 Ok(packet) => {
                     session.fcnt += 1;
                     self.buffer.clear();
@@ -171,16 +191,6 @@ impl<R: Radio, E> Device<R, E> {
             self.buffer.push(*el).unwrap();
         }
         devnonce_ret
-    }
-
-    fn handle_mac_cmd(
-        &mut self,
-        cmd: &lorawan_encoding::maccommands::MacCommand,
-    ) {
-        println!("{:?}", cmd);
-        // match cmd {
-        //     MacCommand::
-        // }
     }
 
     fn send_join_request(&mut self, radio: &mut dyn Radio<Event = E>) -> DevNonce {
@@ -331,6 +341,7 @@ impl<R: Radio, E> Device<R, E> {
                                     ])
                                     .unwrap(),
                                     fcnt: 0,
+                                    ack_desired: false,
                                 };
                                 self.sm_handler = Device::joined_idle;
                                 self.sm_data = Data::Session(session);
@@ -430,8 +441,28 @@ impl<R: Radio, E> Device<R, E> {
         event: Event,
     ) -> Option<Response> {
         match event {
+            Event::TimerFired => {
+                if let Data::Session(session) = &mut self.sm_data {
+                    self.sm_handler = Device::joined_idle;
+
+                    // if self.session.ack_request {
+                    //     // ACK was missed, may want to do something
+                    // }
+
+                    Some(Response {
+                        request: None,
+                        state: State::JoinedIdle
+                    })
+                } else{
+                    self.sm_handler = Device::error;
+                    Some(Response {
+                        request: None,
+                        state: State::Error
+                    })
+                }
+            },
             Event::RxComplete(_quality) => {
-                if let Data::Session(session) = &self.sm_data {
+                if let Data::Session(session) = &mut self.sm_data {
                     let packet = lorawan_parse(radio.get_received_packet()).unwrap();
 
                     if let PhyPayload::Data(data_frame) = packet {
@@ -450,7 +481,7 @@ impl<R: Radio, E> Device<R, E> {
                                     self.sm_handler = Device::joined_idle;
 
                                     for mac_cmd in decrypted.fhdr().fopts() {
-                                        self.handle_mac_cmd(&mac_cmd);
+                                        self.mac.handle_downlink_mac(&mut self.region, &mac_cmd);
                                     }
 
                                     return Some(Response {

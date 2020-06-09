@@ -17,6 +17,7 @@ sx12xx = { git = "https://github.com/lthiery/sx12xx-rs.git", branch = "lthiery/r
 lorawan-encoding = { path = "../encoding", default-features = false, features = ["default-crypto"] }
 heapless = "0.5.4"
 generic-array = "0.13.2"
+as-slice = "*"
 
 [dev-dependencies]
 cortex-m = {version = "0.6.0", features = ["const-fn"] }

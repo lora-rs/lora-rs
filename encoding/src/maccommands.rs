@@ -355,6 +355,15 @@ impl<'a> From<&'a [u8; 2]> for LinkCheckAnsPayload<'a> {
     }
 }
 
+// impl fmt::Debug for Point {
+//     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+//         f.debug_struct("Point")
+//             .field("x", &self.x)
+//             .field("y", &self.y)
+//             .finish()
+//     }
+// }
+
 impl<'a> LinkADRReqPayload<'a> {
     /// Data Rate that the device should use for its next transmissions.
     pub fn data_rate(&self) -> u8 {
