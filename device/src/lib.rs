@@ -1,11 +1,11 @@
-#![cfg_attr(not(test), no_std)]
+//#![cfg_attr(not(test), no_std)]
 
 use lorawan_encoding::{
     self,
     creator::{DataPayloadCreator, JoinRequestCreator},
     keys::AES128,
     parser::DevAddr,
-    parser::{parse as lorawan_parse, JoinAcceptPayload, PhyPayload, EUI64},
+    parser::{parse as lorawan_parse, *},
 };
 use core::marker::PhantomData;
 use heapless::Vec;
@@ -422,14 +422,42 @@ impl<R: Radio, E> Device<R, E> {
         match event {
             Event::RxComplete(_quality) => {
                 if let Data::Session(session) = &self.sm_data {
+                    let packet = lorawan_parse(radio.get_received_packet()).unwrap();
 
+                    if let PhyPayload::Data(data_frame) = packet {
+                        if let  DataPayload::Encrypted(encrypted_data) = data_frame {
+                            if session.devaddr == encrypted_data.fhdr().dev_addr() {
+                                let fcnt = encrypted_data.fhdr().fcnt() as u32;
+                                if encrypted_data
+                                    .validate_mic(&session.newskey, fcnt)
+                                {
+                                    let decrypted = encrypted_data.decrypt(
+                                        Some(&session.newskey),
+                                        Some(&session.appskey),
+                                        fcnt,
+                                    ).unwrap();
+                                    println!(
+                                        "\tDecrypted({:x?})",
+                                        decrypted.frm_payload()
+                                    );
+                                    self.sm_handler = Device::joined_idle;
+
+                                    for mac_cmd in decrypted.fhdr().fopts() {
+                                        print!("{:?}\t", mac_cmd);
+                                    }
+
+                                    return Some(Response {
+                                        request: None,
+                                        state: State::JoinedIdle
+                                    });
+                                } else {
+                                    println!("\tFailed MIC Validation");
+                                }
+                            }
+                        }
+                    }
                 }
-                self.sm_handler = Device::joined_idle;
-                Some(Response {
-                    request: None,
-                    state: State::JoinedIdle
-                })
-
+                return None;
             }
             _ => self.error(radio, event),
         }
