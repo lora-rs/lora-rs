@@ -173,6 +173,16 @@ impl<R: Radio, E> Device<R, E> {
         devnonce_ret
     }
 
+    fn handle_mac_cmd(
+        &mut self,
+        cmd: &lorawan_encoding::maccommands::MacCommand,
+    ) {
+        println!("{:?}", cmd);
+        // match cmd {
+        //     MacCommand::
+        // }
+    }
+
     fn send_join_request(&mut self, radio: &mut dyn Radio<Event = E>) -> DevNonce {
         radio.configure_tx(
             14,
@@ -436,14 +446,11 @@ impl<R: Radio, E> Device<R, E> {
                                         Some(&session.appskey),
                                         fcnt,
                                     ).unwrap();
-                                    println!(
-                                        "\tDecrypted({:x?})",
-                                        decrypted.frm_payload()
-                                    );
+
                                     self.sm_handler = Device::joined_idle;
 
                                     for mac_cmd in decrypted.fhdr().fopts() {
-                                        print!("{:?}\t", mac_cmd);
+                                        self.handle_mac_cmd(&mac_cmd);
                                     }
 
                                     return Some(Response {

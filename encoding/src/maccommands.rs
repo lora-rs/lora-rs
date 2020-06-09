@@ -198,7 +198,7 @@ macro_rules! mac_cmds {
         fn parse_one_mac_cmd<'a, 'b>(data: &'a [u8], uplink: bool) -> Result<(usize, MacCommand<'a>), &'b str> {
             match (data[0], uplink) {
                 $(
-                    ($cid, $uplink) if data.len() > $size => Ok(($size, MacCommand::$name($type::new(&data[1..])?))),
+                    ($cid, $uplink) if data.len() > $size => Ok(($size, MacCommand::$name($type::new(&data[1..1+$size])?))),
                 )*
                 _ => parse_zero_len_mac_cmd(data, uplink)
             }
