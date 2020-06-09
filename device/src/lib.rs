@@ -1,4 +1,4 @@
-#![cfg_attr(not(test), no_std)]
+//#![cfg_attr(not(test), no_std)]
 
 use lorawan_encoding::{
     self,
@@ -67,10 +67,37 @@ struct Session {
     fcnt: u32,
 }
 
-#[derive(Debug)]
-pub enum Response {
+#[derive(Debug, Copy, Clone)]
+pub enum Request {
     TimerRequest(usize),
     Error,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum State {
+    Joining,
+    Joined,
+    JoinedFailed,
+    JoinedIdle,
+    Sending,
+    WaitingForWindow,
+    InWindow,
+    Error
+}
+
+#[derive(Debug)]
+pub struct Response {
+    request: Option<Request>,
+    state: State
+}
+
+impl Response {
+    pub fn request(&self) -> Option<Request>{
+        self.request
+    }
+    pub fn state(&self) -> State {
+        self.state
+    }
 }
 
 impl<R: Radio, E> Device<R, E> {
@@ -169,8 +196,13 @@ impl<R: Radio, E> Device<R, E> {
 
     fn set_join_accept_rx(&mut self, radio: &mut dyn Radio<Event = E>) {
         radio.configure_rx(Bandwidth::_500KHZ, SpreadingFactor::_10, CodingRate::_4_5);
-
         radio.set_frequency(self.region.get_join_accept_frequency1());
+        radio.set_rx();
+    }
+
+    fn set_rxwindow1(&mut self, radio: &mut dyn Radio<Event = E>) {
+        radio.configure_rx(Bandwidth::_500KHZ, SpreadingFactor::_10, CodingRate::_4_5);
+        radio.set_frequency(self.region.get_rxwindow1_frequency());
         radio.set_rx();
     }
 
@@ -201,7 +233,10 @@ impl<R: Radio, E> Device<R, E> {
     // BELOW HERE ARE PRIVATE STATE MACHINE HANDLERS
     fn error(&mut self, _radio: &mut dyn Radio<Event = E>, _event: Event) -> Option<Response> {
         // can do a richer implementation later
-        Some(Response::Error)
+        Some(Response {
+            request: Some(Request::Error),
+            state: State::Error
+        })
     }
 
     fn not_joined(&mut self, radio: &mut dyn Radio<Event = E>, event: Event) -> Option<Response> {
@@ -224,10 +259,15 @@ impl<R: Radio, E> Device<R, E> {
         match event {
             Event::TxComplete => {
                 self.sm_handler = Device::waiting_join_delay1;
-                Some(Response::TimerRequest(
-                    // TODO: determine this error adjustment more scientifically
-                    self.region.get_join_accept_delay1() * 1000 - 150,
-                ))
+                let mut timeout: isize = (self.region.get_join_accept_delay1() * 1000) as isize;
+                timeout += radio.get_rx_window_offset_ms();
+                Some(Response {
+                    request: Some(Request::TimerRequest(
+                        // TODO: determine this error adjustment more scientifically
+                        timeout as usize
+                    )),
+                    state: State::WaitingForWindow
+                })
             }
             _ => self.error(radio, event),
         }
@@ -242,7 +282,13 @@ impl<R: Radio, E> Device<R, E> {
             Event::TimerFired => {
                 self.sm_handler = Device::waiting_join_accept1;
                 self.set_join_accept_rx(radio);
-                None
+                Some(Response {
+                    request: Some(Request::TimerRequest(
+                        // TODO: handle situation where duration is longer than next window
+                        radio.get_rx_window_duration_ms(),
+                    )),
+                    state: State::InWindow
+                })
             }
             _ => self.error(radio, event),
         }
@@ -278,7 +324,13 @@ impl<R: Radio, E> Device<R, E> {
                                 };
                                 self.sm_handler = Device::joined_idle;
                                 self.sm_data = Data::Session(session);
+
+                                return Some(Response {
+                                    request: None,
+                                    state: State::JoinedIdle
+                                });
                             } else {
+
                             }
                         } else {
                             panic!("Cannot possibly be decrypted already")
@@ -326,8 +378,58 @@ impl<R: Radio, E> Device<R, E> {
     ) -> Option<Response> {
         match event {
             Event::TxComplete => {
+                self.sm_handler = Device::joined_waiting_rxwindow1;
+                let mut timeout: isize = (self.region.get_receive_delay1() * 1000) as isize;
+                timeout += radio.get_rx_window_offset_ms();
+                Some(Response {
+                    request: Some(Request::TimerRequest(
+                        // TODO: determine this error adjustment more scientifically
+                        timeout as usize
+                    )),
+                    state: State::WaitingForWindow
+                })
+            }
+            _ => self.error(radio, event),
+        }
+    }
+
+    fn joined_waiting_rxwindow1(
+        &mut self,
+        radio: &mut dyn Radio<Event = E>,
+        event: Event,
+    ) -> Option<Response> {
+        match event {
+            Event::TimerFired => {
+                self.sm_handler = Device::joined_rxwindow1;
+                self.set_rxwindow1(radio);
+                Some(Response {
+                    request: Some(Request::TimerRequest(
+                        // TODO: handle situation where duration is longer than next window
+                        radio.get_rx_window_duration_ms(),
+                    )),
+                    state: State::InWindow
+                })
+            }
+            _ => self.error(radio, event),
+        }
+    }
+
+    fn joined_rxwindow1(
+        &mut self,
+        radio: &mut dyn Radio<Event = E>,
+        event: Event,
+    ) -> Option<Response> {
+        match event {
+            Event::RxComplete(_quality) => {
+                if let Data::Session(session) = &self.sm_data {
+
+                }
                 self.sm_handler = Device::joined_idle;
-                None
+                Some(Response {
+                    request: None,
+                    state: State::JoinedIdle
+                })
+
             }
             _ => self.error(radio, event),
         }

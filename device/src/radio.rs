@@ -29,6 +29,24 @@ pub struct RxQuality {
     snr: i8,
 }
 
+impl RxQuality {
+    pub fn new(rssi: i16, snr: i8) -> RxQuality {
+        RxQuality {
+            rssi,
+            snr
+        }
+    }
+
+    pub fn rssi(&self) -> i16 {
+        self.rssi
+    }
+
+    pub fn snr(&self) -> i8 {
+        self.snr
+    }
+}
+
+
 pub enum State {
     Busy,
     TxDone,
@@ -43,6 +61,10 @@ pub trait Radio {
     fn set_frequency(&mut self, frequency_mhz: u32);
     // we require mutability so we may decrypt in place
     fn get_received_packet(&mut self) -> &mut Vec<u8, U256>;
+
+    fn get_rx_window_offset_ms(&mut self) -> isize;
+    fn get_rx_window_duration_ms(&mut self) -> usize;
+
     fn configure_tx(
         &mut self,
         power: i8,
@@ -73,6 +95,13 @@ impl Radio for sx12xx::Sx12xx {
 
     fn get_received_packet(&mut self) -> &mut Vec<u8, U256> {
         self.get_rx()
+    }
+
+    fn get_rx_window_offset_ms(&mut self) -> isize {
+        -150
+    }
+    fn get_rx_window_duration_ms(&mut self) -> usize {
+        1000
     }
 
     fn configure_tx(

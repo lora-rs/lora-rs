@@ -42,13 +42,13 @@ const ACK_TIMEOUT: usize = 2; // random delay between 1 and 3 seconds
 
 pub struct Configuration {
     subband: Option<u8>,
-    last_join: (u8, u8),
+    last_tx: (u8, u8),
 }
 impl Configuration {
     pub fn new() -> Configuration {
         Configuration {
             subband: None,
-            last_join: (0, 0),
+            last_tx: (0, 0),
         }
     }
 
@@ -63,7 +63,7 @@ impl Configuration {
         } else {
             (random >> 3) & 0b111
         };
-        self.last_join = (subband, subband_channel);
+        self.last_tx = (subband, subband_channel);
         UPLINK_CHANNEL_MAP[subband as usize][subband_channel as usize]
     }
 
@@ -74,11 +74,16 @@ impl Configuration {
         } else {
             (random >> 3) & 0b111
         };
+        self.last_tx = (subband, subband_channel);
         UPLINK_CHANNEL_MAP[subband as usize][subband_channel as usize]
     }
 
     pub fn get_join_accept_frequency1(&mut self) -> u32 {
-        DOWNLINK_CHANNEL_MAP[self.last_join.1 as usize]
+        DOWNLINK_CHANNEL_MAP[self.last_tx.1 as usize]
+    }
+
+    pub fn get_rxwindow1_frequency(&mut self) -> u32 {
+        DOWNLINK_CHANNEL_MAP[self.last_tx.1 as usize]
     }
 
     pub fn get_join_accept_delay1(&mut self) -> usize {
@@ -88,4 +93,13 @@ impl Configuration {
     pub fn get_join_accept_delay2(&mut self) -> usize {
         JOIN_ACCEPT_DELAY2
     }
+
+    pub fn get_receive_delay1(&mut self) -> usize {
+        RECEIVE_DELAY1
+    }
+
+    pub fn get_receive_delay2(&mut self) -> usize {
+        RECEIVE_DELAY2
+    }
+
 }
