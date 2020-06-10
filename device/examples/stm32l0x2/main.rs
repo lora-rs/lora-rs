@@ -8,7 +8,7 @@ extern crate nb;
 extern crate panic_halt;
 
 use core::fmt::Write;
-use lorawan_device::{Device as LoRaWanDevice, Event as LoRaWanEvent, Response as LoRaWanResponse};
+use lorawan_device::{Device as LoRaWanDevice, Event as LoRaWanEvent, Request as LoRaWanRequest};
 use rtfm::app;
 use stm32l0xx_hal::exti::{ExtiLine, GpioLine};
 use stm32l0xx_hal::{pac, pac::Interrupt, rng, serial};
@@ -146,7 +146,7 @@ const APP: () = {
         }
     }
 
-    #[task(capacity = 4, priority = 2, resources = [debug_uart, buffer, sx12xx, lorawan], spawn  = [lorawan_response])]
+    #[task(capacity = 4, priority = 2, resources = [debug_uart, buffer, sx12xx, lorawan], spawn  = [lorawan_request])]
     fn radio_event(ctx: radio_event::Context, event: sx12xx::Event) {
         let (sx12xx, lorawan) = (ctx.resources.sx12xx, ctx.resources.lorawan);
         let debug = ctx.resources.debug_uart;
@@ -156,11 +156,13 @@ const APP: () = {
         }
 
         if let Some(response) = lorawan.handle_radio_event(sx12xx, event) {
-            ctx.spawn.lorawan_response(response).unwrap();
+            if let Some(request) = response.request() {
+                ctx.spawn.lorawan_request(request).unwrap();
+            }
         }
     }
 
-    #[task(capacity = 4, priority = 2, resources = [debug_uart, buffer, sx12xx, lorawan], spawn  = [lorawan_response])]
+    #[task(capacity = 4, priority = 2, resources = [debug_uart, buffer, sx12xx, lorawan], spawn  = [lorawan_request])]
     fn lorawan_event(ctx: lorawan_event::Context, event: LoRaWanEvent) {
         let (sx12xx, lorawan) = (ctx.resources.sx12xx, ctx.resources.lorawan);
         let debug = ctx.resources.debug_uart;
@@ -173,14 +175,17 @@ const APP: () = {
         }
 
         if let Some(response) = lorawan.handle_event(sx12xx, event) {
-            ctx.spawn.lorawan_response(response).unwrap();
+            if let Some(request) = response.request() {
+                ctx.spawn.lorawan_request(request).unwrap();
+            }
         }
+
     }
 
     #[task(capacity = 4, priority = 2, resources = [debug_uart, timer_context])]
-    fn lorawan_response(ctx: lorawan_response::Context, response: LoRaWanResponse) {
-        match response {
-            LoRaWanResponse::TimerRequest(ms) => {
+    fn lorawan_request(ctx: lorawan_request::Context, request: LoRaWanRequest) {
+        match request {
+            LoRaWanRequest::TimerRequest(ms) => {
                 write!(ctx.resources.debug_uart, "Arming Timer {:} ms \r\n", ms).unwrap();
                 // grab a lock on timer and arm a timeout
                 ctx.resources.timer_context.target = ms as u16;
@@ -189,7 +194,7 @@ const APP: () = {
                 // trigger timer so that it can set itself up
                 rtfm::pend(Interrupt::TIM2);
             }
-            LoRaWanResponse::Error => {
+            LoRaWanRequest::Error => {
                 write!(ctx.resources.debug_uart, "LoRaWanResponse::Error!!\r\n").unwrap();
             }
         }
