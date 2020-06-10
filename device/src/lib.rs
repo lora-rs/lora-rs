@@ -1,16 +1,16 @@
 //#![cfg_attr(not(test), no_std)]
 
+use core::marker::PhantomData;
+use heapless::consts::*;
+use heapless::Vec;
 use lorawan_encoding::{
     self,
     creator::{DataPayloadCreator, JoinRequestCreator},
     keys::AES128,
+    maccommands::SerializableMacCommand,
     parser::DevAddr,
     parser::{parse as lorawan_parse, *},
-    maccommands::SerializableMacCommand
 };
-use core::marker::PhantomData;
-use heapless::Vec;
-use heapless::consts::*;
 
 pub mod radio;
 pub use radio::Radio;
@@ -40,7 +40,7 @@ enum Data {
     Session(Session),
 }
 
-type SmHandler<R,E> = fn(&mut Device<R, E>, &mut dyn Radio<Event = E>, Event) -> Option<Response>;
+type SmHandler<R, E> = fn(&mut Device<R, E>, &mut dyn Radio<Event = E>, Event) -> Option<Response>;
 
 pub struct Device<R: Radio, E> {
     _radio: PhantomData<R>,
@@ -48,7 +48,7 @@ pub struct Device<R: Radio, E> {
     get_random: fn() -> u32,
     credentials: Credentials,
     region: RegionalConfiguration,
-    sm_handler: SmHandler<R,E>,
+    sm_handler: SmHandler<R, E>,
     sm_data: Data,
     buffer: Vec<u8, U256>,
     mac: Mac,
@@ -69,7 +69,7 @@ struct Session {
     appskey: AES128,
     devaddr: DevAddr<[u8; 4]>,
     fcnt: u32,
-    ack_desired: bool
+    ack_desired: bool,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -87,17 +87,17 @@ pub enum State {
     Sending,
     WaitingForWindow,
     InWindow,
-    Error
+    Error,
 }
 
 #[derive(Debug)]
 pub struct Response {
     request: Option<Request>,
-    state: State
+    state: State,
 }
 
 impl Response {
-    pub fn request(&self) -> Option<Request>{
+    pub fn request(&self) -> Option<Request> {
         self.request
     }
     pub fn state(&self) -> State {
@@ -154,12 +154,17 @@ impl<R: Radio, E> Device<R, E> {
             let mut dyn_cmds: Vec<&dyn SerializableMacCommand, U8> = Vec::new();
 
             for cmd in &cmds {
-                if let Err(e) =dyn_cmds.push(cmd) {
+                if let Err(_e) = dyn_cmds.push(cmd) {
                     panic!("dyn_cmds too small compared to cmds")
                 }
             }
 
-            match phy.build(&data,  dyn_cmds.as_slice(), &session.newskey, &session.appskey) {
+            match phy.build(
+                &data,
+                dyn_cmds.as_slice(),
+                &session.newskey,
+                &session.appskey,
+            ) {
                 Ok(packet) => {
                     session.fcnt += 1;
                     self.buffer.clear();
@@ -172,10 +177,7 @@ impl<R: Radio, E> Device<R, E> {
     }
 
     // TODO: no copies
-    fn create_join_request(
-        &mut self,
-        devnonce: u16,
-    ) -> DevNonce {
+    fn create_join_request(&mut self, devnonce: u16) -> DevNonce {
         self.buffer.clear();
         let mut phy = JoinRequestCreator::new();
         let creds = &self.credentials;
@@ -255,7 +257,7 @@ impl<R: Radio, E> Device<R, E> {
         // can do a richer implementation later
         Some(Response {
             request: Some(Request::Error),
-            state: State::Error
+            state: State::Error,
         })
     }
 
@@ -284,9 +286,9 @@ impl<R: Radio, E> Device<R, E> {
                 Some(Response {
                     request: Some(Request::TimerRequest(
                         // TODO: determine this error adjustment more scientifically
-                        timeout as usize
+                        timeout as usize,
                     )),
-                    state: State::WaitingForWindow
+                    state: State::WaitingForWindow,
                 })
             }
             _ => self.error(radio, event),
@@ -307,7 +309,7 @@ impl<R: Radio, E> Device<R, E> {
                         // TODO: handle situation where duration is longer than next window
                         radio.get_rx_window_duration_ms(),
                     )),
-                    state: State::InWindow
+                    state: State::InWindow,
                 })
             }
             _ => self.error(radio, event),
@@ -348,10 +350,9 @@ impl<R: Radio, E> Device<R, E> {
 
                                 return Some(Response {
                                     request: None,
-                                    state: State::JoinedIdle
+                                    state: State::JoinedIdle,
                                 });
                             } else {
-
                             }
                         } else {
                             panic!("Cannot possibly be decrypted already")
@@ -405,9 +406,9 @@ impl<R: Radio, E> Device<R, E> {
                 Some(Response {
                     request: Some(Request::TimerRequest(
                         // TODO: determine this error adjustment more scientifically
-                        timeout as usize
+                        timeout as usize,
                     )),
-                    state: State::WaitingForWindow
+                    state: State::WaitingForWindow,
                 })
             }
             _ => self.error(radio, event),
@@ -428,7 +429,7 @@ impl<R: Radio, E> Device<R, E> {
                         // TODO: handle situation where duration is longer than next window
                         radio.get_rx_window_duration_ms(),
                     )),
-                    state: State::InWindow
+                    state: State::InWindow,
                 })
             }
             _ => self.error(radio, event),
@@ -442,7 +443,7 @@ impl<R: Radio, E> Device<R, E> {
     ) -> Option<Response> {
         match event {
             Event::TimerFired => {
-                if let Data::Session(session) = &mut self.sm_data {
+                if let Data::Session(_session) = &mut self.sm_data {
                     self.sm_handler = Device::joined_idle;
 
                     // if self.session.ack_request {
@@ -451,32 +452,32 @@ impl<R: Radio, E> Device<R, E> {
 
                     Some(Response {
                         request: None,
-                        state: State::JoinedIdle
+                        state: State::JoinedIdle,
                     })
-                } else{
+                } else {
                     self.sm_handler = Device::error;
                     Some(Response {
                         request: None,
-                        state: State::Error
+                        state: State::Error,
                     })
                 }
-            },
+            }
             Event::RxComplete(_quality) => {
                 if let Data::Session(session) = &mut self.sm_data {
                     let packet = lorawan_parse(radio.get_received_packet()).unwrap();
 
                     if let PhyPayload::Data(data_frame) = packet {
-                        if let  DataPayload::Encrypted(encrypted_data) = data_frame {
+                        if let DataPayload::Encrypted(encrypted_data) = data_frame {
                             if session.devaddr == encrypted_data.fhdr().dev_addr() {
                                 let fcnt = encrypted_data.fhdr().fcnt() as u32;
-                                if encrypted_data
-                                    .validate_mic(&session.newskey, fcnt)
-                                {
-                                    let decrypted = encrypted_data.decrypt(
-                                        Some(&session.newskey),
-                                        Some(&session.appskey),
-                                        fcnt,
-                                    ).unwrap();
+                                if encrypted_data.validate_mic(&session.newskey, fcnt) {
+                                    let decrypted = encrypted_data
+                                        .decrypt(
+                                            Some(&session.newskey),
+                                            Some(&session.appskey),
+                                            fcnt,
+                                        )
+                                        .unwrap();
 
                                     self.sm_handler = Device::joined_idle;
 
@@ -486,7 +487,7 @@ impl<R: Radio, E> Device<R, E> {
 
                                     return Some(Response {
                                         request: None,
-                                        state: State::JoinedIdle
+                                        state: State::JoinedIdle,
                                     });
                                 } else {
                                     println!("\tFailed MIC Validation");
@@ -495,7 +496,7 @@ impl<R: Radio, E> Device<R, E> {
                         }
                     }
                 }
-                return None;
+                None
             }
             _ => self.error(radio, event),
         }

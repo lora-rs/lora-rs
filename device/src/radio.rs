@@ -31,21 +31,17 @@ pub struct RxQuality {
 
 impl RxQuality {
     pub fn new(rssi: i16, snr: i8) -> RxQuality {
-        RxQuality {
-            rssi,
-            snr
-        }
+        RxQuality { rssi, snr }
     }
 
-    pub fn rssi(&self) -> i16 {
+    pub fn rssi(self) -> i16 {
         self.rssi
     }
 
-    pub fn snr(&self) -> i8 {
+    pub fn snr(self) -> i8 {
         self.snr
     }
 }
-
 
 pub enum State {
     Busy,
