@@ -8,7 +8,7 @@
 
 //! This module implements LoRaWAN packet handling and parsing.
 
-//#![no_std]
+#![no_std]
 pub mod creator;
 pub mod keys;
 pub mod maccommandcreator;

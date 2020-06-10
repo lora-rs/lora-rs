@@ -1,4 +1,4 @@
-//#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_std)]
 
 use core::marker::PhantomData;
 use heapless::consts::*;
@@ -489,8 +489,6 @@ impl<R: Radio, E> Device<R, E> {
                                         request: None,
                                         state: State::JoinedIdle,
                                     });
-                                } else {
-                                    println!("\tFailed MIC Validation");
                                 }
                             }
                         }
