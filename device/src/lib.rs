@@ -1,4 +1,4 @@
-//#![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_std)]
 
 use core::marker::PhantomData;
 use heapless::consts::*;
@@ -275,8 +275,6 @@ impl<R: Radio, E> Device<R, E> {
             }
 
             _ => {
-                println!("not_joined error {:?}", event);
-
                 self.error(radio, event)
             },
         }
@@ -298,7 +296,6 @@ impl<R: Radio, E> Device<R, E> {
             }
 
             _ => {
-                println!("join_sent error {:?}", event);
                 self.error(radio, event)
             },
         }
@@ -323,7 +320,6 @@ impl<R: Radio, E> Device<R, E> {
             }
 
             _ => {
-                println!("waiting_join_delay1 error {:?}", event);
                 self.error(radio, event)
             },
         }
@@ -380,7 +376,6 @@ impl<R: Radio, E> Device<R, E> {
             }
 
             _ => {
-                println!("waiting_join_accept1 error {:?}", event);
                 self.error(radio, event)
             },
         }
@@ -406,8 +401,6 @@ impl<R: Radio, E> Device<R, E> {
                 _ => self.error(radio, event),
             }
         } else {
-            println!("joined_idle error {:?}", event);
-
             self.error(radio, event)
         }
     }
@@ -432,7 +425,6 @@ impl<R: Radio, E> Device<R, E> {
             }
 
             _ => {
-                println!("joined_sending error {:?}", event);
                 self.error(radio, event)
             },
         }
@@ -457,7 +449,6 @@ impl<R: Radio, E> Device<R, E> {
             }
 
             _ => {
-                println!("joined_waiting_rxwindow1 error {:?}", event);
                 self.error(radio, event)
             },
         }
@@ -482,7 +473,6 @@ impl<R: Radio, E> Device<R, E> {
                         state: State::JoinedIdle,
                     })
                 } else {
-                    println!("joined_rx_window1 error: Timer fired no session");
                     self.sm_handler = Device::error;
                     Some(Response {
                         request: None,
@@ -525,7 +515,6 @@ impl<R: Radio, E> Device<R, E> {
                 None
             }
             _ => {
-                println!("joined_rx_window1 error {:?}", event);
                 self.error(radio, event)
             },
         }
