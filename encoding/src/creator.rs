@@ -26,10 +26,10 @@ use super::default_crypto::DefaultFactory;
 use super::keys::Decrypter;
 
 #[cfg(any(feature = "with-downlink", feature = "default-crypto"))]
-use generic_array::GenericArray;
+use aes::block_cipher::generic_array::GenericArray;
 
 #[cfg(feature = "default-crypto")]
-use generic_array::typenum::U256;
+use aes::block_cipher::generic_array::typenum::U256;
 
 const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
@@ -182,8 +182,8 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
         let aes_enc = self.factory.new_dec(key);
         for i in 0..(d.len() >> 4) {
             let start = (i << 4) + 1;
-            let mut tmp = GenericArray::from_mut_slice(&mut d[start..(16 + start)]);
-            aes_enc.decrypt_block(&mut tmp);
+            let tmp = GenericArray::from_mut_slice(&mut d[start..(16 + start)]);
+            aes_enc.decrypt_block(tmp);
         }
         self.encrypted = true;
     }

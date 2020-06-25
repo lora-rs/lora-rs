@@ -6,8 +6,7 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use generic_array::GenericArray;
-
+pub use aes::block_cipher::generic_array::GenericArray;
 use super::keys;
 
 /// calculate_data_mic computes the MIC of a correct data packet.
