@@ -12,6 +12,11 @@ use aes::block_cipher::{generic_array::GenericArray, NewBlockCipher};
 use aes::Aes128;
 use std::alloc::System;
 use std::sync::atomic::{AtomicU64, Ordering};
+<<<<<<< HEAD
+=======
+use aes::block_cipher::{generic_array::GenericArray, NewBlockCipher};
+use aes::Aes128;
+>>>>>>> Initial device stack refactor (#1)
 
 extern crate std;
 

@@ -331,7 +331,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
 
             for i in 0..(len >> 4) {
                 let start = (i << 4) + 1;
-                let block = GenericArray::from_mut_slice(&mut bytes[start..(start + 16)]);
+                let block =
+                    GenericArray::from_mut_slice(&mut bytes[start..(start + 16)]);
                 aes_enc.encrypt_block(block);
             }
         }

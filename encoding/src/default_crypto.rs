@@ -5,7 +5,6 @@
 // copied, modified, or distributed except according to those terms.
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
-
 use super::creator::JoinRequestCreator;
 use super::keys::*;
 use super::parser::{
