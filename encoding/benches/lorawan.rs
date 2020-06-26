@@ -10,9 +10,8 @@ use criterion::{criterion_group, criterion_main, Criterion};
 
 use std::alloc::System;
 use std::sync::atomic::{AtomicU64, Ordering};
-
-use aes::{block_cipher_trait::BlockCipher, Aes128};
-use generic_array::GenericArray;
+use aes::block_cipher::{generic_array::GenericArray, NewBlockCipher};
+use aes::Aes128;
 
 extern crate std;
 
@@ -140,7 +139,7 @@ impl PartialEq for ConstFactory {
 
 impl ConstFactory {
     fn new(key: &AES128) -> Self {
-        use cmac::Mac;
+        use cmac::crypto_mac::NewMac;
         ConstFactory(
             Aes128::new(GenericArray::from_slice(&key.0[..])),
             Cmac::new_varkey(&key.0[..]).unwrap(),

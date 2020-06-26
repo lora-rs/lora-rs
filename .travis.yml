@@ -7,16 +7,9 @@ rust:
 cache: cargo
 
 before_script:
-  - echo "deb http://cz.archive.ubuntu.com/ubuntu eoan main universe" | sudo tee -a /etc/apt/sources.list
-  - sudo apt-get update
-  - sudo apt-get install cmake doxygen xdot
-  - sudo apt-get install g++-multilib libc6-dev-i386 gcc-arm-none-eabi libnewlib-arm-none-eabi
-  - rustup target add thumbv6m-none-eabi
   - rustup component add clippy
 
 script:
-  - (cd encoding && cargo clippy --all-targets --all-features -- -D warnings)
-  - (cd device && cargo clippy -- -D warnings)
+  - cargo clippy --all-targets --all-features -- -D warnings
   - cargo build --verbose --all
-  - cargo test --verbose --workspace --exclude lorawan-device
-  - (cd device && cargo build --example stm32l0x2)
+  - cargo test --verbose --workspace
