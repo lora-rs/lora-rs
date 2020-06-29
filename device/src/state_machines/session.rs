@@ -97,11 +97,15 @@ impl<R> From<Session<R>> for Device<R>
 
 into_state![Idle, SendingData, WaitingForRxWindow, WaitingForRx];
 
+#[derive(Debug)]
 pub enum Error {
     RadioEventWhileIdle,
     RadioEventWhileWaitingForRxWindow,
+    NewSessionWhileWaitingForRxWindow,
+    SendDataWhileWaitingForRxWindow,
+    NewSessionWhileWaitingForRx,
+    SendDataWhileWaitingForRx,
 }
-
 
 impl<R> From<Error> for super::super::Error<R>
 where R: radio::PhyRxTx
@@ -384,13 +388,13 @@ where
                 }
             }
             Event::RadioEvent(_) => {
-                (self.into(), Err(Error::RadioEventWhileIdle.into()))
+                (self.into(), Err(Error::RadioEventWhileWaitingForRxWindow.into()))
             }
-            // anything other than a Timeout is unexpected
-            Event::NewSession | Event::SendData(_) => {
-                panic!("Unexpected event while WaitingForRxWindow")
+            Event::NewSession => {
+                (self.into(), Err(Error::NewSessionWhileWaitingForRxWindow.into()))
+            } Event::SendData(_) => {
+                (self.into(), Err(Error::SendDataWhileWaitingForRxWindow.into()))
             }
-
         }
     }
 }
@@ -435,35 +439,35 @@ where
                 match self.shared.radio.handle_event(radio_event) {
                     Ok(response) => match response {
                         radio::Response::RxDone(_quality) => {
-                            let packet =
-                                lorawan_parse(self.shared.radio.get_received_packet()).unwrap();
-                            if let PhyPayload::Data(data_frame) = packet {
-                                if let DataPayload::Encrypted(encrypted_data) = data_frame {
-                                    let session = &mut self.session;
-                                    if session.devaddr() == &encrypted_data.fhdr().dev_addr() {
-                                        let fcnt = encrypted_data.fhdr().fcnt() as u32;
-                                        if encrypted_data.validate_mic(&session.newskey(), fcnt)
-                                            && (fcnt > session.fcnt_down || fcnt == 0)
-                                        {
-                                            session.fcnt_down = fcnt;
-                                            let decrypted = encrypted_data
-                                                .decrypt(
-                                                    Some(&session.newskey()),
-                                                    Some(&session.appskey()),
-                                                    fcnt,
-                                                )
-                                                .unwrap();
+                            if let Ok(parsed_packet) = lorawan_parse(self.shared.radio.get_received_packet()) {
+                                if let PhyPayload::Data(data_frame) = parsed_packet {
+                                    if let DataPayload::Encrypted(encrypted_data) = data_frame {
+                                        let session = &mut self.session;
+                                        if session.devaddr() == &encrypted_data.fhdr().dev_addr() {
+                                            let fcnt = encrypted_data.fhdr().fcnt() as u32;
+                                            if encrypted_data.validate_mic(&session.newskey(), fcnt)
+                                                && (fcnt > session.fcnt_down || fcnt == 0)
+                                            {
+                                                session.fcnt_down = fcnt;
+                                                let decrypted = encrypted_data
+                                                    .decrypt(
+                                                        Some(&session.newskey()),
+                                                        Some(&session.appskey()),
+                                                        fcnt,
+                                                    )
+                                                    .unwrap();
 
-                                            for mac_cmd in decrypted.fhdr().fopts() {
-                                                self.shared.mac.handle_downlink_mac(
-                                                    &mut self.shared.region,
-                                                    &mac_cmd,
+                                                for mac_cmd in decrypted.fhdr().fopts() {
+                                                    self.shared.mac.handle_downlink_mac(
+                                                        &mut self.shared.region,
+                                                        &mac_cmd,
+                                                    );
+                                                }
+                                                return (
+                                                    self.into_idle().into(),
+                                                    Ok(Response::DataDown),
                                                 );
                                             }
-                                            return (
-                                                self.into_idle().into(),
-                                                Ok(Response::DataDown),
-                                            );
                                         }
                                     }
                                 }
@@ -513,8 +517,11 @@ where
                     ),
                 }
             }
-            // anything other than a RadioEvent is unexpected
-            Event::NewSession | Event::SendData(_) => panic!("Unexpected event while WaitingForRx"),
+            Event::NewSession => {
+                (self.into(), Err(Error::NewSessionWhileWaitingForRx.into()))
+            } Event::SendData(_) => {
+                (self.into(), Err(Error::SendDataWhileWaitingForRx.into()))
+            }
         }
     }
 

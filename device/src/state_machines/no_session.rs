@@ -89,8 +89,23 @@ where
     }
 }
 
-pub enum Error {}
+#[derive(Debug)]
+pub enum Error {
+    RadioEventWhileIdle,
+    SendDataWhileNoSession,
+    RadioEventWhileWaitingForJoinWindow,
+    NewSessionWhileWaitingForJoinWindow,
+    SendDataWhileWaitingForJoinWindow,
+    NewSessionWhileWaitingForJoinResponse,
+}
 
+impl<R> From<Error> for super::super::Error<R>
+    where R: radio::PhyRxTx
+{
+    fn from(error: Error) -> super::super::Error<R> {
+        super::super::Error::NoSession(error)
+    }
+}
 type DevNonce = lorawan_encoding::parser::DevNonce<[u8; 2]>;
 
 pub struct Idle<R>
@@ -145,10 +160,10 @@ where
                 }
             }
             Event::RadioEvent(_radio_event) => {
-                panic!("Unexpected radio event while NoSession::Idle");
+                (self.into(), Err(Error::RadioEventWhileIdle.into()))
             }
             Event::SendData(_) => {
-                panic!("Unexpected transmit data event while NoSession::Idle");
+                (self.into(), Err(Error::SendDataWhileNoSession.into()))
             }
         }
     }
@@ -252,8 +267,14 @@ where
                 }
             }
             // anything other than a RadioEvent is unexpected
-            Event::NewSession | Event::Timeout | Event::SendData(_) => {
-                panic!("Unexpected event while SendingJoin")
+            Event::NewSession => {
+                (self.into(), Err(Error::NewSessionWhileWaitingForJoinResponse.into()))
+            }
+            Event::Timeout => {
+                panic!("TODO: implement timeouts")
+            }
+            Event::SendData(_) => {
+                (self.into(), Err(Error::SendDataWhileNoSession.into()))
             }
         }
     }
@@ -312,9 +333,14 @@ where
                     Err(e) => (self.into(), Err(e.into())),
                 }
             }
-            // anything other than a Timeout is unexpected
-            Event::NewSession | Event::RadioEvent(_) | Event::SendData(_) => {
-                panic!("Unexpected event while WaitingForRxWindow")
+            Event::RadioEvent(_) => {
+                (self.into(), Err(Error::RadioEventWhileWaitingForJoinWindow.into()))
+            }
+            Event::NewSession => {
+                (self.into(), Err(Error::NewSessionWhileWaitingForJoinWindow.into()))
+            }
+            Event::SendData(_) => {
+                (self.into(), Err(Error::SendDataWhileNoSession.into()))
             }
         }
     }
@@ -385,9 +411,15 @@ where
                     Err(e) => (self.into(), Err(e.into())),
                 }
             }
-            // anything other than a RadioEvent is unexpected
-            Event::NewSession | Event::Timeout | Event::SendData(_) => {
-                panic!("Unexpected event while SendingJoin")
+            Event::Timeout => {
+                panic!("TODO: implement Timeouts")
+            }
+            Event::NewSession => {
+                (self.into(), Err(Error::NewSessionWhileWaitingForJoinResponse.into()))
+
+            }
+            Event::SendData(_) => {
+                (self.into(), Err(Error::SendDataWhileNoSession.into()))
             }
         }
     }
