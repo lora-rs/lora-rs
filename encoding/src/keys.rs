@@ -6,7 +6,7 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use aes::block_cipher::generic_array::{typenum::U16, GenericArray};
+use super::securityhelpers::generic_array::{typenum::U16, GenericArray};
 
 /// AES128 represents 128 bit AES key.
 #[derive(Debug, Default, PartialEq, Clone, Copy)]

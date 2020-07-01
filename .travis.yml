@@ -16,6 +16,7 @@ before_script:
 
 script:
   - (cd encoding && cargo clippy --all-targets --all-features -- -D warnings)
+  - (cd encoding && cargo build --no-default-features)
   - (cd device && cargo clippy -- -D warnings)
   - cargo build --verbose --all
   - cargo test --verbose --workspace --exclude lorawan-device
