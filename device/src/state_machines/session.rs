@@ -150,12 +150,14 @@ impl<'a, R> Idle<R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    fn prepare_buffer(&mut self, data: &SendData) {
+    #[allow(clippy::match_wild_err_arm)]
+    fn prepare_buffer(&mut self, data: &SendData) -> FcntUp {
+        let fcnt = self.session.fcnt_up();
         let mut phy = DataPayloadCreator::new();
         phy.set_confirmed(data.confirmed)
             .set_f_port(data.fport)
             .set_dev_addr(*self.session.devaddr())
-            .set_fcnt(self.session.fcnt_up());
+            .set_fcnt(fcnt);
 
         let mut cmds = Vec::new();
         self.shared.mac.get_cmds(&mut cmds);
@@ -182,6 +184,7 @@ where
             }
             Err(_) => panic!("Error assembling packet!"),
         }
+        fcnt
     }
     pub fn handle_event(
         mut self,
@@ -190,7 +193,7 @@ where
         match event {
             Event::SendData(send_data) => {
                 // encodes the packet and places it in send buffer
-                self.prepare_buffer(&send_data);
+                let fcnt = self.prepare_buffer(&send_data);
 
                 let random = (self.shared.get_random)();
                 let frequency = self.shared.region.get_join_frequency(random as u8);
@@ -208,6 +211,7 @@ where
                     &mut self.shared.buffer,
                 );
 
+
                 let confirmed = send_data.confirmed;
 
                 // send the transmit request to the radio
@@ -218,7 +222,7 @@ where
                             // allows for asynchronous sending
                             radio::Response::Txing => (
                                 self.into_sending_data(confirmed).into(),
-                                Ok(Response::SendingDataUp),
+                                Ok(Response::SendingDataUp(fcnt)),
                             ),
                             // directly jump to waiting for RxWindow
                             // allows for synchronous sending
@@ -457,16 +461,24 @@ where
                                                     )
                                                     .unwrap();
 
-                                                for mac_cmd in decrypted.fhdr().fopts() {
-                                                    self.shared.mac.handle_downlink_mac(
+                                                self.shared.mac.handle_downlink_macs(
+                                                    &mut self.shared.region,
+                                                    &mut decrypted.fhdr().fopts(),
+                                                );
+
+                                                if let Ok(FRMPayload::MACCommands(mac_cmds)) = decrypted.frm_payload() {
+                                                    self.shared.mac.handle_downlink_macs(
                                                         &mut self.shared.region,
-                                                        &mac_cmd,
+                                                        &mut mac_cmds.mac_commands(),
                                                     );
                                                 }
+
                                                 return (
                                                     self.into_idle().into(),
-                                                    Ok(Response::DataDown),
+                                                    Ok(Response::DataDown(fcnt)),
                                                 );
+
+
                                             }
                                         }
                                     }

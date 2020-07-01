@@ -1,4 +1,4 @@
-#![no_std]
+//#![no_std]
 
 use heapless::consts::*;
 use heapless::Vec;
@@ -17,6 +17,7 @@ use us915::Configuration as RegionalConfiguration;
 mod state_machines;
 use state_machines::Shared;
 pub use state_machines::{no_session, session};
+use lorawan_encoding::parser::{parse as lorawan_parse, PhyPayload, DataPayload, FRMPayload};
 
 type TimestampMs = u32;
 
@@ -24,17 +25,19 @@ pub struct Device<R: radio::PhyRxTx + Timings> {
     state: State<R>,
 }
 
+type FcntDown = u32;
+type FcntUp = u32;
+
 #[derive(Debug)]
 pub enum Response {
     Idle,
-    DataDown,   // packet received
-    TxComplete, // packet sent
+    DataDown(FcntDown)  , // packet received
     TimeoutRequest(TimestampMs),
     SendingJoinRequest,
     WaitingForJoinAccept,
     Rxing,
     NewSession,
-    SendingDataUp,
+    SendingDataUp(FcntUp),
     WaitingForDataDown,
     NoAck,
     ReadyToSend,
@@ -165,12 +168,42 @@ impl<R: radio::PhyRxTx + Timings> Device<R> {
         }))
     }
 
+    pub fn get_downlink_payload(&mut self) -> Option<Vec<u8, U256>> {
+        let buffer = self.get_radio().get_received_packet();
+        if let Ok(parsed_packet) = lorawan_parse(buffer) {
+            if let PhyPayload::Data(data_frame) = parsed_packet {
+                if let DataPayload::Decrypted(decrypted) = data_frame {
+                    if let Ok(FRMPayload::Data(data)) = decrypted.frm_payload() {
+                        let mut return_data = Vec::new();
+                        return_data.extend_from_slice(data).unwrap();
+                        return Some(return_data);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+    pub fn get_downlink_mac(&mut self) -> Option<Vec<u8, U256>> {
+        let buffer = self.get_radio().get_received_packet();
+        if let Ok(parsed_packet) = lorawan_parse(buffer) {
+            if let PhyPayload::Data(data_frame) = parsed_packet {
+                if let DataPayload::Decrypted(decrypted) = data_frame {
+                    if let Ok(FRMPayload::Data(data)) = decrypted.frm_payload() {
+                        let mut return_data = Vec::new();
+                        return_data.extend_from_slice(data).unwrap();
+                        return Some(return_data);
+                    }
+                }
+            }
+        }
+        None
+    }
+
     pub fn handle_event(self, event: Event<R>) -> (Self, Result<Response, Error<R>>) {
         match self.state {
             State::NoSession(state) => state.handle_event(event),
             State::Session(state) => state.handle_event(event),
         }
-        // self.state = new_state;
-        // (self, response)
     }
 }
