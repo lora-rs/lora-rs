@@ -36,15 +36,17 @@ impl AdrAnsTrait for AdrAns {
 }
 
 impl Mac {
-    pub fn handle_downlink_mac(
+    pub fn handle_downlink_macs(
         &mut self,
         region: &mut RegionalConfiguration,
-        cmd: &lorawan_encoding::maccommands::MacCommand,
+        cmds: &mut lorawan_encoding::maccommands::MacCommandIterator,
     ) {
-        if let MacCommand::LinkADRReq(payload) = cmd {
-            // we ignore DR and TxPwr
-            region.set_channel_mask(payload.channel_mask());
-            self.adr_ans.add();
+        for cmd in cmds {
+            if let MacCommand::LinkADRReq(payload) = cmd {
+                // we ignore DR and TxPwr
+                region.set_channel_mask(payload.channel_mask());
+                self.adr_ans.add();
+            }
         }
     }
 

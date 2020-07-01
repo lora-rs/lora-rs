@@ -8,6 +8,7 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
+<<<<<<< HEAD
 use aes::block_cipher::{generic_array::GenericArray, NewBlockCipher};
 use aes::Aes128;
 use std::alloc::System;
@@ -17,6 +18,12 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use aes::block_cipher::{generic_array::GenericArray, NewBlockCipher};
 use aes::Aes128;
 >>>>>>> Initial device stack refactor (#1)
+=======
+use aes::block_cipher::{generic_array::GenericArray, NewBlockCipher};
+use aes::Aes128;
+use std::alloc::System;
+use std::sync::atomic::{AtomicU64, Ordering};
+>>>>>>> Make downlink data, session keys, and fcnts accessible to user (#3)
 
 extern crate std;
 

@@ -1,7 +1,7 @@
 use super::super::session::Session;
 use super::super::State as SuperState;
 use super::super::*;
-use super::Shared;
+use super::{CommonState, Shared};
 use lorawan_encoding::{
     self,
     creator::JoinRequestCreator,
@@ -100,7 +100,8 @@ pub enum Error {
 }
 
 impl<R> From<Error> for super::super::Error<R>
-    where R: radio::PhyRxTx
+where
+    R: radio::PhyRxTx,
 {
     fn from(error: Error) -> super::super::Error<R> {
         super::super::Error::NoSession(error)
@@ -162,9 +163,7 @@ where
             Event::RadioEvent(_radio_event) => {
                 (self.into(), Err(Error::RadioEventWhileIdle.into()))
             }
-            Event::SendData(_) => {
-                (self.into(), Err(Error::SendDataWhileNoSession.into()))
-            }
+            Event::SendData(_) => (self.into(), Err(Error::SendDataWhileNoSession.into())),
         }
     }
 
@@ -267,15 +266,12 @@ where
                 }
             }
             // anything other than a RadioEvent is unexpected
-            Event::NewSession => {
-                (self.into(), Err(Error::NewSessionWhileWaitingForJoinResponse.into()))
-            }
-            Event::Timeout => {
-                panic!("TODO: implement timeouts")
-            }
-            Event::SendData(_) => {
-                (self.into(), Err(Error::SendDataWhileNoSession.into()))
-            }
+            Event::NewSession => (
+                self.into(),
+                Err(Error::NewSessionWhileWaitingForJoinResponse.into()),
+            ),
+            Event::Timeout => panic!("TODO: implement timeouts"),
+            Event::SendData(_) => (self.into(), Err(Error::SendDataWhileNoSession.into())),
         }
     }
 }
@@ -333,15 +329,15 @@ where
                     Err(e) => (self.into(), Err(e.into())),
                 }
             }
-            Event::RadioEvent(_) => {
-                (self.into(), Err(Error::RadioEventWhileWaitingForJoinWindow.into()))
-            }
-            Event::NewSession => {
-                (self.into(), Err(Error::NewSessionWhileWaitingForJoinWindow.into()))
-            }
-            Event::SendData(_) => {
-                (self.into(), Err(Error::SendDataWhileNoSession.into()))
-            }
+            Event::RadioEvent(_) => (
+                self.into(),
+                Err(Error::RadioEventWhileWaitingForJoinWindow.into()),
+            ),
+            Event::NewSession => (
+                self.into(),
+                Err(Error::NewSessionWhileWaitingForJoinWindow.into()),
+            ),
+            Event::SendData(_) => (self.into(), Err(Error::SendDataWhileNoSession.into())),
         }
     }
 }
@@ -411,16 +407,12 @@ where
                     Err(e) => (self.into(), Err(e.into())),
                 }
             }
-            Event::Timeout => {
-                panic!("TODO: implement Timeouts")
-            }
-            Event::NewSession => {
-                (self.into(), Err(Error::NewSessionWhileWaitingForJoinResponse.into()))
-
-            }
-            Event::SendData(_) => {
-                (self.into(), Err(Error::SendDataWhileNoSession.into()))
-            }
+            Event::Timeout => panic!("TODO: implement Timeouts"),
+            Event::NewSession => (
+                self.into(),
+                Err(Error::NewSessionWhileWaitingForJoinResponse.into()),
+            ),
+            Event::SendData(_) => (self.into(), Err(Error::SendDataWhileNoSession.into())),
         }
     }
 }

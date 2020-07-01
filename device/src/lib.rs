@@ -15,6 +15,7 @@ mod us915;
 use us915::Configuration as RegionalConfiguration;
 
 mod state_machines;
+use lorawan_encoding::parser::{parse as lorawan_parse, DataPayload, FRMPayload, PhyPayload, DataHeader};
 use state_machines::Shared;
 pub use state_machines::{no_session, session};
 
@@ -24,17 +25,19 @@ pub struct Device<R: radio::PhyRxTx + Timings> {
     state: State<R>,
 }
 
+type FcntDown = u32;
+type FcntUp = u32;
+
 #[derive(Debug)]
 pub enum Response {
     Idle,
-    DataDown,   // packet received
-    TxComplete, // packet sent
+    DataDown(FcntDown), // packet received
     TimeoutRequest(TimestampMs),
     SendingJoinRequest,
     WaitingForJoinAccept,
     Rxing,
     NewSession,
-    SendingDataUp,
+    SendingDataUp(FcntUp),
     WaitingForDataDown,
     NoAck,
     ReadyToSend,
@@ -47,7 +50,8 @@ pub enum Error<R: radio::PhyRxTx> {
 }
 
 impl<R> From<radio::Error<R>> for Error<R>
-where R: radio::PhyRxTx
+where
+    R: radio::PhyRxTx,
 {
     fn from(radio_error: radio::Error<R>) -> Error<R> {
         Error::Radio(radio_error)
@@ -91,10 +95,6 @@ where
 {
     NoSession(no_session::NoSession<R>),
     Session(session::Session<R>),
-}
-
-trait CommonState<R: radio::PhyRxTx + Timings> {
-    fn get_mut_shared(&mut self) -> &mut Shared<R>;
 }
 
 use core::default::Default;
@@ -144,7 +144,7 @@ impl<R: radio::PhyRxTx + Timings> Device<R> {
         let shared = self.get_shared();
         shared.get_mut_credentials()
     }
-    
+
     fn get_shared(&mut self) -> &mut Shared<R> {
         match &mut self.state {
             State::NoSession(state) => state.get_mut_shared(),
@@ -165,12 +165,45 @@ impl<R: radio::PhyRxTx + Timings> Device<R> {
         }))
     }
 
+    pub fn get_fcnt_up(&mut self) -> Option<u32> {
+        if let State::Session(session) = &self.state {
+            Some(session.get_session_data().fcnt_up())
+        } else {
+            None
+        }
+    }
+
+    pub fn get_session_keys(&mut self) -> Option<SessionKeys> {
+        if let State::Session(session) = &self.state {
+            Some(SessionKeys::copy_from_session_data(
+                session.get_session_data(),
+            ))
+        } else {
+            None
+        }
+    }
+
+    pub fn get_downlink_payload(&mut self) -> Option<(u8, Vec<u8, U256>)> {
+        let buffer = self.get_radio().get_received_packet();
+        if let Ok(parsed_packet) = lorawan_parse(buffer) {
+            if let PhyPayload::Data(data_frame) = parsed_packet {
+                let fport = data_frame.f_port();
+                if let DataPayload::Decrypted(decrypted) = data_frame {
+                    if let (Some(fport), Ok(FRMPayload::Data(data))) = (fport, decrypted.frm_payload() ) {
+                        let mut return_data = Vec::new();
+                        return_data.extend_from_slice(data).unwrap();
+                        return Some((fport, return_data));
+                    }
+                }
+            }
+        }
+        None
+    }
+
     pub fn handle_event(self, event: Event<R>) -> (Self, Result<Response, Error<R>>) {
         match self.state {
             State::NoSession(state) => state.handle_event(event),
             State::Session(state) => state.handle_event(event),
         }
-        // self.state = new_state;
-        // (self, response)
     }
 }

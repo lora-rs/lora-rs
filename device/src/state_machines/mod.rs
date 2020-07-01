@@ -15,7 +15,6 @@ pub struct Shared<R: radio::PhyRxTx + Timings> {
 }
 
 impl<R: radio::PhyRxTx + Timings> Shared<R> {
-
     pub fn get_mut_radio(&mut self) -> &mut R {
         &mut self.radio
     }
@@ -42,4 +41,8 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
             buffer,
         }
     }
+}
+
+trait CommonState<R: radio::PhyRxTx + Timings> {
+    fn get_mut_shared(&mut self) -> &mut Shared<R>;
 }
