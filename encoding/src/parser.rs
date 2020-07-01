@@ -31,7 +31,7 @@
 use super::keys::{CryptoFactory, Encrypter, AES128, MIC};
 use super::maccommands::{parse_mac_commands, DLSettings, Frequency, MacCommandIterator};
 use super::securityhelpers;
-use super::securityhelpers::GenericArray;
+use super::securityhelpers::generic_array::GenericArray;
 
 #[cfg(feature = "default-crypto")]
 use super::default_crypto::DefaultFactory;
@@ -331,8 +331,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
 
             for i in 0..(len >> 4) {
                 let start = (i << 4) + 1;
-                let block =
-                    GenericArray::from_mut_slice(&mut bytes[start..(start + 16)]);
+                let block = GenericArray::from_mut_slice(&mut bytes[start..(start + 16)]);
                 aes_enc.encrypt_block(block);
             }
         }

@@ -6,17 +6,16 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-
-use aes::block_cipher::generic_array::{GenericArray, typenum::U16};
-use aes::block_cipher::{BlockCipher, NewBlockCipher};
-use aes::Aes128;
-use cmac::crypto_mac::NewMac;
 use super::creator::JoinRequestCreator;
 use super::keys::*;
 use super::parser::{
     DecryptedDataPayload, DecryptedJoinAcceptPayload, EncryptedDataPayload,
     EncryptedJoinAcceptPayload, JoinRequestPayload,
 };
+use super::securityhelpers::generic_array::{typenum::U16, GenericArray};
+use aes::block_cipher::{BlockCipher, NewBlockCipher};
+use aes::Aes128;
+use cmac::crypto_mac::NewMac;
 
 pub type Cmac = cmac::Cmac<Aes128>;
 

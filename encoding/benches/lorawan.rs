@@ -8,10 +8,10 @@
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-use std::alloc::System;
-use std::sync::atomic::{AtomicU64, Ordering};
 use aes::block_cipher::{generic_array::GenericArray, NewBlockCipher};
 use aes::Aes128;
+use std::alloc::System;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 extern crate std;
 

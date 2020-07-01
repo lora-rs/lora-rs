@@ -37,7 +37,7 @@ enum Data {
     Session(Session),
 }
 
-type SmHandler<R,E> = fn(&mut Device<R, E>, &mut dyn Radio<Event = E>, Event) -> Option<Response>;
+type SmHandler<R, E> = fn(&mut Device<R, E>, &mut dyn Radio<Event = E>, Event) -> Option<Response>;
 
 pub struct Device<R: Radio, E> {
     _radio: PhantomData<R>,
@@ -45,7 +45,7 @@ pub struct Device<R: Radio, E> {
     get_random: fn() -> u32,
     credentials: Credentials,
     region: RegionalConfiguration,
-    sm_handler: SmHandler<R,E>,
+    sm_handler: SmHandler<R, E>,
     sm_data: Data,
 }
 
