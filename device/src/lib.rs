@@ -15,7 +15,9 @@ mod us915;
 use us915::Configuration as RegionalConfiguration;
 
 mod state_machines;
-use lorawan_encoding::parser::{parse as lorawan_parse, DataPayload, FRMPayload, PhyPayload, DataHeader};
+use lorawan_encoding::parser::{
+    parse as lorawan_parse, DataHeader, DataPayload, FRMPayload, PhyPayload,
+};
 use state_machines::Shared;
 pub use state_machines::{no_session, session};
 
@@ -189,7 +191,9 @@ impl<R: radio::PhyRxTx + Timings> Device<R> {
             if let PhyPayload::Data(data_frame) = parsed_packet {
                 let fport = data_frame.f_port();
                 if let DataPayload::Decrypted(decrypted) = data_frame {
-                    if let (Some(fport), Ok(FRMPayload::Data(data))) = (fport, decrypted.frm_payload() ) {
+                    if let (Some(fport), Ok(FRMPayload::Data(data))) =
+                        (fport, decrypted.frm_payload())
+                    {
                         let mut return_data = Vec::new();
                         return_data.extend_from_slice(data).unwrap();
                         return Some((fport, return_data));
