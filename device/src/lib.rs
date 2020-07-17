@@ -43,6 +43,7 @@ pub enum Response {
     WaitingForDataDown,
     NoAck,
     ReadyToSend,
+    NoJoinAccept,
 }
 
 pub enum Error<R: radio::PhyRxTx> {
