@@ -2,11 +2,8 @@
 
 [![Build Status](https://travis-ci.org/ivajloip/rust-lorawan.svg?branch=master)](https://travis-ci.org/ivajloip/rust-lorawan)
 
-This is an experimental LoRaWAN device stack. It can be tested by using the example 
-in [the sx12xx-rs repository](https://github.com/lthiery/sx12xx-rs).
-
+This is an experimental LoRaWAN device stack. It can be tested by using the example in [the sx12xx-rs repository](https://github.com/lthiery/sx12xx-rs).
 This is a very state machine driven implementation of a LoRaWAN stack designed for concurrency in non-threaded environments.
-
 The state machine implementation was based off [an article by Ana Hobden](https://hoverbear.org/blog/rust-state-machine-pattern/).
 
 There are two super-states that the Device can be in:
