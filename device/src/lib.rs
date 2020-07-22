@@ -41,20 +41,18 @@ type FcntUp = u32;
 
 #[derive(Debug)]
 pub enum Response {
-    Idle,
-    DataDown(FcntDown), // packet received
+    NoUpdate,
     TimeoutRequest(TimestampMs),
-    SendingJoinRequest,
-    WaitingForJoinAccept,
-    Rxing,
-    NewSession,
-    SendingDataUp(FcntUp),
-    WaitingForDataDown,
+    JoinRequestSending,
+    JoinSuccess,
+    NoJoinAccept,
+    UplinkSending(FcntUp),
+    DownlinkReceived(FcntDown),
     NoAck,
     ReadyToSend,
-    NoJoinAccept,
 }
 
+#[derive(Debug)]
 pub enum Error<R: radio::PhyRxTx> {
     Radio(radio::Error<R>), // error: unhandled event
     Session(session::Error),
@@ -74,10 +72,10 @@ pub enum Event<'a, R>
 where
     R: radio::PhyRxTx,
 {
-    NewSession,
+    NewSessionRequest,
+    SendDataRequest(SendData<'a>),
     RadioEvent(radio::Event<'a, R>),
-    Timeout,
-    SendData(SendData<'a>),
+    TimeoutFired,
 }
 
 impl<'a, R> core::fmt::Debug for Event<'a, R>
@@ -86,10 +84,10 @@ where
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let event = match self {
-            Event::NewSession => "NewSession",
+            Event::NewSessionRequest => "NewSessionRequest",
+            Event::SendDataRequest(_) => "SendDataRequest",
             Event::RadioEvent(_) => "RadioEvent(?)",
-            Event::Timeout => "Timeout",
-            Event::SendData(_) => "SendData",
+            Event::TimeoutFired => "TimeoutFired",
         };
         write!(f, "lorawan_device::Event::{}", event)
     }
@@ -183,14 +181,14 @@ where
         fport: u8,
         confirmed: bool,
     ) -> (Self, Result<Response, Error<R>>) {
-        self.handle_event(Event::SendData(SendData {
+        self.handle_event(Event::SendDataRequest(SendData {
             data,
             fport,
             confirmed,
         }))
     }
 
-    pub fn get_fcnt_up(&mut self) -> Option<u32> {
+    pub fn get_fcnt_up(&self) -> Option<u32> {
         if let State::Session(session) = &self.state {
             Some(session.get_session_data().fcnt_up())
         } else {
@@ -198,7 +196,7 @@ where
         }
     }
 
-    pub fn get_session_keys(&mut self) -> Option<SessionKeys> {
+    pub fn get_session_keys(&self) -> Option<SessionKeys> {
         if let State::Session(session) = &self.state {
             Some(SessionKeys::copy_from_session_data(
                 session.get_session_data(),

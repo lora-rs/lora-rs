@@ -218,7 +218,7 @@ where
         event: Event<R>,
     ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
         match event {
-            Event::SendData(send_data) => {
+            Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
                 let fcnt = self.prepare_buffer::<C>(&send_data);
 
@@ -248,7 +248,7 @@ where
                             // allows for asynchronous sending
                             radio::Response::Txing => (
                                 self.into_sending_data(confirmed).into(),
-                                Ok(Response::SendingDataUp(fcnt)),
+                                Ok(Response::UplinkSending(fcnt)),
                             ),
                             // directly jump to waiting for RxWindow
                             // allows for synchronous sending
@@ -264,10 +264,10 @@ where
                 }
             }
             // tolerate unexpected timeout
-            Event::Timeout => (self.into(), Ok(Response::Idle)),
-            Event::NewSession => {
+            Event::TimeoutFired => (self.into(), Ok(Response::NoUpdate)),
+            Event::NewSessionRequest => {
                 let no_session = NoSession::new(self.shared);
-                no_session.handle_event(Event::NewSession)
+                no_session.handle_event(Event::NewSessionRequest)
             }
             Event::RadioEvent(_radio_event) => {
                 (self.into(), Err(Error::RadioEventWhileIdle.into()))
@@ -340,9 +340,11 @@ where
                 }
             }
             // tolerate unexpected timeout
-            Event::Timeout => (self.into(), Ok(Response::Idle)),
+            Event::TimeoutFired => (self.into(), Ok(Response::NoUpdate)),
             // anything other than a RadioEvent is unexpected
-            Event::NewSession | Event::SendData(_) => panic!("Unexpected event while SendingJoin"),
+            Event::NewSessionRequest | Event::SendDataRequest(_) => {
+                panic!("Unexpected event while SendingJoin")
+            }
         }
     }
 
@@ -376,7 +378,7 @@ where
     ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for a Timeout
-            Event::Timeout => {
+            Event::TimeoutFired => {
                 let rx_config = radio::RfConfig {
                     frequency: self.shared.region.get_rxwindow1_frequency(),
                     bandwidth: radio::Bandwidth::_500KHZ,
@@ -420,11 +422,11 @@ where
                 self.into(),
                 Err(Error::RadioEventWhileWaitingForRxWindow.into()),
             ),
-            Event::NewSession => (
+            Event::NewSessionRequest => (
                 self.into(),
                 Err(Error::NewSessionWhileWaitingForRxWindow.into()),
             ),
-            Event::SendData(_) => (
+            Event::SendDataRequest(_) => (
                 self.into(),
                 Err(Error::SendDataWhileWaitingForRxWindow.into()),
             ),
@@ -510,11 +512,11 @@ where
                                                 if self.session.fcnt_up() == (0xFFFF + 1) {
                                                     let no_session = NoSession::new(self.shared);
                                                     return no_session
-                                                        .handle_event(Event::NewSession);
+                                                        .handle_event(Event::NewSessionRequest);
                                                 } else {
                                                     return (
                                                         self.into_idle().into(),
-                                                        Ok(Response::DataDown(fcnt)),
+                                                        Ok(Response::DownlinkReceived(fcnt)),
                                                     );
                                                 }
                                             }
@@ -522,14 +524,14 @@ where
                                     }
                                 }
                             }
-                            (self.into(), Ok(Response::WaitingForDataDown))
+                            (self.into(), Ok(Response::NoUpdate))
                         }
-                        _ => (self.into(), Ok(Response::WaitingForDataDown)),
+                        _ => (self.into(), Ok(Response::NoUpdate)),
                     },
                     Err(e) => (self.into(), Err(e.into())),
                 }
             }
-            Event::Timeout => {
+            Event::TimeoutFired => {
                 // send the transmit request to the radio
                 if let Err(_e) = self.shared.radio.handle_event(radio::Event::CancelRx) {
                     panic!("Error cancelling Rx");
@@ -558,7 +560,7 @@ where
                         // that could be confusing for the client
                         if self.session.fcnt_up() == (0xFFFF + 1) {
                             let no_session = NoSession::new(self.shared);
-                            no_session.handle_event(Event::NewSession)
+                            no_session.handle_event(Event::NewSessionRequest)
                         } else {
                             let response = if self.confirmed {
                                 Ok(Response::NoAck)
@@ -570,8 +572,12 @@ where
                     }
                 }
             }
-            Event::NewSession => (self.into(), Err(Error::NewSessionWhileWaitingForRx.into())),
-            Event::SendData(_) => (self.into(), Err(Error::SendDataWhileWaitingForRx.into())),
+            Event::NewSessionRequest => {
+                (self.into(), Err(Error::NewSessionWhileWaitingForRx.into()))
+            }
+            Event::SendDataRequest(_) => {
+                (self.into(), Err(Error::SendDataWhileWaitingForRx.into()))
+            }
         }
     }
 

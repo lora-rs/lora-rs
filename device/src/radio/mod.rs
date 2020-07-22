@@ -17,6 +17,7 @@ where
     PhyEvent(R::PhyEvent),
 }
 
+#[derive(Debug)]
 pub enum Response<R>
 where
     R: PhyRxTx,
@@ -43,10 +44,12 @@ where
     PhyError(R::PhyError),
 }
 
+use core::fmt;
+
 pub trait PhyRxTx {
-    type PhyEvent;
-    type PhyResponse;
-    type PhyError;
+    type PhyEvent: fmt::Debug;
+    type PhyError: fmt::Debug;
+    type PhyResponse: fmt::Debug;
 
     fn get_mut_radio(&mut self) -> &mut Self;
 
