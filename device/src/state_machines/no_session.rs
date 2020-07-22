@@ -7,7 +7,7 @@ use lorawan_encoding::{
     creator::JoinRequestCreator,
     keys::AES128,
     parser::DevAddr,
-    parser::{parse as lorawan_parse, *},
+    parser::{parse_with_factory as lorawan_parse, *},
 };
 
 pub enum NoSession<R>
@@ -20,15 +20,24 @@ where
     WaitingForJoinResponse(WaitingForJoinResponse<R>),
 }
 
+enum JoinRxWindow {
+    _1(u32),
+    _2(u32),
+}
+
 macro_rules! into_state {
     ($($from:tt),*) => {
     $(
-        impl<R> From<$from<R>> for Device<R>
+        impl<R, C> From<$from<R>> for Device<R,C>
         where
             R: radio::PhyRxTx + Timings,
+            C: CryptoFactory + Default
         {
-            fn from(state: $from<R>) -> Device<R> {
-                Device { state: SuperState::NoSession(NoSession::$from(state)) }
+            fn from(state: $from<R>) -> Device<R, C> {
+                Device {
+                    crypto: PhantomData::default(),
+                    state: SuperState::NoSession(NoSession::$from(state))
+                    }
             }
         }
 
@@ -76,10 +85,10 @@ where
         }
     }
 
-    pub fn handle_event(
+    pub fn handle_event<C: CryptoFactory + Default>(
         self,
         event: Event<R>,
-    ) -> (Device<R>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
         match self {
             NoSession::Idle(state) => state.handle_event(event),
             NoSession::SendingJoin(state) => state.handle_event(event),
@@ -121,14 +130,14 @@ impl<'a, R> Idle<R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    pub fn handle_event(
+    pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // NewSession Request or a Timeout from previously failed Join attempt
             Event::NewSession | Event::Timeout => {
-                let (devnonce, tx_config) = self.create_join_request();
+                let (devnonce, tx_config) = self.create_join_request::<C>();
                 let radio_event: radio::Event<R> =
                     radio::Event::TxRequest(tx_config, &mut self.shared.buffer);
 
@@ -145,11 +154,11 @@ where
                             // directly jump to waiting for RxWindow
                             // allows for synchronous sending
                             radio::Response::TxDone(ms) => {
-                                let time = join_rx_window_timeout(&self.shared.region, ms) as i32
-                                    + self.shared.radio.get_rx_window_offset_ms();
+                                let first_window = self.shared.region.get_join_accept_delay1() + ms;
                                 (
-                                    self.into_waiting_rxwindow(devnonce).into(),
-                                    Ok(Response::TimeoutRequest(time as u32)),
+                                    self.into_waiting_for_rxwindow(devnonce, first_window)
+                                        .into(),
+                                    Ok(Response::TimeoutRequest(first_window)),
                                 )
                             }
                             _ => {
@@ -167,13 +176,14 @@ where
         }
     }
 
-    fn create_join_request(&mut self) -> (DevNonce, radio::TxConfig) {
+    fn create_join_request<C: CryptoFactory + Default>(&mut self) -> (DevNonce, radio::TxConfig) {
         let mut random = (self.shared.get_random)();
         // use lowest 16 bits for devnonce
         let devnonce_bytes = random as u16;
 
         self.shared.buffer.clear();
-        let mut phy = JoinRequestCreator::new();
+
+        let mut phy: JoinRequestCreator<[u8; 23], C> = JoinRequestCreator::default();
         let creds = &self.shared.credentials;
 
         let devnonce = [devnonce_bytes as u8, (devnonce_bytes >> 8) as u8];
@@ -211,10 +221,11 @@ where
         }
     }
 
-    fn into_waiting_rxwindow(self, devnonce: DevNonce) -> WaitingForRxWindow<R> {
+    fn into_waiting_for_rxwindow(self, devnonce: DevNonce, time: u32) -> WaitingForRxWindow<R> {
         WaitingForRxWindow {
             shared: self.shared,
             join_attempts: self.join_attempts + 1,
+            join_rx_window: JoinRxWindow::_1(time),
             devnonce,
         }
     }
@@ -233,27 +244,27 @@ impl<R> SendingJoin<R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    pub fn handle_event(
+    pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
                 // send the transmit request to the radio
-
-                let offset = self.shared.radio.get_rx_window_offset_ms();
-
                 match self.shared.radio.handle_event(radio_event) {
                     Ok(response) => {
                         match response {
                             // expect a complete transmit
                             radio::Response::TxDone(ms) => {
-                                let time =
-                                    join_rx_window_timeout(&self.shared.region, ms) as i32 + offset;
+                                let first_window = (self.shared.region.get_join_accept_delay1()
+                                    as i32
+                                    + ms as i32
+                                    + self.shared.radio.get_rx_window_offset_ms())
+                                    as u32;
                                 (
-                                    WaitingForRxWindow::from(self).into(),
-                                    Ok(Response::TimeoutRequest(time as u32)),
+                                    self.into_waiting_for_rxwindow(first_window).into(),
+                                    Ok(Response::TimeoutRequest(first_window)),
                                 )
                             }
                             // anything other than TxComplete | Idle is unexpected
@@ -274,17 +285,13 @@ where
             Event::SendData(_) => (self.into(), Err(Error::SendDataWhileNoSession.into())),
         }
     }
-}
 
-impl<R> From<SendingJoin<R>> for WaitingForRxWindow<R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    fn from(val: SendingJoin<R>) -> WaitingForRxWindow<R> {
+    fn into_waiting_for_rxwindow(self, time: u32) -> WaitingForRxWindow<R> {
         WaitingForRxWindow {
-            shared: val.shared,
-            join_attempts: val.join_attempts,
-            devnonce: val.devnonce,
+            shared: self.shared,
+            join_attempts: self.join_attempts + 1,
+            join_rx_window: JoinRxWindow::_1(time),
+            devnonce: self.devnonce,
         }
     }
 }
@@ -296,16 +303,17 @@ where
     shared: Shared<R>,
     join_attempts: usize,
     devnonce: DevNonce,
+    join_rx_window: JoinRxWindow,
 }
 
 impl<R> WaitingForRxWindow<R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    pub fn handle_event(
+    pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for a Timeout
             Event::Timeout => {
@@ -321,11 +329,31 @@ where
                     .radio
                     .handle_event(radio::Event::RxRequest(rx_config))
                 {
-                    // TODO: pass timeout
-                    Ok(_) => (
-                        WaitingForJoinResponse::from(self).into(),
-                        Ok(Response::WaitingForJoinAccept),
-                    ),
+                    Ok(_) => {
+                        let window_close: u32 = match self.join_rx_window {
+                            // RxWindow1 one must timeout before RxWindow2
+                            JoinRxWindow::_1(time) => {
+                                let time_between_windows =
+                                    self.shared.region.get_join_accept_delay2()
+                                        - self.shared.region.get_join_accept_delay1();
+                                if time_between_windows
+                                    > self.shared.radio.get_rx_window_duration_ms()
+                                {
+                                    time + self.shared.radio.get_rx_window_duration_ms()
+                                } else {
+                                    time + time_between_windows
+                                }
+                            }
+                            // RxWindow2 can last however long
+                            JoinRxWindow::_2(time) => {
+                                time + self.shared.radio.get_rx_window_duration_ms()
+                            }
+                        };
+                        (
+                            WaitingForJoinResponse::from(self).into(),
+                            Ok(Response::TimeoutRequest(window_close)),
+                        )
+                    }
                     Err(e) => (self.into(), Err(e.into())),
                 }
             }
@@ -348,6 +376,7 @@ where
 {
     fn from(val: WaitingForRxWindow<R>) -> WaitingForJoinResponse<R> {
         WaitingForJoinResponse {
+            join_rx_window: val.join_rx_window,
             shared: val.shared,
             join_attempts: val.join_attempts,
             devnonce: val.devnonce,
@@ -362,16 +391,17 @@ where
     shared: Shared<R>,
     join_attempts: usize,
     devnonce: DevNonce,
+    join_rx_window: JoinRxWindow,
 }
 
 impl<R> WaitingForJoinResponse<R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    pub fn handle_event(
+    pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -379,10 +409,9 @@ where
                 match self.shared.radio.handle_event(radio_event) {
                     Ok(response) => match response {
                         radio::Response::RxDone(_quality) => {
-                            let packet =
-                                lorawan_parse(self.shared.radio.get_received_packet()).unwrap();
-
-                            if let PhyPayload::JoinAccept(join_accept) = packet {
+                            if let Ok(PhyPayload::JoinAccept(join_accept)) =
+                                lorawan_parse(self.shared.radio.get_received_packet(), C::default())
+                            {
                                 if let JoinAcceptPayload::Encrypted(encrypted) = join_accept {
                                     let credentials = &self.shared.credentials;
 
@@ -407,7 +436,40 @@ where
                     Err(e) => (self.into(), Err(e.into())),
                 }
             }
-            Event::Timeout => panic!("TODO: implement Timeouts"),
+            Event::Timeout => {
+                // send the transmit request to the radio
+                if let Err(_e) = self.shared.radio.handle_event(radio::Event::CancelRx) {
+                    panic!("Error cancelling Rx");
+                }
+
+                match self.join_rx_window {
+                    JoinRxWindow::_1(t1) => {
+                        let time_between_windows = self.shared.region.get_join_accept_delay2()
+                            - self.shared.region.get_join_accept_delay1();
+                        let t2 = t1 + time_between_windows;
+                        // TODO: jump to RxWindow2 if t2 == now
+                        (
+                            WaitingForRxWindow {
+                                shared: self.shared,
+                                devnonce: self.devnonce,
+                                join_attempts: self.join_attempts,
+                                join_rx_window: JoinRxWindow::_2(t2),
+                            }
+                            .into(),
+                            Ok(Response::TimeoutRequest(t2)),
+                        )
+                    }
+                    // Timeout during second RxWindow leads to giving up
+                    JoinRxWindow::_2(_) => (
+                        Idle {
+                            shared: self.shared,
+                            join_attempts: self.join_attempts,
+                        }
+                        .into(),
+                        Ok(Response::NoJoinAccept),
+                    ),
+                }
+            }
             Event::NewSession => (
                 self.into(),
                 Err(Error::NewSessionWhileWaitingForJoinResponse.into()),
@@ -477,8 +539,4 @@ impl SessionData {
     pub fn fcnt_up_increment(&mut self) {
         self.fcnt_up += 1;
     }
-}
-
-fn join_rx_window_timeout(region: &RegionalConfiguration, timestamp_ms: TimestampMs) -> u32 {
-    region.get_join_accept_delay1() + timestamp_ms
 }

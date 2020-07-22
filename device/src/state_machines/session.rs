@@ -42,18 +42,18 @@ else(Ready)║ ╚═════════════╝   ║              
            ╚═══════════════════╝               ╚════════════════════╝
  */
 
-use super::super::no_session::SessionData;
+use super::super::no_session::{NoSession, SessionData};
 use super::super::State as SuperState;
 use super::super::*;
 use super::CommonState;
 use as_slice::AsSlice;
+use generic_array::{typenum::U256, GenericArray};
 use lorawan_encoding::{
     self,
     creator::DataPayloadCreator,
     maccommands::SerializableMacCommand,
-    parser::{parse as lorawan_parse, *},
+    parser::{parse_with_factory as lorawan_parse, *},
 };
-
 pub enum Session<R>
 where
     R: radio::PhyRxTx + Timings,
@@ -76,10 +76,13 @@ trait SessionState<R: radio::PhyRxTx + Timings> {
 macro_rules! into_state {
     ($($from:tt),*) => {
     $(
-        impl<R: radio::PhyRxTx + Timings> From<$from<R>> for Device<R>
+        impl<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default> From<$from<R>> for Device<R, C>
         {
-            fn from(state: $from<R>) -> Device<R> {
-                Device { state: SuperState::Session(Session::$from(state)) }
+            fn from(state: $from<R>) -> Device<R, C> {
+                Device {
+                    crypto: PhantomData::default(),
+                    state: SuperState::Session(Session::$from(state))
+                }
             }
         }
 
@@ -97,13 +100,15 @@ macro_rules! into_state {
     )*};
 }
 
-impl<R> From<Session<R>> for Device<R>
+impl<R, C> From<Session<R>> for Device<R, C>
 where
     R: radio::PhyRxTx + Timings,
+    C: CryptoFactory + Default,
 {
-    fn from(session: Session<R>) -> Device<R> {
+    fn from(session: Session<R>) -> Device<R, C> {
         Device {
             state: SuperState::Session(session),
+            crypto: PhantomData::default(),
         }
     }
 }
@@ -155,10 +160,10 @@ where
         }
     }
 
-    pub fn handle_event(
+    pub fn handle_event<C: CryptoFactory + Default>(
         self,
         event: Event<R>,
-    ) -> (Device<R>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
         match self {
             Session::Idle(state) => state.handle_event(event),
             Session::SendingData(state) => state.handle_event(event),
@@ -173,9 +178,9 @@ where
     R: radio::PhyRxTx + Timings,
 {
     #[allow(clippy::match_wild_err_arm)]
-    fn prepare_buffer(&mut self, data: &SendData) -> FcntUp {
+    fn prepare_buffer<C: CryptoFactory + Default>(&mut self, data: &SendData) -> FcntUp {
         let fcnt = self.session.fcnt_up();
-        let mut phy = DataPayloadCreator::new();
+        let mut phy: DataPayloadCreator<GenericArray<u8, U256>, C> = DataPayloadCreator::default();
         phy.set_confirmed(data.confirmed)
             .set_f_port(data.fport)
             .set_dev_addr(*self.session.devaddr())
@@ -208,14 +213,14 @@ where
         }
         fcnt
     }
-    pub fn handle_event(
+    pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             Event::SendData(send_data) => {
                 // encodes the packet and places it in send buffer
-                let fcnt = self.prepare_buffer(&send_data);
+                let fcnt = self.prepare_buffer::<C>(&send_data);
 
                 let random = (self.shared.get_random)();
                 let frequency = self.shared.region.get_join_frequency(random as u8);
@@ -261,7 +266,8 @@ where
             // tolerate unexpected timeout
             Event::Timeout => (self.into(), Ok(Response::Idle)),
             Event::NewSession => {
-                panic!("Unhandled NewSession request during active session");
+                let no_session = NoSession::new(self.shared);
+                no_session.handle_event(Event::NewSession)
             }
             Event::RadioEvent(_radio_event) => {
                 (self.into(), Err(Error::RadioEventWhileIdle.into()))
@@ -308,10 +314,10 @@ impl<R> SendingData<R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    pub fn handle_event(
+    pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -364,10 +370,10 @@ impl<'a, R> WaitingForRxWindow<R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    pub fn handle_event(
+    pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for a Timeout
             Event::Timeout => {
@@ -454,10 +460,10 @@ impl<'a, R> WaitingForRx<R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    pub fn handle_event(
+    pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -466,7 +472,7 @@ where
                     Ok(response) => match response {
                         radio::Response::RxDone(_quality) => {
                             if let Ok(parsed_packet) =
-                                lorawan_parse(self.shared.radio.get_received_packet())
+                                lorawan_parse(self.shared.radio.get_received_packet(), C::default())
                             {
                                 if let PhyPayload::Data(data_frame) = parsed_packet {
                                     if let DataPayload::Encrypted(encrypted_data) = data_frame {
@@ -499,10 +505,18 @@ where
                                                     );
                                                 }
 
-                                                return (
-                                                    self.into_idle().into(),
-                                                    Ok(Response::DataDown(fcnt)),
-                                                );
+                                                // the response is lost when the session is being reset...
+                                                // that could be confusing for the client
+                                                if self.session.fcnt_up() == (0xFFFF + 1) {
+                                                    let no_session = NoSession::new(self.shared);
+                                                    return no_session
+                                                        .handle_event(Event::NewSession);
+                                                } else {
+                                                    return (
+                                                        self.into_idle().into(),
+                                                        Ok(Response::DataDown(fcnt)),
+                                                    );
+                                                }
                                             }
                                         }
                                     }
@@ -539,18 +553,21 @@ where
                         )
                     }
                     // Timeout during second RxWindow leads to giving up
-                    RxWindow::_2(_) => (
-                        Idle {
-                            shared: self.shared,
-                            session: self.session,
-                        }
-                        .into(),
-                        if self.confirmed {
-                            Ok(Response::NoAck)
+                    RxWindow::_2(_) => {
+                        // the response is lost when the session is being reset...
+                        // that could be confusing for the client
+                        if self.session.fcnt_up() == (0xFFFF + 1) {
+                            let no_session = NoSession::new(self.shared);
+                            no_session.handle_event(Event::NewSession)
                         } else {
-                            Ok(Response::ReadyToSend)
-                        },
-                    ),
+                            let response = if self.confirmed {
+                                Ok(Response::NoAck)
+                            } else {
+                                Ok(Response::ReadyToSend)
+                            };
+                            (self.into_idle().into(), response)
+                        }
+                    }
                 }
             }
             Event::NewSession => (self.into(), Err(Error::NewSessionWhileWaitingForRx.into())),
@@ -566,21 +583,27 @@ where
     }
 }
 
-fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings>(
+fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
     state: Session<R>,
     confirmed: bool,
     timestamp_ms: TimestampMs,
-) -> (Device<R>, Result<Response, super::super::Error<R>>) {
+) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
     let (new_state, first_window) = match state {
         Session::Idle(state) => {
-            let first_window = state.shared.region.get_receive_delay1() + timestamp_ms;
+            let first_window = (state.shared.region.get_receive_delay1() as i32
+                + timestamp_ms as i32
+                + state.shared.radio.get_rx_window_offset_ms())
+                as u32;
             (
                 state.into_waiting_for_rxwindow(confirmed, first_window),
                 first_window,
             )
         }
         Session::SendingData(state) => {
-            let first_window = state.shared.region.get_receive_delay1() + timestamp_ms;
+            let first_window = (state.shared.region.get_receive_delay1() as i32
+                + timestamp_ms as i32
+                + state.shared.radio.get_rx_window_offset_ms())
+                as u32;
             (
                 state.into_waiting_for_rxwindow(confirmed, first_window),
                 first_window,

@@ -15,16 +15,25 @@ mod us915;
 use us915::Configuration as RegionalConfiguration;
 
 mod state_machines;
-use lorawan_encoding::parser::{
-    parse as lorawan_parse, DataHeader, DataPayload, FRMPayload, PhyPayload,
+use core::marker::PhantomData;
+use lorawan_encoding::{
+    keys::CryptoFactory,
+    parser::{
+        parse_with_factory as lorawan_parse, DataHeader, DataPayload, FRMPayload, PhyPayload,
+    },
 };
 use state_machines::Shared;
 pub use state_machines::{no_session, session};
 
 type TimestampMs = u32;
 
-pub struct Device<R: radio::PhyRxTx + Timings> {
+pub struct Device<R, C>
+where
+    R: radio::PhyRxTx + Timings,
+    C: CryptoFactory + Default,
+{
     state: State<R>,
+    crypto: PhantomData<C>,
 }
 
 type FcntDown = u32;
@@ -43,6 +52,7 @@ pub enum Response {
     WaitingForDataDown,
     NoAck,
     ReadyToSend,
+    NoJoinAccept,
 }
 
 pub enum Error<R: radio::PhyRxTx> {
@@ -110,22 +120,27 @@ where
 }
 
 pub trait Timings {
-    fn get_rx_window_offset_ms(&mut self) -> i32;
-    fn get_rx_window_duration_ms(&mut self) -> u32;
+    fn get_rx_window_offset_ms(&self) -> i32;
+    fn get_rx_window_duration_ms(&self) -> u32;
 }
 
-impl<R: radio::PhyRxTx + Timings> Device<R> {
+impl<R, C> Device<R, C>
+where
+    R: radio::PhyRxTx + Timings,
+    C: CryptoFactory + Default,
+{
     pub fn new(
         radio: R,
         deveui: [u8; 8],
         appeui: [u8; 8],
         appkey: [u8; 16],
         get_random: fn() -> u32,
-    ) -> Device<R> {
+    ) -> Device<R, C> {
         let mut region = RegionalConfiguration::new();
         region.set_subband(2);
 
         Device {
+            crypto: PhantomData::default(),
             state: State::new(Shared::new(
                 radio,
                 Credentials::new(appeui, deveui, appkey),
@@ -151,6 +166,14 @@ impl<R: radio::PhyRxTx + Timings> Device<R> {
         match &mut self.state {
             State::NoSession(state) => state.get_mut_shared(),
             State::Session(state) => state.get_mut_shared(),
+        }
+    }
+
+    pub fn ready_to_send_data(&self) -> bool {
+        if let State::Session(session::Session::Idle(_)) = &self.state {
+            true
+        } else {
+            false
         }
     }
 
@@ -187,7 +210,7 @@ impl<R: radio::PhyRxTx + Timings> Device<R> {
 
     pub fn get_downlink_payload(&mut self) -> Option<(u8, Vec<u8, U256>)> {
         let buffer = self.get_radio().get_received_packet();
-        if let Ok(parsed_packet) = lorawan_parse(buffer) {
+        if let Ok(parsed_packet) = lorawan_parse(buffer, C::default()) {
             if let PhyPayload::Data(data_frame) = parsed_packet {
                 let fport = data_frame.f_port();
                 if let DataPayload::Decrypted(decrypted) = data_frame {

@@ -358,7 +358,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
         self.mic() == self.calculate_mic(key)
     }
 
-    fn calculate_mic(&self, key: &AES128) -> MIC {
+    pub fn calculate_mic(&self, key: &AES128) -> MIC {
         let d = self.0.as_ref();
         securityhelpers::calculate_mic(&d[..d.len() - 4], self.1.new_mac(key))
     }
