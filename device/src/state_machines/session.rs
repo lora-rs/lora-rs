@@ -223,7 +223,7 @@ where
                 let fcnt = self.prepare_buffer::<C>(&send_data);
 
                 let random = (self.shared.get_random)();
-                let frequency = self.shared.region.get_join_frequency(random as u8);
+                let frequency = self.shared.region.get_data_frequency(random as u8);
 
                 let event: radio::Event<R> = radio::Event::TxRequest(
                     radio::TxConfig {

@@ -54,7 +54,7 @@ pub enum Response {
 
 #[derive(Debug)]
 pub enum Error<R: radio::PhyRxTx> {
-    Radio(radio::Error<R>), // error: unhandled event
+    Radio(radio::Error<R>),
     Session(session::Error),
     NoSession(no_session::Error),
 }
