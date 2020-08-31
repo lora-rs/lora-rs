@@ -16,12 +16,7 @@ use us915::Configuration as RegionalConfiguration;
 
 mod state_machines;
 use core::marker::PhantomData;
-use lorawan_encoding::{
-    keys::CryptoFactory,
-    parser::{
-        parse_with_factory as lorawan_parse, DataHeader, DataPayload, FRMPayload, PhyPayload,
-    },
-};
+use lorawan_encoding::{keys::CryptoFactory, parser::DecryptedDataPayload};
 use state_machines::Shared;
 pub use state_machines::{no_session, session};
 
@@ -206,23 +201,8 @@ where
         }
     }
 
-    pub fn get_downlink_payload(&mut self) -> Option<(u8, Vec<u8, U256>)> {
-        let buffer = self.get_radio().get_received_packet();
-        if let Ok(parsed_packet) = lorawan_parse(buffer, C::default()) {
-            if let PhyPayload::Data(data_frame) = parsed_packet {
-                let fport = data_frame.f_port();
-                if let DataPayload::Decrypted(decrypted) = data_frame {
-                    if let (Some(fport), Ok(FRMPayload::Data(data))) =
-                        (fport, decrypted.frm_payload())
-                    {
-                        let mut return_data = Vec::new();
-                        return_data.extend_from_slice(data).unwrap();
-                        return Some((fport, return_data));
-                    }
-                }
-            }
-        }
-        None
+    pub fn take_data_downlink(&mut self) -> Option<DecryptedDataPayload<Vec<u8, U256>>> {
+        self.get_shared().take_data_downlink()
     }
 
     pub fn handle_event(self, event: Event<R>) -> (Self, Result<Response, Error<R>>) {

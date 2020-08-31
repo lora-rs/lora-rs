@@ -1,4 +1,5 @@
 use super::*;
+use lorawan_encoding::parser::DecryptedDataPayload;
 
 pub mod no_session;
 
@@ -12,6 +13,7 @@ pub struct Shared<R: radio::PhyRxTx + Timings> {
     // TODO: do something nicer for randomness
     get_random: fn() -> u32,
     buffer: Vec<u8, U256>,
+    data_downlink: Option<DecryptedDataPayload<Vec<u8, U256>>>,
 }
 
 impl<R: radio::PhyRxTx + Timings> Shared<R> {
@@ -20,6 +22,10 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
     }
     pub fn get_mut_credentials(&mut self) -> &mut Credentials {
         &mut self.credentials
+    }
+
+    pub fn take_data_downlink(&mut self) -> Option<DecryptedDataPayload<Vec<u8, U256>>> {
+        self.data_downlink.take()
     }
 }
 
@@ -39,6 +45,7 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
             mac,
             get_random,
             buffer,
+            data_downlink: None,
         }
     }
 }

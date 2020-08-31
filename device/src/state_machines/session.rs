@@ -493,6 +493,15 @@ where
                                                     )
                                                     .unwrap();
 
+                                                let mut copy = Vec::new();
+                                                copy.extend(decrypted.as_bytes());
+
+                                                self.shared.data_downlink = Some(
+                                                    DecryptedDataPayload::new_from_decrypted_payload(
+                                                        copy
+                                                    ).unwrap()
+                                                );
+
                                                 self.shared.mac.handle_downlink_macs(
                                                     &mut self.shared.region,
                                                     &mut decrypted.fhdr().fopts(),
