@@ -520,18 +520,17 @@ where
                                                     );
                                                 }
 
-                                                // the response is lost when the session is being reset...
-                                                // that could be confusing for the client
-                                                if self.session.fcnt_up() == (0xFFFF + 1) {
-                                                    let no_session = NoSession::new(self.shared);
-                                                    return no_session
-                                                        .handle_event(Event::NewSessionRequest);
-                                                } else {
-                                                    return (
-                                                        self.into_idle().into(),
-                                                        Ok(Response::DownlinkReceived(fcnt)),
-                                                    );
-                                                }
+                                                // check if FCnt is used up
+                                                let response =
+                                                    if self.session.fcnt_up() == (0xFFFF + 1) {
+                                                        // signal that the session is expired
+                                                        // client must know to check for potential data
+                                                        // (FCnt may be extracted when client checks)
+                                                        Ok(Response::SessionExpired)
+                                                    } else {
+                                                        Ok(Response::DownlinkReceived(fcnt))
+                                                    };
+                                                return (self.into_idle().into(), response);
                                             }
                                         }
                                     }
@@ -569,19 +568,17 @@ where
                     }
                     // Timeout during second RxWindow leads to giving up
                     RxWindow::_2(_) => {
-                        // the response is lost when the session is being reset...
-                        // that could be confusing for the client
-                        if self.session.fcnt_up() == (0xFFFF + 1) {
-                            let no_session = NoSession::new(self.shared);
-                            no_session.handle_event(Event::NewSessionRequest)
+                        // check if FCnt is used up
+                        let response = if self.session.fcnt_up() == (0xFFFF + 1) {
+                            // signal that the session is expired
+                            // client must know to check for potential data
+                            Ok(Response::SessionExpired)
+                        } else if self.confirmed {
+                            Ok(Response::NoAck)
                         } else {
-                            let response = if self.confirmed {
-                                Ok(Response::NoAck)
-                            } else {
-                                Ok(Response::ReadyToSend)
-                            };
-                            (self.into_idle().into(), response)
-                        }
+                            Ok(Response::ReadyToSend)
+                        };
+                        (self.into_idle().into(), response)
                     }
                 }
             }

@@ -45,6 +45,7 @@ pub enum Response {
     DownlinkReceived(FcntDown),
     NoAck,
     ReadyToSend,
+    SessionExpired,
 }
 
 #[derive(Debug)]
