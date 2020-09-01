@@ -485,6 +485,8 @@ where
                                                 && (fcnt > session.fcnt_down || fcnt == 0)
                                             {
                                                 session.fcnt_down = fcnt;
+
+                                                // this is a sane unwrap because we checked the MIC already
                                                 let decrypted = encrypted_data
                                                     .decrypt(
                                                         Some(&session.newskey()),
@@ -496,6 +498,8 @@ where
                                                 let mut copy = Vec::new();
                                                 copy.extend(decrypted.as_bytes());
 
+                                                // this is a sane unwrap because we know the decrypted
+                                                // payload is a valid DecryptedDataPayload
                                                 self.shared.data_downlink = Some(
                                                     DecryptedDataPayload::new_from_decrypted_payload(
                                                         copy
