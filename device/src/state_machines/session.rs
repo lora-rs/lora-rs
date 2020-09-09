@@ -490,14 +490,14 @@ where
                                                 copy.extend(encrypted_data.as_bytes());
 
                                                 // this is a sane unwrap because we checked the MIC already
-                                                let decrypted = EncryptedDataPayload::new(copy).unwrap()
+                                                let decrypted = EncryptedDataPayload::new(copy)
+                                                    .unwrap()
                                                     .decrypt(
                                                         Some(&session.newskey()),
                                                         Some(&session.appskey()),
                                                         session.fcnt_down,
                                                     )
                                                     .unwrap();
-
 
                                                 self.shared.mac.handle_downlink_macs(
                                                     &mut self.shared.region,
