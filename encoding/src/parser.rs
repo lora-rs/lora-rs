@@ -575,22 +575,6 @@ impl<T: DataHeader> AsPhyPayloadBytes for T {
     }
 }
 
-fn can_build_data_frame_from(bytes: &[u8]) -> bool {
-    let has_acceptable_len = bytes.len() >= 12 &&
-        // TODO: Bug related to possibly insufficient number of bytes
-        fhdr_length(bytes[5]) <= bytes.len();
-    if !has_acceptable_len {
-        return false;
-    }
-    match MHDR(bytes[0]).mtype() {
-        MType::ConfirmedDataUp
-        | MType::ConfirmedDataDown
-        | MType::UnconfirmedDataUp
-        | MType::UnconfirmedDataDown => true,
-        _ => false,
-    }
-}
-
 /// EncryptedDataPayload represents an encrypted data payload.
 ///
 /// It can be built either directly through the [new](#method.new) or using the
@@ -612,10 +596,26 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> {
     /// * data - the bytes for the payload.
     /// * factory - the factory that shall be used to create object for crypto functions.
     pub fn new_with_factory<'a>(data: T, factory: F) -> Result<Self, &'a str> {
-        if can_build_data_frame_from(data.as_ref()) {
+        if Self::can_build_from(data.as_ref()) {
             Ok(Self(data, factory))
         } else {
             Err("can not build EncryptedDataPayload from the provided data")
+        }
+    }
+
+    fn can_build_from(bytes: &[u8]) -> bool {
+        let has_acceptable_len = bytes.len() >= 12 &&
+            // TODO: Bug related to possibly insufficient number of bytes
+            fhdr_length(bytes[5]) <= bytes.len();
+        if !has_acceptable_len {
+            return false;
+        }
+        match MHDR(bytes[0]).mtype() {
+            MType::ConfirmedDataUp
+            | MType::ConfirmedDataDown
+            | MType::UnconfirmedDataUp
+            | MType::UnconfirmedDataDown => true,
+            _ => false,
         }
     }
 
@@ -731,19 +731,6 @@ impl<T: AsRef<[u8]>> DataHeader for DecryptedDataPayload<T> {
 }
 
 impl<T: AsRef<[u8]>> DecryptedDataPayload<T> {
-    /// Creates a new DecryptedDataPayload if the provided data is acceptable.
-    ///
-    /// # Argument
-    ///
-    /// * data - the bytes for the payload.
-    pub fn new_from_decrypted_payload<'a>(data: T) -> Result<Self, &'a str> {
-        if can_build_data_frame_from(data.as_ref()) {
-            Ok(Self(data))
-        } else {
-            Err("can not build EncryptedDataPayload from the provided data")
-        }
-    }
-
     /// Returns FRMPayload that can represent either application payload or mac commands if fport
     /// is 0.
     pub fn frm_payload(&self) -> Result<FRMPayload, &str> {
