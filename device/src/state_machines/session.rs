@@ -489,7 +489,10 @@ where
                                                 let mut copy = Vec::new();
                                                 copy.extend(encrypted_data.as_bytes());
 
-                                                // this is a sane unwrap because we checked the MIC already
+                                                // there two unwraps that are sane in their own right
+                                                // * making a new EncryptedDataPayload with owned bytes will
+                                                //      always work when copy bytes from another EncryptedPayload
+                                                // * the decrypt will always work when we have verified MIC previously
                                                 let decrypted = EncryptedDataPayload::new(copy)
                                                     .unwrap()
                                                     .decrypt(
