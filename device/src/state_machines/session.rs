@@ -486,25 +486,18 @@ where
                                             {
                                                 session.fcnt_down = fcnt;
 
+                                                let mut copy = Vec::new();
+                                                copy.extend(encrypted_data.as_bytes());
+
                                                 // this is a sane unwrap because we checked the MIC already
-                                                let decrypted = encrypted_data
+                                                let decrypted = EncryptedDataPayload::new(copy).unwrap()
                                                     .decrypt(
                                                         Some(&session.newskey()),
                                                         Some(&session.appskey()),
-                                                        fcnt,
+                                                        session.fcnt_down,
                                                     )
                                                     .unwrap();
 
-                                                let mut copy = Vec::new();
-                                                copy.extend(decrypted.as_bytes());
-
-                                                // this is a sane unwrap because we know the decrypted
-                                                // payload is a valid DecryptedDataPayload
-                                                self.shared.data_downlink = Some(
-                                                    DecryptedDataPayload::new_from_decrypted_payload(
-                                                        copy
-                                                    ).unwrap()
-                                                );
 
                                                 self.shared.mac.handle_downlink_macs(
                                                     &mut self.shared.region,
@@ -519,6 +512,8 @@ where
                                                         &mut mac_cmds.mac_commands(),
                                                     );
                                                 }
+
+                                                self.shared.data_downlink = Some(decrypted);
 
                                                 // check if FCnt is used up
                                                 let response =
