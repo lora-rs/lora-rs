@@ -493,7 +493,8 @@ where
                                                 // * making a new EncryptedDataPayload with owned bytes will
                                                 //      always work when copy bytes from another EncryptedPayload
                                                 // * the decrypt will always work when we have verified MIC previously
-                                                let decrypted = EncryptedDataPayload::new(copy)
+                                                let decrypted =
+                                                    EncryptedDataPayload::new_with_factory(copy, C::default())
                                                     .unwrap()
                                                     .decrypt(
                                                         Some(&session.newskey()),
