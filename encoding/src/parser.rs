@@ -31,6 +31,7 @@
 use super::keys::{CryptoFactory, Encrypter, AES128, MIC};
 use super::maccommands::{parse_mac_commands, DLSettings, Frequency, MacCommandIterator};
 use super::securityhelpers;
+use super::securityhelpers::generic_array::GenericArray;
 
 #[cfg(feature = "default-crypto")]
 use super::default_crypto::DefaultFactory;
@@ -330,9 +331,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
 
             for i in 0..(len >> 4) {
                 let start = (i << 4) + 1;
-                let mut block =
-                    generic_array::GenericArray::from_mut_slice(&mut bytes[start..(start + 16)]);
-                aes_enc.encrypt_block(&mut block);
+                let block = GenericArray::from_mut_slice(&mut bytes[start..(start + 16)]);
+                aes_enc.encrypt_block(block);
             }
         }
         DecryptedJoinAcceptPayload(self.0, self.1)
@@ -358,7 +358,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
         self.mic() == self.calculate_mic(key)
     }
 
-    fn calculate_mic(&self, key: &AES128) -> MIC {
+    pub fn calculate_mic(&self, key: &AES128) -> MIC {
         let d = self.0.as_ref();
         securityhelpers::calculate_mic(&d[..d.len() - 4], self.1.new_mac(key))
     }
@@ -452,7 +452,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
         block[7] = dev_nonce_arr[0];
         block[8] = dev_nonce_arr[1];
 
-        let mut input = generic_array::GenericArray::clone_from_slice(&block);
+        let mut input = GenericArray::clone_from_slice(&block);
         cipher.encrypt_block(&mut input);
 
         let mut output_key = [0u8; 16];
@@ -892,9 +892,13 @@ fixed_len_struct! {
     struct DevAddr[4];
 }
 
+#[allow(clippy::should_implement_trait)]
 impl<T: AsRef<[u8]>> DevAddr<T> {
     pub fn nwk_id(&self) -> u8 {
         self.0.as_ref()[0] >> 1
+    }
+    pub fn as_ref(&self) -> &[u8] {
+        self.0.as_ref()
     }
 }
 

@@ -1,24 +1,29 @@
-# lorawan-device-rs
+# lorawan-device
 
-Experimental implementation of a device stack.
+[![Build Status](https://travis-ci.org/ivajloip/rust-lorawan.svg?branch=master)](https://travis-ci.org/ivajloip/rust-lorawan)
 
-## Cloning, building, testing
+This is an experimental LoRaWAN device stack. It can be tested by using the example in [the sx12xx-rs repository](https://github.com/lthiery/sx12xx-rs).
+This is a very state machine driven implementation of a LoRaWAN stack designed for concurrency in non-threaded environments.
+The state machine implementation was based off [an article by Ana Hobden](https://hoverbear.org/blog/rust-state-machine-pattern/).
 
-You can use cargo to build:
-    `cargo build [--release]`
+There are two super-states that the Device can be in:
+* **NoSession**: default state upon initialization
+* **Session**: achieved after successful OTAA
 
-The configuration in `.cargo/config` is configured to build only for the `thumbv6m-none-eabi` platform currently.
+State machine diagrams are provided in their respective files: `src/state_machines/no_session` and `src/state_machines/session`   
 
-The code in the example directory is for the [STM32L0 Discovery kit](https://www.st.com/en/evaluation-tools/b-l072z-lrwan1.html), which features the [STM32L072CZ](https://www.st.com/en/microcontrollers-microprocessors/stm32l072cz.html).
+The following features are implemented:
+* a radio abstraction layer by the following traits defined here: `radio::PhyRxTx + Timings`
+* the `radio::PhyRxTx` trait enables a state machine design by the implementor
+* a pass through for the LoRaWAN crypto abstraction provided by the lorawan-encoding, paving the way for secure elements and other hardware peripherals
+* RX windows for data and join accepts are implemented by `Timeouts` which are passed by Response up to the user, minimizing borrowing or owning of such bindings by the library
+* Timeouts can be adjusted by the radio abstraction layer thanks to the `Timing` trait
+* the stack starts deriving a new session when the FCnt maxes out the 32-bit counter; new session may also be created by any time by the user, as long the stack is not mid-transmit
+* MAC commands are minimally mocked, as a ADRReq is responded with an ADRResp, but not much is done with the actual payload
 
-To upload the code, start a debug server using either JLink (Note: [you can reprogram the ST-Link](https://www.segger.com/products/debug-probes/j-link/models/other-j-links/st-link-on-board/) on the discovery kit to act like a JLink Server; you will lose the virtual UART over USB provided by the ST-Link):
-    `JLinkGDBServer -device STM32L072CZ -speed 4000 -if swd -AutoConnect -1 -port 3333`
+This is a work in progress and the notable limitations are:
+* OTAA only, no ABP
+* supports US915 only and subband 2 only
+* no retries on Joins or Confirmed packets and the user is instead given **NoAck** and **NoJoinAccept** responses
 
-or OpenOCD server (Note: if you are using the OpenOCD server, you will want to update `.cargo/config:runner` to use `openocd.gdb` instead of `jlink.gdb`):
-    `openocd -f ./openocd.cfg`
 
-run the example:
-    `cargo run --example stm32l0x2 [--release]`
-
-Run tests:
-    `cargo test --target x86_64-unknown-linux-gnu --tests`

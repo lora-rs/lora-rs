@@ -5,16 +5,16 @@
 // copied, modified, or distributed except according to those terms.
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
-
-use aes::{block_cipher_trait::BlockCipher, Aes128};
-use generic_array::{typenum::U16, GenericArray};
-
 use super::creator::JoinRequestCreator;
 use super::keys::*;
 use super::parser::{
     DecryptedDataPayload, DecryptedJoinAcceptPayload, EncryptedDataPayload,
     EncryptedJoinAcceptPayload, JoinRequestPayload,
 };
+use super::securityhelpers::generic_array::{typenum::U16, GenericArray};
+use aes::block_cipher::{BlockCipher, NewBlockCipher};
+use aes::Aes128;
+use cmac::crypto_mac::NewMac;
 
 pub type Cmac = cmac::Cmac<Aes128>;
 
@@ -36,27 +36,26 @@ impl CryptoFactory for DefaultFactory {
     }
 
     fn new_mac(&self, key: &AES128) -> Self::M {
-        use cmac::Mac;
-        let key = GenericArray::from_slice(&key.0);
-        Cmac::new(key)
+        let key = GenericArray::from_slice(&key.0[..]);
+        Cmac::new(&key)
     }
 }
 
 impl Encrypter for Aes128 {
     fn encrypt_block(&self, block: &mut GenericArray<u8, U16>) {
-        aes::block_cipher_trait::BlockCipher::encrypt_block(self, block);
+        BlockCipher::encrypt_block(self, block);
     }
 }
 
 impl Decrypter for Aes128 {
     fn decrypt_block(&self, block: &mut GenericArray<u8, U16>) {
-        aes::block_cipher_trait::BlockCipher::decrypt_block(self, block);
+        BlockCipher::decrypt_block(self, block);
     }
 }
 
 impl Mac for Cmac {
     fn input(&mut self, data: &[u8]) {
-        cmac::Mac::input(self, data);
+        cmac::Mac::update(self, data);
     }
 
     fn reset(&mut self) {
@@ -64,7 +63,7 @@ impl Mac for Cmac {
     }
 
     fn result(self) -> GenericArray<u8, U16> {
-        cmac::Mac::result(self).code()
+        cmac::Mac::finalize(self).into_bytes()
     }
 }
 

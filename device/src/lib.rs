@@ -1,334 +1,215 @@
-#![cfg_attr(not(test), no_std)]
+#![no_std]
 
-use lorawan_encoding::{
-    self,
-    creator::{DataPayloadCreator, JoinRequestCreator},
-    keys::AES128,
-    parser::DevAddr,
-    parser::{parse as lorawan_parse, JoinAcceptPayload, PhyPayload, EUI64},
-};
-
-use core::marker::PhantomData;
+use heapless::consts::*;
 use heapless::Vec;
 
 pub mod radio;
-pub use radio::Radio;
-use radio::*;
+
+mod mac;
+use mac::Mac;
+
+mod types;
+pub use types::*;
 
 mod us915;
 use us915::Configuration as RegionalConfiguration;
 
-type DevNonce = lorawan_encoding::parser::DevNonce<[u8; 2]>;
-type Confirmed = bool;
+mod state_machines;
+use core::marker::PhantomData;
+use lorawan_encoding::{keys::CryptoFactory, parser::DecryptedDataPayload};
+use state_machines::Shared;
+pub use state_machines::{no_session, session};
 
-#[derive(Copy, Clone, Debug)]
-pub enum Event {
-    StartJoin, // user issued command to start a join process
-    TxComplete,
-    RxComplete(radio::RxQuality),
-    TimerFired,
-    SendData(Confirmed),
+type TimestampMs = u32;
+
+pub struct Device<R, C>
+where
+    R: radio::PhyRxTx + Timings,
+    C: CryptoFactory + Default,
+{
+    state: State<R>,
+    crypto: PhantomData<C>,
 }
 
-type JoinAttempts = usize;
-
-enum Data {
-    NoSession(JoinAttempts, DevNonce),
-    Session(Session),
-}
-
-type SmHandler<R,E> = fn(&mut Device<R, E>, &mut dyn Radio<Event = E>, Event) -> Option<Response>;
-
-pub struct Device<R: Radio, E> {
-    _radio: PhantomData<R>,
-    // TODO: do something nicer
-    get_random: fn() -> u32,
-    credentials: Credentials,
-    region: RegionalConfiguration,
-    sm_handler: SmHandler<R,E>,
-    sm_data: Data,
-}
-
-type AppEui = [u8; 8];
-type DevEui = [u8; 8];
-
-struct Credentials {
-    deveui: DevEui,
-    appeui: AppEui,
-    appkey: AES128,
-}
-
-#[derive(Debug)]
-struct Session {
-    newskey: AES128,
-    appskey: AES128,
-    devaddr: DevAddr<[u8; 4]>,
-    fcnt: u32,
-}
+type FcntDown = u32;
+type FcntUp = u32;
 
 #[derive(Debug)]
 pub enum Response {
-    TimerRequest(usize),
-    Error,
+    NoUpdate,
+    TimeoutRequest(TimestampMs),
+    JoinRequestSending,
+    JoinSuccess,
+    NoJoinAccept,
+    UplinkSending(FcntUp),
+    DownlinkReceived(FcntDown),
+    NoAck,
+    ReadyToSend,
+    SessionExpired,
 }
 
-impl<R: Radio, E> Device<R, E> {
+#[derive(Debug)]
+pub enum Error<R: radio::PhyRxTx> {
+    Radio(radio::Error<R>),
+    Session(session::Error),
+    NoSession(no_session::Error),
+}
+
+impl<R> From<radio::Error<R>> for Error<R>
+where
+    R: radio::PhyRxTx,
+{
+    fn from(radio_error: radio::Error<R>) -> Error<R> {
+        Error::Radio(radio_error)
+    }
+}
+
+pub enum Event<'a, R>
+where
+    R: radio::PhyRxTx,
+{
+    NewSessionRequest,
+    SendDataRequest(SendData<'a>),
+    RadioEvent(radio::Event<'a, R>),
+    TimeoutFired,
+}
+
+impl<'a, R> core::fmt::Debug for Event<'a, R>
+where
+    R: radio::PhyRxTx,
+{
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let event = match self {
+            Event::NewSessionRequest => "NewSessionRequest",
+            Event::SendDataRequest(_) => "SendDataRequest",
+            Event::RadioEvent(_) => "RadioEvent(?)",
+            Event::TimeoutFired => "TimeoutFired",
+        };
+        write!(f, "lorawan_device::Event::{}", event)
+    }
+}
+
+pub struct SendData<'a> {
+    data: &'a [u8],
+    fport: u8,
+    confirmed: bool,
+}
+
+pub enum State<R>
+where
+    R: radio::PhyRxTx + Timings,
+{
+    NoSession(no_session::NoSession<R>),
+    Session(session::Session<R>),
+}
+
+use core::default::Default;
+impl<R> State<R>
+where
+    R: radio::PhyRxTx + Timings,
+{
+    fn new(shared: Shared<R>) -> Self {
+        State::NoSession(no_session::NoSession::new(shared))
+    }
+}
+
+pub trait Timings {
+    fn get_rx_window_offset_ms(&self) -> i32;
+    fn get_rx_window_duration_ms(&self) -> u32;
+}
+
+impl<R, C> Device<R, C>
+where
+    R: radio::PhyRxTx + Timings,
+    C: CryptoFactory + Default,
+{
     pub fn new(
+        radio: R,
         deveui: [u8; 8],
         appeui: [u8; 8],
         appkey: [u8; 16],
         get_random: fn() -> u32,
-    ) -> Device<R, E> {
+    ) -> Device<R, C> {
         let mut region = RegionalConfiguration::new();
         region.set_subband(2);
 
         Device {
-            credentials: Credentials {
-                deveui,
-                appeui,
-                appkey: appkey.into(),
-            },
-            region,
-            get_random,
-            _radio: PhantomData::default(),
-            sm_handler: Self::not_joined,
-            sm_data: Data::NoSession(0, DevNonce::new([0, 0]).unwrap()),
+            crypto: PhantomData::default(),
+            state: State::new(Shared::new(
+                radio,
+                Credentials::new(appeui, deveui, appkey),
+                region,
+                Mac::default(),
+                get_random,
+                Vec::new(),
+            )),
+        }
+    }
+
+    pub fn get_radio(&mut self) -> &mut R {
+        let shared = self.get_shared();
+        shared.get_mut_radio()
+    }
+
+    pub fn get_credentials(&mut self) -> &mut Credentials {
+        let shared = self.get_shared();
+        shared.get_mut_credentials()
+    }
+
+    fn get_shared(&mut self) -> &mut Shared<R> {
+        match &mut self.state {
+            State::NoSession(state) => state.get_mut_shared(),
+            State::Session(state) => state.get_mut_shared(),
+        }
+    }
+
+    pub fn ready_to_send_data(&self) -> bool {
+        if let State::Session(session::Session::Idle(_)) = &self.state {
+            true
+        } else {
+            false
         }
     }
 
     pub fn send(
-        &mut self,
-        radio: &mut dyn Radio<Event = E>,
+        self,
         data: &[u8],
         fport: u8,
         confirmed: bool,
-    ) {
-        if let Data::Session(session) = &mut self.sm_data {
-            let mut phy = DataPayloadCreator::new();
-            phy.set_confirmed(confirmed)
-                .set_f_port(fport)
-                .set_dev_addr(session.devaddr)
-                .set_fcnt(session.fcnt);
-
-            match phy.build(&data, &[], &session.newskey, &session.appskey) {
-                Ok(packet) => {
-                    session.fcnt += 1;
-                    let buffer = radio.get_mut_buffer();
-                    buffer.extend(packet);
-
-                    (self.sm_handler)(self, radio, Event::SendData(confirmed));
-                }
-                Err(_output) => {}
-            }
-        }
+    ) -> (Self, Result<Response, Error<R>>) {
+        self.handle_event(Event::SendDataRequest(SendData {
+            data,
+            fport,
+            confirmed,
+        }))
     }
 
-    // TODO: no copies
-    fn create_join_request<S: generic_array::ArrayLength<u8>>(
-        &self,
-        buffer: &mut Vec<u8, S>,
-        devnonce: u16,
-    ) -> DevNonce {
-        buffer.clear();
-        let mut phy = JoinRequestCreator::new();
-        let creds = &self.credentials;
-
-        let devnonce = [devnonce as u8, (devnonce >> 8) as u8];
-        phy.set_app_eui(EUI64::new(creds.appeui).unwrap())
-            .set_dev_eui(EUI64::new(creds.deveui).unwrap())
-            .set_dev_nonce(&devnonce);
-        let vec = phy.build(&creds.appkey).unwrap();
-
-        let devnonce_ret = DevNonce::new(devnonce).unwrap();
-        for el in vec {
-            buffer.push(*el).unwrap();
-        }
-        devnonce_ret
-    }
-
-    fn send_join_request(&mut self, radio: &mut dyn Radio<Event = E>) -> DevNonce {
-        radio.configure_tx(
-            14,
-            Bandwidth::_125KHZ,
-            SpreadingFactor::_10,
-            CodingRate::_4_5,
-        );
-
-        let mut random = (self.get_random)();
-        // use lowest 16 bits for devnonce
-        let devnonce = random as u16;
-        // we'll use the rest for frequency and subband selection
-        random >>= 16;
-        radio.set_frequency(self.region.get_join_frequency(random as u8));
-        // prepares the buffer
-        let devnonce = self.create_join_request(radio.get_mut_buffer(), devnonce);
-        radio.send_buffer();
-        devnonce
-    }
-
-    fn set_join_accept_rx(&mut self, radio: &mut dyn Radio<Event = E>) {
-        radio.configure_rx(Bandwidth::_500KHZ, SpreadingFactor::_10, CodingRate::_4_5);
-
-        radio.set_frequency(self.region.get_join_accept_frequency1());
-        radio.set_rx();
-    }
-
-    pub fn handle_radio_event(
-        &mut self,
-        radio: &mut dyn Radio<Event = E>,
-        event: E,
-    ) -> Option<Response> {
-        let radio_state = radio.handle_event(event);
-
-        match radio_state {
-            radio::State::Busy => None,
-            radio::State::TxDone => self.handle_event(radio, Event::TxComplete),
-            radio::State::RxDone(quality) => self.handle_event(radio, Event::RxComplete(quality)),
-            radio::State::TxError => None,
-            radio::State::RxError => None,
-        }
-    }
-
-    pub fn handle_event(
-        &mut self,
-        radio: &mut dyn Radio<Event = E>,
-        event: Event,
-    ) -> Option<Response> {
-        (self.sm_handler)(self, radio, event)
-    }
-
-    // BELOW HERE ARE PRIVATE STATE MACHINE HANDLERS
-    fn error(&mut self, _radio: &mut dyn Radio<Event = E>, _event: Event) -> Option<Response> {
-        // can do a richer implementation later
-        Some(Response::Error)
-    }
-
-    fn not_joined(&mut self, radio: &mut dyn Radio<Event = E>, event: Event) -> Option<Response> {
-        match event {
-            Event::StartJoin => {
-                if let Data::NoSession(attempts, _) = self.sm_data {
-                    self.sm_handler = Device::join_sent;
-                    let devnonce = self.send_join_request(radio);
-                    self.sm_data = Data::NoSession(attempts + 1, devnonce);
-                    None
-                } else {
-                    self.error(radio, event)
-                }
-            }
-            _ => self.error(radio, event),
-        }
-    }
-
-    fn join_sent(&mut self, radio: &mut dyn Radio<Event = E>, event: Event) -> Option<Response> {
-        match event {
-            Event::TxComplete => {
-                self.sm_handler = Device::waiting_join_delay1;
-                Some(Response::TimerRequest(
-                    // TODO: determine this error adjustment more scientifically
-                    self.region.get_join_accept_delay1() * 1000 - 150,
-                ))
-            }
-            _ => self.error(radio, event),
-        }
-    }
-
-    fn waiting_join_delay1(
-        &mut self,
-        radio: &mut dyn Radio<Event = E>,
-        event: Event,
-    ) -> Option<Response> {
-        match event {
-            Event::TimerFired => {
-                self.sm_handler = Device::waiting_join_accept1;
-                self.set_join_accept_rx(radio);
-                None
-            }
-            _ => self.error(radio, event),
-        }
-    }
-
-    fn waiting_join_accept1(
-        &mut self,
-        radio: &mut dyn Radio<Event = E>,
-        event: Event,
-    ) -> Option<Response> {
-        match event {
-            Event::RxComplete(_quality) => {
-                if let Data::NoSession(_, devnonce) = self.sm_data {
-                    let packet = lorawan_parse(radio.get_received_packet()).unwrap();
-
-                    if let PhyPayload::JoinAccept(join_accept) = packet {
-                        if let JoinAcceptPayload::Encrypted(encrypted) = join_accept {
-                            let decrypt = encrypted.decrypt(&self.credentials.appkey);
-                            if decrypt.validate_mic(&self.credentials.appkey) {
-                                let session = Session {
-                                    newskey: decrypt
-                                        .derive_newskey(&devnonce, &self.credentials.appkey),
-                                    appskey: decrypt
-                                        .derive_appskey(&devnonce, &self.credentials.appkey),
-                                    devaddr: DevAddr::new([
-                                        decrypt.dev_addr().as_ref()[0],
-                                        decrypt.dev_addr().as_ref()[1],
-                                        decrypt.dev_addr().as_ref()[2],
-                                        decrypt.dev_addr().as_ref()[3],
-                                    ])
-                                    .unwrap(),
-                                    fcnt: 0,
-                                };
-                                self.sm_handler = Device::joined_idle;
-                                self.sm_data = Data::Session(session);
-                            } else {
-                            }
-                        } else {
-                            panic!("Cannot possibly be decrypted already")
-                        }
-                    } else {
-                        // just some other packet, ignore
-                    }
-                    None
-                } else {
-                    self.error(radio, event)
-                }
-            }
-            _ => self.error(radio, event),
-        }
-    }
-
-    fn joined_idle(&mut self, radio: &mut dyn Radio<Event = E>, event: Event) -> Option<Response> {
-        if let Data::Session(_) = self.sm_data {
-            match event {
-                Event::SendData(_) => {
-                    radio.configure_tx(
-                        14,
-                        Bandwidth::_125KHZ,
-                        SpreadingFactor::_10,
-                        CodingRate::_4_5,
-                    );
-                    let random = (self.get_random)();
-                    radio.set_frequency(self.region.get_data_frequency(random as u8));
-                    radio.send_buffer();
-                    self.sm_handler = Device::joined_sending;
-
-                    None
-                }
-                _ => self.error(radio, event),
-            }
+    pub fn get_fcnt_up(&self) -> Option<u32> {
+        if let State::Session(session) = &self.state {
+            Some(session.get_session_data().fcnt_up())
         } else {
-            self.error(radio, event)
+            None
         }
     }
 
-    fn joined_sending(
-        &mut self,
-        radio: &mut dyn Radio<Event = E>,
-        event: Event,
-    ) -> Option<Response> {
-        match event {
-            Event::TxComplete => {
-                self.sm_handler = Device::joined_idle;
-                None
-            }
-            _ => self.error(radio, event),
+    pub fn get_session_keys(&self) -> Option<SessionKeys> {
+        if let State::Session(session) = &self.state {
+            Some(SessionKeys::copy_from_session_data(
+                session.get_session_data(),
+            ))
+        } else {
+            None
+        }
+    }
+
+    pub fn take_data_downlink(&mut self) -> Option<DecryptedDataPayload<Vec<u8, U256>>> {
+        self.get_shared().take_data_downlink()
+    }
+
+    pub fn handle_event(self, event: Event<R>) -> (Self, Result<Response, Error<R>>) {
+        match self.state {
+            State::NoSession(state) => state.handle_event(event),
+            State::Session(state) => state.handle_event(event),
         }
     }
 }

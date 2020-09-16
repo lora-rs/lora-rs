@@ -12,7 +12,7 @@ use lorawan_encoding::maccommands::*;
 macro_rules! test_helper {
     ( $data:ident, $name:ident, $type:ident, $size:expr, $( ( $method:ident, $val:expr ) ,)*) => {{
         {
-            assert!($type::new_as_mac_cmd(&$data[0..0]).is_err());
+            assert!($type::new_as_mac_cmd(&[]).is_err());
             let mc = $type::new_as_mac_cmd(&$data[..]);
             assert!(mc.is_ok());
             if let (MacCommand::$name(res), size) = mc.unwrap() {
@@ -83,7 +83,7 @@ fn test_link_adr_ans_new() {
         ([0x04], false, false, true, false),
         ([0x07], true, true, true, true),
     ];
-    assert!(LinkADRReqPayload::new_as_mac_cmd(&examples[0].0[0..0]).is_err());
+    assert!(LinkADRReqPayload::new_as_mac_cmd(&[]).is_err());
     for &(ref v, ref e_power, ref e_dr, ref e_cm, ref e_ack) in &examples {
         let mc = LinkADRAnsPayload::new_as_mac_cmd(&v[..]);
         assert!(mc.is_ok());
@@ -140,7 +140,7 @@ fn test_rx_param_setup_ans_new() {
         ([0x04], false, false, true, false),
         ([0x07], true, true, true, true),
     ];
-    assert!(RXParamSetupAnsPayload::new_as_mac_cmd(&examples[0].0[0..0]).is_err());
+    assert!(RXParamSetupAnsPayload::new_as_mac_cmd(&[]).is_err());
     for &(ref v, ref e_ch, ref e_rx2_dr, ref e_rx1_dr_offset, ref e_ack) in &examples {
         let mc = RXParamSetupAnsPayload::new_as_mac_cmd(&v[..]);
         assert!(mc.is_ok());
@@ -196,7 +196,7 @@ fn test_new_channel_ans() {
         ([0x02], false, true, false),
         ([0x03], true, true, true),
     ];
-    assert!(NewChannelAnsPayload::new_as_mac_cmd(&examples[0].0[0..0]).is_err());
+    assert!(NewChannelAnsPayload::new_as_mac_cmd(&[]).is_err());
     for &(ref v, ref e_ch_freq, ref e_drr, ref e_ack) in &examples {
         let mc = NewChannelAnsPayload::new_as_mac_cmd(&v[..]);
         assert!(mc.is_ok());
@@ -230,14 +230,12 @@ fn test_rx_timing_setup_ans() {
 
 #[test]
 fn test_parse_mac_commands_empty_downlink() {
-    let data = mac_cmds_payload();
-    assert_eq!(parse_mac_commands(&data[0..0], false).count(), 0);
+    assert_eq!(parse_mac_commands(&[], false).count(), 0);
 }
 
 #[test]
 fn test_parse_mac_commands_empty_uplink() {
-    let data = mac_cmds_payload();
-    assert_eq!(parse_mac_commands(&data[0..0], true).count(), 0);
+    assert_eq!(parse_mac_commands(&[], true).count(), 0);
 }
 
 #[test]
@@ -309,8 +307,7 @@ fn test_redundancy_number_of_transmissions() {
 
 #[test]
 fn test_frequency_new_bad_payload() {
-    let data = frequency_payload();
-    assert!(Frequency::new(&data[0..0]).is_none());
+    assert!(Frequency::new(&[]).is_none());
 }
 
 #[test]

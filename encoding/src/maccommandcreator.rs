@@ -44,7 +44,7 @@ macro_rules! impl_mac_cmd_creator_boilerplate {
             pub fn new() -> Self {
                 let mut data = [0; $len];
                 data[0] = $cid;
-                Self { data: data }
+                Self { data }
             }
 
             /// Returns the serialized version of the class as bytes.

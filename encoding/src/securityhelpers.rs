@@ -5,10 +5,9 @@
 // copied, modified, or distributed except according to those terms.
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
-
-use generic_array::GenericArray;
-
 use super::keys;
+pub use generic_array;
+use generic_array::GenericArray;
 
 /// calculate_data_mic computes the MIC of a correct data packet.
 pub fn calculate_data_mic<M: keys::Mac>(data: &[u8], key: M, fcnt: u32) -> keys::MIC {
