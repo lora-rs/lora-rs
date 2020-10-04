@@ -197,8 +197,6 @@ where
             }
         }
 
-        self.session.fcnt_up_increment();
-
         match phy.build(
             &data.data,
             dyn_cmds.as_slice(),
@@ -485,6 +483,12 @@ where
                                                 && (fcnt > session.fcnt_down || fcnt == 0)
                                             {
                                                 session.fcnt_down = fcnt;
+                                                // increment the FcntUp since we have received
+                                                // downlink - only reason to not increment
+                                                // is if confirmed frame is sent and no
+                                                // confirmation (ie: downlink) occurs
+                                                session.fcnt_up_increment();
+
 
                                                 let mut copy = Vec::new();
                                                 copy.extend(encrypted_data.as_bytes());
@@ -567,13 +571,20 @@ where
                     }
                     // Timeout during second RxWindow leads to giving up
                     RxWindow::_2(_) => {
-                        // check if FCnt is used up
-                        let response = if self.session.fcnt_up() == (0xFFFF + 1) {
+
+                        if !self.confirmed {
+                            // if this was not a confirmed frame, we can still
+                            // increment the FCnt Up
+                            self.session.fcnt_up_increment();
+                        }
+
+                        let response = if self.confirmed {
+                            Ok(Response::NoAck)
+                            // check if FCnt is used up
+                        } else if self.session.fcnt_up() == (0xFFFF + 1) {
                             // signal that the session is expired
                             // client must know to check for potential data
                             Ok(Response::SessionExpired)
-                        } else if self.confirmed {
-                            Ok(Response::NoAck)
                         } else {
                             Ok(Response::ReadyToSend)
                         };
