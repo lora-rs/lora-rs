@@ -489,7 +489,6 @@ where
                                                 // confirmation (ie: downlink) occurs
                                                 session.fcnt_up_increment();
 
-
                                                 let mut copy = Vec::new();
                                                 copy.extend(encrypted_data.as_bytes());
 
@@ -498,7 +497,10 @@ where
                                                 //      always work when copy bytes from another EncryptedPayload
                                                 // * the decrypt will always work when we have verified MIC previously
                                                 let decrypted =
-                                                    EncryptedDataPayload::new_with_factory(copy, C::default())
+                                                    EncryptedDataPayload::new_with_factory(
+                                                        copy,
+                                                        C::default(),
+                                                    )
                                                     .unwrap()
                                                     .decrypt(
                                                         Some(&session.newskey()),
@@ -571,7 +573,6 @@ where
                     }
                     // Timeout during second RxWindow leads to giving up
                     RxWindow::_2(_) => {
-
                         if !self.confirmed {
                             // if this was not a confirmed frame, we can still
                             // increment the FCnt Up
@@ -580,7 +581,7 @@ where
 
                         let response = if self.confirmed {
                             Ok(Response::NoAck)
-                            // check if FCnt is used up
+                        // check if FCnt is used up
                         } else if self.session.fcnt_up() == (0xFFFF + 1) {
                             // signal that the session is expired
                             // client must know to check for potential data

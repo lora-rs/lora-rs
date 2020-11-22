@@ -64,16 +64,18 @@ pub fn encrypt_frm_data_payload(
     let mut a = [0u8; 16];
     generate_helper_block(phy_payload, 0x01, fcnt, &mut a[..]);
 
-    let mut tmp = GenericArray::from_mut_slice(&mut a[..]);
+    let mut s = [0u8; 16];
+    let mut s_block = GenericArray::from_mut_slice(&mut s[..]);
+
     let mut ctr = 1;
     for i in 0..len {
         let j = i & 0x0f;
         if j == 0 {
             a[15] = ctr;
-            ctr+=1;
-            tmp = GenericArray::from_mut_slice(&mut a[..]);
-            aes_enc.encrypt_block(&mut tmp);
+            ctr += 1;
+            s_block.copy_from_slice(&a);
+            aes_enc.encrypt_block(&mut s_block);
         }
-        phy_payload[start + i] ^= tmp[j]
+        phy_payload[start + i] ^= s_block[j]
     }
 }
