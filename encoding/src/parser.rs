@@ -610,13 +610,14 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> {
         if !has_acceptable_len {
             return false;
         }
-        match MHDR(bytes[0]).mtype() {
+
+        matches!(
+            MHDR(bytes[0]).mtype(),
             MType::ConfirmedDataUp
-            | MType::ConfirmedDataDown
-            | MType::UnconfirmedDataUp
-            | MType::UnconfirmedDataDown => true,
-            _ => false,
-        }
+                | MType::ConfirmedDataDown
+                | MType::UnconfirmedDataUp
+                | MType::UnconfirmedDataDown
+        )
     }
 
     /// Verifies that the DataPayload has correct MIC.

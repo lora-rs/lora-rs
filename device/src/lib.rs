@@ -164,11 +164,7 @@ where
     }
 
     pub fn ready_to_send_data(&self) -> bool {
-        if let State::Session(session::Session::Idle(_)) = &self.state {
-            true
-        } else {
-            false
-        }
+        matches!(&self.state, State::Session(session::Session::Idle(_)))
     }
 
     pub fn send(

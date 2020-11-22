@@ -72,7 +72,7 @@ pub fn encrypt_frm_data_payload(
         let j = i & 0x0f;
         if j == 0 {
             a[15] = ctr;
-            ctr+=1;
+            ctr += 1;
             s_block.copy_from_slice(&a);
             aes_enc.encrypt_block(&mut s_block);
         }
