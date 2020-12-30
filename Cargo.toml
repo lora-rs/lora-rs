@@ -1,12 +1,13 @@
 [package]
 name = "lorawan"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2018"
 authors = ["Ivaylo Petrov <ivajloip@gmail.com>"]
 description = "Crate lorawan provides structures and tools for reading and writing LoRaWAN messages from and to a slice of bytes."
 repository = "https://github.com/ivajloip/rust-lorawan"
 license = "MIT"
 keywords = ["lorawan", "iot", "lpwan", "parser", "lightweight"]
+readme = "README.md"
 
 [dependencies]
 aes = { version = "0.3.2", optional = true }
