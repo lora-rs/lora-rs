@@ -198,7 +198,7 @@ macro_rules! mac_cmds {
         fn parse_one_mac_cmd<'a, 'b>(data: &'a [u8], uplink: bool) -> Result<(usize, MacCommand<'a>), &'b str> {
             match (data[0], uplink) {
                 $(
-                    ($cid, $uplink) if data.len() > $size => Ok(($size, MacCommand::$name($type::new(&data[1..])?))),
+                    ($cid, $uplink) if data.len() > $size => Ok(($size, MacCommand::$name($type::new(&data[1.. 1 + $size])?))),
                 )*
                 _ => parse_zero_len_mac_cmd(data, uplink)
             }
@@ -306,11 +306,8 @@ macro_rules! create_value_reader_fn {
 /// let mac_cmds: Vec<lorawan::maccommands::MacCommand> =
 ///     lorawan::maccommands::parse_mac_commands(&data[..], true).collect();
 /// ```
-pub fn parse_mac_commands(
-    data: &[u8],
-    uplink: bool,
-) -> MacCommandIterator {
-    MacCommandIterator{
+pub fn parse_mac_commands(data: &[u8], uplink: bool) -> MacCommandIterator {
+    MacCommandIterator {
         index: 0,
         data,
         uplink,
@@ -341,12 +338,14 @@ impl<'a> Iterator for MacCommandIterator<'a> {
 impl<'a> LinkCheckAnsPayload<'a> {
     create_value_reader_fn!(
         /// The link margin in dB of the last successfully received LinkCheckReq command.
-        margin, 0
+        margin,
+        0
     );
 
     create_value_reader_fn!(
         /// The number of gateways that successfully received the last LinkCheckReq command.
-        gateway_count, 1
+        gateway_count,
+        1
     );
 }
 
@@ -470,17 +469,20 @@ impl From<u8> for Redundancy {
 impl<'a> LinkADRAnsPayload<'a> {
     create_ack_fn!(
         /// Whether the channel mask change was applied successsfully.
-        channel_mask_ack, 0
+        channel_mask_ack,
+        0
     );
 
     create_ack_fn!(
         /// Whether the data rate change was applied successsfully.
-        data_rate_ack, 1
+        data_rate_ack,
+        1
     );
 
     create_ack_fn!(
         /// Whether the power change was applied successsfully.
-        powert_ack, 2
+        powert_ack,
+        2
     );
 
     /// Whether the device has accepted the new parameters or not.
@@ -590,17 +592,20 @@ impl<'a> AsRef<[u8]> for Frequency<'a> {
 impl<'a> RXParamSetupAnsPayload<'a> {
     create_ack_fn!(
         /// Whether the channel change was applied successsfully.
-        channel_ack, 0
+        channel_ack,
+        0
     );
 
     create_ack_fn!(
         /// Whether the rx2 data rate change was applied successsfully.
-        rx2_data_rate_ack, 1
+        rx2_data_rate_ack,
+        1
     );
 
     create_ack_fn!(
         /// Whether the rx1 data rate offset change was applied successsfully.
-        rx1_dr_offset_ack, 2
+        rx1_dr_offset_ack,
+        2
     );
 
     /// Whether the device has accepted the new parameters or not.
@@ -616,7 +621,8 @@ impl<'a> DevStatusAnsPayload<'a> {
         /// Note: 0 means that the device is powered by an external source, 255 means that the device
         /// was unable to measure its battery level, any other value represents the actual battery
         /// level.
-        battery, 0
+        battery,
+        0
     );
 
     /// The margin is the demodulation signal-to-noise ratio in dB rounded to the nearest integer
@@ -629,7 +635,8 @@ impl<'a> DevStatusAnsPayload<'a> {
 impl<'a> NewChannelReqPayload<'a> {
     create_value_reader_fn!(
         /// The index of the channel being created or modified.
-        channel_index, 0
+        channel_index,
+        0
     );
 
     /// The frequency of the new or modified channel.
@@ -695,12 +702,14 @@ impl From<u8> for DataRateRange {
 impl<'a> NewChannelAnsPayload<'a> {
     create_ack_fn!(
         /// Whether the channel frequency change was applied successsfully.
-        channel_freq_ack, 0
+        channel_freq_ack,
+        0
     );
 
     create_ack_fn!(
         /// Whether the data rate range change was applied successsfully.
-        data_rate_range_ack, 1
+        data_rate_range_ack,
+        1
     );
 
     /// Whether the device has accepted the new channel.

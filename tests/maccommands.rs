@@ -246,9 +246,32 @@ fn test_parse_mac_commands_empty_uplink() {
 fn test_parse_mac_commands_with_multiple_cmds() {
     let data = mac_cmds_payload();
     let mut commands = parse_mac_commands(&data[..], true);
-    assert_eq!(commands.next(), Some(MacCommand::LinkCheckReq(LinkCheckReqPayload())));
+    assert_eq!(
+        commands.next(),
+        Some(MacCommand::LinkCheckReq(LinkCheckReqPayload()))
+    );
     let expected = LinkADRAnsPayload::new_as_mac_cmd(&data[2..]).unwrap().0;
     assert_eq!(commands.next(), Some(expected));
+}
+
+#[test]
+fn test_parse_mac_commands_with_multiple_cmds_with_payloads() {
+    let data = vec![3, 0, 0, 0, 112, 3, 0, 0, 255, 0];
+    let mut commands = parse_mac_commands(&data, false);
+
+    assert_eq!(
+        commands.next(),
+        Some(MacCommand::LinkADRReq(
+            LinkADRReqPayload::new(&[0, 0, 0, 112]).unwrap()
+        ))
+    );
+
+    assert_eq!(
+        commands.next(),
+        Some(MacCommand::LinkADRReq(
+            LinkADRReqPayload::new(&[0, 0, 255, 0]).unwrap()
+        ))
+    );
 }
 
 fn mac_cmds_payload() -> Vec<u8> {
@@ -337,7 +360,9 @@ fn test_mac_commands_len_with_creators() {
 #[test]
 fn test_mac_commands_len_with_mac_cmds() {
     let rx_timing_setup_req = RXTimingSetupReqPayload::new_as_mac_cmd(&[0x02]).unwrap().0;
-    let dev_status_ans = DevStatusAnsPayload::new_as_mac_cmd(&[0xfe, 0x3f]).unwrap().0;
+    let dev_status_ans = DevStatusAnsPayload::new_as_mac_cmd(&[0xfe, 0x3f])
+        .unwrap()
+        .0;
     let cmds: Vec<&dyn SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_ans];
 
     assert_eq!(mac_commands_len(&cmds[..]), 5);
