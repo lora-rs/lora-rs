@@ -8,13 +8,27 @@
 The lorawan library provides structures and tools for reading and writing
 LoRaWAN 1.0.2 messages from and to slices of bytes.
 
+## Create renamed and unmaintained
+
+The create `lorawan` has been renamed to `lorawan-encoding` in order to be less
+ambiguous and as more crates are now hosted in the same repository. Please
+find the new create [here](https://crates.io/crates/lorawan-encoding).
+
+If migrating your code would be too much effort, please consider using
+something like
+
+```
+[dependencies]
+lorawan-encoding = { package = "lorawan", version = "0.6.1" }
+```
+
 # Sample Packet manipulation
 
 ## Use the library
 
 ```toml
 [dependencies]
-lorawan = "0.5.0"
+lorawan = "0.6.1"
 ```
 
 ## Packet generation
