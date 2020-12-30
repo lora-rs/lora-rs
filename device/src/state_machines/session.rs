@@ -580,8 +580,8 @@ where
                         }
 
                         let response = if self.confirmed {
+                            // check if FCnt is used up
                             Ok(Response::NoAck)
-                        // check if FCnt is used up
                         } else if self.session.fcnt_up() == (0xFFFF + 1) {
                             // signal that the session is expired
                             // client must know to check for potential data
