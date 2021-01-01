@@ -420,7 +420,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     pub fn set_fcnt(&mut self, fcnt: u32) -> &mut Self {
         let d = self.data.as_mut();
         self.fcnt = fcnt;
-        d[6] = (fcnt & (0xff as u32)) as u8;
+        d[6] = (fcnt & (0xff_u32)) as u8;
         d[7] = (fcnt >> 8) as u8;
 
         self

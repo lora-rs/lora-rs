@@ -961,7 +961,7 @@ impl<'a> FHDR<'a> {
     /// Gives the piggy-backed MAC ommands associated with the given payload.
     pub fn fopts(&self) -> MacCommandIterator {
         let f_opts_len = FCtrl(self.0[4], self.1).f_opts_len();
-        parse_mac_commands(&self.0[7 as usize..(7 + f_opts_len) as usize], self.1)
+        parse_mac_commands(&self.0[7_usize..(7 + f_opts_len) as usize], self.1)
     }
 }
 
