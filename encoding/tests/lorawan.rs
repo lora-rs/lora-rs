@@ -155,6 +155,17 @@ fn test_parse_phy_payload_with_too_few_bytes_is_err() {
 }
 
 #[test]
+fn test_parse_phy_payload_with_unsupported_major_versoin() {
+    let bytes = vec![
+        0x81, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05,
+    ];
+    let phy = parse(bytes);
+
+    // this is now part of the API.
+    assert_eq!(phy.err(), Some("Unsupported major version"));
+}
+
+#[test]
 fn test_parse_join_request_payload() {
     let phy = parse(phy_join_request_payload());
     assert_eq!(

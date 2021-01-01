@@ -781,6 +781,8 @@ pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(
 ///
 /// Check out [parse](fn.parse.html) if you do not need custom crypto factory.  
 ///
+/// Returns error "Unsupported major version" if the major version is unsupported.
+///
 /// # Argument
 ///
 /// * bytes - the data from which the PhyPayload is to be built.
@@ -791,12 +793,7 @@ where
     F: CryptoFactory,
 {
     let bytes = data.as_ref();
-    let len = bytes.len();
-    // the smallest payload is a data payload without fport and FRMPayload
-    // which is 12 bytes long.
-    if len < 12 {
-        return Err("insufficient number of bytes");
-    }
+    check_phy_data(bytes)?;
     match MHDR(bytes[0]).mtype() {
         MType::JoinRequest => Ok(PhyPayload::JoinRequest(
             JoinRequestPayload::new_with_factory(data, factory)?,
@@ -811,6 +808,24 @@ where
             EncryptedDataPayload::new_with_factory(data, factory)?,
         ))),
         _ => Err("unsupported message type"),
+    }
+}
+
+fn check_phy_data<'a, 'b>(bytes: &'a [u8]) -> Result<(), &'b str> {
+    let len = bytes.len();
+    if len == 0 {
+        return Err("can not parse empty payload as LoRaWAN phy payload");
+    }
+    let mhdr = MHDR(bytes[0]);
+    if mhdr.major() != Major::LoRaWANR1 {
+        return Err("Unsupported major version");
+    }
+    // the smallest payload is a data payload without fport and FRMPayload
+    // which is 12 bytes long.
+    if len < 12 {
+        Err("insufficient number of bytes")
+    } else {
+        Ok(())
     }
 }
 
