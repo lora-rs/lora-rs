@@ -106,22 +106,68 @@ macro_rules! fixed_len_struct {
     };
 }
 
+pub trait ProprietaryPhyParser<P> {
+    fn new(data: &[u8]) -> Result<P, &str>;
+}
+
+pub enum Version {
+    V1_0,
+}
+
+pub trait ParseConfig<P> {
+    type PP: ProprietaryPhyParser<P>;
+    type F: CryptoFactory;
+
+    fn proprietary_parser(&self) -> Self::PP;
+    fn crypto_factory(&self) -> Self::F;
+    fn version(&self) -> Version;
+}
+
+pub struct DefaultConfig;
+
+impl ParseConfig<()> for DefaultConfig {
+    type PP = DefaultProprietary;
+    type F = DefaultFactory;
+
+    fn proprietary_parser(&self) -> Self::PP {
+        DefaultProprietary {}
+    }
+
+    fn crypto_factory(&self) -> Self::F {
+        DefaultFactory {}
+    }
+
+    fn version(&self) -> Version {
+        Version::V1_0
+    }
+}
+
+pub struct DefaultProprietary;
+
+impl ProprietaryPhyParser<()> for DefaultProprietary {
+    fn new(data: &[u8]) -> Result<(), &str> {
+        Err("proprietary phy are not supported for this config")
+    }
+}
+
 /// PhyPayload is a type that represents a physical LoRaWAN payload.
 ///
 /// It can either be JoinRequest, JoinAccept, or DataPayload.
 #[derive(Debug, PartialEq)]
-pub enum PhyPayload<T, F> {
-    JoinRequest(JoinRequestPayload<T, F>),
-    JoinAccept(JoinAcceptPayload<T, F>),
-    Data(DataPayload<T, F>),
+pub enum PhyPayload<T, P, C: ParseConfig<P>> {
+    JoinRequest(JoinRequestPayload<T, C::F>),
+    JoinAccept(JoinAcceptPayload<T, C::F>),
+    Data(DataPayload<T, C::F>),
+    Proprietary(P),
 }
 
-impl<T: AsRef<[u8]>, F> AsRef<[u8]> for PhyPayload<T, F> {
+impl<T: AsRef<[u8]>, P: AsRef<[u8]>, C: ParseConfig<P>> AsRef<[u8]> for PhyPayload<T, P, C> {
     fn as_ref(&self) -> &[u8] {
         match self {
             PhyPayload::JoinRequest(jr) => jr.as_bytes(),
             PhyPayload::JoinAccept(ja) => ja.as_bytes(),
             PhyPayload::Data(data) => data.as_bytes(),
+            PhyPayload::Proprietary(data) => data.as_ref(),
         }
     }
 }
@@ -773,8 +819,20 @@ impl<T: AsRef<[u8]>> DecryptedDataPayload<T> {
 #[cfg(feature = "default-crypto")]
 pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(
     data: T,
-) -> Result<PhyPayload<T, DefaultFactory>, &'a str> {
-    parse_with_factory(data, DefaultFactory)
+) -> Result<PhyPayload<T, (), DefaultConfig>, &'a str> {
+    parse_with_config(data, DefaultConfig {})
+}
+
+pub fn parse_with_factory<'a, T, F>(
+    data: T,
+    factory: F,
+) -> Result<PhyPayload<T, (), DefaultConfig>, &'a str>
+where
+    T: AsRef<[u8]> + AsMut<[u8]>,
+    F: CryptoFactory,
+{
+    // TODO: Fix
+    parse_with_config(data, DefaultConfig {})
 }
 
 /// Parses a payload as LoRaWAN physical payload.
@@ -787,12 +845,13 @@ pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(
 ///
 /// * bytes - the data from which the PhyPayload is to be built.
 /// * factory - the factory that shall be used to create object for crypto functions.
-pub fn parse_with_factory<'a, T, F>(data: T, factory: F) -> Result<PhyPayload<T, F>, &'a str>
+pub fn parse_with_config<'a, T, P, C>(data: T, config: C) -> Result<PhyPayload<T, P, C>, &'a str>
 where
     T: AsRef<[u8]> + AsMut<[u8]>,
-    F: CryptoFactory,
+    C: ParseConfig<P>,
 {
     let bytes = data.as_ref();
+    let factory = config.crypto_factory();
     check_phy_data(bytes)?;
     match MHDR(bytes[0]).mtype() {
         MType::JoinRequest => Ok(PhyPayload::JoinRequest(
