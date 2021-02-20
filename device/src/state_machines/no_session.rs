@@ -409,24 +409,24 @@ where
                 match self.shared.radio.handle_event(radio_event) {
                     Ok(response) => match response {
                         radio::Response::RxDone(_quality) => {
-                            if let Ok(PhyPayload::JoinAccept(join_accept)) =
+                            if let Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(
+                                encrypted,
+                            ))) =
                                 lorawan_parse(self.shared.radio.get_received_packet(), C::default())
                             {
-                                if let JoinAcceptPayload::Encrypted(encrypted) = join_accept {
-                                    let credentials = &self.shared.credentials;
+                                let credentials = &self.shared.credentials;
 
-                                    let decrypt = encrypted.decrypt(credentials.appkey());
-                                    if decrypt.validate_mic(credentials.appkey()) {
-                                        let session = SessionData::derive_new(
-                                            &decrypt,
-                                            self.devnonce,
-                                            credentials,
-                                        );
-                                        return (
-                                            Session::new(self.shared, session).into(),
-                                            Ok(Response::JoinSuccess),
-                                        );
-                                    }
+                                let decrypt = encrypted.decrypt(credentials.appkey());
+                                if decrypt.validate_mic(credentials.appkey()) {
+                                    let session = SessionData::derive_new(
+                                        &decrypt,
+                                        self.devnonce,
+                                        credentials,
+                                    );
+                                    return (
+                                        Session::new(self.shared, session).into(),
+                                        Ok(Response::JoinSuccess),
+                                    );
                                 }
                             }
                             (self.into(), Ok(Response::NoUpdate))

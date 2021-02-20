@@ -471,73 +471,67 @@ where
                 match self.shared.radio.handle_event(radio_event) {
                     Ok(response) => match response {
                         radio::Response::RxDone(_quality) => {
-                            if let Ok(parsed_packet) =
+                            if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
                                 lorawan_parse(self.shared.radio.get_received_packet(), C::default())
                             {
-                                if let PhyPayload::Data(data_frame) = parsed_packet {
-                                    if let DataPayload::Encrypted(encrypted_data) = data_frame {
-                                        let session = &mut self.session;
-                                        if session.devaddr() == &encrypted_data.fhdr().dev_addr() {
-                                            let fcnt = encrypted_data.fhdr().fcnt() as u32;
-                                            if encrypted_data.validate_mic(&session.newskey(), fcnt)
-                                                && (fcnt > session.fcnt_down || fcnt == 0)
-                                            {
-                                                session.fcnt_down = fcnt;
-                                                // increment the FcntUp since we have received
-                                                // downlink - only reason to not increment
-                                                // is if confirmed frame is sent and no
-                                                // confirmation (ie: downlink) occurs
-                                                session.fcnt_up_increment();
+                                let session = &mut self.session;
+                                if session.devaddr() == &encrypted_data.fhdr().dev_addr() {
+                                    let fcnt = encrypted_data.fhdr().fcnt() as u32;
+                                    if encrypted_data.validate_mic(&session.newskey(), fcnt)
+                                        && (fcnt > session.fcnt_down || fcnt == 0)
+                                    {
+                                        session.fcnt_down = fcnt;
+                                        // increment the FcntUp since we have received
+                                        // downlink - only reason to not increment
+                                        // is if confirmed frame is sent and no
+                                        // confirmation (ie: downlink) occurs
+                                        session.fcnt_up_increment();
 
-                                                let mut copy = Vec::new();
-                                                copy.extend(encrypted_data.as_bytes());
+                                        let mut copy = Vec::new();
+                                        copy.extend(encrypted_data.as_bytes());
 
-                                                // there two unwraps that are sane in their own right
-                                                // * making a new EncryptedDataPayload with owned bytes will
-                                                //      always work when copy bytes from another EncryptedPayload
-                                                // * the decrypt will always work when we have verified MIC previously
-                                                let decrypted =
-                                                    EncryptedDataPayload::new_with_factory(
-                                                        copy,
-                                                        C::default(),
-                                                    )
-                                                    .unwrap()
-                                                    .decrypt(
-                                                        Some(&session.newskey()),
-                                                        Some(&session.appskey()),
-                                                        session.fcnt_down,
-                                                    )
-                                                    .unwrap();
+                                        // there two unwraps that are sane in their own right
+                                        // * making a new EncryptedDataPayload with owned bytes will
+                                        //      always work when copy bytes from another EncryptedPayload
+                                        // * the decrypt will always work when we have verified MIC previously
+                                        let decrypted = EncryptedDataPayload::new_with_factory(
+                                            copy,
+                                            C::default(),
+                                        )
+                                        .unwrap()
+                                        .decrypt(
+                                            Some(&session.newskey()),
+                                            Some(&session.appskey()),
+                                            session.fcnt_down,
+                                        )
+                                        .unwrap();
 
-                                                self.shared.mac.handle_downlink_macs(
-                                                    &mut self.shared.region,
-                                                    &mut decrypted.fhdr().fopts(),
-                                                );
+                                        self.shared.mac.handle_downlink_macs(
+                                            &mut self.shared.region,
+                                            &mut decrypted.fhdr().fopts(),
+                                        );
 
-                                                if let Ok(FRMPayload::MACCommands(mac_cmds)) =
-                                                    decrypted.frm_payload()
-                                                {
-                                                    self.shared.mac.handle_downlink_macs(
-                                                        &mut self.shared.region,
-                                                        &mut mac_cmds.mac_commands(),
-                                                    );
-                                                }
-
-                                                self.shared.data_downlink = Some(decrypted);
-
-                                                // check if FCnt is used up
-                                                let response =
-                                                    if self.session.fcnt_up() == (0xFFFF + 1) {
-                                                        // signal that the session is expired
-                                                        // client must know to check for potential data
-                                                        // (FCnt may be extracted when client checks)
-                                                        Ok(Response::SessionExpired)
-                                                    } else {
-                                                        Ok(Response::DownlinkReceived(fcnt))
-                                                    };
-                                                return (self.into_idle().into(), response);
-                                            }
+                                        if let Ok(FRMPayload::MACCommands(mac_cmds)) =
+                                            decrypted.frm_payload()
+                                        {
+                                            self.shared.mac.handle_downlink_macs(
+                                                &mut self.shared.region,
+                                                &mut mac_cmds.mac_commands(),
+                                            );
                                         }
+
+                                        self.shared.data_downlink = Some(decrypted);
+
+                                        // check if FCnt is used up
+                                        let response = if self.session.fcnt_up() == (0xFFFF + 1) {
+                                            // signal that the session is expired
+                                            // client must know to check for potential data
+                                            // (FCnt may be extracted when client checks)
+                                            Ok(Response::SessionExpired)
+                                        } else {
+                                            Ok(Response::DownlinkReceived(fcnt))
+                                        };
+                                        return (self.into_idle().into(), response);
                                     }
                                 }
                             }
