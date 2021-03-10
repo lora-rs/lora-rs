@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+use crate::radio::{Bandwidth, CodingRate, SpreadingFactor};
 use lorawan_encoding::maccommands::ChannelMask;
 
 const UPLINK_CHANNEL_MAP: [[u32; 8]; 8] = [
@@ -104,6 +105,10 @@ const MAX_FCNT_GAP: usize = 16384;
 const ADR_ACK_LIMIT: usize = 64;
 const ADR_ACK_DELAY: usize = 32;
 const ACK_TIMEOUT: usize = 2; // random delay between 1 and 3 seconds
+const DEFAULT_BANDWIDTH: Bandwidth = Bandwidth::_500KHZ;
+const DEFAULT_SPREADING_FACTOR: SpreadingFactor = SpreadingFactor::_10;
+const DEFAULT_CODING_RATE: CodingRate = CodingRate::_4_5;
+const DEFAULT_DBM: i8 = 20;
 
 #[derive(Default)]
 pub struct Configuration {
@@ -112,19 +117,19 @@ pub struct Configuration {
 }
 
 impl Configuration {
-    pub fn new() -> Configuration {
+    pub(crate) fn new() -> Configuration {
         Self::default()
     }
 
-    pub fn set_channel_mask(&mut self, _chmask: ChannelMask) {
+    pub(crate) fn set_channel_mask(&mut self, _chmask: ChannelMask) {
         // one day this should truly be handled
     }
 
-    pub fn set_subband(&mut self, subband: u8) {
+    pub(crate) fn set_subband(&mut self, subband: u8) {
         self.subband = Some(subband);
     }
 
-    pub fn get_join_frequency(&mut self, random: u8) -> u32 {
+    pub(crate) fn select_join_frequency(&mut self, random: u8) -> u32 {
         let subband_channel = random & 0b111;
         let subband = if let Some(subband) = &self.subband {
             subband - 1
@@ -135,7 +140,7 @@ impl Configuration {
         UPLINK_CHANNEL_MAP[subband as usize][subband_channel as usize]
     }
 
-    pub fn get_data_frequency(&mut self, random: u8) -> u32 {
+    pub(crate) fn select_data_frequency(&mut self, random: u8) -> u32 {
         let subband_channel = random & 0b111;
         let subband = if let Some(subband) = &self.subband {
             subband - 1
@@ -146,27 +151,43 @@ impl Configuration {
         UPLINK_CHANNEL_MAP[subband as usize][subband_channel as usize]
     }
 
-    pub fn get_join_accept_frequency1(&self) -> u32 {
+    pub(crate) fn get_join_accept_frequency1(&self) -> u32 {
         DOWNLINK_CHANNEL_MAP[self.last_tx.1 as usize]
     }
 
-    pub fn get_rxwindow1_frequency(&self) -> u32 {
+    pub(crate) fn get_rxwindow1_frequency(&self) -> u32 {
         DOWNLINK_CHANNEL_MAP[self.last_tx.1 as usize]
     }
 
-    pub fn get_join_accept_delay1(&self) -> u32 {
+    pub(crate) fn get_bandwidth(&self) -> Bandwidth {
+        DEFAULT_BANDWIDTH
+    }
+
+    pub(crate) fn get_dbm(&self) -> i8 {
+        DEFAULT_DBM
+    }
+
+    pub(crate) fn get_coding_rate(&self) -> CodingRate {
+        DEFAULT_CODING_RATE
+    }
+
+    pub(crate) fn get_spreading_factor(&self) -> SpreadingFactor {
+        DEFAULT_SPREADING_FACTOR
+    }
+
+    pub(crate) fn get_join_accept_delay1(&self) -> u32 {
         JOIN_ACCEPT_DELAY1
     }
 
-    pub fn get_join_accept_delay2(&self) -> u32 {
+    pub(crate) fn get_join_accept_delay2(&self) -> u32 {
         JOIN_ACCEPT_DELAY2
     }
 
-    pub fn get_receive_delay1(&self) -> u32 {
+    pub(crate) fn get_receive_delay1(&self) -> u32 {
         RECEIVE_DELAY1
     }
 
-    pub fn get_receive_delay2(&self) -> u32 {
+    pub(crate) fn get_receive_delay2(&self) -> u32 {
         RECEIVE_DELAY2
     }
 }

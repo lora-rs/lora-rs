@@ -199,15 +199,19 @@ where
 
         // we'll use the rest for frequency and subband selection
         random >>= 16;
-        let frequency = self.shared.region.get_join_frequency(random as u8);
+        let dbm = self.shared.region.get_dbm();
+        let frequency = self.shared.region.select_join_frequency(random as u8);
+        let bandwidth = self.shared.region.get_bandwidth();
+        let spreading_factor = self.shared.region.get_spreading_factor();
+        let coding_rate = self.shared.region.get_coding_rate();
 
         let tx_config = radio::TxConfig {
-            pw: 20,
+            pw: dbm,
             rf: radio::RfConfig {
                 frequency,
-                bandwidth: radio::Bandwidth::_125KHZ,
-                spreading_factor: radio::SpreadingFactor::_10,
-                coding_rate: radio::CodingRate::_4_5,
+                bandwidth,
+                spreading_factor,
+                coding_rate,
             },
         };
         (devnonce_copy, tx_config)
@@ -319,9 +323,9 @@ where
             Event::TimeoutFired => {
                 let rx_config = radio::RfConfig {
                     frequency: self.shared.region.get_join_accept_frequency1(),
-                    bandwidth: radio::Bandwidth::_500KHZ,
-                    spreading_factor: radio::SpreadingFactor::_10,
-                    coding_rate: radio::CodingRate::_4_5,
+                    bandwidth: self.shared.region.get_bandwidth(),
+                    spreading_factor: self.shared.region.get_spreading_factor(),
+                    coding_rate: self.shared.region.get_coding_rate(),
                 };
                 // configure the radio for the RX
                 match self

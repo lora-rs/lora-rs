@@ -8,7 +8,7 @@ pub mod session;
 pub struct Shared<R: radio::PhyRxTx + Timings> {
     radio: R,
     credentials: Credentials,
-    region: RegionalConfiguration,
+    region: Region,
     mac: Mac,
     // TODO: do something nicer for randomness
     get_random: fn() -> u32,
@@ -33,7 +33,7 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
     pub fn new(
         radio: R,
         credentials: Credentials,
-        region: RegionalConfiguration,
+        region: Region,
         mac: Mac,
         get_random: fn() -> u32,
         buffer: Vec<u8, U256>,
