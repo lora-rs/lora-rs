@@ -34,9 +34,9 @@ pub struct RfConfig {
 impl Default for RfConfig {
     fn default() -> RfConfig {
         RfConfig {
-            frequency: 902_300_000,
-            bandwidth: Bandwidth::_500KHZ,
-            spreading_factor: SpreadingFactor::_10,
+            frequency: 868_100_000,
+            bandwidth: Bandwidth::_125KHZ,
+            spreading_factor: SpreadingFactor::_7,
             coding_rate: CodingRate::_4_5,
         }
     }

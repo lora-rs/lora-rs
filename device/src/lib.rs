@@ -11,8 +11,9 @@ use mac::Mac;
 mod types;
 pub use types::*;
 
-mod us915;
-use us915::Configuration as RegionalConfiguration;
+mod region;
+
+pub use region::Region;
 
 mod state_machines;
 use core::marker::PhantomData;
@@ -130,7 +131,7 @@ where
         appkey: [u8; 16],
         get_random: fn() -> u32,
     ) -> Device<R, C> {
-        let mut region = RegionalConfiguration::new();
+        let mut region = Region::new();
         region.set_subband(2);
 
         Device {

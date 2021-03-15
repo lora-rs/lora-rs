@@ -221,16 +221,20 @@ where
                 let fcnt = self.prepare_buffer::<C>(&send_data);
 
                 let random = (self.shared.get_random)();
-                let frequency = self.shared.region.get_data_frequency(random as u8);
+                let dbm = self.shared.region.get_dbm();
+                let frequency = self.shared.region.select_join_frequency(random as u8);
+                let bandwidth = self.shared.region.get_bandwidth();
+                let spreading_factor = self.shared.region.get_spreading_factor();
+                let coding_rate = self.shared.region.get_coding_rate();
 
                 let event: radio::Event<R> = radio::Event::TxRequest(
                     radio::TxConfig {
-                        pw: 20,
+                        pw: dbm,
                         rf: radio::RfConfig {
                             frequency,
-                            bandwidth: radio::Bandwidth::_125KHZ,
-                            spreading_factor: radio::SpreadingFactor::_10,
-                            coding_rate: radio::CodingRate::_4_5,
+                            bandwidth,
+                            spreading_factor,
+                            coding_rate,
                         },
                     },
                     &mut self.shared.buffer,
@@ -379,8 +383,8 @@ where
             Event::TimeoutFired => {
                 let rx_config = radio::RfConfig {
                     frequency: self.shared.region.get_rxwindow1_frequency(),
-                    bandwidth: radio::Bandwidth::_500KHZ,
-                    spreading_factor: radio::SpreadingFactor::_10,
+                    bandwidth: radio::Bandwidth::_125KHZ,
+                    spreading_factor: radio::SpreadingFactor::_7,
                     coding_rate: radio::CodingRate::_4_5,
                 };
                 // configure the radio for the RX
