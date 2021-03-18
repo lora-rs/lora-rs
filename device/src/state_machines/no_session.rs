@@ -1,7 +1,10 @@
 use super::super::session::Session;
 use super::super::State as SuperState;
 use super::super::*;
-use super::{CommonState, Shared};
+use super::{
+    region::{Frame, RegionHandler},
+    CommonState, Shared,
+};
 use lorawan_encoding::{
     self,
     creator::JoinRequestCreator,
@@ -199,22 +202,10 @@ where
 
         // we'll use the rest for frequency and subband selection
         random >>= 16;
-        let dbm = self.shared.region.get_dbm();
-        let frequency = self.shared.region.select_join_frequency(random as u8);
-        let bandwidth = self.shared.region.get_bandwidth();
-        let spreading_factor = self.shared.region.get_spreading_factor();
-        let coding_rate = self.shared.region.get_coding_rate();
-
-        let tx_config = radio::TxConfig {
-            pw: dbm,
-            rf: radio::RfConfig {
-                frequency,
-                bandwidth,
-                spreading_factor,
-                coding_rate,
-            },
-        };
-        (devnonce_copy, tx_config)
+        (
+            devnonce_copy,
+            self.shared.region.tx_config(random as u8, Frame::Join),
+        )
     }
 
     fn into_sending_join(self, devnonce: DevNonce) -> SendingJoin<R> {
@@ -323,9 +314,9 @@ where
             Event::TimeoutFired => {
                 let rx_config = radio::RfConfig {
                     frequency: self.shared.region.get_join_accept_frequency1(),
-                    bandwidth: self.shared.region.get_bandwidth(),
-                    spreading_factor: self.shared.region.get_spreading_factor(),
-                    coding_rate: self.shared.region.get_coding_rate(),
+                    bandwidth: radio::Bandwidth::_500KHZ,
+                    spreading_factor: radio::SpreadingFactor::_10,
+                    coding_rate: radio::CodingRate::_4_5,
                 };
                 // configure the radio for the RX
                 match self
@@ -419,8 +410,10 @@ where
                                 lorawan_parse(self.shared.radio.get_received_packet(), C::default())
                             {
                                 let credentials = &self.shared.credentials;
-
                                 let decrypt = encrypted.decrypt(credentials.appkey());
+                                self.shared.downlink = Some(super::Downlink::Join(
+                                    self.shared.region.process_join_accept(&decrypt),
+                                ));
                                 if decrypt.validate_mic(credentials.appkey()) {
                                     let session = SessionData::derive_new(
                                         &decrypt,

@@ -12,14 +12,13 @@ mod types;
 pub use types::*;
 
 mod region;
-
 pub use region::Region;
 
 mod state_machines;
 use core::marker::PhantomData;
 use lorawan_encoding::{keys::CryptoFactory, parser::DecryptedDataPayload};
 use state_machines::Shared;
-pub use state_machines::{no_session, session};
+pub use state_machines::{no_session, session, JoinAccept};
 
 type TimestampMs = u32;
 
@@ -125,14 +124,14 @@ where
     C: CryptoFactory + Default,
 {
     pub fn new(
+        region: Region,
         radio: R,
         deveui: [u8; 8],
         appeui: [u8; 8],
         appkey: [u8; 16],
         get_random: fn() -> u32,
     ) -> Device<R, C> {
-        let mut region = Region::new();
-        region.set_subband(2);
+        let region = region::Configuration::new(region);
 
         Device {
             crypto: PhantomData::default(),
@@ -201,6 +200,10 @@ where
 
     pub fn take_data_downlink(&mut self) -> Option<DecryptedDataPayload<Vec<u8, U256>>> {
         self.get_shared().take_data_downlink()
+    }
+
+    pub fn take_join_accept(&mut self) -> Option<JoinAccept> {
+        self.get_shared().take_join_accept()
     }
 
     pub fn handle_event(self, event: Event<R>) -> (Self, Result<Response, Error<R>>) {

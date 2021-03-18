@@ -45,7 +45,10 @@ else(Ready)║ ╚═════════════╝   ║              
 use super::super::no_session::{NoSession, SessionData};
 use super::super::State as SuperState;
 use super::super::*;
-use super::CommonState;
+use super::{
+    region::{Frame, RegionHandler},
+    CommonState,
+};
 use as_slice::AsSlice;
 use generic_array::{typenum::U256, GenericArray};
 use lorawan_encoding::{
@@ -219,24 +222,10 @@ where
             Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
                 let fcnt = self.prepare_buffer::<C>(&send_data);
-
                 let random = (self.shared.get_random)();
-                let dbm = self.shared.region.get_dbm();
-                let frequency = self.shared.region.select_join_frequency(random as u8);
-                let bandwidth = self.shared.region.get_bandwidth();
-                let spreading_factor = self.shared.region.get_spreading_factor();
-                let coding_rate = self.shared.region.get_coding_rate();
 
                 let event: radio::Event<R> = radio::Event::TxRequest(
-                    radio::TxConfig {
-                        pw: dbm,
-                        rf: radio::RfConfig {
-                            frequency,
-                            bandwidth,
-                            spreading_factor,
-                            coding_rate,
-                        },
-                    },
+                    self.shared.region.tx_config(random as u8, Frame::Data),
                     &mut self.shared.buffer,
                 );
 
@@ -383,8 +372,8 @@ where
             Event::TimeoutFired => {
                 let rx_config = radio::RfConfig {
                     frequency: self.shared.region.get_rxwindow1_frequency(),
-                    bandwidth: radio::Bandwidth::_125KHZ,
-                    spreading_factor: radio::SpreadingFactor::_7,
+                    bandwidth: radio::Bandwidth::_500KHZ,
+                    spreading_factor: radio::SpreadingFactor::_10,
                     coding_rate: radio::CodingRate::_4_5,
                 };
                 // configure the radio for the RX
@@ -524,7 +513,8 @@ where
                                             );
                                         }
 
-                                        self.shared.data_downlink = Some(decrypted);
+                                        self.shared.downlink =
+                                            Some(super::Downlink::Data(decrypted));
 
                                         // check if FCnt is used up
                                         let response = if self.session.fcnt_up() == (0xFFFF + 1) {

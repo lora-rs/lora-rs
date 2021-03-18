@@ -17,9 +17,3 @@ lorawan-encoding = { path = "../encoding", default-features = false }
 heapless = "0.5.4"
 as-slice = "*"
 generic-array = "0.14.2"
-
-[features]
-default = ["region+us915"]
-
-"region+us915" = []
-"region+eu868" = []
