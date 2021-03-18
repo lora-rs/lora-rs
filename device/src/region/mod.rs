@@ -51,7 +51,7 @@ impl Configuration {
         }
     }
 
-    pub(crate) fn tx_config(&mut self, random: u8, frame: Frame) -> TxConfig {
+    pub(crate) fn create_tx_config(&mut self, random: u8, frame: Frame) -> TxConfig {
         TxConfig {
             pw: self.get_dbm(),
             rf: RfConfig {

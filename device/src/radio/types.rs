@@ -31,30 +31,10 @@ pub struct RfConfig {
     pub coding_rate: CodingRate,
 }
 
-impl Default for RfConfig {
-    fn default() -> RfConfig {
-        RfConfig {
-            frequency: 902_300_000,
-            bandwidth: Bandwidth::_500KHZ,
-            spreading_factor: SpreadingFactor::_10,
-            coding_rate: CodingRate::_4_5,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct TxConfig {
     pub pw: i8,
     pub rf: RfConfig,
-}
-
-impl Default for TxConfig {
-    fn default() -> TxConfig {
-        TxConfig {
-            pw: 20,
-            rf: RfConfig::default(),
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug)]

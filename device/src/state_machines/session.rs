@@ -225,7 +225,7 @@ where
                 let random = (self.shared.get_random)();
 
                 let event: radio::Event<R> = radio::Event::TxRequest(
-                    self.shared.region.tx_config(random as u8, Frame::Data),
+                    self.shared.region.create_tx_config(random as u8, Frame::Data),
                     &mut self.shared.buffer,
                 );
 
@@ -372,9 +372,9 @@ where
             Event::TimeoutFired => {
                 let rx_config = radio::RfConfig {
                     frequency: self.shared.region.get_rxwindow1_frequency(),
-                    bandwidth: radio::Bandwidth::_500KHZ,
-                    spreading_factor: radio::SpreadingFactor::_10,
-                    coding_rate: radio::CodingRate::_4_5,
+                    bandwidth: self.shared.region.get_bandwidth(),
+                    spreading_factor: self.shared.region.get_spreading_factor(),
+                    coding_rate: self.shared.region.get_coding_rate(),
                 };
                 // configure the radio for the RX
                 match self
