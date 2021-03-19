@@ -11,7 +11,7 @@ use mac::Mac;
 mod types;
 pub use types::*;
 
-mod region;
+pub mod region;
 pub use region::Region;
 
 mod state_machines;
@@ -124,15 +124,13 @@ where
     C: CryptoFactory + Default,
 {
     pub fn new(
-        region: Region,
+        region: region::Configuration,
         radio: R,
         deveui: [u8; 8],
         appeui: [u8; 8],
         appkey: [u8; 16],
         get_random: fn() -> u32,
     ) -> Device<R, C> {
-        let region = region::Configuration::new(region);
-
         Device {
             crypto: PhantomData::default(),
             state: State::new(Shared::new(

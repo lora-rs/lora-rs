@@ -66,6 +66,24 @@ impl Configuration {
         }
     }
 }
+macro_rules! from_region {
+    ($r:tt) => {
+    impl From<$r> for Configuration {
+    fn from(region: $r) -> Configuration {
+        Configuration {
+            state: State::$r(region)
+        }
+    }
+}
+    }
+}
+from_region!(US915);
+from_region!(CN470);
+from_region!(EU868);
+
+
+
+
 
 use super::state_machines::JoinAccept;
 use lorawan_encoding::parser::DecryptedJoinAcceptPayload;
