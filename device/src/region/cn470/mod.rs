@@ -1,13 +1,12 @@
 #![allow(dead_code)]
 use super::*;
-use lorawan_encoding::maccommands::ChannelMask;
 
 mod frequencies;
 use frequencies::*;
 
 #[derive(Default)]
 pub struct CN470 {
-    last_tx: u8,
+    last_tx: usize,
     cf_list: Option<[u32; 5]>,
 }
 
@@ -36,21 +35,14 @@ impl RegionHandler for CN470 {
         }
     }
 
-    fn set_channel_mask(&mut self, _chmask: ChannelMask) {
-        // one day this should truly be handled
-    }
-
-    // no subband setting for CN470
-    fn set_subband(&mut self, _subband: u8) {}
-
     fn get_join_frequency(&mut self, random: u8) -> u32 {
-        let channel = random % 96;
+        let channel = random as usize % 96;
         self.last_tx = channel;
-        UPLINK_MAP[channel as usize]
+        UPLINK_MAP[channel ]
     }
 
     fn get_data_frequency(&mut self, random: u8) -> u32 {
-        let channel = random & 0b111;
+        let channel = random as usize % UPLINK_MAP.len();
         self.last_tx = channel;
         UPLINK_MAP[channel as usize]
     }

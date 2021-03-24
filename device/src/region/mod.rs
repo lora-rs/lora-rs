@@ -81,10 +81,6 @@ from_region!(US915);
 from_region!(CN470);
 from_region!(EU868);
 
-
-
-
-
 use super::state_machines::JoinAccept;
 use lorawan_encoding::parser::DecryptedJoinAcceptPayload;
 
@@ -161,7 +157,6 @@ impl RegionHandler for Configuration {
     fn get_receive_delay2(&self) -> u32 {
         region_dispatch!(self, get_receive_delay2)
     }
-
     fn get_bandwidth(&self) -> Bandwidth {
         region_dispatch!(self, get_bandwidth)
     }
@@ -181,8 +176,12 @@ pub trait RegionHandler {
         &mut self,
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     ) -> JoinAccept;
-    fn set_channel_mask(&mut self, channel_mask: ChannelMask);
-    fn set_subband(&mut self, subband: u8);
+    fn set_channel_mask(&mut self, _channel_mask: ChannelMask) {
+        // does not apply to every region
+    }
+    fn set_subband(&mut self, _subband: u8) {
+        // does not apply to every region
+    }
     fn get_join_frequency(&mut self, random: u8) -> u32;
     fn get_data_frequency(&mut self, random: u8) -> u32;
     fn get_join_accept_frequency1(&self) -> u32;
