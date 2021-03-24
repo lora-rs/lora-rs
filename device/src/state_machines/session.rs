@@ -46,7 +46,7 @@ use super::super::no_session::{NoSession, SessionData};
 use super::super::State as SuperState;
 use super::super::*;
 use super::{
-    region::{Frame, RegionHandler},
+    region::{Frame, Window, RegionHandler},
     CommonState,
 };
 use as_slice::AsSlice;
@@ -225,7 +225,7 @@ where
                 let random = (self.shared.get_random)();
 
                 let event: radio::Event<R> = radio::Event::TxRequest(
-                    self.shared.region.create_tx_config(random as u8, Frame::Data),
+                    self.shared.region.create_tx_config(random as u8, self.shared.datarate,&Frame::Data),
                     &mut self.shared.buffer,
                 );
 
@@ -370,12 +370,12 @@ where
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
-                let rx_config = radio::RfConfig {
-                    frequency: self.shared.region.get_rxwindow1_frequency(),
-                    bandwidth: self.shared.region.get_bandwidth(),
-                    spreading_factor: self.shared.region.get_spreading_factor(),
-                    coding_rate: self.shared.region.get_coding_rate(),
+                let window = match &self.rx_window {
+                    RxWindow::_1(_) => Window::_1,
+                    RxWindow::_2(_) => Window::_2,
                 };
+                let rx_config = self.shared.region.get_rx_config(self.shared.datarate, &Frame::Join, &window);
+
                 // configure the radio for the RX
                 match self
                     .shared
@@ -386,8 +386,8 @@ where
                         let window_close: u32 = match self.rx_window {
                             // RxWindow1 one must timeout before RxWindow2
                             RxWindow::_1(time) => {
-                                let time_between_windows = self.shared.region.get_receive_delay2()
-                                    - self.shared.region.get_receive_delay1();
+                                let time_between_windows = self.shared.region.get_rx_delay(&Frame::Data, &Window::_2)
+                                    - self.shared.region.get_rx_delay(&Frame::Data, &Window::_1);
                                 if time_between_windows
                                     > self.shared.radio.get_rx_window_duration_ms()
                                 {
@@ -544,8 +544,8 @@ where
 
                 match self.rx_window {
                     RxWindow::_1(t1) => {
-                        let time_between_windows = self.shared.region.get_receive_delay2()
-                            - self.shared.region.get_receive_delay1();
+                        let time_between_windows = self.shared.region.get_rx_delay(&Frame::Data, &Window::_2)
+                            - self.shared.region.get_rx_delay(&Frame::Data, &Window::_1);
                         let t2 = t1 + time_between_windows;
                         // TODO: jump to RxWindow2 if t2 == now
                         (
@@ -605,7 +605,7 @@ fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, C: CryptoFactory + Defaul
 ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
     let (new_state, first_window) = match state {
         Session::Idle(state) => {
-            let first_window = (state.shared.region.get_receive_delay1() as i32
+            let first_window = (state.shared.region.get_rx_delay(&Frame::Data, &Window::_1) as i32
                 + timestamp_ms as i32
                 + state.shared.radio.get_rx_window_offset_ms())
                 as u32;
@@ -615,7 +615,7 @@ fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, C: CryptoFactory + Defaul
             )
         }
         Session::SendingData(state) => {
-            let first_window = (state.shared.region.get_receive_delay1() as i32
+            let first_window = (state.shared.region.get_rx_delay(&Frame::Data, &Window::_1) as i32
                 + timestamp_ms as i32
                 + state.shared.radio.get_rx_window_offset_ms())
                 as u32;

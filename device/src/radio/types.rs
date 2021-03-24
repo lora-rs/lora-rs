@@ -1,11 +1,11 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Bandwidth {
     _125KHZ,
     _250KHZ,
     _500KHZ,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SpreadingFactor {
     _7,
     _8,
@@ -15,7 +15,7 @@ pub enum SpreadingFactor {
     _12,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CodingRate {
     _4_5,
     _4_6,

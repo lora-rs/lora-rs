@@ -39,9 +39,20 @@ impl State {
     }
 }
 
-pub(crate) enum Frame {
+#[derive(Debug, Clone)]
+pub struct Datarate {
+    bandwidth: Bandwidth,
+    spreading_factor: SpreadingFactor,
+}
+
+pub enum Frame {
     Join,
     Data,
+}
+
+pub enum Window {
+    _1,
+    _2,
 }
 
 impl Configuration {
@@ -50,8 +61,8 @@ impl Configuration {
             state: State::new(region),
         }
     }
-
-    pub(crate) fn create_tx_config(&mut self, random: u8, frame: Frame) -> TxConfig {
+    pub(crate) fn create_tx_config(&mut self, random: u8, datarate: usize, frame: &Frame) -> TxConfig {
+        let datarate = self.get_tx_datarate(datarate, frame);
         TxConfig {
             pw: self.get_dbm(),
             rf: RfConfig {
@@ -59,10 +70,20 @@ impl Configuration {
                     Frame::Data => self.get_data_frequency(random as u8),
                     Frame::Join => self.get_join_frequency(random as u8),
                 },
-                bandwidth: self.get_bandwidth(),
-                spreading_factor: self.get_spreading_factor(),
+                bandwidth: datarate.bandwidth,
+                spreading_factor: datarate.spreading_factor,
                 coding_rate: self.get_coding_rate(),
             },
+        }
+    }
+
+    pub(crate) fn get_rx_config(&mut self, datarate: usize, frame: &Frame, window: &Window) -> RfConfig {
+        let datarate = self.get_rx_datarate(datarate, frame, window);
+        RfConfig {
+            frequency: self.get_rx_frequency(frame, window),
+            bandwidth: datarate.bandwidth,
+            spreading_factor: datarate.spreading_factor,
+            coding_rate: self.get_coding_rate(),
         }
     }
 }
@@ -125,11 +146,9 @@ impl RegionHandler for Configuration {
     ) -> JoinAccept {
         mut_region_dispatch!(self, process_join_accept, join_accept)
     }
-
     fn set_channel_mask(&mut self, channel_mask: ChannelMask) {
         mut_region_dispatch!(self, set_channel_mask, channel_mask)
     }
-
     fn set_subband(&mut self, subband: u8) {
         mut_region_dispatch!(self, set_subband, subband)
     }
@@ -139,35 +158,23 @@ impl RegionHandler for Configuration {
     fn get_data_frequency(&mut self, random: u8) -> u32 {
         mut_region_dispatch!(self, get_data_frequency, random)
     }
-    fn get_join_accept_frequency1(&self) -> u32 {
-        region_dispatch!(self, get_join_accept_frequency1)
+    fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
+        region_dispatch!(self, get_rx_delay, frame, window)
     }
-    fn get_rxwindow1_frequency(&self) -> u32 {
-        region_dispatch!(self, get_rxwindow1_frequency)
+    fn get_rx_frequency(&self,frame: &Frame, window: &Window) -> u32 {
+        region_dispatch!(self, get_rx_frequency, frame, window)
     }
-    fn get_join_accept_delay1(&self) -> u32 {
-        region_dispatch!(self, get_join_accept_delay1)
+    fn get_tx_datarate(&self, datarate: usize, frame: &Frame ) -> Datarate  {
+        region_dispatch!(self, get_tx_datarate, datarate, frame)
     }
-    fn get_join_accept_delay2(&self) -> u32 {
-        region_dispatch!(self, get_join_accept_delay2)
-    }
-    fn get_receive_delay1(&self) -> u32 {
-        region_dispatch!(self, get_receive_delay1)
-    }
-    fn get_receive_delay2(&self) -> u32 {
-        region_dispatch!(self, get_receive_delay2)
-    }
-    fn get_bandwidth(&self) -> Bandwidth {
-        region_dispatch!(self, get_bandwidth)
+    fn get_rx_datarate(&self, datarate: usize, frame: &Frame, window: &Window ) -> Datarate {
+        region_dispatch!(self, get_rx_datarate, datarate, frame, window)
     }
     fn get_dbm(&self) -> i8 {
         region_dispatch!(self, get_dbm)
     }
     fn get_coding_rate(&self) -> CodingRate {
         region_dispatch!(self, get_coding_rate)
-    }
-    fn get_spreading_factor(&self) -> SpreadingFactor {
-        region_dispatch!(self, get_spreading_factor)
     }
 }
 
@@ -182,36 +189,35 @@ pub trait RegionHandler {
     fn set_subband(&mut self, _subband: u8) {
         // does not apply to every region
     }
+
     fn get_join_frequency(&mut self, random: u8) -> u32;
     fn get_data_frequency(&mut self, random: u8) -> u32;
-    fn get_join_accept_frequency1(&self) -> u32;
-    fn get_rxwindow1_frequency(&self) -> u32;
+    fn get_rx_frequency(&self,frame: &Frame, window: &Window) -> u32;
 
-    fn get_join_accept_delay1(&self) -> u32 {
-        JOIN_ACCEPT_DELAY1
-    }
-    fn get_join_accept_delay2(&self) -> u32 {
-        JOIN_ACCEPT_DELAY2
+    fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
+        match frame {
+            Frame::Join => {
+                match window {
+                    Window::_1 => JOIN_ACCEPT_DELAY1,
+                    Window::_2 => JOIN_ACCEPT_DELAY2,
+                }
+            }
+            Frame::Data => {
+                match window {
+                    Window::_1 => RECEIVE_DELAY1,
+                    Window::_2 => RECEIVE_DELAY2,
+                }
+            }
+        }
+
     }
 
-    fn get_receive_delay1(&self) -> u32 {
-        RECEIVE_DELAY1
-    }
-
-    fn get_receive_delay2(&self) -> u32 {
-        RECEIVE_DELAY2
-    }
-
-    fn get_bandwidth(&self) -> Bandwidth {
-        DEFAULT_BANDWIDTH
-    }
+    fn get_tx_datarate(&self, datarate: usize, frame: &Frame ) -> Datarate;
+    fn get_rx_datarate(&self, datarate: usize,  frame: &Frame, window: &Window ) -> Datarate;
     fn get_dbm(&self) -> i8 {
         DEFAULT_DBM
     }
     fn get_coding_rate(&self) -> CodingRate {
         DEFAULT_CODING_RATE
-    }
-    fn get_spreading_factor(&self) -> SpreadingFactor {
-        DEFAULT_SPREADING_FACTOR
     }
 }

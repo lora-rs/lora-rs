@@ -13,6 +13,7 @@ pub struct Shared<R: radio::PhyRxTx + Timings> {
     get_random: fn() -> u32,
     buffer: Vec<u8, U256>,
     downlink: Option<Downlink>,
+    datarate: usize,
 }
 
 enum Downlink {
@@ -67,6 +68,7 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
             get_random,
             buffer,
             downlink: None,
+            datarate: 0,
         }
     }
 }
