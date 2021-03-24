@@ -12,7 +12,7 @@ use super::parser::{
     EncryptedJoinAcceptPayload, JoinRequestPayload,
 };
 use super::securityhelpers::generic_array::{typenum::U16, GenericArray};
-use aes::block_cipher::{BlockCipher, NewBlockCipher};
+use aes::cipher::{BlockCipher, NewBlockCipher};
 use aes::Aes128;
 use cmac::crypto_mac::NewMac;
 
