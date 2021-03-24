@@ -36,15 +36,15 @@ impl RegionHandler for CN470 {
     }
 
     fn get_join_frequency(&mut self, random: u8) -> u32 {
-        let channel = random as usize % 96;
+        let channel = random as usize % UPLINK_MAP.len();
         self.last_tx = channel;
-        UPLINK_MAP[channel ]
+        UPLINK_MAP[channel]
     }
 
     fn get_data_frequency(&mut self, random: u8) -> u32 {
         let channel = random as usize % UPLINK_MAP.len();
         self.last_tx = channel;
-        UPLINK_MAP[channel as usize]
+        UPLINK_MAP[channel]
     }
 
     fn get_join_accept_frequency1(&self) -> u32 {
