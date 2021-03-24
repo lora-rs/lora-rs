@@ -326,18 +326,15 @@ where
                         let window_close: u32 = match self.join_rx_window {
                             // RxWindow1 one must timeout before RxWindow2
                             JoinRxWindow::_1(time) => {
-                                time + self.shared.radio.get_rx_window_duration_ms()
-
-                                // let time_between_windows =
-                                //     self.shared.region.get_rx_delay(&Frame::Join, &Window::_2)
-                                //         - self.shared.region.get_rx_delay(&Frame::Join, &Window::_1);
-                                // if time_between_windows
-                                //     > self.shared.radio.get_rx_window_duration_ms()
-                                // {
-                                //     time + self.shared.radio.get_rx_window_duration_ms()
-                                // } else {
-                                //     time + self.shared.radio.get_rx_window_duration_ms()
-                                // }
+                                let time_between_windows = self.shared.region.get_rx_delay(&Frame::Join, &Window::_2)
+                                    - self.shared.region.get_rx_delay(&Frame::Join, &Window::_1);
+                                if time_between_windows
+                                    > self.shared.radio.get_rx_window_duration_ms()
+                                {
+                                    time + self.shared.radio.get_rx_window_duration_ms()
+                                } else {
+                                    time + time_between_windows
+                                }
                             }
                             // RxWindow2 can last however long
                             JoinRxWindow::_2(time) => {
