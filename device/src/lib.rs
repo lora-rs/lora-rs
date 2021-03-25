@@ -118,6 +118,7 @@ pub trait Timings {
     fn get_rx_window_duration_ms(&self) -> u32;
 }
 
+#[allow(dead_code)]
 impl<R, C> Device<R, C>
 where
     R: radio::PhyRxTx + Timings,
@@ -159,6 +160,14 @@ where
             State::NoSession(state) => state.get_mut_shared(),
             State::Session(state) => state.get_mut_shared(),
         }
+    }
+
+    fn get_datarate(&mut self) -> usize {
+        self.get_shared().get_datarate()
+    }
+
+    fn set_datarate(&mut self, datarate: usize) {
+        self.get_shared().set_datarate(datarate);
     }
 
     pub fn ready_to_send_data(&self) -> bool {

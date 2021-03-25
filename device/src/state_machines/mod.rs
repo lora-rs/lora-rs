@@ -33,6 +33,12 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
     pub fn get_mut_credentials(&mut self) -> &mut Credentials {
         &mut self.credentials
     }
+    pub fn get_datarate(&mut self) -> usize {
+        self.datarate
+    }
+    pub fn set_datarate(&mut self, datarate: usize) {
+        self.datarate = datarate;
+    }
 
     pub fn take_data_downlink(&mut self) -> Option<DecryptedDataPayload<Vec<u8, U256>>> {
         if let Some(Downlink::Data(payload)) = self.downlink.take() {
