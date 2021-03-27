@@ -26,10 +26,10 @@ use super::default_crypto::DefaultFactory;
 use super::keys::Decrypter;
 
 #[cfg(any(feature = "with-downlink", feature = "default-crypto"))]
-use aes::block_cipher::generic_array::GenericArray;
+use aes::cipher::generic_array::GenericArray;
 
 #[cfg(feature = "default-crypto")]
-use aes::block_cipher::generic_array::typenum::U256;
+use aes::cipher::generic_array::typenum::U256;
 
 const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 

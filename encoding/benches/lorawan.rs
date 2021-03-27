@@ -6,7 +6,7 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use aes::block_cipher::{generic_array::GenericArray, NewBlockCipher};
+use aes::cipher::{generic_array::GenericArray, NewBlockCipher};
 use aes::Aes128;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::alloc::System;
