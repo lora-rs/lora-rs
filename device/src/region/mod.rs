@@ -17,12 +17,14 @@ pub struct Configuration {
 }
 
 #[derive(Debug, Clone)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Region {
     US915,
     CN470,
     EU868,
 }
 
+#[allow(clippy::upper_case_acronyms)]
 enum State {
     US915(US915),
     CN470(CN470),
@@ -61,7 +63,12 @@ impl Configuration {
             state: State::new(region),
         }
     }
-    pub(crate) fn create_tx_config(&mut self, random: u8, datarate: usize, frame: &Frame) -> TxConfig {
+    pub(crate) fn create_tx_config(
+        &mut self,
+        random: u8,
+        datarate: usize,
+        frame: &Frame,
+    ) -> TxConfig {
         let datarate = self.get_tx_datarate(datarate, frame);
         TxConfig {
             pw: self.get_dbm(),
@@ -77,7 +84,12 @@ impl Configuration {
         }
     }
 
-    pub(crate) fn get_rx_config(&mut self, datarate: usize, frame: &Frame, window: &Window) -> RfConfig {
+    pub(crate) fn get_rx_config(
+        &mut self,
+        datarate: usize,
+        frame: &Frame,
+        window: &Window,
+    ) -> RfConfig {
         let datarate = self.get_rx_datarate(datarate, frame, window);
         RfConfig {
             frequency: self.get_rx_frequency(frame, window),
@@ -89,14 +101,14 @@ impl Configuration {
 }
 macro_rules! from_region {
     ($r:tt) => {
-    impl From<$r> for Configuration {
-    fn from(region: $r) -> Configuration {
-        Configuration {
-            state: State::$r(region)
+        impl From<$r> for Configuration {
+            fn from(region: $r) -> Configuration {
+                Configuration {
+                    state: State::$r(region),
+                }
+            }
         }
-    }
-}
-    }
+    };
 }
 from_region!(US915);
 from_region!(CN470);
@@ -161,13 +173,13 @@ impl RegionHandler for Configuration {
     fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
         region_dispatch!(self, get_rx_delay, frame, window)
     }
-    fn get_rx_frequency(&self,frame: &Frame, window: &Window) -> u32 {
+    fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32 {
         region_dispatch!(self, get_rx_frequency, frame, window)
     }
-    fn get_tx_datarate(&self, datarate: usize, frame: &Frame ) -> Datarate  {
+    fn get_tx_datarate(&self, datarate: usize, frame: &Frame) -> Datarate {
         region_dispatch!(self, get_tx_datarate, datarate, frame)
     }
-    fn get_rx_datarate(&self, datarate: usize, frame: &Frame, window: &Window ) -> Datarate {
+    fn get_rx_datarate(&self, datarate: usize, frame: &Frame, window: &Window) -> Datarate {
         region_dispatch!(self, get_rx_datarate, datarate, frame, window)
     }
     fn get_dbm(&self) -> i8 {
@@ -192,28 +204,23 @@ pub trait RegionHandler {
 
     fn get_join_frequency(&mut self, random: u8) -> u32;
     fn get_data_frequency(&mut self, random: u8) -> u32;
-    fn get_rx_frequency(&self,frame: &Frame, window: &Window) -> u32;
+    fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32;
 
     fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
         match frame {
-            Frame::Join => {
-                match window {
-                    Window::_1 => JOIN_ACCEPT_DELAY1,
-                    Window::_2 => JOIN_ACCEPT_DELAY2,
-                }
-            }
-            Frame::Data => {
-                match window {
-                    Window::_1 => RECEIVE_DELAY1,
-                    Window::_2 => RECEIVE_DELAY2,
-                }
-            }
+            Frame::Join => match window {
+                Window::_1 => JOIN_ACCEPT_DELAY1,
+                Window::_2 => JOIN_ACCEPT_DELAY2,
+            },
+            Frame::Data => match window {
+                Window::_1 => RECEIVE_DELAY1,
+                Window::_2 => RECEIVE_DELAY2,
+            },
         }
-
     }
 
-    fn get_tx_datarate(&self, datarate: usize, frame: &Frame ) -> Datarate;
-    fn get_rx_datarate(&self, datarate: usize,  frame: &Frame, window: &Window ) -> Datarate;
+    fn get_tx_datarate(&self, datarate: usize, frame: &Frame) -> Datarate;
+    fn get_rx_datarate(&self, datarate: usize, frame: &Frame, window: &Window) -> Datarate;
     fn get_dbm(&self) -> i8 {
         DEFAULT_DBM
     }

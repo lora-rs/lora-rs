@@ -1,8 +1,8 @@
 #[derive(Debug, Clone)]
 pub enum Bandwidth {
-    _125KHZ,
-    _250KHZ,
-    _500KHZ,
+    _125KHz,
+    _250KHz,
+    _500KHz,
 }
 
 #[derive(Debug, Clone)]

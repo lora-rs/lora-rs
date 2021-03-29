@@ -7,6 +7,7 @@ mod datarates;
 use datarates::*;
 
 #[derive(Default)]
+#[allow(clippy::upper_case_acronyms)]
 pub struct EU868 {
     subband: Option<u8>,
     last_tx: usize,
@@ -75,14 +76,14 @@ impl RegionHandler for EU868 {
                     JOIN_CHANNELS[channel]
                 }
             }
-            Window::_2=> 869_525_000,
+            Window::_2 => 869_525_000,
         }
     }
 
     fn get_tx_datarate(&self, datarate: usize, _frame: &Frame) -> Datarate {
         DATARATES[datarate].clone()
     }
-    fn get_rx_datarate(&self, datarate: usize, _frame: &Frame, window: &Window ) -> Datarate {
+    fn get_rx_datarate(&self, datarate: usize, _frame: &Frame, window: &Window) -> Datarate {
         let datarate = match window {
             Window::_1 => datarate,
             Window::_2 => 0,

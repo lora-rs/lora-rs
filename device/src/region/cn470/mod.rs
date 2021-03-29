@@ -8,6 +8,7 @@ mod datarates;
 use datarates::*;
 
 #[derive(Default)]
+#[allow(clippy::upper_case_acronyms)]
 pub struct CN470 {
     last_tx: usize,
     cf_list: Option<[u32; 5]>,
@@ -53,15 +54,14 @@ impl RegionHandler for CN470 {
     fn get_rx_frequency(&self, _frame: &Frame, window: &Window) -> u32 {
         match window {
             Window::_1 => DOWNLINK_MAP[self.last_tx as usize % 2],
-            Window::_2=> 505_300_000,
-
+            Window::_2 => 505_300_000,
         }
     }
 
     fn get_tx_datarate(&self, datarate: usize, _frame: &Frame) -> Datarate {
         DATARATES[datarate].clone()
     }
-    fn get_rx_datarate(&self, datarate: usize, _frame: &Frame, window: &Window ) -> Datarate {
+    fn get_rx_datarate(&self, datarate: usize, _frame: &Frame, window: &Window) -> Datarate {
         let datarate = match window {
             Window::_1 => datarate,
             Window::_2 => 0,

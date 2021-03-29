@@ -2,7 +2,7 @@ use super::super::session::Session;
 use super::super::State as SuperState;
 use super::super::*;
 use super::{
-    region::{Frame, Window, RegionHandler},
+    region::{Frame, RegionHandler, Window},
     CommonState, Shared,
 };
 use lorawan_encoding::{
@@ -157,7 +157,8 @@ where
                             // directly jump to waiting for RxWindow
                             // allows for synchronous sending
                             radio::Response::TxDone(ms) => {
-                                let first_window = self.shared.region.get_rx_delay(&Frame::Join, &Window::_1) + ms;
+                                let first_window =
+                                    self.shared.region.get_rx_delay(&Frame::Join, &Window::_1) + ms;
                                 (
                                     self.into_waiting_for_rxwindow(devnonce, first_window)
                                         .into(),
@@ -204,7 +205,9 @@ where
         random >>= 16;
         (
             devnonce_copy,
-            self.shared.region.create_tx_config(random as u8, self.shared.datarate, &Frame::Join),
+            self.shared
+                .region
+                .create_tx_config(random as u8, self.shared.datarate, &Frame::Join),
         )
     }
 
@@ -252,10 +255,10 @@ where
                         match response {
                             // expect a complete transmit
                             radio::Response::TxDone(ms) => {
-                                let first_window = self.shared.region.get_rx_delay(&Frame::Join, &Window::_1)
-                                    + ms
-                                    + self.shared.radio.get_rx_window_offset_ms()
-                                    as u32;
+                                let first_window =
+                                    self.shared.region.get_rx_delay(&Frame::Join, &Window::_1)
+                                        + ms
+                                        + self.shared.radio.get_rx_window_offset_ms() as u32;
                                 (
                                     self.into_waiting_for_rxwindow(first_window).into(),
                                     Ok(Response::TimeoutRequest(first_window)),
@@ -315,7 +318,10 @@ where
                     JoinRxWindow::_1(_) => Window::_1,
                     JoinRxWindow::_2(_) => Window::_2,
                 };
-                let rx_config = self.shared.region.get_rx_config(self.shared.datarate, &Frame::Join, &window);
+                let rx_config =
+                    self.shared
+                        .region
+                        .get_rx_config(self.shared.datarate, &Frame::Join, &window);
                 // configure the radio for the RX
                 match self
                     .shared
@@ -326,7 +332,10 @@ where
                         let window_close: u32 = match self.join_rx_window {
                             // RxWindow1 one must timeout before RxWindow2
                             JoinRxWindow::_1(time) => {
-                                let time_between_windows = self.shared.region.get_rx_delay(&Frame::Join, &Window::_2)
+                                let time_between_windows = self
+                                    .shared
+                                    .region
+                                    .get_rx_delay(&Frame::Join, &Window::_2)
                                     - self.shared.region.get_rx_delay(&Frame::Join, &Window::_1);
                                 if time_between_windows
                                     > self.shared.radio.get_rx_window_duration_ms()
@@ -438,8 +447,9 @@ where
 
                 match self.join_rx_window {
                     JoinRxWindow::_1(t1) => {
-                        let time_between_windows = self.shared.region.get_rx_delay(&Frame::Join, &Window::_2)
-                            - self.shared.region.get_rx_delay(&Frame::Join, &Window::_1);
+                        let time_between_windows =
+                            self.shared.region.get_rx_delay(&Frame::Join, &Window::_2)
+                                - self.shared.region.get_rx_delay(&Frame::Join, &Window::_1);
                         let t2 = t1 + time_between_windows;
                         // TODO: jump to RxWindow2 if t2 == now
                         (

@@ -11,6 +11,7 @@ use datarates::*;
 const US_DBM: i8 = 21;
 
 #[derive(Default)]
+#[allow(clippy::upper_case_acronyms)]
 pub struct US915 {
     subband: Option<u8>,
     last_tx: (u8, u8),
@@ -65,7 +66,7 @@ impl RegionHandler for US915 {
     fn get_rx_frequency(&self, _frame: &Frame, window: &Window) -> u32 {
         match window {
             Window::_1 => DOWNLINK_CHANNEL_MAP[self.last_tx.1 as usize],
-            Window::_2=> 923_300_000,
+            Window::_2 => 923_300_000,
         }
     }
 
@@ -81,7 +82,7 @@ impl RegionHandler for US915 {
         };
         DATARATES[datarate].clone().unwrap()
     }
-    fn get_rx_datarate(&self, datarate: usize, _frame: &Frame, window: &Window ) -> Datarate {
+    fn get_rx_datarate(&self, datarate: usize, _frame: &Frame, window: &Window) -> Datarate {
         let datarate = match window {
             Window::_1 => {
                 // no support for RX1 DR Offset
@@ -90,12 +91,10 @@ impl RegionHandler for US915 {
                     1 => 9,
                     2 => 8,
                     3 => 7,
-                    _ => panic!("get_rx_datarate: Invalid datarate")
+                    _ => panic!("get_rx_datarate: Invalid datarate"),
                 }
             }
-            Window::_2 => {
-                8
-            }
+            Window::_2 => 8,
         };
         DATARATES[datarate].clone().unwrap()
     }

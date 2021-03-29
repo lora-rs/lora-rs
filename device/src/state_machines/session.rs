@@ -46,7 +46,7 @@ use super::super::no_session::{NoSession, SessionData};
 use super::super::State as SuperState;
 use super::super::*;
 use super::{
-    region::{Frame, Window, RegionHandler},
+    region::{Frame, RegionHandler, Window},
     CommonState,
 };
 use as_slice::AsSlice;
@@ -225,7 +225,11 @@ where
                 let random = (self.shared.get_random)();
 
                 let event: radio::Event<R> = radio::Event::TxRequest(
-                    self.shared.region.create_tx_config(random as u8, self.shared.datarate,&Frame::Data),
+                    self.shared.region.create_tx_config(
+                        random as u8,
+                        self.shared.datarate,
+                        &Frame::Data,
+                    ),
                     &mut self.shared.buffer,
                 );
 
@@ -374,7 +378,10 @@ where
                     RxWindow::_1(_) => Window::_1,
                     RxWindow::_2(_) => Window::_2,
                 };
-                let rx_config = self.shared.region.get_rx_config(self.shared.datarate, &Frame::Join, &window);
+                let rx_config =
+                    self.shared
+                        .region
+                        .get_rx_config(self.shared.datarate, &Frame::Join, &window);
 
                 // configure the radio for the RX
                 match self
@@ -386,7 +393,10 @@ where
                         let window_close: u32 = match self.rx_window {
                             // RxWindow1 one must timeout before RxWindow2
                             RxWindow::_1(time) => {
-                                let time_between_windows = self.shared.region.get_rx_delay(&Frame::Data, &Window::_2)
+                                let time_between_windows = self
+                                    .shared
+                                    .region
+                                    .get_rx_delay(&Frame::Data, &Window::_2)
                                     - self.shared.region.get_rx_delay(&Frame::Data, &Window::_1);
                                 if time_between_windows
                                     > self.shared.radio.get_rx_window_duration_ms()
@@ -544,8 +554,9 @@ where
 
                 match self.rx_window {
                     RxWindow::_1(t1) => {
-                        let time_between_windows = self.shared.region.get_rx_delay(&Frame::Data, &Window::_2)
-                            - self.shared.region.get_rx_delay(&Frame::Data, &Window::_1);
+                        let time_between_windows =
+                            self.shared.region.get_rx_delay(&Frame::Data, &Window::_2)
+                                - self.shared.region.get_rx_delay(&Frame::Data, &Window::_1);
                         let t2 = t1 + time_between_windows;
                         // TODO: jump to RxWindow2 if t2 == now
                         (
