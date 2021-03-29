@@ -6,7 +6,7 @@ During Uplink assembly, this struct will be inquired to drive construction
 use heapless::consts::*;
 use heapless::Vec;
 
-use super::region::{self, RegionHandler};
+use super::region;
 use lorawan_encoding::maccommands::{LinkADRAnsPayload, MacCommand};
 
 #[derive(Default, Debug)]

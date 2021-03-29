@@ -68,7 +68,6 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
         get_random: fn() -> u32,
         buffer: Vec<u8, U256>,
     ) -> Shared<R> {
-        use crate::region::RegionHandler;
         let datarate = region.get_default_datarate();
         Shared {
             radio,

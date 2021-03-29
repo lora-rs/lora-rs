@@ -2,7 +2,7 @@ use super::super::session::Session;
 use super::super::State as SuperState;
 use super::super::*;
 use super::{
-    region::{Frame, RegionHandler, Window},
+    region::{Frame, Window},
     CommonState, Shared,
 };
 use lorawan_encoding::{

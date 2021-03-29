@@ -46,7 +46,7 @@ use super::super::no_session::{NoSession, SessionData};
 use super::super::State as SuperState;
 use super::super::*;
 use super::{
-    region::{Frame, RegionHandler, Window},
+    region::{Frame, Window},
     CommonState,
 };
 use as_slice::AsSlice;

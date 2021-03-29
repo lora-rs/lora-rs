@@ -21,6 +21,12 @@ impl US915 {
     pub fn new() -> US915 {
         Self::default()
     }
+    pub fn subband(subband: u8) -> US915 {
+        US915 {
+            subband: Some(subband),
+            last_tx: (0,0)
+        }
+    }
 }
 
 use super::JoinAccept;

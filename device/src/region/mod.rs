@@ -79,6 +79,41 @@ pub(crate)  enum Window {
     _2,
 }
 
+macro_rules! mut_region_dispatch {
+  ($s:expr, $t:tt) => {
+      match &mut $s.state {
+        State::US915(state) => state.$t(),
+        State::CN470(state) => state.$t(),
+        State::EU868(state) => state.$t(),
+    }
+  };
+  ($s:expr, $t:tt, $($arg:tt)*) => {
+      match &mut $s.state {
+        State::US915(state) => state.$t($($arg)*),
+        State::CN470(state) => state.$t($($arg)*),
+        State::EU868(state) => state.$t($($arg)*),
+    }
+  };
+}
+
+macro_rules! region_dispatch {
+  ($s:expr, $t:tt) => {
+      match &$s.state {
+        State::US915(state) => state.$t(),
+        State::CN470(state) => state.$t(),
+        State::EU868(state) => state.$t(),
+    }
+  };
+  ($s:expr, $t:tt, $($arg:tt)*) => {
+      match &$s.state {
+        State::US915(state) => state.$t($($arg)*),
+        State::CN470(state) => state.$t($($arg)*),
+        State::EU868(state) => state.$t($($arg)*),
+    }
+  };
+}
+
+
 impl Configuration {
     pub fn new(region: Region) -> Configuration {
         Configuration {
@@ -120,7 +155,53 @@ impl Configuration {
             coding_rate: self.get_coding_rate(),
         }
     }
+
+    pub(crate) fn process_join_accept<T: core::convert::AsRef<[u8]>, C>(
+        &mut self,
+        join_accept: &DecryptedJoinAcceptPayload<T, C>,
+    ) -> JoinAccept {
+        mut_region_dispatch!(self, process_join_accept, join_accept)
+    }
+
+    pub(crate) fn set_channel_mask(&mut self, channel_mask: ChannelMask) {
+        mut_region_dispatch!(self, set_channel_mask, channel_mask)
+    }
+
+    pub fn set_subband(&mut self, subband: u8) {
+        mut_region_dispatch!(self, set_subband, subband)
+    }
+
+    pub(crate) fn get_join_frequency(&mut self, random: u8) -> u32 {
+        mut_region_dispatch!(self, get_join_frequency, random)
+    }
+    pub(crate) fn get_data_frequency(&mut self, random: u8) -> u32 {
+        mut_region_dispatch!(self, get_data_frequency, random)
+    }
+    pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
+        region_dispatch!(self, get_rx_delay, frame, window)
+    }
+    pub(crate) fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32 {
+        region_dispatch!(self, get_rx_frequency, frame, window)
+    }
+    pub(crate) fn get_default_datarate(&self) -> DR {
+        region_dispatch!(self, get_default_datarate)
+    }
+    pub(crate) fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate {
+        region_dispatch!(self, get_tx_datarate, datarate, frame)
+    }
+    pub(crate) fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate {
+        region_dispatch!(self, get_rx_datarate, datarate, frame, window)
+    }
+
+    pub(crate) fn get_dbm(&self) -> i8 {
+        region_dispatch!(self, get_dbm)
+    }
+
+    pub(crate) fn get_coding_rate(&self) -> CodingRate {
+        region_dispatch!(self, get_coding_rate)
+    }
 }
+
 macro_rules! from_region {
     ($r:tt) => {
         impl From<$r> for Configuration {
@@ -139,85 +220,6 @@ from_region!(EU868);
 use super::state_machines::JoinAccept;
 use lorawan_encoding::parser::DecryptedJoinAcceptPayload;
 
-macro_rules! mut_region_dispatch {
-  ($s:expr, $t:tt) => {
-      match &mut $s.state {
-        State::US915(state) => state.$t(),
-        State::CN470(state) => state.$t(),
-        State::EU868(state) => state.$t(),
-    }
-  };
-  ($s:expr, $t:tt, $($arg:tt)*) => {
-      match &mut $s.state {
-        State::US915(state) => state.$t($($arg)*),
-        State::CN470(state) => state.$t($($arg)*),
-        State::EU868(state) => state.$t($($arg)*),
-    }
-  };
-}
-
-macro_rules! region_dispatch {
-  ($s:expr, $t:tt) => {
-      match &$s.state {
-        State::US915(state) => state.$t(),
-        State::CN470(state) => state.$t(),
-        State::EU868(state) => state.$t(),
-    }
-  };
-  ($s:expr, $t:tt, $($arg:tt)*) => {
-      match &$s.state {
-        State::US915(state) => state.$t($($arg)*),
-        State::CN470(state) => state.$t($($arg)*),
-        State::EU868(state) => state.$t($($arg)*),
-    }
-  };
-}
-
-impl RegionHandler for Configuration {
-    fn process_join_accept<T: core::convert::AsRef<[u8]>, C>(
-        &mut self,
-        join_accept: &DecryptedJoinAcceptPayload<T, C>,
-    ) -> JoinAccept {
-        mut_region_dispatch!(self, process_join_accept, join_accept)
-    }
-    fn set_channel_mask(&mut self, channel_mask: ChannelMask) {
-        mut_region_dispatch!(self, set_channel_mask, channel_mask)
-    }
-
-    fn set_subband(&mut self, subband: u8) {
-        mut_region_dispatch!(self, set_subband, subband)
-    }
-
-    fn get_join_frequency(&mut self, random: u8) -> u32 {
-        mut_region_dispatch!(self, get_join_frequency, random)
-    }
-    fn get_data_frequency(&mut self, random: u8) -> u32 {
-        mut_region_dispatch!(self, get_data_frequency, random)
-    }
-    fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
-        region_dispatch!(self, get_rx_delay, frame, window)
-    }
-    fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32 {
-        region_dispatch!(self, get_rx_frequency, frame, window)
-    }
-    fn get_default_datarate(&self) -> DR {
-        region_dispatch!(self, get_default_datarate)
-    }
-    fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate {
-        region_dispatch!(self, get_tx_datarate, datarate, frame)
-    }
-    fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate {
-        region_dispatch!(self, get_rx_datarate, datarate, frame, window)
-    }
-
-    fn get_dbm(&self) -> i8 {
-        region_dispatch!(self, get_dbm)
-    }
-
-    fn get_coding_rate(&self) -> CodingRate {
-        region_dispatch!(self, get_coding_rate)
-    }
-}
 
 pub(crate) trait RegionHandler {
     fn process_join_accept<T: core::convert::AsRef<[u8]>, C>(
