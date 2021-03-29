@@ -23,6 +23,7 @@ The following LoRaWAN features are implemented:
 
 - Class A device behavior
 - Regional support for US915, EU868, and CN470
+- Supports CFList in JoinAccept
 - the stack starts deriving a new session when the FCnt maxes out the 32-bit
   counter; new session may also be created by any time by the user, as long the
   stack is not mid-transmit
