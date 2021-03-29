@@ -162,11 +162,11 @@ where
         }
     }
 
-    pub fn get_datarate(&mut self) -> usize {
+    pub fn get_datarate(&mut self) -> region::DR {
         self.get_shared().get_datarate()
     }
 
-    pub fn set_datarate(&mut self, datarate: usize) {
+    pub fn set_datarate(&mut self, datarate: region::DR) {
         self.get_shared().set_datarate(datarate);
     }
 

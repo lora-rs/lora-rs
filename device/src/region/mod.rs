@@ -1,3 +1,5 @@
+#![allow(clippy::upper_case_acronyms)]
+// generally, we allow upper_case_acronyms to make it match the LoRaWAN naming conventions better
 use lorawan_encoding::maccommands::ChannelMask;
 
 mod constants;
@@ -16,15 +18,34 @@ pub struct Configuration {
     state: State,
 }
 
+// This datarate type is public to the device client
+#[derive(Debug, Clone, Copy)]
+pub enum DR {
+    _0 = 0,
+    _1 = 1,
+    _2 = 2,
+    _3 = 3,
+    _4 = 4,
+    _5 = 5,
+    _6 = 6,
+    _7 = 7,
+    _8 = 8,
+    _9 = 9,
+    _10 = 10,
+    _11 = 11,
+    _12 = 12,
+    _13 = 13,
+    _14 = 14,
+    _15 = 15,
+}
+
 #[derive(Debug, Clone)]
-#[allow(clippy::upper_case_acronyms)]
 pub enum Region {
     US915,
     CN470,
     EU868,
 }
 
-#[allow(clippy::upper_case_acronyms)]
 enum State {
     US915(US915),
     CN470(CN470),
@@ -41,18 +62,19 @@ impl State {
     }
 }
 
+// This datarate type is used internally for defining bandwidth/sf per region
 #[derive(Debug, Clone)]
-pub struct Datarate {
+pub(crate) struct Datarate {
     bandwidth: Bandwidth,
     spreading_factor: SpreadingFactor,
 }
 
-pub enum Frame {
+pub(crate)  enum Frame {
     Join,
     Data,
 }
 
-pub enum Window {
+pub(crate)  enum Window {
     _1,
     _2,
 }
@@ -66,7 +88,7 @@ impl Configuration {
     pub(crate) fn create_tx_config(
         &mut self,
         random: u8,
-        datarate: usize,
+        datarate: DR,
         frame: &Frame,
     ) -> TxConfig {
         let datarate = self.get_tx_datarate(datarate, frame);
@@ -86,7 +108,7 @@ impl Configuration {
 
     pub(crate) fn get_rx_config(
         &mut self,
-        datarate: usize,
+        datarate: DR,
         frame: &Frame,
         window: &Window,
     ) -> RfConfig {
@@ -161,9 +183,11 @@ impl RegionHandler for Configuration {
     fn set_channel_mask(&mut self, channel_mask: ChannelMask) {
         mut_region_dispatch!(self, set_channel_mask, channel_mask)
     }
+
     fn set_subband(&mut self, subband: u8) {
         mut_region_dispatch!(self, set_subband, subband)
     }
+
     fn get_join_frequency(&mut self, random: u8) -> u32 {
         mut_region_dispatch!(self, get_join_frequency, random)
     }
@@ -176,21 +200,26 @@ impl RegionHandler for Configuration {
     fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32 {
         region_dispatch!(self, get_rx_frequency, frame, window)
     }
-    fn get_tx_datarate(&self, datarate: usize, frame: &Frame) -> Datarate {
+    fn get_default_datarate(&self) -> DR {
+        region_dispatch!(self, get_default_datarate)
+    }
+    fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate {
         region_dispatch!(self, get_tx_datarate, datarate, frame)
     }
-    fn get_rx_datarate(&self, datarate: usize, frame: &Frame, window: &Window) -> Datarate {
+    fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate {
         region_dispatch!(self, get_rx_datarate, datarate, frame, window)
     }
+
     fn get_dbm(&self) -> i8 {
         region_dispatch!(self, get_dbm)
     }
+
     fn get_coding_rate(&self) -> CodingRate {
         region_dispatch!(self, get_coding_rate)
     }
 }
 
-pub trait RegionHandler {
+pub(crate) trait RegionHandler {
     fn process_join_accept<T: core::convert::AsRef<[u8]>, C>(
         &mut self,
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
@@ -218,9 +247,9 @@ pub trait RegionHandler {
             },
         }
     }
-
-    fn get_tx_datarate(&self, datarate: usize, frame: &Frame) -> Datarate;
-    fn get_rx_datarate(&self, datarate: usize, frame: &Frame, window: &Window) -> Datarate;
+    fn get_default_datarate(&self) -> DR { DR::_0 }
+    fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate;
+    fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate;
     fn get_dbm(&self) -> i8 {
         DEFAULT_DBM
     }

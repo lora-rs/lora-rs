@@ -4,6 +4,8 @@ use lorawan_encoding::parser::DecryptedDataPayload;
 pub mod no_session;
 pub mod session;
 
+pub use region::DR;
+
 pub struct Shared<R: radio::PhyRxTx + Timings> {
     radio: R,
     credentials: Credentials,
@@ -13,7 +15,7 @@ pub struct Shared<R: radio::PhyRxTx + Timings> {
     get_random: fn() -> u32,
     buffer: Vec<u8, U256>,
     downlink: Option<Downlink>,
-    datarate: usize,
+    datarate: DR,
 }
 
 enum Downlink {
@@ -33,10 +35,10 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
     pub fn get_mut_credentials(&mut self) -> &mut Credentials {
         &mut self.credentials
     }
-    pub fn get_datarate(&mut self) -> usize {
+    pub fn get_datarate(&mut self) -> DR {
         self.datarate
     }
-    pub fn set_datarate(&mut self, datarate: usize) {
+    pub fn set_datarate(&mut self, datarate: DR) {
         self.datarate = datarate;
     }
 
@@ -66,6 +68,8 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
         get_random: fn() -> u32,
         buffer: Vec<u8, U256>,
     ) -> Shared<R> {
+        use crate::region::RegionHandler;
+        let datarate = region.get_default_datarate();
         Shared {
             radio,
             credentials,
@@ -74,7 +78,7 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
             get_random,
             buffer,
             downlink: None,
-            datarate: 0,
+            datarate,
         }
     }
 }

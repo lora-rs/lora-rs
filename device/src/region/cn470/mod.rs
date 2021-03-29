@@ -58,14 +58,14 @@ impl RegionHandler for CN470 {
         }
     }
 
-    fn get_tx_datarate(&self, datarate: usize, _frame: &Frame) -> Datarate {
-        DATARATES[datarate].clone()
+    fn get_tx_datarate(&self, datarate: DR, _frame: &Frame) -> Datarate {
+        DATARATES[datarate as usize].clone()
     }
-    fn get_rx_datarate(&self, datarate: usize, _frame: &Frame, window: &Window) -> Datarate {
+    fn get_rx_datarate(&self, datarate: DR, _frame: &Frame, window: &Window) -> Datarate {
         let datarate = match window {
             Window::_1 => datarate,
-            Window::_2 => 0,
+            Window::_2 => DR::_0,
         };
-        DATARATES[datarate].clone()
+        DATARATES[datarate as usize].clone()
     }
 }

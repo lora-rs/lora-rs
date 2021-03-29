@@ -74,28 +74,28 @@ impl RegionHandler for US915 {
         US_DBM
     }
 
-    fn get_tx_datarate(&self, datarate: usize, frame: &Frame) -> Datarate {
+    fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate {
         // datarate for JoinRequest is always 0
         let datarate = match frame {
-            Frame::Join => 0,
+            Frame::Join => DR::_0,
             Frame::Data => datarate,
         };
-        DATARATES[datarate].clone().unwrap()
+        DATARATES[datarate as usize].clone().unwrap()
     }
-    fn get_rx_datarate(&self, datarate: usize, _frame: &Frame, window: &Window) -> Datarate {
+    fn get_rx_datarate(&self, tx_datarate: DR, _frame: &Frame, window: &Window) -> Datarate {
         let datarate = match window {
             Window::_1 => {
                 // no support for RX1 DR Offset
-                match datarate {
-                    0 => 10,
-                    1 => 9,
-                    2 => 8,
-                    3 => 7,
-                    _ => panic!("get_rx_datarate: Invalid datarate"),
+                match tx_datarate {
+                    DR::_0 => DR::_10,
+                    DR::_1 => DR::_9,
+                    DR::_2 => DR::_8,
+                    DR::_3 => DR::_7,
+                    _ => panic!("Invalid TX datarate")
                 }
             }
-            Window::_2 => 8,
+            Window::_2 => DR::_8,
         };
-        DATARATES[datarate].clone().unwrap()
+        DATARATES[datarate as usize].clone().unwrap()
     }
 }
