@@ -303,8 +303,8 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     ///
     /// * key - the key to be used for setting the MIC.
     pub fn build(&mut self, key: &keys::AES128) -> Result<&[u8], &str> {
-        let d = self.data.as_mut();
-        set_mic(&mut d[..], key, &self.factory);
+        let mut d = self.data.as_mut();
+        set_mic(&mut d, key, &self.factory);
         Ok(&d[..])
     }
 }
@@ -481,7 +481,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
         nwk_skey: &'c keys::AES128,
         app_skey: &'d keys::AES128,
     ) -> Result<&[u8], &'e str> {
-        let d = self.data.as_mut();
+        let mut d = self.data.as_mut();
         let mut last_filled = 8; // MHDR + FHDR without the FOpts
         let has_fport = self.data_f_port.is_some();
         let has_fport_zero = has_fport && self.data_f_port.unwrap() == 0;
@@ -530,7 +530,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
 
         // Encrypt FRMPayload
         securityhelpers::encrypt_frm_data_payload(
-            &mut d[..],
+            &mut d,
             last_filled,
             last_filled + payload_len,
             self.fcnt,

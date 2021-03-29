@@ -676,13 +676,13 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
         if key.is_none() {
             return Err("key needed to decrypt the frm data payload was None");
         }
-        let data = self.0.as_mut();
+        let mut data = self.0.as_mut();
         let len = data.len();
         let start = 1 + fhdr_length + 1;
         let end = len - 4;
         if start < end {
             securityhelpers::encrypt_frm_data_payload(
-                &mut data[..],
+                &mut data,
                 start,
                 end,
                 full_fcnt,

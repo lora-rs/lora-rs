@@ -7,8 +7,8 @@
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
 //! This module implements LoRaWAN packet handling and parsing.
-
 #![no_std]
+#![allow(clippy::upper_case_acronyms)]
 pub mod creator;
 pub mod keys;
 pub mod maccommandcreator;
