@@ -11,15 +11,14 @@ use mac::Mac;
 mod types;
 pub use types::*;
 
-mod region;
-
+pub mod region;
 pub use region::Region;
 
 mod state_machines;
 use core::marker::PhantomData;
 use lorawan_encoding::{keys::CryptoFactory, parser::DecryptedDataPayload};
 use state_machines::Shared;
-pub use state_machines::{no_session, session};
+pub use state_machines::{no_session, session, JoinAccept};
 
 type TimestampMs = u32;
 
@@ -119,21 +118,20 @@ pub trait Timings {
     fn get_rx_window_duration_ms(&self) -> u32;
 }
 
+#[allow(dead_code)]
 impl<R, C> Device<R, C>
 where
     R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
 {
     pub fn new(
+        region: region::Configuration,
         radio: R,
         deveui: [u8; 8],
         appeui: [u8; 8],
         appkey: [u8; 16],
         get_random: fn() -> u32,
     ) -> Device<R, C> {
-        let mut region = Region::new();
-        region.set_subband(2);
-
         Device {
             crypto: PhantomData::default(),
             state: State::new(Shared::new(
@@ -162,6 +160,14 @@ where
             State::NoSession(state) => state.get_mut_shared(),
             State::Session(state) => state.get_mut_shared(),
         }
+    }
+
+    pub fn get_datarate(&mut self) -> region::DR {
+        self.get_shared().get_datarate()
+    }
+
+    pub fn set_datarate(&mut self, datarate: region::DR) {
+        self.get_shared().set_datarate(datarate);
     }
 
     pub fn ready_to_send_data(&self) -> bool {
@@ -201,6 +207,10 @@ where
 
     pub fn take_data_downlink(&mut self) -> Option<DecryptedDataPayload<Vec<u8, U256>>> {
         self.get_shared().take_data_downlink()
+    }
+
+    pub fn take_join_accept(&mut self) -> Option<JoinAccept> {
+        self.get_shared().take_join_accept()
     }
 
     pub fn handle_event(self, event: Event<R>) -> (Self, Result<Response, Error<R>>) {

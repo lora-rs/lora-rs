@@ -45,7 +45,10 @@ else(Ready)║ ╚═════════════╝   ║              
 use super::super::no_session::{NoSession, SessionData};
 use super::super::State as SuperState;
 use super::super::*;
-use super::CommonState;
+use super::{
+    region::{Frame, Window},
+    CommonState,
+};
 use as_slice::AsSlice;
 use generic_array::{typenum::U256, GenericArray};
 use lorawan_encoding::{
@@ -219,24 +222,14 @@ where
             Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
                 let fcnt = self.prepare_buffer::<C>(&send_data);
-
                 let random = (self.shared.get_random)();
-                let dbm = self.shared.region.get_dbm();
-                let frequency = self.shared.region.select_join_frequency(random as u8);
-                let bandwidth = self.shared.region.get_bandwidth();
-                let spreading_factor = self.shared.region.get_spreading_factor();
-                let coding_rate = self.shared.region.get_coding_rate();
 
                 let event: radio::Event<R> = radio::Event::TxRequest(
-                    radio::TxConfig {
-                        pw: dbm,
-                        rf: radio::RfConfig {
-                            frequency,
-                            bandwidth,
-                            spreading_factor,
-                            coding_rate,
-                        },
-                    },
+                    self.shared.region.create_tx_config(
+                        random as u8,
+                        self.shared.datarate,
+                        &Frame::Data,
+                    ),
                     &mut self.shared.buffer,
                 );
 
@@ -381,12 +374,15 @@ where
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
-                let rx_config = radio::RfConfig {
-                    frequency: self.shared.region.get_rxwindow1_frequency(),
-                    bandwidth: radio::Bandwidth::_125KHZ,
-                    spreading_factor: radio::SpreadingFactor::_7,
-                    coding_rate: radio::CodingRate::_4_5,
+                let window = match &self.rx_window {
+                    RxWindow::_1(_) => Window::_1,
+                    RxWindow::_2(_) => Window::_2,
                 };
+                let rx_config =
+                    self.shared
+                        .region
+                        .get_rx_config(self.shared.datarate, &Frame::Join, &window);
+
                 // configure the radio for the RX
                 match self
                     .shared
@@ -397,8 +393,11 @@ where
                         let window_close: u32 = match self.rx_window {
                             // RxWindow1 one must timeout before RxWindow2
                             RxWindow::_1(time) => {
-                                let time_between_windows = self.shared.region.get_receive_delay2()
-                                    - self.shared.region.get_receive_delay1();
+                                let time_between_windows = self
+                                    .shared
+                                    .region
+                                    .get_rx_delay(&Frame::Data, &Window::_2)
+                                    - self.shared.region.get_rx_delay(&Frame::Data, &Window::_1);
                                 if time_between_windows
                                     > self.shared.radio.get_rx_window_duration_ms()
                                 {
@@ -524,7 +523,8 @@ where
                                             );
                                         }
 
-                                        self.shared.data_downlink = Some(decrypted);
+                                        self.shared.downlink =
+                                            Some(super::Downlink::Data(decrypted));
 
                                         // check if FCnt is used up
                                         let response = if self.session.fcnt_up() == (0xFFFF + 1) {
@@ -554,8 +554,9 @@ where
 
                 match self.rx_window {
                     RxWindow::_1(t1) => {
-                        let time_between_windows = self.shared.region.get_receive_delay2()
-                            - self.shared.region.get_receive_delay1();
+                        let time_between_windows =
+                            self.shared.region.get_rx_delay(&Frame::Data, &Window::_2)
+                                - self.shared.region.get_rx_delay(&Frame::Data, &Window::_1);
                         let t2 = t1 + time_between_windows;
                         // TODO: jump to RxWindow2 if t2 == now
                         (
@@ -615,7 +616,7 @@ fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, C: CryptoFactory + Defaul
 ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
     let (new_state, first_window) = match state {
         Session::Idle(state) => {
-            let first_window = (state.shared.region.get_receive_delay1() as i32
+            let first_window = (state.shared.region.get_rx_delay(&Frame::Data, &Window::_1) as i32
                 + timestamp_ms as i32
                 + state.shared.radio.get_rx_window_offset_ms())
                 as u32;
@@ -625,7 +626,7 @@ fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, C: CryptoFactory + Defaul
             )
         }
         Session::SendingData(state) => {
-            let first_window = (state.shared.region.get_receive_delay1() as i32
+            let first_window = (state.shared.region.get_rx_delay(&Frame::Data, &Window::_1) as i32
                 + timestamp_ms as i32
                 + state.shared.radio.get_rx_window_offset_ms())
                 as u32;

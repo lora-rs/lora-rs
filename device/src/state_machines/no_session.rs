@@ -1,7 +1,10 @@
 use super::super::session::Session;
 use super::super::State as SuperState;
 use super::super::*;
-use super::{CommonState, Shared};
+use super::{
+    region::{Frame, Window},
+    CommonState, Shared,
+};
 use lorawan_encoding::{
     self,
     creator::JoinRequestCreator,
@@ -154,7 +157,8 @@ where
                             // directly jump to waiting for RxWindow
                             // allows for synchronous sending
                             radio::Response::TxDone(ms) => {
-                                let first_window = self.shared.region.get_join_accept_delay1() + ms;
+                                let first_window =
+                                    self.shared.region.get_rx_delay(&Frame::Join, &Window::_1) + ms;
                                 (
                                     self.into_waiting_for_rxwindow(devnonce, first_window)
                                         .into(),
@@ -199,22 +203,12 @@ where
 
         // we'll use the rest for frequency and subband selection
         random >>= 16;
-        let dbm = self.shared.region.get_dbm();
-        let frequency = self.shared.region.select_join_frequency(random as u8);
-        let bandwidth = self.shared.region.get_bandwidth();
-        let spreading_factor = self.shared.region.get_spreading_factor();
-        let coding_rate = self.shared.region.get_coding_rate();
-
-        let tx_config = radio::TxConfig {
-            pw: dbm,
-            rf: radio::RfConfig {
-                frequency,
-                bandwidth,
-                spreading_factor,
-                coding_rate,
-            },
-        };
-        (devnonce_copy, tx_config)
+        (
+            devnonce_copy,
+            self.shared
+                .region
+                .create_tx_config(random as u8, self.shared.datarate, &Frame::Join),
+        )
     }
 
     fn into_sending_join(self, devnonce: DevNonce) -> SendingJoin<R> {
@@ -261,11 +255,10 @@ where
                         match response {
                             // expect a complete transmit
                             radio::Response::TxDone(ms) => {
-                                let first_window = (self.shared.region.get_join_accept_delay1()
-                                    as i32
-                                    + ms as i32
-                                    + self.shared.radio.get_rx_window_offset_ms())
-                                    as u32;
+                                let first_window =
+                                    self.shared.region.get_rx_delay(&Frame::Join, &Window::_1)
+                                        + ms
+                                        + self.shared.radio.get_rx_window_offset_ms() as u32;
                                 (
                                     self.into_waiting_for_rxwindow(first_window).into(),
                                     Ok(Response::TimeoutRequest(first_window)),
@@ -321,12 +314,14 @@ where
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
-                let rx_config = radio::RfConfig {
-                    frequency: self.shared.region.get_join_accept_frequency1(),
-                    bandwidth: self.shared.region.get_bandwidth(),
-                    spreading_factor: self.shared.region.get_spreading_factor(),
-                    coding_rate: self.shared.region.get_coding_rate(),
+                let window = match &self.join_rx_window {
+                    JoinRxWindow::_1(_) => Window::_1,
+                    JoinRxWindow::_2(_) => Window::_2,
                 };
+                let rx_config =
+                    self.shared
+                        .region
+                        .get_rx_config(self.shared.datarate, &Frame::Join, &window);
                 // configure the radio for the RX
                 match self
                     .shared
@@ -337,9 +332,11 @@ where
                         let window_close: u32 = match self.join_rx_window {
                             // RxWindow1 one must timeout before RxWindow2
                             JoinRxWindow::_1(time) => {
-                                let time_between_windows =
-                                    self.shared.region.get_join_accept_delay2()
-                                        - self.shared.region.get_join_accept_delay1();
+                                let time_between_windows = self
+                                    .shared
+                                    .region
+                                    .get_rx_delay(&Frame::Join, &Window::_2)
+                                    - self.shared.region.get_rx_delay(&Frame::Join, &Window::_1);
                                 if time_between_windows
                                     > self.shared.radio.get_rx_window_duration_ms()
                                 {
@@ -419,8 +416,10 @@ where
                                 lorawan_parse(self.shared.radio.get_received_packet(), C::default())
                             {
                                 let credentials = &self.shared.credentials;
-
                                 let decrypt = encrypted.decrypt(credentials.appkey());
+                                self.shared.downlink = Some(super::Downlink::Join(
+                                    self.shared.region.process_join_accept(&decrypt),
+                                ));
                                 if decrypt.validate_mic(credentials.appkey()) {
                                     let session = SessionData::derive_new(
                                         &decrypt,
@@ -448,8 +447,9 @@ where
 
                 match self.join_rx_window {
                     JoinRxWindow::_1(t1) => {
-                        let time_between_windows = self.shared.region.get_join_accept_delay2()
-                            - self.shared.region.get_join_accept_delay1();
+                        let time_between_windows =
+                            self.shared.region.get_rx_delay(&Frame::Join, &Window::_2)
+                                - self.shared.region.get_rx_delay(&Frame::Join, &Window::_1);
                         let t2 = t1 + time_between_windows;
                         // TODO: jump to RxWindow2 if t2 == now
                         (

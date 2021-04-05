@@ -1,11 +1,11 @@
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Bandwidth {
-    _125KHZ,
-    _250KHZ,
-    _500KHZ,
+    _125KHz,
+    _250KHz,
+    _500KHz,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum SpreadingFactor {
     _7,
     _8,
@@ -15,7 +15,7 @@ pub enum SpreadingFactor {
     _12,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum CodingRate {
     _4_5,
     _4_6,
@@ -31,30 +31,10 @@ pub struct RfConfig {
     pub coding_rate: CodingRate,
 }
 
-impl Default for RfConfig {
-    fn default() -> RfConfig {
-        RfConfig {
-            frequency: 868_100_000,
-            bandwidth: Bandwidth::_125KHZ,
-            spreading_factor: SpreadingFactor::_7,
-            coding_rate: CodingRate::_4_5,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct TxConfig {
     pub pw: i8,
     pub rf: RfConfig,
-}
-
-impl Default for TxConfig {
-    fn default() -> TxConfig {
-        TxConfig {
-            pw: 20,
-            rf: RfConfig::default(),
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug)]

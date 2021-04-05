@@ -6,7 +6,7 @@ During Uplink assembly, this struct will be inquired to drive construction
 use heapless::consts::*;
 use heapless::Vec;
 
-use super::Region;
+use super::region;
 use lorawan_encoding::maccommands::{LinkADRAnsPayload, MacCommand};
 
 #[derive(Default, Debug)]
@@ -38,7 +38,7 @@ impl AdrAnsTrait for AdrAns {
 impl Mac {
     pub fn handle_downlink_macs(
         &mut self,
-        region: &mut Region,
+        region: &mut region::Configuration,
         cmds: &mut lorawan_encoding::maccommands::MacCommandIterator,
     ) {
         for cmd in cmds {
