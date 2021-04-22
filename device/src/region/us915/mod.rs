@@ -24,7 +24,7 @@ impl US915 {
     pub fn subband(subband: u8) -> US915 {
         US915 {
             subband: Some(subband),
-            last_tx: (0,0)
+            last_tx: (0, 0),
         }
     }
 }
@@ -97,7 +97,7 @@ impl RegionHandler for US915 {
                     DR::_1 => DR::_9,
                     DR::_2 => DR::_8,
                     DR::_3 => DR::_7,
-                    _ => panic!("Invalid TX datarate")
+                    _ => panic!("Invalid TX datarate"),
                 }
             }
             Window::_2 => DR::_8,
