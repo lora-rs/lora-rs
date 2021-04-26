@@ -132,7 +132,7 @@ impl Configuration {
         }
     }
 
-    // RECEIVE_DELAY2 is not configurable, LoRaWAN 1.0.3 Section 5.7: "The second reception slot opens one second 840after the first reception slot."
+    // RECEIVE_DELAY2 is not configurable, LoRaWAN 1.0.3 Section 5.7: "The second reception slot opens one second after the first reception slot."
     pub fn set_receive_delay1(&mut self, delay: u32) {
         self.receive_delay1 = delay;
         self.receive_delay2 = self.receive_delay1 + 1000;
