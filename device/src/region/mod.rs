@@ -16,6 +16,10 @@ pub use us915::US915;
 
 pub struct Configuration {
     state: State,
+    join_accept_delay1: u32,
+    join_accept_delay2: u32,
+    receive_delay1: u32,
+    receive_delay2: u32,
 }
 
 // This datarate type is public to the device client
@@ -69,12 +73,12 @@ pub(crate) struct Datarate {
     spreading_factor: SpreadingFactor,
 }
 
-pub(crate)  enum Frame {
+pub(crate) enum Frame {
     Join,
     Data,
 }
 
-pub(crate)  enum Window {
+pub(crate) enum Window {
     _1,
     _2,
 }
@@ -113,19 +117,36 @@ macro_rules! region_dispatch {
   };
 }
 
-
 impl Configuration {
     pub fn new(region: Region) -> Configuration {
+        Configuration::with_state(State::new(region))
+    }
+
+    fn with_state(state: State) -> Configuration {
         Configuration {
-            state: State::new(region),
+            state,
+            receive_delay1: constants::RECEIVE_DELAY1,
+            receive_delay2: constants::RECEIVE_DELAY2,
+            join_accept_delay1: constants::JOIN_ACCEPT_DELAY1,
+            join_accept_delay2: constants::JOIN_ACCEPT_DELAY2,
         }
     }
-    pub(crate) fn create_tx_config(
-        &mut self,
-        random: u8,
-        datarate: DR,
-        frame: &Frame,
-    ) -> TxConfig {
+
+    // RECEIVE_DELAY2 is not configurable, LoRaWAN 1.0.3 Section 5.7: "The second reception slot opens one second after the first reception slot."
+    pub fn set_receive_delay1(&mut self, delay: u32) {
+        self.receive_delay1 = delay;
+        self.receive_delay2 = self.receive_delay1 + 1000;
+    }
+
+    pub fn set_join_accept_delay1(&mut self, delay: u32) {
+        self.join_accept_delay1 = delay;
+    }
+
+    pub fn set_join_accept_delay2(&mut self, delay: u32) {
+        self.join_accept_delay2 = delay;
+    }
+
+    pub(crate) fn create_tx_config(&mut self, random: u8, datarate: DR, frame: &Frame) -> TxConfig {
         let datarate = self.get_tx_datarate(datarate, frame);
         TxConfig {
             pw: self.get_dbm(),
@@ -178,7 +199,16 @@ impl Configuration {
         mut_region_dispatch!(self, get_data_frequency, random)
     }
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
-        region_dispatch!(self, get_rx_delay, frame, window)
+        match frame {
+            Frame::Join => match window {
+                Window::_1 => self.join_accept_delay1,
+                Window::_2 => self.join_accept_delay2,
+            },
+            Frame::Data => match window {
+                Window::_1 => self.receive_delay1,
+                Window::_2 => self.receive_delay2,
+            },
+        }
     }
     pub(crate) fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32 {
         region_dispatch!(self, get_rx_frequency, frame, window)
@@ -206,9 +236,7 @@ macro_rules! from_region {
     ($r:tt) => {
         impl From<$r> for Configuration {
             fn from(region: $r) -> Configuration {
-                Configuration {
-                    state: State::$r(region),
-                }
+                Configuration::with_state(State::$r(region))
             }
         }
     };
@@ -219,7 +247,6 @@ from_region!(EU868);
 
 use super::state_machines::JoinAccept;
 use lorawan_encoding::parser::DecryptedJoinAcceptPayload;
-
 
 pub(crate) trait RegionHandler {
     fn process_join_accept<T: core::convert::AsRef<[u8]>, C>(
@@ -237,19 +264,9 @@ pub(crate) trait RegionHandler {
     fn get_data_frequency(&mut self, random: u8) -> u32;
     fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32;
 
-    fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
-        match frame {
-            Frame::Join => match window {
-                Window::_1 => JOIN_ACCEPT_DELAY1,
-                Window::_2 => JOIN_ACCEPT_DELAY2,
-            },
-            Frame::Data => match window {
-                Window::_1 => RECEIVE_DELAY1,
-                Window::_2 => RECEIVE_DELAY2,
-            },
-        }
+    fn get_default_datarate(&self) -> DR {
+        DR::_0
     }
-    fn get_default_datarate(&self) -> DR { DR::_0 }
     fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate;
     fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate;
     fn get_dbm(&self) -> i8 {
