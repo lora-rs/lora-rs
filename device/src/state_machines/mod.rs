@@ -13,7 +13,7 @@ pub struct Shared<R: radio::PhyRxTx + Timings> {
     mac: Mac,
     // TODO: do something nicer for randomness
     get_random: fn() -> u32,
-    buffer: Vec<u8, U256>,
+    buffer: R::PhyBuf,
     downlink: Option<Downlink>,
     datarate: DR,
 }
@@ -66,7 +66,7 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
         region: region::Configuration,
         mac: Mac,
         get_random: fn() -> u32,
-        buffer: Vec<u8, U256>,
+        buffer: R::PhyBuf,
     ) -> Shared<R> {
         let datarate = region.get_default_datarate();
         Shared {

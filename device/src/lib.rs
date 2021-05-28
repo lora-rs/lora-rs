@@ -140,7 +140,7 @@ where
                 region,
                 Mac::default(),
                 get_random,
-                Vec::new(),
+                Default::default(),
             )),
         }
     }

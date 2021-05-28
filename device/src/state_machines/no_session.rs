@@ -2,6 +2,7 @@ use super::super::session::Session;
 use super::super::State as SuperState;
 use super::super::*;
 use super::{
+    radio::PhyRxTxBuf,
     region::{Frame, Window},
     CommonState, Shared,
 };

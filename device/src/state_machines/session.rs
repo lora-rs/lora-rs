@@ -46,6 +46,7 @@ use super::super::no_session::{NoSession, SessionData};
 use super::super::State as SuperState;
 use super::super::*;
 use super::{
+    radio::PhyRxTxBuf,
     region::{Frame, Window},
     CommonState,
 };
@@ -491,7 +492,7 @@ where
                                         session.fcnt_up_increment();
 
                                         let mut copy = Vec::new();
-                                        copy.extend(encrypted_data.as_bytes());
+                                        copy.extend_from_slice(encrypted_data.as_bytes()).unwrap();
 
                                         // there two unwraps that are sane in their own right
                                         // * making a new EncryptedDataPayload with owned bytes will
