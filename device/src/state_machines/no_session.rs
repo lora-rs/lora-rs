@@ -533,16 +533,24 @@ impl SessionData {
         devnonce: DevNonce,
         credentials: &Credentials,
     ) -> SessionData {
-        SessionData {
-            newskey: decrypt.derive_newskey(&devnonce, credentials.appkey()),
-            appskey: decrypt.derive_appskey(&devnonce, credentials.appkey()),
-            devaddr: DevAddr::new([
+        Self::new(
+            decrypt.derive_newskey(&devnonce, credentials.appkey()),
+            decrypt.derive_appskey(&devnonce, credentials.appkey()),
+            DevAddr::new([
                 decrypt.dev_addr().as_ref()[0],
                 decrypt.dev_addr().as_ref()[1],
                 decrypt.dev_addr().as_ref()[2],
                 decrypt.dev_addr().as_ref()[3],
             ])
             .unwrap(),
+        )
+    }
+
+    pub fn new(newskey: AES128, appskey: AES128, devaddr: DevAddr<[u8; 4]>) -> SessionData {
+        SessionData {
+            newskey,
+            appskey,
+            devaddr,
             fcnt_up: 0,
             fcnt_down: 0,
         }

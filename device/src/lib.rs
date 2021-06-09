@@ -16,9 +16,12 @@ pub use region::Region;
 
 mod state_machines;
 use core::marker::PhantomData;
-use lorawan_encoding::{keys::CryptoFactory, parser::DecryptedDataPayload};
+use lorawan_encoding::{
+    keys::{CryptoFactory, AES128},
+    parser::{DecryptedDataPayload, DevAddr},
+};
 use state_machines::Shared;
-pub use state_machines::{no_session, session, JoinAccept};
+pub use state_machines::{no_session, no_session::SessionData, session, JoinAccept};
 
 type TimestampMs = u32;
 
@@ -111,6 +114,16 @@ where
     fn new(shared: Shared<'a, R>) -> Self {
         State::NoSession(no_session::NoSession::new(shared))
     }
+
+    fn new_abp(
+        shared: Shared<R>,
+        newskey: AES128,
+        appskey: AES128,
+        devaddr: DevAddr<[u8; 4]>,
+    ) -> Self {
+        let session_data = SessionData::new(newskey, appskey, devaddr);
+        State::Session(session::Session::new(shared, session_data))
+    }
 }
 
 pub trait Timings {
@@ -143,6 +156,32 @@ where
                 get_random,
                 tx_buffer,
             )),
+        }
+    }
+
+    pub fn new_abp(
+        region: region::Configuration,
+        radio: R,
+        newskey: AES128,
+        appskey: AES128,
+        devaddr: DevAddr<[u8; 4]>,
+        get_random: fn() -> u32,
+    ) -> Device<R, C> {
+        Device {
+            crypto: PhantomData::default(),
+            state: State::new_abp(
+                Shared::new(
+                    radio,
+                    None,
+                    region,
+                    Mac::default(),
+                    get_random,
+                    Default::default(),
+                ),
+                newskey,
+                appskey,
+                devaddr,
+            ),
         }
     }
 
