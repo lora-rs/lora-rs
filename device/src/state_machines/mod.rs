@@ -9,7 +9,7 @@ pub use region::DR;
 
 pub struct Shared<'a, R: radio::PhyRxTx + Timings> {
     radio: R,
-    credentials: Credentials,
+    credentials: Option<Credentials>,
     region: region::Configuration,
     mac: Mac,
     // TODO: do something nicer for randomness
@@ -33,7 +33,7 @@ impl<'a, R: radio::PhyRxTx + Timings> Shared<'a, R> {
     pub fn get_mut_radio(&mut self) -> &mut R {
         &mut self.radio
     }
-    pub fn get_mut_credentials(&mut self) -> &mut Credentials {
+    pub fn get_mut_credentials(&mut self) -> &mut Option<Credentials> {
         &mut self.credentials
     }
     pub fn get_datarate(&mut self) -> DR {
@@ -63,7 +63,7 @@ impl<'a, R: radio::PhyRxTx + Timings> Shared<'a, R> {
 impl<'a, R: radio::PhyRxTx + Timings> Shared<'a, R> {
     pub fn new(
         radio: R,
-        credentials: Credentials,
+        credentials: Option<Credentials>,
         region: region::Configuration,
         mac: Mac,
         get_random: fn() -> u32,

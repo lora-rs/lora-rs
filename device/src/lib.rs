@@ -137,7 +137,7 @@ where
             crypto: PhantomData::default(),
             state: State::new(Shared::new(
                 radio,
-                Credentials::new(appeui, deveui, appkey),
+                Some(Credentials::new(appeui, deveui, appkey)),
                 region,
                 Mac::default(),
                 get_random,
@@ -151,7 +151,7 @@ where
         shared.get_mut_radio()
     }
 
-    pub fn get_credentials(&mut self) -> &mut Credentials {
+    pub fn get_credentials(&mut self) -> &mut Option<Credentials> {
         let shared = self.get_shared();
         shared.get_mut_credentials()
     }
