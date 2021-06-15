@@ -210,7 +210,7 @@ where
                 self.shared.tx_buffer.clear();
                 self.shared.tx_buffer.extend_from_slice(packet).unwrap();
             }
-            Err(_) => panic!("Error assembling packet!"),
+            Err(e) => panic!("Error assembling packet! {} ", e),
         }
         fcnt
     }

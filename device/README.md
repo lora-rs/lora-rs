@@ -22,8 +22,9 @@ A state machine diagram is provided in `src/state_machines/session`
 The following LoRaWAN features are implemented:
 
 - Class A device behavior
+- Over-the-Air Activation (OTAA) and Activation by Personalization (ABP)
 - Regional support for US915, EU868, and CN470
-- Supports CFList in JoinAccept
+- Supports CFList in JoinAccept for EU868 and CN470
 - the stack starts deriving a new session when the FCnt maxes out the 32-bit
   counter; new session may also be created by any time by the user, as long the
   stack is not mid-transmit
@@ -47,6 +48,5 @@ The following design features are implemented:
 This is a work in progress and the notable limitations are:
 
 - Class A behavior only, not B or C
-- OTAA only, no ABP
 - no retries on Joins or Confirmed packets and the user is instead given
   **NoAck** and **NoJoinAccept** responses
