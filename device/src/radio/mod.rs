@@ -59,22 +59,22 @@ pub trait PhyRxTx {
 
 pub struct RadioBuffer<'a> {
     packet: &'a mut [u8],
-    len: usize,
+    pos: usize,
 }
 
 impl<'a> RadioBuffer<'a> {
     pub fn new(packet: &'a mut [u8]) -> Self {
-        Self { packet, len: 0 }
+        Self { packet, pos: 0 }
     }
 
     pub fn clear(&mut self) {
-        self.len = 0;
+        self.pos = 0;
     }
 
     pub fn extend_from_slice(&mut self, buf: &[u8]) -> Result<(), ()> {
-        if self.len + buf.len() < self.packet.len() {
-            self.packet[self.len..self.len + buf.len()].copy_from_slice(buf);
-            self.len += buf.len();
+        if self.pos + buf.len() < self.packet.len() {
+            self.packet[self.pos..self.pos + buf.len()].copy_from_slice(buf);
+            self.pos += buf.len();
             Ok(())
         } else {
             Err(())
@@ -84,12 +84,12 @@ impl<'a> RadioBuffer<'a> {
 
 impl AsMut<[u8]> for RadioBuffer<'_> {
     fn as_mut(&mut self) -> &mut [u8] {
-        &mut self.packet[..self.len]
+        &mut self.packet[..self.pos]
     }
 }
 
 impl AsRef<[u8]> for RadioBuffer<'_> {
     fn as_ref(&self) -> &[u8] {
-        &self.packet[..self.len]
+        &self.packet[..self.pos]
     }
 }
