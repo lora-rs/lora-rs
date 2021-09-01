@@ -22,12 +22,12 @@ pub use state_machines::{no_session, session, JoinAccept};
 
 type TimestampMs = u32;
 
-pub struct Device<R, C>
+pub struct Device<'a, R, C>
 where
     R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
 {
-    state: State<R>,
+    state: State<'a, R>,
     crypto: PhantomData<C>,
 }
 
@@ -95,20 +95,20 @@ pub struct SendData<'a> {
     confirmed: bool,
 }
 
-pub enum State<R>
+pub enum State<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    NoSession(no_session::NoSession<R>),
-    Session(session::Session<R>),
+    NoSession(no_session::NoSession<'a, R>),
+    Session(session::Session<'a, R>),
 }
 
 use core::default::Default;
-impl<R> State<R>
+impl<'a, R> State<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    fn new(shared: Shared<R>) -> Self {
+    fn new(shared: Shared<'a, R>) -> Self {
         State::NoSession(no_session::NoSession::new(shared))
     }
 }
@@ -119,9 +119,9 @@ pub trait Timings {
 }
 
 #[allow(dead_code)]
-impl<R, C> Device<R, C>
+impl<'a, R, C> Device<'a, R, C>
 where
-    R: radio::PhyRxTx + Timings,
+    R: radio::PhyRxTx + Timings + 'a,
     C: CryptoFactory + Default,
 {
     pub fn new(
@@ -131,7 +131,8 @@ where
         appeui: [u8; 8],
         appkey: [u8; 16],
         get_random: fn() -> u32,
-    ) -> Device<R, C> {
+        tx_buffer: &'a mut [u8],
+    ) -> Device<'_, R, C> {
         Device {
             crypto: PhantomData::default(),
             state: State::new(Shared::new(
@@ -140,7 +141,7 @@ where
                 region,
                 Mac::default(),
                 get_random,
-                Default::default(),
+                tx_buffer,
             )),
         }
     }
@@ -155,7 +156,7 @@ where
         shared.get_mut_credentials()
     }
 
-    fn get_shared(&mut self) -> &mut Shared<R> {
+    fn get_shared(&mut self) -> &mut Shared<'a, R> {
         match &mut self.state {
             State::NoSession(state) => state.get_mut_shared(),
             State::Session(state) => state.get_mut_shared(),

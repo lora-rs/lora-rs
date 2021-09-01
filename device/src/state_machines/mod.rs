@@ -1,3 +1,4 @@
+use super::radio::RadioBuffer;
 use super::*;
 use lorawan_encoding::parser::DecryptedDataPayload;
 
@@ -6,14 +7,14 @@ pub mod session;
 
 pub use region::DR;
 
-pub struct Shared<R: radio::PhyRxTx + Timings> {
+pub struct Shared<'a, R: radio::PhyRxTx + Timings> {
     radio: R,
     credentials: Credentials,
     region: region::Configuration,
     mac: Mac,
     // TODO: do something nicer for randomness
     get_random: fn() -> u32,
-    buffer: R::PhyBuf,
+    tx_buffer: RadioBuffer<'a>,
     downlink: Option<Downlink>,
     datarate: DR,
 }
@@ -28,7 +29,7 @@ pub struct JoinAccept {
     pub cflist: Option<[u32; 5]>,
 }
 
-impl<R: radio::PhyRxTx + Timings> Shared<R> {
+impl<'a, R: radio::PhyRxTx + Timings> Shared<'a, R> {
     pub fn get_mut_radio(&mut self) -> &mut R {
         &mut self.radio
     }
@@ -59,14 +60,14 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
     }
 }
 
-impl<R: radio::PhyRxTx + Timings> Shared<R> {
+impl<'a, R: radio::PhyRxTx + Timings> Shared<'a, R> {
     pub fn new(
         radio: R,
         credentials: Credentials,
         region: region::Configuration,
         mac: Mac,
         get_random: fn() -> u32,
-        buffer: R::PhyBuf,
+        buffer: &'a mut [u8],
     ) -> Shared<R> {
         let datarate = region.get_default_datarate();
         Shared {
@@ -75,13 +76,13 @@ impl<R: radio::PhyRxTx + Timings> Shared<R> {
             region,
             mac,
             get_random,
-            buffer,
+            tx_buffer: RadioBuffer::new(buffer),
             downlink: None,
             datarate,
         }
     }
 }
 
-trait CommonState<R: radio::PhyRxTx + Timings> {
-    fn get_mut_shared(&mut self) -> &mut Shared<R>;
+trait CommonState<'a, R: radio::PhyRxTx + Timings> {
+    fn get_mut_shared(&mut self) -> &mut Shared<'a, R>;
 }

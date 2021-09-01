@@ -2,7 +2,6 @@ use super::super::session::Session;
 use super::super::State as SuperState;
 use super::super::*;
 use super::{
-    radio::PhyRxTxBuf,
     region::{Frame, Window},
     CommonState, Shared,
 };
@@ -14,14 +13,14 @@ use lorawan_encoding::{
     parser::{parse_with_factory as lorawan_parse, *},
 };
 
-pub enum NoSession<R>
+pub enum NoSession<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    Idle(Idle<R>),
-    SendingJoin(SendingJoin<R>),
-    WaitingForRxWindow(WaitingForRxWindow<R>),
-    WaitingForJoinResponse(WaitingForJoinResponse<R>),
+    Idle(Idle<'a, R>),
+    SendingJoin(SendingJoin<'a, R>),
+    WaitingForRxWindow(WaitingForRxWindow<'a, R>),
+    WaitingForJoinResponse(WaitingForJoinResponse<'a, R>),
 }
 
 enum JoinRxWindow {
@@ -32,21 +31,21 @@ enum JoinRxWindow {
 macro_rules! into_state {
     ($($from:tt),*) => {
     $(
-        impl<R, C> From<$from<R>> for Device<R,C>
+        impl<'a, R, C> From<$from<'a, R>> for Device<'a, R,C>
         where
             R: radio::PhyRxTx + Timings,
             C: CryptoFactory + Default
         {
-            fn from(state: $from<R>) -> Device<R, C> {
+            fn from(state: $from<'a, R>) -> Device<'a, R, C> {
                 Device {
                     crypto: PhantomData::default(),
                     state: SuperState::NoSession(NoSession::$from(state))
-                    }
+                }
             }
         }
 
-        impl<R: radio::PhyRxTx + Timings> CommonState<R> for $from<R> {
-            fn get_mut_shared(&mut self) -> &mut Shared<R> {
+        impl<'a, R: radio::PhyRxTx + Timings> CommonState<'a, R> for $from<'a, R> {
+            fn get_mut_shared(&mut self) -> &mut Shared<'a, R> {
                 &mut self.shared
             }
         }
@@ -60,27 +59,27 @@ into_state![
     WaitingForJoinResponse
 ];
 
-impl<R> From<NoSession<R>> for SuperState<R>
+impl<'a, R> From<NoSession<'a, R>> for SuperState<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    fn from(no_session: NoSession<R>) -> SuperState<R> {
+    fn from(no_session: NoSession<'a, R>) -> SuperState<'a, R> {
         SuperState::NoSession(no_session)
     }
 }
 
-impl<R> NoSession<R>
+impl<'a, R> NoSession<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    pub fn new(shared: Shared<R>) -> NoSession<R> {
+    pub fn new(shared: Shared<'a, R>) -> NoSession<'a, R> {
         NoSession::Idle(Idle {
             shared,
             join_attempts: 0,
         })
     }
 
-    pub fn get_mut_shared(&mut self) -> &mut Shared<R> {
+    pub fn get_mut_shared(&mut self) -> &mut Shared<'a, R> {
         match self {
             NoSession::Idle(state) => state.get_mut_shared(),
             NoSession::SendingJoin(state) => state.get_mut_shared(),
@@ -92,7 +91,7 @@ where
     pub fn handle_event<C: CryptoFactory + Default>(
         self,
         event: Event<R>,
-    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
         match self {
             NoSession::Idle(state) => state.handle_event(event),
             NoSession::SendingJoin(state) => state.handle_event(event),
@@ -122,28 +121,28 @@ where
 }
 type DevNonce = lorawan_encoding::parser::DevNonce<[u8; 2]>;
 
-pub struct Idle<R>
+pub struct Idle<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    shared: Shared<R>,
+    shared: Shared<'a, R>,
     join_attempts: usize,
 }
 
-impl<'a, R> Idle<R>
+impl<'a, R> Idle<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
     pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // NewSession Request or a Timeout from previously failed Join attempt
             Event::NewSessionRequest | Event::TimeoutFired => {
                 let (devnonce, tx_config) = self.create_join_request::<C>();
                 let radio_event: radio::Event<R> =
-                    radio::Event::TxRequest(tx_config, &mut self.shared.buffer);
+                    radio::Event::TxRequest(tx_config, &self.shared.tx_buffer.as_ref());
 
                 // send the transmit request to the radio
                 match self.shared.radio.handle_event(radio_event) {
@@ -186,7 +185,7 @@ where
         // use lowest 16 bits for devnonce
         let devnonce_bytes = random as u16;
 
-        self.shared.buffer.clear();
+        self.shared.tx_buffer.clear();
 
         let mut phy: JoinRequestCreator<[u8; 23], C> = JoinRequestCreator::default();
         let creds = &self.shared.credentials;
@@ -200,7 +199,7 @@ where
 
         let devnonce_copy = DevNonce::new(devnonce).unwrap();
 
-        self.shared.buffer.extend(vec);
+        self.shared.tx_buffer.extend_from_slice(vec).unwrap();
 
         // we'll use the rest for frequency and subband selection
         random >>= 16;
@@ -212,7 +211,7 @@ where
         )
     }
 
-    fn into_sending_join(self, devnonce: DevNonce) -> SendingJoin<R> {
+    fn into_sending_join(self, devnonce: DevNonce) -> SendingJoin<'a, R> {
         SendingJoin {
             shared: self.shared,
             join_attempts: self.join_attempts + 1,
@@ -220,7 +219,7 @@ where
         }
     }
 
-    fn into_waiting_for_rxwindow(self, devnonce: DevNonce, time: u32) -> WaitingForRxWindow<R> {
+    fn into_waiting_for_rxwindow(self, devnonce: DevNonce, time: u32) -> WaitingForRxWindow<'a, R> {
         WaitingForRxWindow {
             shared: self.shared,
             join_attempts: self.join_attempts + 1,
@@ -230,23 +229,23 @@ where
     }
 }
 
-pub struct SendingJoin<R>
+pub struct SendingJoin<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    shared: Shared<R>,
+    shared: Shared<'a, R>,
     join_attempts: usize,
     devnonce: DevNonce,
 }
 
-impl<R> SendingJoin<R>
+impl<'a, R> SendingJoin<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
     pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -284,7 +283,7 @@ where
         }
     }
 
-    fn into_waiting_for_rxwindow(self, time: u32) -> WaitingForRxWindow<R> {
+    fn into_waiting_for_rxwindow(self, time: u32) -> WaitingForRxWindow<'a, R> {
         WaitingForRxWindow {
             shared: self.shared,
             join_attempts: self.join_attempts + 1,
@@ -294,24 +293,24 @@ where
     }
 }
 
-pub struct WaitingForRxWindow<R>
+pub struct WaitingForRxWindow<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    shared: Shared<R>,
+    shared: Shared<'a, R>,
     join_attempts: usize,
     devnonce: DevNonce,
     join_rx_window: JoinRxWindow,
 }
 
-impl<R> WaitingForRxWindow<R>
+impl<'a, R> WaitingForRxWindow<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
     pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
@@ -372,11 +371,11 @@ where
     }
 }
 
-impl<R> From<WaitingForRxWindow<R>> for WaitingForJoinResponse<R>
+impl<'a, R> From<WaitingForRxWindow<'a, R>> for WaitingForJoinResponse<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    fn from(val: WaitingForRxWindow<R>) -> WaitingForJoinResponse<R> {
+    fn from(val: WaitingForRxWindow<'a, R>) -> WaitingForJoinResponse<'a, R> {
         WaitingForJoinResponse {
             join_rx_window: val.join_rx_window,
             shared: val.shared,
@@ -386,24 +385,24 @@ where
     }
 }
 
-pub struct WaitingForJoinResponse<R>
+pub struct WaitingForJoinResponse<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    shared: Shared<R>,
+    shared: Shared<'a, R>,
     join_attempts: usize,
     devnonce: DevNonce,
     join_rx_window: JoinRxWindow,
 }
 
-impl<R> WaitingForJoinResponse<R>
+impl<'a, R> WaitingForJoinResponse<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
     pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -484,11 +483,11 @@ where
     }
 }
 
-impl<R> From<WaitingForJoinResponse<R>> for Idle<R>
+impl<'a, R> From<WaitingForJoinResponse<'a, R>> for Idle<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    fn from(val: WaitingForJoinResponse<R>) -> Idle<R> {
+    fn from(val: WaitingForJoinResponse<'a, R>) -> Idle<'a, R> {
         Idle {
             shared: val.shared,
             join_attempts: val.join_attempts,
