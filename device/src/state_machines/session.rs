@@ -46,7 +46,6 @@ use super::super::no_session::{NoSession, SessionData};
 use super::super::State as SuperState;
 use super::super::*;
 use super::{
-    radio::PhyRxTxBuf,
     region::{Frame, Window},
     CommonState,
 };
@@ -58,14 +57,14 @@ use lorawan_encoding::{
     maccommands::SerializableMacCommand,
     parser::{parse_with_factory as lorawan_parse, *},
 };
-pub enum Session<R>
+pub enum Session<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    Idle(Idle<R>),
-    SendingData(SendingData<R>),
-    WaitingForRxWindow(WaitingForRxWindow<R>),
-    WaitingForRx(WaitingForRx<R>),
+    Idle(Idle<'a, R>),
+    SendingData(SendingData<'a, R>),
+    WaitingForRxWindow(WaitingForRxWindow<'a, R>),
+    WaitingForRx(WaitingForRx<'a, R>),
 }
 
 enum RxWindow {
@@ -80,9 +79,9 @@ trait SessionState<R: radio::PhyRxTx + Timings> {
 macro_rules! into_state {
     ($($from:tt),*) => {
     $(
-        impl<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default> From<$from<R>> for Device<R, C>
+        impl<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default> From<$from<'a, R>> for Device<'a, R, C>
         {
-            fn from(state: $from<R>) -> Device<R, C> {
+            fn from(state: $from<'a, R>) -> Device<'a, R, C> {
                 Device {
                     crypto: PhantomData::default(),
                     state: SuperState::Session(Session::$from(state))
@@ -90,26 +89,26 @@ macro_rules! into_state {
             }
         }
 
-        impl<R: radio::PhyRxTx + Timings> SessionState<R> for $from<R> {
+        impl<'a, R: radio::PhyRxTx + Timings> SessionState<R> for $from<'a, R> {
             fn get_session(&self) -> &SessionData {
                 &self.session
             }
         }
 
-        impl<R: radio::PhyRxTx + Timings> CommonState<R> for $from<R> {
-            fn get_mut_shared(&mut self) -> &mut Shared<R> {
+        impl<'a, R: radio::PhyRxTx + Timings> CommonState<'a, R> for $from<'a, R> {
+            fn get_mut_shared(&mut self) -> &mut Shared<'a, R> {
                 &mut self.shared
             }
         }
     )*};
 }
 
-impl<R, C> From<Session<R>> for Device<R, C>
+impl<'a, R, C> From<Session<'a, R>> for Device<'a, R, C>
 where
     R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
 {
-    fn from(session: Session<R>) -> Device<R, C> {
+    fn from(session: Session<'a, R>) -> Device<'a, R, C> {
         Device {
             state: SuperState::Session(session),
             crypto: PhantomData::default(),
@@ -138,15 +137,15 @@ where
     }
 }
 
-impl<R> Session<R>
+impl<'a, R> Session<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    pub fn new(shared: Shared<R>, session: SessionData) -> Session<R> {
+    pub fn new(shared: Shared<'a, R>, session: SessionData) -> Session<'a, R> {
         Session::Idle(Idle { shared, session })
     }
 
-    pub fn get_mut_shared(&mut self) -> &mut Shared<R> {
+    pub fn get_mut_shared(&mut self) -> &mut Shared<'a, R> {
         match self {
             Session::Idle(state) => state.get_mut_shared(),
             Session::SendingData(state) => state.get_mut_shared(),
@@ -167,7 +166,7 @@ where
     pub fn handle_event<C: CryptoFactory + Default>(
         self,
         event: Event<R>,
-    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
         match self {
             Session::Idle(state) => state.handle_event(event),
             Session::SendingData(state) => state.handle_event(event),
@@ -177,7 +176,7 @@ where
     }
 }
 
-impl<'a, R> Idle<R>
+impl<'a, R> Idle<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
@@ -208,8 +207,8 @@ where
             self.session.appskey(),
         ) {
             Ok(packet) => {
-                self.shared.buffer.clear();
-                self.shared.buffer.extend(packet);
+                self.shared.tx_buffer.clear();
+                self.shared.tx_buffer.extend_from_slice(packet).unwrap();
             }
             Err(_) => panic!("Error assembling packet!"),
         }
@@ -218,7 +217,7 @@ where
     pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
@@ -231,7 +230,7 @@ where
                         self.shared.datarate,
                         &Frame::Data,
                     ),
-                    &mut self.shared.buffer,
+                    &self.shared.tx_buffer.as_ref(),
                 );
 
                 let confirmed = send_data.confirmed;
@@ -271,7 +270,7 @@ where
         }
     }
 
-    fn into_sending_data(self, confirmed: bool) -> SendingData<R> {
+    fn into_sending_data(self, confirmed: bool) -> SendingData<'a, R> {
         SendingData {
             session: self.session,
             shared: self.shared,
@@ -279,7 +278,7 @@ where
         }
     }
 
-    fn into_waiting_for_rxwindow(self, confirmed: bool, time: u32) -> WaitingForRxWindow<R> {
+    fn into_waiting_for_rxwindow(self, confirmed: bool, time: u32) -> WaitingForRxWindow<'a, R> {
         WaitingForRxWindow {
             session: self.session,
             shared: self.shared,
@@ -289,31 +288,31 @@ where
     }
 }
 
-pub struct Idle<R>
+pub struct Idle<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    shared: Shared<R>,
+    shared: Shared<'a, R>,
     session: SessionData,
 }
 
-pub struct SendingData<R>
+pub struct SendingData<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    shared: Shared<R>,
+    shared: Shared<'a, R>,
     session: SessionData,
     confirmed: bool,
 }
 
-impl<R> SendingData<R>
+impl<'a, R> SendingData<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
     pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -344,7 +343,7 @@ where
         }
     }
 
-    fn into_waiting_for_rxwindow(self, confirmed: bool, time: u32) -> WaitingForRxWindow<R> {
+    fn into_waiting_for_rxwindow(self, confirmed: bool, time: u32) -> WaitingForRxWindow<'a, R> {
         WaitingForRxWindow {
             session: self.session,
             shared: self.shared,
@@ -354,24 +353,24 @@ where
     }
 }
 
-pub struct WaitingForRxWindow<R>
+pub struct WaitingForRxWindow<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    shared: Shared<R>,
+    shared: Shared<'a, R>,
     session: SessionData,
     confirmed: bool,
     rx_window: RxWindow,
 }
 
-impl<'a, R> WaitingForRxWindow<R>
+impl<'a, R> WaitingForRxWindow<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
     pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
@@ -436,11 +435,11 @@ where
     }
 }
 
-impl<R> From<WaitingForRxWindow<R>> for WaitingForRx<R>
+impl<'a, R> From<WaitingForRxWindow<'a, R>> for WaitingForRx<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    fn from(val: WaitingForRxWindow<R>) -> WaitingForRx<R> {
+    fn from(val: WaitingForRxWindow<'a, R>) -> WaitingForRx<'a, R> {
         WaitingForRx {
             shared: val.shared,
             session: val.session,
@@ -450,24 +449,24 @@ where
     }
 }
 
-pub struct WaitingForRx<R>
+pub struct WaitingForRx<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
-    shared: Shared<R>,
+    shared: Shared<'a, R>,
     session: SessionData,
     confirmed: bool,
     rx_window: RxWindow,
 }
 
-impl<'a, R> WaitingForRx<R>
+impl<'a, R> WaitingForRx<'a, R>
 where
     R: radio::PhyRxTx + Timings,
 {
     pub fn handle_event<C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
+    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -602,7 +601,7 @@ where
         }
     }
 
-    fn into_idle(self) -> Idle<R> {
+    fn into_idle(self) -> Idle<'a, R> {
         Idle {
             shared: self.shared,
             session: self.session,
@@ -611,10 +610,10 @@ where
 }
 
 fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
-    state: Session<R>,
+    state: Session<'_, R>,
     confirmed: bool,
     timestamp_ms: TimestampMs,
-) -> (Device<R, C>, Result<Response, super::super::Error<R>>) {
+) -> (Device<'_, R, C>, Result<Response, super::super::Error<R>>) {
     let (new_state, first_window) = match state {
         Session::Idle(state) => {
             let first_window = (state.shared.region.get_rx_delay(&Frame::Data, &Window::_1) as i32
