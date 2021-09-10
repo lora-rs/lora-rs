@@ -1,6 +1,5 @@
 #![no_std]
 
-use heapless::consts::*;
 use heapless::Vec;
 
 pub mod radio;
@@ -206,7 +205,7 @@ where
         }
     }
 
-    pub fn take_data_downlink(&mut self) -> Option<DecryptedDataPayload<Vec<u8, U256>>> {
+    pub fn take_data_downlink(&mut self) -> Option<DecryptedDataPayload<Vec<u8, 256>>> {
         self.get_shared().take_data_downlink()
     }
 

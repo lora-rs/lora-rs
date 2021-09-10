@@ -192,7 +192,7 @@ where
         let mut cmds = Vec::new();
         self.shared.mac.get_cmds(&mut cmds);
 
-        let mut dyn_cmds: Vec<&dyn SerializableMacCommand, U8> = Vec::new();
+        let mut dyn_cmds: Vec<&dyn SerializableMacCommand, 8> = Vec::new();
 
         for cmd in &cmds {
             if let Err(_e) = dyn_cmds.push(cmd) {
