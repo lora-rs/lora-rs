@@ -3,6 +3,7 @@ use lorawan_encoding::keys::AES128;
 pub type AppEui = [u8; 8];
 pub type DevEui = [u8; 8];
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug)]
 pub struct Credentials {
     deveui: DevEui,
@@ -32,6 +33,7 @@ impl Credentials {
     }
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct SessionKeys {
     newskey: AES128,
     appskey: AES128,

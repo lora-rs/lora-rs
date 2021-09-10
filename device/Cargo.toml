@@ -17,3 +17,15 @@ lorawan-encoding = { path = "../encoding", default-features = false }
 heapless = "0.6.1"
 as-slice = "*"
 generic-array = "0.14.2"
+defmt = { version = "0.2.0", optional = true }
+
+[features]
+withdefmt = ["defmt", "lorawan-encoding/defmt"]
+default = []
+# do NOT modify these features
+defmt-default = []
+defmt-trace = []
+defmt-debug = []
+defmt-info = []
+defmt-warn = []
+defmt-error = []
