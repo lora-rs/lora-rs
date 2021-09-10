@@ -9,10 +9,12 @@ use constants::*;
 mod cn470;
 mod eu868;
 mod us915;
+mod eu433;
 
 pub use cn470::CN470;
 pub use eu868::EU868;
 pub use us915::US915;
+pub use eu433::EU433;
 
 pub struct Configuration {
     state: State,
@@ -48,12 +50,14 @@ pub enum Region {
     US915,
     CN470,
     EU868,
+    EU433,
 }
 
 enum State {
     US915(US915),
     CN470(CN470),
     EU868(EU868),
+    EU433(EU433),
 }
 
 impl State {
@@ -62,6 +66,7 @@ impl State {
             Region::US915 => State::US915(US915::new()),
             Region::CN470 => State::CN470(CN470::new()),
             Region::EU868 => State::EU868(EU868::new()),
+            Region::EU433 => State::EU433(EU433::new()),
         }
     }
 }
@@ -89,6 +94,7 @@ macro_rules! mut_region_dispatch {
         State::US915(state) => state.$t(),
         State::CN470(state) => state.$t(),
         State::EU868(state) => state.$t(),
+        State::EU433(state) => state.$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
@@ -96,6 +102,7 @@ macro_rules! mut_region_dispatch {
         State::US915(state) => state.$t($($arg)*),
         State::CN470(state) => state.$t($($arg)*),
         State::EU868(state) => state.$t($($arg)*),
+        State::EU433(state) => state.$t($($arg)*),
     }
   };
 }
@@ -106,6 +113,7 @@ macro_rules! region_dispatch {
         State::US915(state) => state.$t(),
         State::CN470(state) => state.$t(),
         State::EU868(state) => state.$t(),
+        State::EU433(state) => state.$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
@@ -113,6 +121,7 @@ macro_rules! region_dispatch {
         State::US915(state) => state.$t($($arg)*),
         State::CN470(state) => state.$t($($arg)*),
         State::EU868(state) => state.$t($($arg)*),
+        State::EU433(state) => state.$t($($arg)*),
     }
   };
 }
@@ -244,6 +253,7 @@ macro_rules! from_region {
 from_region!(US915);
 from_region!(CN470);
 from_region!(EU868);
+from_region!(EU433);
 
 use super::state_machines::JoinAccept;
 use lorawan_encoding::parser::DecryptedJoinAcceptPayload;
