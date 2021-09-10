@@ -116,7 +116,7 @@ where
     }
 
     fn new_abp(
-        shared: Shared<R>,
+        shared: Shared<'a, R>,
         newskey: AES128,
         appskey: AES128,
         devaddr: DevAddr<[u8; 4]>,
@@ -131,6 +131,19 @@ pub trait Timings {
     fn get_rx_window_duration_ms(&self) -> u32;
 }
 
+pub enum JoinMode {
+    OTAA {
+        deveui: [u8; 8],
+        appeui: [u8; 8],
+        appkey: [u8; 16],
+    },
+    ABP {
+        newskey: AES128,
+        appskey: AES128,
+        devaddr: DevAddr<[u8; 4]>,
+    },
+}
+
 #[allow(dead_code)]
 impl<'a, R, C> Device<'a, R, C>
 where
@@ -139,49 +152,37 @@ where
 {
     pub fn new(
         region: region::Configuration,
+        join_mode: JoinMode,
         radio: R,
-        deveui: [u8; 8],
-        appeui: [u8; 8],
-        appkey: [u8; 16],
         get_random: fn() -> u32,
         tx_buffer: &'a mut [u8],
     ) -> Device<'_, R, C> {
         Device {
             crypto: PhantomData::default(),
-            state: State::new(Shared::new(
-                radio,
-                Some(Credentials::new(appeui, deveui, appkey)),
-                region,
-                Mac::default(),
-                get_random,
-                tx_buffer,
-            )),
-        }
-    }
-
-    pub fn new_abp(
-        region: region::Configuration,
-        radio: R,
-        newskey: AES128,
-        appskey: AES128,
-        devaddr: DevAddr<[u8; 4]>,
-        get_random: fn() -> u32,
-    ) -> Device<R, C> {
-        Device {
-            crypto: PhantomData::default(),
-            state: State::new_abp(
-                Shared::new(
+            state: match join_mode {
+                JoinMode::OTAA {
+                    deveui,
+                    appeui,
+                    appkey,
+                } => State::new(Shared::new(
                     radio,
-                    None,
+                    Some(Credentials::new(appeui, deveui, appkey)),
                     region,
                     Mac::default(),
                     get_random,
-                    Default::default(),
+                    tx_buffer,
+                )),
+                JoinMode::ABP {
+                    newskey,
+                    appskey,
+                    devaddr,
+                } => State::new_abp(
+                    Shared::new(radio, None, region, Mac::default(), get_random, tx_buffer),
+                    newskey,
+                    appskey,
+                    devaddr,
                 ),
-                newskey,
-                appskey,
-                devaddr,
-            ),
+            },
         }
     }
 
