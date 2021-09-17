@@ -16,9 +16,12 @@ pub use region::Region;
 
 mod state_machines;
 use core::marker::PhantomData;
-use lorawan_encoding::{keys::CryptoFactory, parser::DecryptedDataPayload};
+use lorawan_encoding::{
+    keys::{CryptoFactory, AES128},
+    parser::{DecryptedDataPayload, DevAddr},
+};
 use state_machines::Shared;
-pub use state_machines::{no_session, session, JoinAccept};
+pub use state_machines::{no_session, no_session::SessionData, session, JoinAccept};
 
 type TimestampMs = u32;
 
@@ -111,11 +114,34 @@ where
     fn new(shared: Shared<'a, R>) -> Self {
         State::NoSession(no_session::NoSession::new(shared))
     }
+
+    fn new_abp(
+        shared: Shared<'a, R>,
+        newskey: AES128,
+        appskey: AES128,
+        devaddr: DevAddr<[u8; 4]>,
+    ) -> Self {
+        let session_data = SessionData::new(newskey, appskey, devaddr);
+        State::Session(session::Session::new(shared, session_data))
+    }
 }
 
 pub trait Timings {
     fn get_rx_window_offset_ms(&self) -> i32;
     fn get_rx_window_duration_ms(&self) -> u32;
+}
+
+pub enum JoinMode {
+    OTAA {
+        deveui: [u8; 8],
+        appeui: [u8; 8],
+        appkey: [u8; 16],
+    },
+    ABP {
+        newskey: AES128,
+        appskey: AES128,
+        devaddr: DevAddr<[u8; 4]>,
+    },
 }
 
 #[allow(dead_code)]
@@ -126,23 +152,37 @@ where
 {
     pub fn new(
         region: region::Configuration,
+        join_mode: JoinMode,
         radio: R,
-        deveui: [u8; 8],
-        appeui: [u8; 8],
-        appkey: [u8; 16],
         get_random: fn() -> u32,
         tx_buffer: &'a mut [u8],
     ) -> Device<'_, R, C> {
         Device {
             crypto: PhantomData::default(),
-            state: State::new(Shared::new(
-                radio,
-                Credentials::new(appeui, deveui, appkey),
-                region,
-                Mac::default(),
-                get_random,
-                tx_buffer,
-            )),
+            state: match join_mode {
+                JoinMode::OTAA {
+                    deveui,
+                    appeui,
+                    appkey,
+                } => State::new(Shared::new(
+                    radio,
+                    Some(Credentials::new(appeui, deveui, appkey)),
+                    region,
+                    Mac::default(),
+                    get_random,
+                    tx_buffer,
+                )),
+                JoinMode::ABP {
+                    newskey,
+                    appskey,
+                    devaddr,
+                } => State::new_abp(
+                    Shared::new(radio, None, region, Mac::default(), get_random, tx_buffer),
+                    newskey,
+                    appskey,
+                    devaddr,
+                ),
+            },
         }
     }
 
@@ -151,7 +191,7 @@ where
         shared.get_mut_radio()
     }
 
-    pub fn get_credentials(&mut self) -> &mut Credentials {
+    pub fn get_credentials(&mut self) -> &mut Option<Credentials> {
         let shared = self.get_shared();
         shared.get_mut_credentials()
     }
