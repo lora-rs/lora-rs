@@ -1,3 +1,4 @@
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone)]
 pub enum Bandwidth {
     _125KHz,
@@ -5,6 +6,7 @@ pub enum Bandwidth {
     _500KHz,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone)]
 pub enum SpreadingFactor {
     _7,
@@ -15,6 +17,7 @@ pub enum SpreadingFactor {
     _12,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone)]
 pub enum CodingRate {
     _4_5,
@@ -23,6 +26,7 @@ pub enum CodingRate {
     _4_8,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug)]
 pub struct RfConfig {
     pub frequency: u32,
@@ -31,12 +35,14 @@ pub struct RfConfig {
     pub coding_rate: CodingRate,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug)]
 pub struct TxConfig {
     pub pw: i8,
     pub rf: RfConfig,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Copy, Clone, Debug)]
 pub struct RxQuality {
     rssi: i16,

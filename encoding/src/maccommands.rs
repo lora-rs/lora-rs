@@ -7,6 +7,7 @@
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
 /// MacCommand represents the enumeration of all LoRaWAN MACCommands.
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, PartialEq)]
 pub enum MacCommand<'a> {
     LinkCheckReq(LinkCheckReqPayload),
@@ -208,60 +209,74 @@ macro_rules! mac_cmds {
 
 mac_cmd_zero_len! {
     /// LinkCheckReqPayload represents the LinkCheckReq LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct LinkCheckReqPayload[cmd=LinkCheckReq, cid=0x02, uplink=true]
 
     /// DutyCycleAnsPayload represents the DutyCycleAns LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct DutyCycleAnsPayload[cmd=DutyCycleAns, cid=0x04, uplink=true]
 
     /// DevStatusReqPayload represents the DevStatusReq LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct DevStatusReqPayload[cmd=DevStatusReq, cid=0x06, uplink=false]
 
     /// RXTimingSetupAnsPayload represents the RXTimingSetupAns LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct RXTimingSetupAnsPayload[cmd=RXTimingSetupAns, cid=0x08, uplink=true]
 }
 
 mac_cmds! {
     /// LinkCheckAnsPayload represents the LinkCheckAns LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct LinkCheckAnsPayload[cmd=LinkCheckAns, cid=0x02, uplink=false, size=2]
 
     /// LinkADRReqPayload represents the LinkADRReq LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct LinkADRReqPayload[cmd=LinkADRReq, cid=0x03, uplink=false, size=4]
 
     /// LinkADRAnsPayload represents the LinkADRAns LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct LinkADRAnsPayload[cmd=LinkADRAns, cid=0x03, uplink=true, size=1]
 
     /// DutyCycleReqPayload represents the DutyCycleReq LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct DutyCycleReqPayload[cmd=DutyCycleReq, cid=0x04, uplink=false, size=1]
 
     /// RXParamSetupReqPayload represents the RXParamSetupReq LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct RXParamSetupReqPayload[cmd=RXParamSetupReq, cid=0x05, uplink=false, size=4]
 
     /// RXParamSetupAnsPayload represents the RXParamSetupAns LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct RXParamSetupAnsPayload[cmd=RXParamSetupAns, cid=0x05, uplink=true, size=1]
 
     /// DevStatusAnsPayload represents the DevStatusAns LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct DevStatusAnsPayload[cmd=DevStatusAns, cid=0x06, uplink=false, size=2]
 
     /// NewChannelReqPayload represents the NewChannelReq LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct NewChannelReqPayload[cmd=NewChannelReq, cid=0x07, uplink=false, size=5]
 
     /// NewChannelAnsPayload represents the NewChannelAns LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct NewChannelAnsPayload[cmd=NewChannelAns, cid=0x07, uplink=true, size=1]
 
     /// RXTimingSetupReqPayload represents the RXTimingSetupReq LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq)]
     struct RXTimingSetupReqPayload[cmd=RXTimingSetupReq, cid=0x08, uplink=false, size=1]
 }
