@@ -271,9 +271,10 @@ where
                             // expect a complete transmit
                             radio::Response::TxDone(ms) => {
                                 let first_window =
-                                    self.shared.region.get_rx_delay(&Frame::Join, &Window::_1)
-                                        + ms
-                                        + self.shared.radio.get_rx_window_offset_ms() as u32;
+                                    (self.shared.region.get_rx_delay(&Frame::Join, &Window::_1) as i32
+                                    + ms as i32
+                                    + self.shared.radio.get_rx_window_offset_ms())
+                                    as u32;
                                 (
                                     self.into_waiting_for_rxwindow(first_window).into(),
                                     Ok(Response::TimeoutRequest(first_window)),
