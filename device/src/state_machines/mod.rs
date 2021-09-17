@@ -20,7 +20,7 @@ pub struct Shared<'a, R: radio::PhyRxTx + Timings> {
 }
 
 enum Downlink {
-    Data(DecryptedDataPayload<Vec<u8, U256>>),
+    Data(DecryptedDataPayload<Vec<u8, 256>>),
     Join(JoinAccept),
 }
 
@@ -43,7 +43,7 @@ impl<'a, R: radio::PhyRxTx + Timings> Shared<'a, R> {
         self.datarate = datarate;
     }
 
-    pub fn take_data_downlink(&mut self) -> Option<DecryptedDataPayload<Vec<u8, U256>>> {
+    pub fn take_data_downlink(&mut self) -> Option<DecryptedDataPayload<Vec<u8, 256>>> {
         if let Some(Downlink::Data(payload)) = self.downlink.take() {
             Some(payload)
         } else {

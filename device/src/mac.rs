@@ -3,7 +3,6 @@ This a temporary design where flags will be left about desired MAC uplinks by th
 During Uplink assembly, this struct will be inquired to drive construction
  */
 
-use heapless::consts::*;
 use heapless::Vec;
 
 use super::region;
@@ -50,7 +49,7 @@ impl Mac {
         }
     }
 
-    pub fn get_cmds(&mut self, macs: &mut Vec<MacCommand, U8>) {
+    pub fn get_cmds(&mut self, macs: &mut Vec<MacCommand, 8>) {
         for _ in 0..self.adr_ans.get() {
             macs.push(MacCommand::LinkADRAns(
                 LinkADRAnsPayload::new(&[0x07]).unwrap(),
