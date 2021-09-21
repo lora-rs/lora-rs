@@ -45,11 +45,7 @@ else(Ready)║ ╚═════════════╝   ║              
 use super::super::no_session::{NoSession, SessionData};
 use super::super::State as SuperState;
 use super::super::*;
-use super::{
-    region::{Frame, Window},
-    CommonState,
-};
-use as_slice::AsSlice;
+use super::region::{Frame, Window};
 use generic_array::{typenum::U256, GenericArray};
 use lorawan_encoding::{
     self,
@@ -57,14 +53,11 @@ use lorawan_encoding::{
     maccommands::SerializableMacCommand,
     parser::{parse_with_factory as lorawan_parse, *},
 };
-pub enum Session<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    Idle(Idle<'a, R>),
-    SendingData(SendingData<'a, R>),
-    WaitingForRxWindow(WaitingForRxWindow<'a, R>),
-    WaitingForRx(WaitingForRx<'a, R>),
+pub enum Session {
+    Idle(Idle),
+    SendingData(SendingData),
+    WaitingForRxWindow(WaitingForRxWindow),
+    WaitingForRx(WaitingForRx),
 }
 
 enum RxWindow {
@@ -72,47 +65,31 @@ enum RxWindow {
     _2(u32),
 }
 
-trait SessionState<R: radio::PhyRxTx + Timings> {
+trait SessionState {
     fn get_session(&self) -> &SessionData;
 }
 
 macro_rules! into_state {
     ($($from:tt),*) => {
     $(
-        impl<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default> From<$from<'a, R>> for Device<'a, R, C>
+        impl From<$from> for SuperState
         {
-            fn from(state: $from<'a, R>) -> Device<'a, R, C> {
-                Device {
-                    crypto: PhantomData::default(),
-                    state: SuperState::Session(Session::$from(state))
-                }
+            fn from(state: $from) -> SuperState {
+                SuperState::Session(Session::$from(state))
             }
         }
 
-        impl<'a, R: radio::PhyRxTx + Timings> SessionState<R> for $from<'a, R> {
+        impl SessionState for $from {
             fn get_session(&self) -> &SessionData {
                 &self.session
-            }
-        }
-
-        impl<'a, R: radio::PhyRxTx + Timings> CommonState<'a, R> for $from<'a, R> {
-            fn get_mut_shared(&mut self) -> &mut Shared<'a, R> {
-                &mut self.shared
             }
         }
     )*};
 }
 
-impl<'a, R, C> From<Session<'a, R>> for Device<'a, R, C>
-where
-    R: radio::PhyRxTx + Timings,
-    C: CryptoFactory + Default,
-{
-    fn from(session: Session<'a, R>) -> Device<'a, R, C> {
-        Device {
-            state: SuperState::Session(session),
-            crypto: PhantomData::default(),
-        }
+impl From<Session> for SuperState {
+    fn from(session: Session) -> SuperState {
+        SuperState::Session(session)
     }
 }
 
@@ -137,21 +114,9 @@ where
     }
 }
 
-impl<'a, R> Session<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    pub fn new(shared: Shared<'a, R>, session: SessionData) -> Session<'a, R> {
-        Session::Idle(Idle { shared, session })
-    }
-
-    pub fn get_mut_shared(&mut self) -> &mut Shared<'a, R> {
-        match self {
-            Session::Idle(state) => state.get_mut_shared(),
-            Session::SendingData(state) => state.get_mut_shared(),
-            Session::WaitingForRxWindow(state) => state.get_mut_shared(),
-            Session::WaitingForRx(state) => state.get_mut_shared(),
-        }
+impl Session {
+    pub fn new(session: SessionData) -> Session {
+        Session::Idle(Idle { session })
     }
 
     pub fn get_session_data(&self) -> &SessionData {
@@ -163,25 +128,27 @@ where
         }
     }
 
-    pub fn handle_event<C: CryptoFactory + Default>(
+    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
         self,
         event: Event<R>,
-    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
+        shared: &mut Shared<'a, R>,
+    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match self {
-            Session::Idle(state) => state.handle_event(event),
-            Session::SendingData(state) => state.handle_event(event),
-            Session::WaitingForRxWindow(state) => state.handle_event(event),
-            Session::WaitingForRx(state) => state.handle_event(event),
+            Session::Idle(state) => state.handle_event::<R, C>(event, shared),
+            Session::SendingData(state) => state.handle_event::<R, C>(event, shared),
+            Session::WaitingForRxWindow(state) => state.handle_event::<R, C>(event, shared),
+            Session::WaitingForRx(state) => state.handle_event::<R, C>(event, shared),
         }
     }
 }
 
-impl<'a, R> Idle<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
+impl Idle {
     #[allow(clippy::match_wild_err_arm)]
-    fn prepare_buffer<C: CryptoFactory + Default>(&mut self, data: &SendData) -> FcntUp {
+    fn prepare_buffer<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+        &mut self,
+        data: &SendData,
+        shared: &mut Shared<'a, R>,
+    ) -> FcntUp {
         let fcnt = self.session.fcnt_up();
         let mut phy: DataPayloadCreator<GenericArray<u8, U256>, C> = DataPayloadCreator::default();
         phy.set_confirmed(data.confirmed)
@@ -190,7 +157,7 @@ where
             .set_fcnt(fcnt);
 
         let mut cmds = Vec::new();
-        self.shared.mac.get_cmds(&mut cmds);
+        shared.mac.get_cmds(&mut cmds);
 
         let mut dyn_cmds: Vec<&dyn SerializableMacCommand, 8> = Vec::new();
 
@@ -207,36 +174,35 @@ where
             self.session.appskey(),
         ) {
             Ok(packet) => {
-                self.shared.tx_buffer.clear();
-                self.shared.tx_buffer.extend_from_slice(packet).unwrap();
+                shared.tx_buffer.clear();
+                shared.tx_buffer.extend_from_slice(packet).unwrap();
             }
             Err(e) => panic!("Error assembling packet! {} ", e),
         }
         fcnt
     }
-    pub fn handle_event<C: CryptoFactory + Default>(
+    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
+        shared: &mut Shared<'a, R>,
+    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
-                let fcnt = self.prepare_buffer::<C>(&send_data);
-                let random = (self.shared.get_random)();
+                let fcnt = self.prepare_buffer::<R, C>(&send_data, shared);
+                let random = (shared.get_random)();
 
                 let event: radio::Event<R> = radio::Event::TxRequest(
-                    self.shared.region.create_tx_config(
-                        random as u8,
-                        self.shared.datarate,
-                        &Frame::Data,
-                    ),
-                    &self.shared.tx_buffer.as_ref(),
+                    shared
+                        .region
+                        .create_tx_config(random as u8, shared.datarate, &Frame::Data),
+                    &shared.tx_buffer.as_ref(),
                 );
 
                 let confirmed = send_data.confirmed;
 
                 // send the transmit request to the radio
-                match self.shared.radio.handle_event(event) {
+                match shared.radio.handle_event(event) {
                     Ok(response) => {
                         match response {
                             // intermediate state where we wait for Join to complete sending
@@ -247,9 +213,12 @@ where
                             ),
                             // directly jump to waiting for RxWindow
                             // allows for synchronous sending
-                            radio::Response::TxDone(ms) => {
-                                data_rxwindow1_timeout(Session::Idle(self), confirmed, ms)
-                            }
+                            radio::Response::TxDone(ms) => data_rxwindow1_timeout::<R, C>(
+                                Session::Idle(self),
+                                confirmed,
+                                ms,
+                                shared,
+                            ),
                             _ => {
                                 panic!("Idle: Unexpected radio response");
                             }
@@ -261,8 +230,8 @@ where
             // tolerate unexpected timeout
             Event::TimeoutFired => (self.into(), Ok(Response::NoUpdate)),
             Event::NewSessionRequest => {
-                let no_session = NoSession::new(self.shared);
-                no_session.handle_event(Event::NewSessionRequest)
+                let no_session = NoSession::new();
+                no_session.handle_event::<R, C>(Event::NewSessionRequest, shared)
             }
             Event::RadioEvent(_radio_event) => {
                 (self.into(), Err(Error::RadioEventWhileIdle.into()))
@@ -270,60 +239,53 @@ where
         }
     }
 
-    fn into_sending_data(self, confirmed: bool) -> SendingData<'a, R> {
+    fn into_sending_data(self, confirmed: bool) -> SendingData {
         SendingData {
             session: self.session,
-            shared: self.shared,
             confirmed,
         }
     }
 
-    fn into_waiting_for_rxwindow(self, confirmed: bool, time: u32) -> WaitingForRxWindow<'a, R> {
+    fn into_waiting_for_rxwindow(self, confirmed: bool, time: u32) -> WaitingForRxWindow {
         WaitingForRxWindow {
             session: self.session,
-            shared: self.shared,
             rx_window: RxWindow::_1(time),
             confirmed,
         }
     }
 }
 
-pub struct Idle<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    shared: Shared<'a, R>,
+pub struct Idle {
     session: SessionData,
 }
 
-pub struct SendingData<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    shared: Shared<'a, R>,
+pub struct SendingData {
     session: SessionData,
     confirmed: bool,
 }
 
-impl<'a, R> SendingData<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    pub fn handle_event<C: CryptoFactory + Default>(
-        mut self,
+impl SendingData {
+    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+        self,
         event: Event<R>,
-    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
+        shared: &mut Shared<'a, R>,
+    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
                 // send the transmit request to the radio
-                match self.shared.radio.handle_event(radio_event) {
+                match shared.radio.handle_event(radio_event) {
                     Ok(response) => {
                         match response {
                             // expect a complete transmit
                             radio::Response::TxDone(ms) => {
                                 let confirmed = self.confirmed;
-                                data_rxwindow1_timeout(Session::SendingData(self), confirmed, ms)
+                                data_rxwindow1_timeout::<R, C>(
+                                    Session::SendingData(self),
+                                    confirmed,
+                                    ms,
+                                    shared,
+                                )
                             }
                             // anything other than TxComplete is unexpected
                             _ => {
@@ -343,34 +305,27 @@ where
         }
     }
 
-    fn into_waiting_for_rxwindow(self, confirmed: bool, time: u32) -> WaitingForRxWindow<'a, R> {
+    fn into_waiting_for_rxwindow(self, confirmed: bool, time: u32) -> WaitingForRxWindow {
         WaitingForRxWindow {
             session: self.session,
-            shared: self.shared,
             rx_window: RxWindow::_1(time),
             confirmed,
         }
     }
 }
 
-pub struct WaitingForRxWindow<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    shared: Shared<'a, R>,
+pub struct WaitingForRxWindow {
     session: SessionData,
     confirmed: bool,
     rx_window: RxWindow,
 }
 
-impl<'a, R> WaitingForRxWindow<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    pub fn handle_event<C: CryptoFactory + Default>(
-        mut self,
+impl WaitingForRxWindow {
+    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+        self,
         event: Event<R>,
-    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
+        shared: &mut Shared<'a, R>,
+    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
@@ -378,14 +333,12 @@ where
                     RxWindow::_1(_) => Window::_1,
                     RxWindow::_2(_) => Window::_2,
                 };
-                let rx_config =
-                    self.shared
-                        .region
-                        .get_rx_config(self.shared.datarate, &Frame::Join, &window);
+                let rx_config = shared
+                    .region
+                    .get_rx_config(shared.datarate, &Frame::Join, &window);
 
                 // configure the radio for the RX
-                match self
-                    .shared
+                match shared
                     .radio
                     .handle_event(radio::Event::RxRequest(rx_config))
                 {
@@ -393,23 +346,17 @@ where
                         let window_close: u32 = match self.rx_window {
                             // RxWindow1 one must timeout before RxWindow2
                             RxWindow::_1(time) => {
-                                let time_between_windows = self
-                                    .shared
-                                    .region
-                                    .get_rx_delay(&Frame::Data, &Window::_2)
-                                    - self.shared.region.get_rx_delay(&Frame::Data, &Window::_1);
-                                if time_between_windows
-                                    > self.shared.radio.get_rx_window_duration_ms()
-                                {
-                                    time + self.shared.radio.get_rx_window_duration_ms()
+                                let time_between_windows =
+                                    shared.region.get_rx_delay(&Frame::Data, &Window::_2)
+                                        - shared.region.get_rx_delay(&Frame::Data, &Window::_1);
+                                if time_between_windows > shared.radio.get_rx_window_duration_ms() {
+                                    time + shared.radio.get_rx_window_duration_ms()
                                 } else {
                                     time + time_between_windows
                                 }
                             }
                             // RxWindow2 can last however long
-                            RxWindow::_2(time) => {
-                                time + self.shared.radio.get_rx_window_duration_ms()
-                            }
+                            RxWindow::_2(time) => time + shared.radio.get_rx_window_duration_ms(),
                         };
                         (
                             WaitingForRx::from(self).into(),
@@ -435,13 +382,9 @@ where
     }
 }
 
-impl<'a, R> From<WaitingForRxWindow<'a, R>> for WaitingForRx<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    fn from(val: WaitingForRxWindow<'a, R>) -> WaitingForRx<'a, R> {
+impl From<WaitingForRxWindow> for WaitingForRx {
+    fn from(val: WaitingForRxWindow) -> WaitingForRx {
         WaitingForRx {
-            shared: val.shared,
             session: val.session,
             confirmed: val.confirmed,
             rx_window: val.rx_window,
@@ -449,33 +392,27 @@ where
     }
 }
 
-pub struct WaitingForRx<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    shared: Shared<'a, R>,
+pub struct WaitingForRx {
     session: SessionData,
     confirmed: bool,
     rx_window: RxWindow,
 }
 
-impl<'a, R> WaitingForRx<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    pub fn handle_event<C: CryptoFactory + Default>(
+impl WaitingForRx {
+    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
         mut self,
         event: Event<R>,
-    ) -> (Device<'a, R, C>, Result<Response, super::super::Error<R>>) {
+        shared: &mut Shared<'a, R>,
+    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
                 // send the transmit request to the radio
-                match self.shared.radio.handle_event(radio_event) {
+                match shared.radio.handle_event(radio_event) {
                     Ok(response) => match response {
                         radio::Response::RxDone(_quality) => {
                             if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
-                                lorawan_parse(self.shared.radio.get_received_packet(), C::default())
+                                lorawan_parse(shared.radio.get_received_packet(), C::default())
                             {
                                 let session = &mut self.session;
                                 if session.devaddr() == &encrypted_data.fhdr().dev_addr() {
@@ -509,22 +446,21 @@ where
                                         )
                                         .unwrap();
 
-                                        self.shared.mac.handle_downlink_macs(
-                                            &mut self.shared.region,
+                                        shared.mac.handle_downlink_macs(
+                                            &mut shared.region,
                                             &mut decrypted.fhdr().fopts(),
                                         );
 
                                         if let Ok(FRMPayload::MACCommands(mac_cmds)) =
                                             decrypted.frm_payload()
                                         {
-                                            self.shared.mac.handle_downlink_macs(
-                                                &mut self.shared.region,
+                                            shared.mac.handle_downlink_macs(
+                                                &mut shared.region,
                                                 &mut mac_cmds.mac_commands(),
                                             );
                                         }
 
-                                        self.shared.downlink =
-                                            Some(super::Downlink::Data(decrypted));
+                                        shared.downlink = Some(super::Downlink::Data(decrypted));
 
                                         // check if FCnt is used up
                                         let response = if self.session.fcnt_up() == (0xFFFF + 1) {
@@ -548,20 +484,19 @@ where
             }
             Event::TimeoutFired => {
                 // send the transmit request to the radio
-                if let Err(_e) = self.shared.radio.handle_event(radio::Event::CancelRx) {
+                if let Err(_e) = shared.radio.handle_event(radio::Event::CancelRx) {
                     panic!("Error cancelling Rx");
                 }
 
                 match self.rx_window {
                     RxWindow::_1(t1) => {
                         let time_between_windows =
-                            self.shared.region.get_rx_delay(&Frame::Data, &Window::_2)
-                                - self.shared.region.get_rx_delay(&Frame::Data, &Window::_1);
+                            shared.region.get_rx_delay(&Frame::Data, &Window::_2)
+                                - shared.region.get_rx_delay(&Frame::Data, &Window::_1);
                         let t2 = t1 + time_between_windows;
                         // TODO: jump to RxWindow2 if t2 == now
                         (
                             WaitingForRxWindow {
-                                shared: self.shared,
                                 session: self.session,
                                 confirmed: self.confirmed,
                                 rx_window: RxWindow::_2(t2),
@@ -601,35 +536,33 @@ where
         }
     }
 
-    fn into_idle(self) -> Idle<'a, R> {
+    fn into_idle(self) -> Idle {
         Idle {
-            shared: self.shared,
             session: self.session,
         }
     }
 }
 
-fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
-    state: Session<'_, R>,
+fn data_rxwindow1_timeout<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+    state: Session,
     confirmed: bool,
     timestamp_ms: TimestampMs,
-) -> (Device<'_, R, C>, Result<Response, super::super::Error<R>>) {
+    shared: &mut Shared<'a, R>,
+) -> (SuperState, Result<Response, super::super::Error<R>>) {
     let (new_state, first_window) = match state {
         Session::Idle(state) => {
-            let first_window = (state.shared.region.get_rx_delay(&Frame::Data, &Window::_1) as i32
+            let first_window = (shared.region.get_rx_delay(&Frame::Data, &Window::_1) as i32
                 + timestamp_ms as i32
-                + state.shared.radio.get_rx_window_offset_ms())
-                as u32;
+                + shared.radio.get_rx_window_offset_ms()) as u32;
             (
                 state.into_waiting_for_rxwindow(confirmed, first_window),
                 first_window,
             )
         }
         Session::SendingData(state) => {
-            let first_window = (state.shared.region.get_rx_delay(&Frame::Data, &Window::_1) as i32
+            let first_window = (shared.region.get_rx_delay(&Frame::Data, &Window::_1) as i32
                 + timestamp_ms as i32
-                + state.shared.radio.get_rx_window_offset_ms())
-                as u32;
+                + shared.radio.get_rx_window_offset_ms()) as u32;
             (
                 state.into_waiting_for_rxwindow(confirmed, first_window),
                 first_window,
