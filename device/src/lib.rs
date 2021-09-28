@@ -1,4 +1,6 @@
 #![no_std]
+#![cfg_attr(feature = "async", feature(generic_associated_types))]
+#![cfg_attr(feature = "async", feature(type_alias_impl_trait))]
 
 use heapless::Vec;
 
@@ -21,6 +23,9 @@ use lorawan_encoding::{
 };
 use state_machines::Shared;
 pub use state_machines::{no_session, no_session::SessionData, session, JoinAccept};
+
+#[cfg(feature = "async")]
+pub mod async_device;
 
 type TimestampMs = u32;
 
