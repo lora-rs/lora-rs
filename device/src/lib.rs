@@ -29,7 +29,8 @@ where
     R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
 {
-    state: State<'a, R>,
+    state: Option<State>,
+    shared: Shared<'a, R>,
     crypto: PhantomData<C>,
 }
 
@@ -97,31 +98,20 @@ pub struct SendData<'a> {
     confirmed: bool,
 }
 
-pub enum State<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    NoSession(no_session::NoSession<'a, R>),
-    Session(session::Session<'a, R>),
+pub enum State {
+    NoSession(no_session::NoSession),
+    Session(session::Session),
 }
 
 use core::default::Default;
-impl<'a, R> State<'a, R>
-where
-    R: radio::PhyRxTx + Timings,
-{
-    fn new(shared: Shared<'a, R>) -> Self {
-        State::NoSession(no_session::NoSession::new(shared))
+impl State {
+    fn new() -> Self {
+        State::NoSession(no_session::NoSession::new())
     }
 
-    fn new_abp(
-        shared: Shared<'a, R>,
-        newskey: AES128,
-        appskey: AES128,
-        devaddr: DevAddr<[u8; 4]>,
-    ) -> Self {
+    fn new_abp(newskey: AES128, appskey: AES128, devaddr: DevAddr<[u8; 4]>) -> Self {
         let session_data = SessionData::new(newskey, appskey, devaddr);
-        State::Session(session::Session::new(shared, session_data))
+        State::Session(session::Session::new(session_data))
     }
 }
 
@@ -156,32 +146,36 @@ where
         get_random: fn() -> u32,
         tx_buffer: &'a mut [u8],
     ) -> Device<'_, R, C> {
-        Device {
-            crypto: PhantomData::default(),
-            state: match join_mode {
-                JoinMode::OTAA {
-                    deveui,
-                    appeui,
-                    appkey,
-                } => State::new(Shared::new(
+        let (shared, state) = match join_mode {
+            JoinMode::OTAA {
+                deveui,
+                appeui,
+                appkey,
+            } => (
+                Shared::new(
                     radio,
                     Some(Credentials::new(appeui, deveui, appkey)),
                     region,
                     Mac::default(),
                     get_random,
                     tx_buffer,
-                )),
-                JoinMode::ABP {
-                    newskey,
-                    appskey,
-                    devaddr,
-                } => State::new_abp(
-                    Shared::new(radio, None, region, Mac::default(), get_random, tx_buffer),
-                    newskey,
-                    appskey,
-                    devaddr,
                 ),
-            },
+                State::new(),
+            ),
+            JoinMode::ABP {
+                newskey,
+                appskey,
+                devaddr,
+            } => (
+                Shared::new(radio, None, region, Mac::default(), get_random, tx_buffer),
+                State::new_abp(newskey, appskey, devaddr),
+            ),
+        };
+
+        Device {
+            crypto: PhantomData::default(),
+            shared,
+            state: Some(state),
         }
     }
 
@@ -196,10 +190,7 @@ where
     }
 
     fn get_shared(&mut self) -> &mut Shared<'a, R> {
-        match &mut self.state {
-            State::NoSession(state) => state.get_mut_shared(),
-            State::Session(state) => state.get_mut_shared(),
-        }
+        &mut self.shared
     }
 
     pub fn get_datarate(&mut self) -> region::DR {
@@ -211,15 +202,13 @@ where
     }
 
     pub fn ready_to_send_data(&self) -> bool {
-        matches!(&self.state, State::Session(session::Session::Idle(_)))
+        matches!(
+            &self.state.as_ref().unwrap(),
+            State::Session(session::Session::Idle(_))
+        )
     }
 
-    pub fn send(
-        self,
-        data: &[u8],
-        fport: u8,
-        confirmed: bool,
-    ) -> (Self, Result<Response, Error<R>>) {
+    pub fn send(&mut self, data: &[u8], fport: u8, confirmed: bool) -> Result<Response, Error<R>> {
         self.handle_event(Event::SendDataRequest(SendData {
             data,
             fport,
@@ -228,7 +217,7 @@ where
     }
 
     pub fn get_fcnt_up(&self) -> Option<u32> {
-        if let State::Session(session) = &self.state {
+        if let State::Session(session) = &self.state.as_ref().unwrap() {
             Some(session.get_session_data().fcnt_up())
         } else {
             None
@@ -236,7 +225,7 @@ where
     }
 
     pub fn get_session_keys(&self) -> Option<SessionKeys> {
-        if let State::Session(session) = &self.state {
+        if let State::Session(session) = &self.state.as_ref().unwrap() {
             Some(SessionKeys::copy_from_session_data(
                 session.get_session_data(),
             ))
@@ -253,10 +242,12 @@ where
         self.get_shared().take_join_accept()
     }
 
-    pub fn handle_event(self, event: Event<R>) -> (Self, Result<Response, Error<R>>) {
-        match self.state {
-            State::NoSession(state) => state.handle_event(event),
-            State::Session(state) => state.handle_event(event),
-        }
+    pub fn handle_event(&mut self, event: Event<R>) -> Result<Response, Error<R>> {
+        let (new_state, result) = match self.state.take().unwrap() {
+            State::NoSession(state) => state.handle_event::<R, C>(event, &mut self.shared),
+            State::Session(state) => state.handle_event::<R, C>(event, &mut self.shared),
+        };
+        self.state.replace(new_state);
+        result
     }
 }

@@ -82,7 +82,3 @@ impl<'a, R: radio::PhyRxTx + Timings> Shared<'a, R> {
         }
     }
 }
-
-trait CommonState<'a, R: radio::PhyRxTx + Timings> {
-    fn get_mut_shared(&mut self) -> &mut Shared<'a, R>;
-}
