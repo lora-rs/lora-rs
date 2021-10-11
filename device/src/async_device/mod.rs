@@ -2,12 +2,11 @@
 //! and allowing asynchronous radio implementations.
 use super::mac::Mac;
 
+pub use super::{region, region::Region, types::*, JoinMode, SendData, Timings};
 use super::{
-    radio::TxConfig,
     region::{Frame, Window},
     Credentials,
 };
-pub use super::{region, region::Region, types::*, JoinMode, SendData, Timings};
 use core::marker::PhantomData;
 use futures::{future::select, future::Either, pin_mut};
 use generic_array::{typenum::U256, GenericArray};
@@ -15,7 +14,6 @@ use heapless::Vec;
 use lorawan_encoding::{
     self,
     creator::DataPayloadCreator,
-    creator::JoinRequestCreator,
     keys::{CryptoFactory, AES128},
     maccommands::SerializableMacCommand,
     parser::DevAddr,
@@ -24,8 +22,8 @@ use lorawan_encoding::{
 use rand_core::RngCore;
 
 type DevNonce = lorawan_encoding::parser::DevNonce<[u8; 2]>;
+use crate::radio::types::RadioBuffer;
 pub use crate::region::DR;
-use radio::RadioBuffer;
 pub mod radio;
 
 /// Type representing a LoRaWAN cabable device. A device is bound to the following types:
@@ -115,7 +113,13 @@ where
                 let credentials = Credentials::new(*appeui, *deveui, *appkey);
 
                 // Prepare the buffer with the join payload
-                let (devnonce, tx_config) = self.create_join_request(&credentials);
+                let random = self.rng.next_u32();
+                let (devnonce, tx_config) = credentials.create_join_request::<C>(
+                    &mut self.region,
+                    random,
+                    self.datarate,
+                    &mut self.radio_buffer,
+                );
 
                 // Transmit the join payload
                 let ms = self
@@ -400,37 +404,6 @@ where
             self.radio_buffer.inc(rx_len);
         }
         Ok(())
-    }
-
-    /// Prepare a join request to be sent. This populates the radio buffer with the request to be
-    /// sent, and returns the radio config to use for transmitting.
-    fn create_join_request(&mut self, creds: &Credentials) -> (DevNonce, TxConfig) {
-        let mut random = self.rng.next_u32();
-        // use lowest 16 bits for devnonce
-        let devnonce_bytes = random as u16;
-
-        self.radio_buffer.clear();
-
-        let mut phy: JoinRequestCreator<[u8; 23], C> = JoinRequestCreator::default();
-
-        let devnonce = [devnonce_bytes as u8, (devnonce_bytes >> 8) as u8];
-
-        phy.set_app_eui(EUI64::new(creds.appeui()).unwrap())
-            .set_dev_eui(EUI64::new(creds.deveui()).unwrap())
-            .set_dev_nonce(&devnonce);
-        let vec = phy.build(&creds.appkey()).unwrap();
-
-        let devnonce_copy = DevNonce::new(devnonce).unwrap();
-
-        self.radio_buffer.extend_from_slice(vec).unwrap();
-
-        // we'll use the rest for frequency and subband selection
-        random >>= 16;
-        (
-            devnonce_copy,
-            self.region
-                .create_tx_config(random as u8, self.datarate, &Frame::Join),
-        )
     }
 }
 
