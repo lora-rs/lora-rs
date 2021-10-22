@@ -1,4 +1,7 @@
-use lorawan_encoding::keys::AES128;
+use crate::radio::{RadioBuffer, TxConfig};
+use crate::region::{Configuration, Frame, DR};
+use lorawan_encoding::keys::CryptoFactory;
+use lorawan_encoding::{creator::JoinRequestCreator, keys::AES128, parser::EUI64};
 
 pub type AppEui = [u8; 8];
 pub type DevEui = [u8; 8];
@@ -10,6 +13,8 @@ pub struct Credentials {
     appeui: AppEui,
     appkey: AES128,
 }
+
+pub(crate) type DevNonce = lorawan_encoding::parser::DevNonce<[u8; 2]>;
 
 impl Credentials {
     pub fn new(appeui: AppEui, deveui: DevEui, appkey: [u8; 16]) -> Credentials {
@@ -30,6 +35,41 @@ impl Credentials {
 
     pub fn appkey(&self) -> &AES128 {
         &self.appkey
+    }
+
+    /// Prepare a join request to be sent. This populates the radio buffer with the request to be
+    /// sent, and returns the radio config to use for transmitting.
+    pub(crate) fn create_join_request<C: CryptoFactory + Default>(
+        &self,
+        region: &mut Configuration,
+        mut random: u32,
+        datarate: DR,
+        buf: &mut RadioBuffer,
+    ) -> (DevNonce, TxConfig) {
+        // use lowest 16 bits for devnonce
+        let devnonce_bytes = random as u16;
+
+        buf.clear();
+
+        let mut phy: JoinRequestCreator<[u8; 23], C> = JoinRequestCreator::default();
+
+        let devnonce = [devnonce_bytes as u8, (devnonce_bytes >> 8) as u8];
+
+        phy.set_app_eui(EUI64::new(self.appeui()).unwrap())
+            .set_dev_eui(EUI64::new(self.deveui()).unwrap())
+            .set_dev_nonce(&devnonce);
+        let vec = phy.build(&self.appkey()).unwrap();
+
+        let devnonce_copy = DevNonce::new(devnonce).unwrap();
+
+        buf.extend_from_slice(vec).unwrap();
+
+        // we'll use the rest for frequency and subband selection
+        random >>= 16;
+        (
+            devnonce_copy,
+            region.create_tx_config(random as u8, datarate, &Frame::Join),
+        )
     }
 }
 

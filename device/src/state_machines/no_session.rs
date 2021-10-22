@@ -7,10 +7,9 @@ use super::{
 };
 use lorawan_encoding::{
     self,
-    creator::JoinRequestCreator,
     keys::AES128,
-    parser::DevAddr,
-    parser::{parse_with_factory as lorawan_parse, *},
+    parser::parse_with_factory as lorawan_parse,
+    parser::{DecryptedJoinAcceptPayload, DevAddr, JoinAcceptPayload, PhyPayload},
 };
 
 pub enum NoSession {
@@ -88,7 +87,6 @@ where
         super::super::Error::NoSession(error)
     }
 }
-type DevNonce = lorawan_encoding::parser::DevNonce<[u8; 2]>;
 
 pub struct Idle {
     join_attempts: usize,
@@ -96,92 +94,63 @@ pub struct Idle {
 
 impl Idle {
     pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
-        mut self,
+        self,
         event: Event<R>,
         shared: &mut Shared<'a, R>,
     ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             // NewSession Request or a Timeout from previously failed Join attempt
             Event::NewSessionRequest | Event::TimeoutFired => {
-                match self.create_join_request::<R, C>(shared) {
-                    Ok((devnonce, tx_config)) => {
-                        let radio_event: radio::Event<R> =
-                            radio::Event::TxRequest(tx_config, &shared.tx_buffer.as_ref());
+                if let Some(credentials) = &shared.credentials {
+                    let random = (shared.get_random)();
+                    let (devnonce, tx_config) = credentials.create_join_request::<C>(
+                        &mut shared.region,
+                        random,
+                        shared.datarate,
+                        &mut shared.tx_buffer,
+                    );
+                    let radio_event: radio::Event<R> =
+                        radio::Event::TxRequest(tx_config, &shared.tx_buffer.as_ref());
 
-                        // send the transmit request to the radio
-                        match shared.radio.handle_event(radio_event) {
-                            Ok(response) => {
-                                match response {
-                                    // intermediate state where we wait for Join to complete sending
-                                    // allows for asynchronous sending
-                                    radio::Response::Txing => (
-                                        self.into_sending_join(devnonce).into(),
-                                        Ok(Response::JoinRequestSending),
-                                    ),
-                                    // directly jump to waiting for RxWindow
-                                    // allows for synchronous sending
-                                    radio::Response::TxDone(ms) => {
-                                        let first_window =
-                                            shared.region.get_rx_delay(&Frame::Join, &Window::_1)
-                                                + ms;
-                                        (
-                                            self.into_waiting_for_rxwindow(devnonce, first_window)
-                                                .into(),
-                                            Ok(Response::TimeoutRequest(first_window)),
-                                        )
-                                    }
-                                    _ => {
-                                        panic!("NoSession::Idle:: Unexpected radio response");
-                                    }
+                    // send the transmit request to the radio
+                    match shared.radio.handle_event(radio_event) {
+                        Ok(response) => {
+                            match response {
+                                // intermediate state where we wait for Join to complete sending
+                                // allows for asynchronous sending
+                                radio::Response::Txing => (
+                                    self.into_sending_join(devnonce).into(),
+                                    Ok(Response::JoinRequestSending),
+                                ),
+                                // directly jump to waiting for RxWindow
+                                // allows for synchronous sending
+                                radio::Response::TxDone(ms) => {
+                                    let first_window =
+                                        shared.region.get_rx_delay(&Frame::Join, &Window::_1) + ms;
+                                    (
+                                        self.into_waiting_for_rxwindow(devnonce, first_window)
+                                            .into(),
+                                        Ok(Response::TimeoutRequest(first_window)),
+                                    )
+                                }
+                                _ => {
+                                    panic!("NoSession::Idle:: Unexpected radio response");
                                 }
                             }
-                            Err(e) => (self.into(), Err(e.into())),
                         }
+                        Err(e) => (self.into(), Err(e.into())),
                     }
-                    Err(e) => (self.into(), Err(e.into())),
+                } else {
+                    (
+                        self.into(),
+                        Err(Error::DeviceDoesNotHaveOtaaCredentials.into()),
+                    )
                 }
             }
             Event::RadioEvent(_radio_event) => {
                 (self.into(), Err(Error::RadioEventWhileIdle.into()))
             }
             Event::SendDataRequest(_) => (self.into(), Err(Error::SendDataWhileNoSession.into())),
-        }
-    }
-
-    fn create_join_request<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
-        &mut self,
-        shared: &mut Shared<R>,
-    ) -> Result<(DevNonce, radio::TxConfig), Error> {
-        let mut random = (shared.get_random)();
-        // use lowest 16 bits for devnonce
-        let devnonce_bytes = random as u16;
-
-        shared.tx_buffer.clear();
-
-        let mut phy: JoinRequestCreator<[u8; 23], C> = JoinRequestCreator::default();
-
-        if let Some(creds) = &shared.credentials {
-            let devnonce = [devnonce_bytes as u8, (devnonce_bytes >> 8) as u8];
-
-            phy.set_app_eui(EUI64::new(creds.appeui()).unwrap())
-                .set_dev_eui(EUI64::new(creds.deveui()).unwrap())
-                .set_dev_nonce(&devnonce);
-            let vec = phy.build(&creds.appkey()).unwrap();
-
-            let devnonce_copy = DevNonce::new(devnonce).unwrap();
-
-            shared.tx_buffer.extend_from_slice(vec).unwrap();
-
-            // we'll use the rest for frequency and subband selection
-            random >>= 16;
-            Ok((
-                devnonce_copy,
-                shared
-                    .region
-                    .create_tx_config(random as u8, shared.datarate, &Frame::Join),
-            ))
-        } else {
-            Err(Error::DeviceDoesNotHaveOtaaCredentials)
         }
     }
 
