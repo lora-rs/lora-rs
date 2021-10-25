@@ -64,15 +64,14 @@ impl RegionHandler for EU868 {
     fn get_rx_frequency(&self, _frame: &Frame, window: &Window) -> u32 {
         match window {
             Window::_1 => {
+                let channel = self.last_tx;
                 if let Some(cf_list) = self.cf_list {
-                    let channel = self.last_tx;
                     if channel < JOIN_CHANNELS.len() {
                         JOIN_CHANNELS[channel]
                     } else {
                         cf_list[channel - JOIN_CHANNELS.len()]
                     }
                 } else {
-                    let channel = self.last_tx;
                     JOIN_CHANNELS[channel]
                 }
             }

@@ -58,7 +58,7 @@ impl Credentials {
         phy.set_app_eui(EUI64::new(self.appeui()).unwrap())
             .set_dev_eui(EUI64::new(self.deveui()).unwrap())
             .set_dev_nonce(&devnonce);
-        let vec = phy.build(&self.appkey()).unwrap();
+        let vec = phy.build(self.appkey()).unwrap();
 
         let devnonce_copy = DevNonce::new(devnonce).unwrap();
 

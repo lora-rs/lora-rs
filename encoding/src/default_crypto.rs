@@ -37,7 +37,7 @@ impl CryptoFactory for DefaultFactory {
 
     fn new_mac(&self, key: &AES128) -> Self::M {
         let key = GenericArray::from_slice(&key.0[..]);
-        Cmac::new(&key)
+        Cmac::new(key)
     }
 }
 

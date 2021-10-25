@@ -27,7 +27,7 @@ pub enum MacCommand<'a> {
 }
 
 impl<'a> MacCommand<'a> {
-    #![allow(clippy::clippy::len_without_is_empty)]
+    #![allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         match *self {
             MacCommand::LinkCheckReq(_) => LinkCheckReqPayload::len(),
@@ -50,18 +50,18 @@ impl<'a> MacCommand<'a> {
     pub fn bytes(&self) -> &[u8] {
         match *self {
             MacCommand::LinkCheckReq(_) => &[],
-            MacCommand::LinkCheckAns(ref v) => &v.0,
-            MacCommand::LinkADRReq(ref v) => &v.0,
-            MacCommand::LinkADRAns(ref v) => &v.0,
-            MacCommand::DutyCycleReq(ref v) => &v.0,
+            MacCommand::LinkCheckAns(ref v) => v.0,
+            MacCommand::LinkADRReq(ref v) => v.0,
+            MacCommand::LinkADRAns(ref v) => v.0,
+            MacCommand::DutyCycleReq(ref v) => v.0,
             MacCommand::DutyCycleAns(_) => &[],
-            MacCommand::RXParamSetupReq(ref v) => &v.0,
-            MacCommand::RXParamSetupAns(ref v) => &v.0,
+            MacCommand::RXParamSetupReq(ref v) => v.0,
+            MacCommand::RXParamSetupAns(ref v) => v.0,
             MacCommand::DevStatusReq(_) => &[],
-            MacCommand::DevStatusAns(ref v) => &v.0,
-            MacCommand::NewChannelReq(ref v) => &v.0,
-            MacCommand::NewChannelAns(ref v) => &v.0,
-            MacCommand::RXTimingSetupReq(ref v) => &v.0,
+            MacCommand::DevStatusAns(ref v) => v.0,
+            MacCommand::NewChannelReq(ref v) => v.0,
+            MacCommand::NewChannelAns(ref v) => v.0,
+            MacCommand::RXTimingSetupReq(ref v) => v.0,
             MacCommand::RXTimingSetupAns(_) => &[],
         }
     }
@@ -600,7 +600,7 @@ impl<'a> From<&'a [u8; 3]> for Frequency<'a> {
 
 impl<'a> AsRef<[u8]> for Frequency<'a> {
     fn as_ref(&self) -> &[u8] {
-        &self.0
+        self.0
     }
 }
 
