@@ -168,7 +168,7 @@ impl Idle {
         }
 
         match phy.build(
-            &data.data,
+            data.data,
             dyn_cmds.as_slice(),
             self.session.newskey(),
             self.session.appskey(),
@@ -196,7 +196,7 @@ impl Idle {
                     shared
                         .region
                         .create_tx_config(random as u8, shared.datarate, &Frame::Data),
-                    &shared.tx_buffer.as_ref(),
+                    shared.tx_buffer.as_ref(),
                 );
 
                 let confirmed = send_data.confirmed;
@@ -417,7 +417,7 @@ impl WaitingForRx {
                                 let session = &mut self.session;
                                 if session.devaddr() == &encrypted_data.fhdr().dev_addr() {
                                     let fcnt = encrypted_data.fhdr().fcnt() as u32;
-                                    if encrypted_data.validate_mic(&session.newskey(), fcnt)
+                                    if encrypted_data.validate_mic(session.newskey(), fcnt)
                                         && (fcnt > session.fcnt_down || fcnt == 0)
                                     {
                                         session.fcnt_down = fcnt;
@@ -440,8 +440,8 @@ impl WaitingForRx {
                                         )
                                         .unwrap()
                                         .decrypt(
-                                            Some(&session.newskey()),
-                                            Some(&session.appskey()),
+                                            Some(session.newskey()),
+                                            Some(session.appskey()),
                                             session.fcnt_down,
                                         )
                                         .unwrap();
@@ -543,11 +543,11 @@ impl WaitingForRx {
     }
 }
 
-fn data_rxwindow1_timeout<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
     state: Session,
     confirmed: bool,
     timestamp_ms: TimestampMs,
-    shared: &mut Shared<'a, R>,
+    shared: &mut Shared<'_, R>,
 ) -> (SuperState, Result<Response, super::super::Error<R>>) {
     let (new_state, first_window) = match state {
         Session::Idle(state) => {

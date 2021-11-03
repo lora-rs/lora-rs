@@ -534,7 +534,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
             last_filled,
             last_filled + payload_len,
             self.fcnt,
-            &self.factory.new_enc(&enc_key),
+            &self.factory.new_enc(enc_key),
         );
 
         // MIC set

@@ -686,7 +686,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
                 start,
                 end,
                 full_fcnt,
-                &self.1.new_enc(&key.unwrap()),
+                &self.1.new_enc(key.unwrap()),
             );
         }
 

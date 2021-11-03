@@ -49,9 +49,15 @@ impl From<NoSession> for SuperState {
     }
 }
 
+impl Default for NoSession {
+    fn default() -> Self {
+        NoSession::Idle(Idle { join_attempts: 0 })
+    }
+}
+
 impl NoSession {
     pub fn new() -> NoSession {
-        NoSession::Idle(Idle { join_attempts: 0 })
+        Self::default()
     }
 
     pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
@@ -110,7 +116,7 @@ impl Idle {
                         &mut shared.tx_buffer,
                     );
                     let radio_event: radio::Event<R> =
-                        radio::Event::TxRequest(tx_config, &shared.tx_buffer.as_ref());
+                        radio::Event::TxRequest(tx_config, shared.tx_buffer.as_ref());
 
                     // send the transmit request to the radio
                     match shared.radio.handle_event(radio_event) {
