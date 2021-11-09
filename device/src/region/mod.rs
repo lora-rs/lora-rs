@@ -7,14 +7,14 @@ pub(crate) use crate::radio::*;
 use constants::*;
 
 mod cn470;
+mod eu433;
 mod eu868;
 mod us915;
-mod eu433;
 
 pub use cn470::CN470;
+pub use eu433::EU433;
 pub use eu868::EU868;
 pub use us915::US915;
-pub use eu433::EU433;
 
 pub struct Configuration {
     state: State,
