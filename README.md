@@ -1,4 +1,5 @@
 # Rust LoRaWAN
+[![Continuous Integration](https://github.com/ivajloip/rust-lorawan/actions/workflows/rust.yml/badge.svg)](https://github.com/ivajloip/rust-lorawan/actions/workflows/rust.yml)
 
 [![Gitter chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/rust-lorawan/lorawan)
 
