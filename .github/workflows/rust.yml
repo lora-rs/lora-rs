@@ -5,6 +5,10 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
+    
+permissions:
+  checks: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
