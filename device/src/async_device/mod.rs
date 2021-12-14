@@ -220,7 +220,7 @@ where
                 Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) => {
                     if session_data.devaddr() == &encrypted_data.fhdr().dev_addr() {
                         let fcnt = encrypted_data.fhdr().fcnt() as u32;
-                        if encrypted_data.validate_mic(&session_data.newskey(), fcnt)
+                        if encrypted_data.validate_mic(session_data.newskey(), fcnt)
                             && (fcnt > session_data.fcnt_down || fcnt == 0)
                         {
                             session_data.fcnt_down = fcnt;
@@ -233,8 +233,8 @@ where
                             // * the decrypt will always work when we have verified MIC previously
                             let decrypted = encrypted_data
                                 .decrypt(
-                                    Some(&session_data.newskey()),
-                                    Some(&session_data.appskey()),
+                                    Some(session_data.newskey()),
+                                    Some(session_data.appskey()),
                                     session_data.fcnt_down,
                                 )
                                 .unwrap();
@@ -308,7 +308,7 @@ where
                 }
 
                 match phy.build(
-                    &data,
+                    data,
                     dyn_cmds.as_slice(),
                     session_data.newskey(),
                     session_data.appskey(),
@@ -387,10 +387,10 @@ where
                 Either::Right(_) => match window {
                     Window::_1 => {
                         window = Window::_2;
-                        window_open = window_open + time_between_windows;
+                        window_open += time_between_windows;
                     }
                     Window::_2 => {
-                        response = Err(Error::RxTimeout.into());
+                        response = Err(Error::RxTimeout);
                         break;
                     }
                 },

@@ -19,6 +19,7 @@ pub struct Shared<'a, R: radio::PhyRxTx + Timings> {
     datarate: DR,
 }
 
+#[allow(clippy::large_enum_variant)]
 enum Downlink {
     Data(DecryptedDataPayload<Vec<u8, 256>>),
     Join(JoinAccept),

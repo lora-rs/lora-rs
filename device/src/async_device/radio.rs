@@ -17,7 +17,7 @@ where
 /// between RX windows.
 pub trait Timer {
     type DelayFuture<'m>: Future<Output = ()> + 'm;
-    fn delay_ms<'m>(&'m mut self, millis: u64) -> Self::DelayFuture<'m>;
+    fn delay_ms(&mut self, millis: u64) -> Self::DelayFuture<'_>;
 }
 
 /// An asynchronous radio implementation that can transmit and receive data.

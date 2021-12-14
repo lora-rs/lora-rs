@@ -65,7 +65,7 @@ pub fn encrypt_frm_data_payload(
     generate_helper_block(phy_payload, 0x01, fcnt, &mut a[..]);
 
     let mut s = [0u8; 16];
-    let mut s_block = GenericArray::from_mut_slice(&mut s[..]);
+    let s_block = GenericArray::from_mut_slice(&mut s[..]);
 
     let mut ctr = 1;
     for i in 0..len {
@@ -74,7 +74,7 @@ pub fn encrypt_frm_data_payload(
             a[15] = ctr;
             ctr += 1;
             s_block.copy_from_slice(&a);
-            aes_enc.encrypt_block(&mut s_block);
+            aes_enc.encrypt_block(s_block);
         }
         phy_payload[start + i] ^= s_block[j]
     }
