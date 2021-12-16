@@ -16,8 +16,10 @@ where
 /// An asynchronous timer that allows the state machine to await
 /// between RX windows.
 pub trait Timer {
-    type DelayFuture<'m>: Future<Output = ()> + 'm;
-    fn delay_ms(&mut self, millis: u64) -> Self::DelayFuture<'_>;
+    type DelayFuture<'m>: Future<Output = ()> + 'm
+    where
+        Self: 'm;
+    fn delay_ms<'m>(&'m mut self, millis: u64) -> Self::DelayFuture<'m>;
 }
 
 /// An asynchronous radio implementation that can transmit and receive data.
