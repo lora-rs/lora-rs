@@ -29,13 +29,13 @@ pub mod async_device;
 
 type TimestampMs = u32;
 
-pub struct Device<'a, R, C>
+pub struct Device<R, C, const N: usize>
 where
     R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
 {
     state: Option<State>,
-    shared: Shared<'a, R>,
+    shared: Shared<R, N>,
     crypto: PhantomData<C>,
 }
 
@@ -139,9 +139,9 @@ pub enum JoinMode {
 }
 
 #[allow(dead_code)]
-impl<'a, R, C> Device<'a, R, C>
+impl<R, C, const N: usize> Device<R, C, N>
 where
-    R: radio::PhyRxTx + Timings + 'a,
+    R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
 {
     pub fn new(
@@ -149,8 +149,7 @@ where
         join_mode: JoinMode,
         radio: R,
         get_random: fn() -> u32,
-        tx_buffer: &'a mut [u8],
-    ) -> Device<'_, R, C> {
+    ) -> Device<R, C, N> {
         let (shared, state) = match join_mode {
             JoinMode::OTAA {
                 deveui,
@@ -163,7 +162,6 @@ where
                     region,
                     Mac::default(),
                     get_random,
-                    tx_buffer,
                 ),
                 State::new(),
             ),
@@ -172,7 +170,7 @@ where
                 appskey,
                 devaddr,
             } => (
-                Shared::new(radio, None, region, Mac::default(), get_random, tx_buffer),
+                Shared::new(radio, None, region, Mac::default(), get_random),
                 State::new_abp(newskey, appskey, devaddr),
             ),
         };
@@ -194,7 +192,7 @@ where
         shared.get_mut_credentials()
     }
 
-    fn get_shared(&mut self) -> &mut Shared<'a, R> {
+    fn get_shared(&mut self) -> &mut Shared<R, N> {
         &mut self.shared
     }
 
@@ -249,8 +247,8 @@ where
 
     pub fn handle_event(&mut self, event: Event<R>) -> Result<Response, Error<R>> {
         let (new_state, result) = match self.state.take().unwrap() {
-            State::NoSession(state) => state.handle_event::<R, C>(event, &mut self.shared),
-            State::Session(state) => state.handle_event::<R, C>(event, &mut self.shared),
+            State::NoSession(state) => state.handle_event::<R, C, N>(event, &mut self.shared),
+            State::Session(state) => state.handle_event::<R, C, N>(event, &mut self.shared),
         };
         self.state.replace(new_state);
         result

@@ -128,26 +128,26 @@ impl Session {
         }
     }
 
-    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
         self,
         event: Event<R>,
-        shared: &mut Shared<'a, R>,
+        shared: &mut Shared<R, N>,
     ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match self {
-            Session::Idle(state) => state.handle_event::<R, C>(event, shared),
-            Session::SendingData(state) => state.handle_event::<R, C>(event, shared),
-            Session::WaitingForRxWindow(state) => state.handle_event::<R, C>(event, shared),
-            Session::WaitingForRx(state) => state.handle_event::<R, C>(event, shared),
+            Session::Idle(state) => state.handle_event::<R, C, N>(event, shared),
+            Session::SendingData(state) => state.handle_event::<R, C, N>(event, shared),
+            Session::WaitingForRxWindow(state) => state.handle_event::<R, C, N>(event, shared),
+            Session::WaitingForRx(state) => state.handle_event::<R, C, N>(event, shared),
         }
     }
 }
 
 impl Idle {
     #[allow(clippy::match_wild_err_arm)]
-    fn prepare_buffer<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+    fn prepare_buffer<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
         &mut self,
         data: &SendData,
-        shared: &mut Shared<'a, R>,
+        shared: &mut Shared<R, N>,
     ) -> FcntUp {
         let fcnt = self.session.fcnt_up();
         let mut phy: DataPayloadCreator<GenericArray<u8, U256>, C> = DataPayloadCreator::default();
@@ -181,15 +181,15 @@ impl Idle {
         }
         fcnt
     }
-    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
         mut self,
         event: Event<R>,
-        shared: &mut Shared<'a, R>,
+        shared: &mut Shared<R, N>,
     ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
-                let fcnt = self.prepare_buffer::<R, C>(&send_data, shared);
+                let fcnt = self.prepare_buffer::<R, C, N>(&send_data, shared);
                 let random = (shared.get_random)();
 
                 let event: radio::Event<R> = radio::Event::TxRequest(
@@ -213,7 +213,7 @@ impl Idle {
                             ),
                             // directly jump to waiting for RxWindow
                             // allows for synchronous sending
-                            radio::Response::TxDone(ms) => data_rxwindow1_timeout::<R, C>(
+                            radio::Response::TxDone(ms) => data_rxwindow1_timeout::<R, C, N>(
                                 Session::Idle(self),
                                 confirmed,
                                 ms,
@@ -231,7 +231,7 @@ impl Idle {
             Event::TimeoutFired => (self.into(), Ok(Response::NoUpdate)),
             Event::NewSessionRequest => {
                 let no_session = NoSession::new();
-                no_session.handle_event::<R, C>(Event::NewSessionRequest, shared)
+                no_session.handle_event::<R, C, N>(Event::NewSessionRequest, shared)
             }
             Event::RadioEvent(_radio_event) => {
                 (self.into(), Err(Error::RadioEventWhileIdle.into()))
@@ -265,10 +265,10 @@ pub struct SendingData {
 }
 
 impl SendingData {
-    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
         self,
         event: Event<R>,
-        shared: &mut Shared<'a, R>,
+        shared: &mut Shared<R, N>,
     ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
@@ -280,7 +280,7 @@ impl SendingData {
                             // expect a complete transmit
                             radio::Response::TxDone(ms) => {
                                 let confirmed = self.confirmed;
-                                data_rxwindow1_timeout::<R, C>(
+                                data_rxwindow1_timeout::<R, C, N>(
                                     Session::SendingData(self),
                                     confirmed,
                                     ms,
@@ -321,10 +321,10 @@ pub struct WaitingForRxWindow {
 }
 
 impl WaitingForRxWindow {
-    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
         self,
         event: Event<R>,
-        shared: &mut Shared<'a, R>,
+        shared: &mut Shared<R, N>,
     ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for a Timeout
@@ -399,10 +399,10 @@ pub struct WaitingForRx {
 }
 
 impl WaitingForRx {
-    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
         mut self,
         event: Event<R>,
-        shared: &mut Shared<'a, R>,
+        shared: &mut Shared<R, N>,
     ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
@@ -543,11 +543,11 @@ impl WaitingForRx {
     }
 }
 
-fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
     state: Session,
     confirmed: bool,
     timestamp_ms: TimestampMs,
-    shared: &mut Shared<'_, R>,
+    shared: &mut Shared<R, N>,
 ) -> (SuperState, Result<Response, super::super::Error<R>>) {
     let (new_state, first_window) = match state {
         Session::Idle(state) => {

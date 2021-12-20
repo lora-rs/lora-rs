@@ -39,12 +39,12 @@ impl Credentials {
 
     /// Prepare a join request to be sent. This populates the radio buffer with the request to be
     /// sent, and returns the radio config to use for transmitting.
-    pub(crate) fn create_join_request<C: CryptoFactory + Default>(
+    pub(crate) fn create_join_request<C: CryptoFactory + Default, const N: usize>(
         &self,
         region: &mut Configuration,
         mut random: u32,
         datarate: DR,
-        buf: &mut RadioBuffer,
+        buf: &mut RadioBuffer<N>,
     ) -> (DevNonce, TxConfig) {
         // use lowest 16 bits for devnonce
         let devnonce_bytes = random as u16;

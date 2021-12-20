@@ -60,16 +60,16 @@ impl NoSession {
         Self::default()
     }
 
-    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
         self,
         event: Event<R>,
-        shared: &mut Shared<'a, R>,
+        shared: &mut Shared<R, N>,
     ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match self {
-            NoSession::Idle(state) => state.handle_event::<R, C>(event, shared),
-            NoSession::SendingJoin(state) => state.handle_event::<R, C>(event, shared),
-            NoSession::WaitingForRxWindow(state) => state.handle_event::<R, C>(event, shared),
-            NoSession::WaitingForJoinResponse(state) => state.handle_event::<R, C>(event, shared),
+            NoSession::Idle(state) => state.handle_event::<R, C, N>(event, shared),
+            NoSession::SendingJoin(state) => state.handle_event::<R, C, N>(event, shared),
+            NoSession::WaitingForRxWindow(state) => state.handle_event::<R, C, N>(event, shared),
+            NoSession::WaitingForJoinResponse(state) => state.handle_event::<R, C, N>(event, shared),
         }
     }
 }
@@ -99,17 +99,17 @@ pub struct Idle {
 }
 
 impl Idle {
-    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
         self,
         event: Event<R>,
-        shared: &mut Shared<'a, R>,
+        shared: &mut Shared<R, N>,
     ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             // NewSession Request or a Timeout from previously failed Join attempt
             Event::NewSessionRequest | Event::TimeoutFired => {
                 if let Some(credentials) = &shared.credentials {
                     let random = (shared.get_random)();
-                    let (devnonce, tx_config) = credentials.create_join_request::<C>(
+                    let (devnonce, tx_config) = credentials.create_join_request::<C, N>(
                         &mut shared.region,
                         random,
                         shared.datarate,
@@ -182,10 +182,10 @@ pub struct SendingJoin {
 }
 
 impl SendingJoin {
-    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
         self,
         event: Event<R>,
-        shared: &mut Shared<'a, R>,
+        shared: &mut Shared<R, N>,
     ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
@@ -241,10 +241,10 @@ pub struct WaitingForRxWindow {
 }
 
 impl WaitingForRxWindow {
-    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
         self,
         event: Event<R>,
-        shared: &mut Shared<'a, R>,
+        shared: &mut Shared<R, N>,
     ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for a Timeout
@@ -317,10 +317,10 @@ pub struct WaitingForJoinResponse {
 }
 
 impl WaitingForJoinResponse {
-    pub fn handle_event<'a, R: radio::PhyRxTx + Timings, C: CryptoFactory + Default>(
+    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
         self,
         event: Event<R>,
-        shared: &mut Shared<'a, R>,
+        shared: &mut Shared<R, N>,
     ) -> (SuperState, Result<Response, super::super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete

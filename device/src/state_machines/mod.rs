@@ -7,14 +7,14 @@ pub mod session;
 
 pub use region::DR;
 
-pub struct Shared<'a, R: radio::PhyRxTx + Timings> {
+pub struct Shared<R: radio::PhyRxTx + Timings, const N: usize> {
     radio: R,
     credentials: Option<Credentials>,
     region: region::Configuration,
     mac: Mac,
     // TODO: do something nicer for randomness
     get_random: fn() -> u32,
-    tx_buffer: RadioBuffer<'a>,
+    tx_buffer: RadioBuffer<N>,
     downlink: Option<Downlink>,
     datarate: DR,
 }
@@ -29,7 +29,7 @@ pub struct JoinAccept {
     pub cflist: Option<[u32; 5]>,
 }
 
-impl<'a, R: radio::PhyRxTx + Timings> Shared<'a, R> {
+impl<'a, R: radio::PhyRxTx + Timings, const N: usize> Shared<R, N> {
     pub fn get_mut_radio(&mut self) -> &mut R {
         &mut self.radio
     }
@@ -60,15 +60,14 @@ impl<'a, R: radio::PhyRxTx + Timings> Shared<'a, R> {
     }
 }
 
-impl<'a, R: radio::PhyRxTx + Timings> Shared<'a, R> {
+impl<R: radio::PhyRxTx + Timings, const N: usize> Shared<R, N> {
     pub fn new(
         radio: R,
         credentials: Option<Credentials>,
         region: region::Configuration,
         mac: Mac,
         get_random: fn() -> u32,
-        buffer: &'a mut [u8],
-    ) -> Shared<R> {
+    ) -> Shared<R, N> {
         let datarate = region.get_default_datarate();
         Shared {
             radio,
@@ -76,7 +75,7 @@ impl<'a, R: radio::PhyRxTx + Timings> Shared<'a, R> {
             region,
             mac,
             get_random,
-            tx_buffer: RadioBuffer::new(buffer),
+            tx_buffer: RadioBuffer::new(),
             downlink: None,
             datarate,
         }
