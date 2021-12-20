@@ -29,7 +29,9 @@
 //! ```
 
 use super::keys::{CryptoFactory, Encrypter, AES128, MIC};
-use super::maccommands::{parse_mac_commands, DLSettings, Frequency, ChannelMask, MacCommandIterator};
+use super::maccommands::{
+    parse_mac_commands, ChannelMask, DLSettings, Frequency, MacCommandIterator,
+};
 use super::securityhelpers;
 use super::securityhelpers::generic_array::GenericArray;
 
@@ -524,7 +526,6 @@ impl<T: AsRef<[u8]>, F> DecryptedJoinAcceptPayload<T, F> {
         } else {
             None
         }
-
     }
 }
 
