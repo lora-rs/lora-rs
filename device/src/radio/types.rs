@@ -62,14 +62,14 @@ impl RxQuality {
     }
 }
 
-pub(crate) struct RadioBuffer<'a> {
-    packet: &'a mut [u8],
+pub(crate) struct RadioBuffer<const N: usize> {
+    packet: [u8; N],
     pos: usize,
 }
 
-impl<'a> RadioBuffer<'a> {
-    pub(crate) fn new(packet: &'a mut [u8]) -> Self {
-        Self { packet, pos: 0 }
+impl<const N: usize> RadioBuffer<N> {
+    pub(crate) fn new() -> Self {
+        Self { packet: [0; N], pos: 0 }
     }
 
     pub(crate) fn clear(&mut self) {
@@ -98,13 +98,13 @@ impl<'a> RadioBuffer<'a> {
     }
 }
 
-impl AsMut<[u8]> for RadioBuffer<'_> {
+impl<const N: usize> AsMut<[u8]> for RadioBuffer<N> {
     fn as_mut(&mut self) -> &mut [u8] {
         &mut self.packet[..self.pos]
     }
 }
 
-impl AsRef<[u8]> for RadioBuffer<'_> {
+impl<const N: usize> AsRef<[u8]> for RadioBuffer<N> {
     fn as_ref(&self) -> &[u8] {
         &self.packet[..self.pos]
     }
