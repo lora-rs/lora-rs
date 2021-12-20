@@ -29,7 +29,7 @@
 //! ```
 
 use super::keys::{CryptoFactory, Encrypter, AES128, MIC};
-use super::maccommands::{parse_mac_commands, DLSettings, Frequency, MacCommandIterator};
+use super::maccommands::{parse_mac_commands, DLSettings, Frequency, ChannelMask, MacCommandIterator};
 use super::securityhelpers;
 use super::securityhelpers::generic_array::GenericArray;
 
@@ -461,6 +461,12 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     }
 }
 
+#[derive(Debug)]
+pub enum CfList<'a> {
+    DynamicChannel([Frequency<'a>; 5]),
+    FixedChannel([ChannelMask; 4]),
+}
+
 impl<T: AsRef<[u8]>, F> DecryptedJoinAcceptPayload<T, F> {
     /// Gives the app nonce of the JoinAccept.
     pub fn app_nonce(&self) -> AppNonce<&[u8]> {
@@ -488,19 +494,37 @@ impl<T: AsRef<[u8]>, F> DecryptedJoinAcceptPayload<T, F> {
     }
 
     /// Gives the channel frequency list of the JoinAccept.
-    pub fn c_f_list(&self) -> Option<[Frequency; 5]> {
+    pub fn c_f_list(&self) -> Option<CfList> {
         if self.0.as_ref().len() == 17 {
             return None;
         }
         let d = self.0.as_ref();
-        let res = [
-            Frequency::new_from_raw(&d[13..16]),
-            Frequency::new_from_raw(&d[16..19]),
-            Frequency::new_from_raw(&d[19..22]),
-            Frequency::new_from_raw(&d[22..25]),
-            Frequency::new_from_raw(&d[25..28]),
-        ];
-        Some(res)
+
+        let c_f_list_type = d[28];
+
+        if c_f_list_type == 0 {
+            let res = [
+                Frequency::new_from_raw(&d[13..16]),
+                Frequency::new_from_raw(&d[16..19]),
+                Frequency::new_from_raw(&d[19..22]),
+                Frequency::new_from_raw(&d[22..25]),
+                Frequency::new_from_raw(&d[25..28]),
+            ];
+            Some(CfList::DynamicChannel(res))
+        } else if c_f_list_type == 1 {
+            let res = [
+                ChannelMask::new_from_raw(&d[13..15]),
+                ChannelMask::new_from_raw(&d[15..17]),
+                ChannelMask::new_from_raw(&d[17..19]),
+                ChannelMask::new_from_raw(&d[19..21]),
+                // 21..22 RFU
+                // 22..25 RFU
+            ];
+            Some(CfList::FixedChannel(res))
+        } else {
+            None
+        }
+
     }
 }
 

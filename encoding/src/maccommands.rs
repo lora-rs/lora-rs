@@ -381,7 +381,7 @@ impl<'a> LinkADRReqPayload<'a> {
         self.0[0] & 0x0f
     }
 
-    /// Usable channels for next trasnmissions.
+    /// Usable channels for next transmissions.
     pub fn channel_mask(&self) -> ChannelMask {
         ChannelMask::new_from_raw(&self.0[1..3])
     }
