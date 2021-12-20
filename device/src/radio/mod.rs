@@ -52,6 +52,7 @@ pub trait PhyRxTx {
 
     // we require mutability so we may decrypt in place
     fn get_received_packet(&mut self) -> &mut [u8];
+
     fn handle_event(&mut self, event: Event<Self>) -> Result<Response<Self>, Error<Self>>
     where
         Self: core::marker::Sized;
