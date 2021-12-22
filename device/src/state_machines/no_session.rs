@@ -337,7 +337,9 @@ impl WaitingForJoinResponse {
                                     Some(credentials) => {
                                         let decrypt = encrypted.decrypt(credentials.appkey());
                                         shared.downlink = Some(super::Downlink::Join(
-                                            shared.region.process_join_accept(&decrypt),
+                                            shared
+                                                .region
+                                                .process_join_accept(&mut shared.mac, &decrypt),
                                         ));
                                         if decrypt.validate_mic(credentials.appkey()) {
                                             let session = SessionData::derive_new(
