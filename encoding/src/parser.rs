@@ -567,10 +567,15 @@ pub trait DataHeader {
         )
     }
 
+    /// Gives whether the frame is confirmed
+    fn is_confirmed(&self) -> bool {
+        let mtype = MHDR(self.as_data_bytes()[0]).mtype();
+        mtype == MType::ConfirmedDataUp || mtype == MType::ConfirmedDataDown
+    }
+
     /// Gives whether the payload is uplink or not.
     fn is_uplink(&self) -> bool {
         let mtype = MHDR(self.as_data_bytes()[0]).mtype();
-
         mtype == MType::UnconfirmedDataUp || mtype == MType::ConfirmedDataUp
     }
 
@@ -995,6 +1000,14 @@ impl<'a> FHDR<'a> {
 pub struct FCtrl(u8, bool);
 
 impl FCtrl {
+    pub fn new_uplink() -> FCtrl {
+        FCtrl(0x0, true)
+    }
+
+    pub fn set_ack(&mut self) {
+        self.0 |= 0b1 << 5;
+    }
+
     pub fn new(bytes: u8, uplink: bool) -> FCtrl {
         FCtrl(bytes, uplink)
     }

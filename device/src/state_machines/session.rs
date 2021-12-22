@@ -151,14 +151,20 @@ impl Idle {
     ) -> FcntUp {
         let fcnt = self.session.fcnt_up();
         let mut phy: DataPayloadCreator<GenericArray<u8, U256>, C> = DataPayloadCreator::default();
+
+        let mut fctrl = lorawan_encoding::parser::FCtrl::new_uplink();
+        if shared.mac.is_confirmed() {
+            fctrl.set_ack();
+        }
+
         phy.set_confirmed(data.confirmed)
+            .set_fctrl(&fctrl)
             .set_f_port(data.fport)
             .set_dev_addr(*self.session.devaddr())
             .set_fcnt(fcnt);
 
         let mut cmds = Vec::new();
         shared.mac.get_cmds(&mut cmds);
-
         let mut dyn_cmds: Vec<&dyn SerializableMacCommand, 8> = Vec::new();
 
         for cmd in &cmds {
@@ -417,6 +423,7 @@ impl WaitingForRx {
                                 let session = &mut self.session;
                                 if session.devaddr() == &encrypted_data.fhdr().dev_addr() {
                                     let fcnt = encrypted_data.fhdr().fcnt() as u32;
+                                    let confirmed = encrypted_data.is_confirmed();
                                     if encrypted_data.validate_mic(session.newskey(), fcnt)
                                         && (fcnt > session.fcnt_down || fcnt == 0)
                                     {
@@ -450,6 +457,9 @@ impl WaitingForRx {
                                             &mut shared.region,
                                             &mut decrypted.fhdr().fopts(),
                                         );
+                                        if confirmed {
+                                            shared.mac.set_confirmed();
+                                        }
 
                                         if let Ok(FRMPayload::MACCommands(mac_cmds)) =
                                             decrypted.frm_payload()
