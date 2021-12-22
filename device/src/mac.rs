@@ -12,6 +12,7 @@ use lorawan_encoding::maccommands::{LinkADRAnsPayload, MacCommand, RXTimingSetup
 pub struct Mac {
     adr_ans: AdrAns,
     rx_delay_ans: RxDelayAns,
+    confirmed: bool,
 }
 
 // multiple AdrAns may happen per downlink
@@ -68,6 +69,16 @@ pub fn del_to_delay_ms(del: u8) -> u32 {
 }
 
 impl Mac {
+    pub fn set_confirmed(&mut self) {
+        self.confirmed = true;
+    }
+
+    pub fn is_confirmed(&mut self) -> bool {
+        let ret = self.confirmed;
+        self.confirmed = false;
+        ret
+    }
+
     pub fn handle_downlink_macs(
         &mut self,
         region: &mut region::Configuration,
