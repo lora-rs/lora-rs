@@ -14,7 +14,11 @@ pub struct Mac {
     rx_delay_ans: RxDelayAns,
 }
 
+// multiple AdrAns may happen per downlink
+// so we aggregate how many AdrReqs are required
 type AdrAns = u8;
+// only one RxDelayReq will happen
+// so we only need to implement this as a bool
 type RxDelayAns = bool;
 
 //work around for E0390
@@ -28,8 +32,6 @@ trait MacAnsTrait {
     fn get(&self) -> u8;
 }
 
-// multiple AdrAns may happen per downlink
-// so we aggregate how many AdrReqs are reqired
 impl MacAnsTrait for AdrAns {
     fn add(&mut self) {
         *self += 1;
@@ -42,8 +44,6 @@ impl MacAnsTrait for AdrAns {
     }
 }
 
-// only one RxDelayReq will happen
-// so we only need to implement this as a bool
 impl MacAnsTrait for RxDelayAns {
     fn add(&mut self) {
         *self = true;
