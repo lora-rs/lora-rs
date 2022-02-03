@@ -28,7 +28,7 @@ impl RegionHandler for CN470 {
         join_accept: &super::DecryptedJoinAcceptPayload<T, C>,
     ) -> JoinAccept {
         let mut new_cf_list = [0, 0, 0, 0, 0];
-        if let Some(cf_list) = join_accept.c_f_list() {
+        if let Some(CfList::DynamicChannel(cf_list)) = join_accept.c_f_list() {
             for (index, freq) in cf_list.iter().enumerate() {
                 new_cf_list[index] = freq.value();
             }

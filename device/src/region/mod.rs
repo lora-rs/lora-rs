@@ -1,6 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
 // generally, we allow upper_case_acronyms to make it match the LoRaWAN naming conventions better
-use lorawan_encoding::maccommands::ChannelMask;
+use lorawan_encoding::{maccommands::ChannelMask, parser::CfList};
 
 mod constants;
 pub(crate) use crate::radio::*;
