@@ -152,7 +152,7 @@ impl Idle {
         let fcnt = self.session.fcnt_up();
         let mut phy: DataPayloadCreator<GenericArray<u8, U256>, C> = DataPayloadCreator::default();
 
-        let mut fctrl = lorawan_encoding::parser::FCtrl::new_uplink();
+        let mut fctrl = FCtrl(0x0, true);
         if shared.mac.is_confirmed() {
             fctrl.set_ack();
             shared.mac.clear_confirmed();

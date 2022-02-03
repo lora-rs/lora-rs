@@ -997,13 +997,9 @@ impl<'a> FHDR<'a> {
 
 /// FCtrl represents the FCtrl from FHDR.
 #[derive(Debug, PartialEq)]
-pub struct FCtrl(u8, bool);
+pub struct FCtrl(pub u8, pub bool);
 
 impl FCtrl {
-    pub fn new_uplink() -> FCtrl {
-        FCtrl(0x0, true)
-    }
-
     pub fn set_ack(&mut self) {
         self.0 |= 0b1 << 5;
     }
