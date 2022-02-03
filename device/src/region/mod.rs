@@ -189,11 +189,9 @@ impl Configuration {
 
     pub(crate) fn process_join_accept<T: core::convert::AsRef<[u8]>, C>(
         &mut self,
-        mac: &mut crate::Mac,
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     ) -> JoinAccept {
         self.set_receive_delay1(mac::del_to_delay_ms(join_accept.rx_delay()));
-        mac.ack_rx_delay();
         mut_region_dispatch!(self, process_join_accept, join_accept)
     }
 

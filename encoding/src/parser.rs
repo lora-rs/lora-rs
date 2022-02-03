@@ -542,6 +542,13 @@ pub trait DataHeader {
         )
     }
 
+    /// Gives whether the data frame confirmed or not
+    fn is_confirmed(&self) -> bool {
+        let mtype = MHDR(self.as_data_bytes()[0]).mtype();
+
+        mtype == MType::ConfirmedDataUp || mtype == MType::ConfirmedDataDown
+    }
+
     /// Gives whether the payload is uplink or not.
     fn is_uplink(&self) -> bool {
         let mtype = MHDR(self.as_data_bytes()[0]).mtype();
