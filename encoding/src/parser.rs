@@ -541,7 +541,7 @@ pub trait DataHeader {
             self.is_uplink(),
         )
     }
-    
+
     /// Gives whether the payload is uplink or not.
     fn is_uplink(&self) -> bool {
         let mtype = MHDR(self.as_data_bytes()[0]).mtype();

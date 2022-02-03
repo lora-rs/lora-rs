@@ -18,13 +18,19 @@ type AdrAns = u8;
 type RxDelayAns = bool;
 
 //work around for E0390
-trait AdrAnsTrait {
+trait MacAnsTrait {
     fn add(&mut self);
     fn clear(&mut self);
+    // we use a uint instead of bool because some ADR responses
+    // require a counter for state.
+    // eg: ADR Req may be batched in a single downlink and require
+    // multiple ADR Ans in the next uplink
     fn get(&self) -> u8;
 }
 
-impl AdrAnsTrait for AdrAns {
+// multiple AdrAns may happen per downlink
+// so we aggregate how many AdrReqs are reqired
+impl MacAnsTrait for AdrAns {
     fn add(&mut self) {
         *self += 1;
     }
@@ -36,7 +42,9 @@ impl AdrAnsTrait for AdrAns {
     }
 }
 
-impl AdrAnsTrait for RxDelayAns {
+// only one RxDelayReq will happen
+// so we only need to implement this as a bool
+impl MacAnsTrait for RxDelayAns {
     fn add(&mut self) {
         *self = true;
     }
@@ -94,7 +102,7 @@ impl Mac {
         }
         self.adr_ans.clear();
 
-        if self.rx_delay_ans.get() == 1 {
+        if self.rx_delay_ans.get() != 0 {
             macs.push(MacCommand::RXTimingSetupAns(
                 RXTimingSetupAnsPayload::new(&[]).unwrap(),
             ))
