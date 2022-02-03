@@ -414,7 +414,6 @@ impl WaitingForRx {
                             if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
                                 lorawan_parse(shared.radio.get_received_packet(), C::default())
                             {
-                                let confirmed = encrypted_data.is_confirmed();
                                 let session = &mut self.session;
                                 if session.devaddr() == &encrypted_data.fhdr().dev_addr() {
                                     let fcnt = encrypted_data.fhdr().fcnt() as u32;
@@ -544,7 +543,11 @@ impl WaitingForRx {
     }
 }
 
-fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+fn data_rxwindow1_timeout<
+    R: radio::PhyRxTx + Timings,
+    C: CryptoFactory + Default,
+    const N: usize,
+>(
     state: Session,
     confirmed: bool,
     timestamp_ms: TimestampMs,

@@ -6,9 +6,7 @@ During Uplink assembly, this struct will be inquired to drive construction
 use heapless::Vec;
 
 use super::region;
-use lorawan_encoding::maccommands::{
-    LinkADRAnsPayload, MacCommand, RXTimingSetupAnsPayload, RXTimingSetupReqPayload,
-};
+use lorawan_encoding::maccommands::{LinkADRAnsPayload, MacCommand, RXTimingSetupAnsPayload};
 
 #[derive(Default, Debug)]
 pub struct Mac {
