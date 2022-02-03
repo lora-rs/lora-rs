@@ -155,6 +155,7 @@ impl Idle {
         let mut fctrl = lorawan_encoding::parser::FCtrl::new_uplink();
         if shared.mac.is_confirmed() {
             fctrl.set_ack();
+            shared.mac.clear_confirmed();
         }
 
         phy.set_confirmed(data.confirmed)

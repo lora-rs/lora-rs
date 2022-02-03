@@ -73,10 +73,11 @@ impl Mac {
         self.confirmed = true;
     }
 
-    pub fn is_confirmed(&mut self) -> bool {
-        let ret = self.confirmed;
+    pub fn clear_confirmed(&mut self) {
         self.confirmed = false;
-        ret
+    }
+    pub fn is_confirmed(&self) -> bool {
+        self.confirmed
     }
 
     pub fn handle_downlink_macs(
