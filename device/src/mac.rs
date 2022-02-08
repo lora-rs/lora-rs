@@ -15,7 +15,7 @@ pub struct Mac {
 }
 
 // multiple AdrAns may happen per downlink
-// so we aggregate how many AdrReqs are required
+// so we aggregate how many AdrAns are required
 type AdrAns = u8;
 // only one RxDelayReq will happen
 // so we only need to implement this as a bool
