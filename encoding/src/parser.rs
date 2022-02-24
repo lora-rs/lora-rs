@@ -463,7 +463,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum CfList<'a> {
     DynamicChannel([Frequency<'a>; 5]),
     FixedChannel([ChannelMask; 4]),
