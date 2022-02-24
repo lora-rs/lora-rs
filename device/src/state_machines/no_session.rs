@@ -69,7 +69,9 @@ impl NoSession {
             NoSession::Idle(state) => state.handle_event::<R, C, N>(event, shared),
             NoSession::SendingJoin(state) => state.handle_event::<R, C, N>(event, shared),
             NoSession::WaitingForRxWindow(state) => state.handle_event::<R, C, N>(event, shared),
-            NoSession::WaitingForJoinResponse(state) => state.handle_event::<R, C, N>(event, shared),
+            NoSession::WaitingForJoinResponse(state) => {
+                state.handle_event::<R, C, N>(event, shared)
+            }
         }
     }
 }

@@ -543,7 +543,11 @@ impl WaitingForRx {
     }
 }
 
-fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+fn data_rxwindow1_timeout<
+    R: radio::PhyRxTx + Timings,
+    C: CryptoFactory + Default,
+    const N: usize,
+>(
     state: Session,
     confirmed: bool,
     timestamp_ms: TimestampMs,

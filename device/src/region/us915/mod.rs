@@ -47,9 +47,11 @@ impl RegionHandler for US915 {
         self.subband = Some(subband);
     }
 
-    fn get_join_frequency(&mut self, random: u8) -> u32 {
+    fn get_join_frequency(&mut self, datarate: DR, random: u8) -> u32 {
         let subband_channel = random & 0b111;
-        let subband = if let Some(subband) = &self.subband {
+        let subband = if datarate == DR::_4 {
+            8
+        } else if let Some(subband) = &self.subband {
             subband - 1
         } else {
             (random >> 3) & 0b111
@@ -58,9 +60,11 @@ impl RegionHandler for US915 {
         UPLINK_CHANNEL_MAP[subband as usize][subband_channel as usize]
     }
 
-    fn get_data_frequency(&mut self, random: u8) -> u32 {
+    fn get_data_frequency(&mut self, datarate: DR, random: u8) -> u32 {
         let subband_channel = random & 0b111;
-        let subband = if let Some(subband) = &self.subband {
+        let subband = if datarate == DR::_4 {
+            8
+        } else if let Some(subband) = &self.subband {
             subband - 1
         } else {
             (random >> 3) & 0b111
@@ -83,7 +87,7 @@ impl RegionHandler for US915 {
     fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate {
         // datarate for JoinRequest is always 0
         let datarate = match frame {
-            Frame::Join => DR::_0,
+            Frame::Join => DR::_4,
             Frame::Data => datarate,
         };
         DATARATES[datarate as usize].clone().unwrap()

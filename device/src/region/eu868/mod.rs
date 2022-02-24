@@ -39,13 +39,13 @@ impl RegionHandler for EU868 {
         }
     }
 
-    fn get_join_frequency(&mut self, random: u8) -> u32 {
+    fn get_join_frequency(&mut self, _datarate: DR, random: u8) -> u32 {
         let channel = random as usize % JOIN_CHANNELS.len();
         self.last_tx = channel;
         JOIN_CHANNELS[channel]
     }
 
-    fn get_data_frequency(&mut self, random: u8) -> u32 {
+    fn get_data_frequency(&mut self, _datarate: DR, random: u8) -> u32 {
         if let Some(cf_list) = self.cf_list {
             let channel = random as usize & 0b111;
             self.last_tx = channel;
