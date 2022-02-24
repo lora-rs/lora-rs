@@ -261,13 +261,13 @@ fn test_new_join_accept_payload_with_c_f_list() {
     let key = AES128([1; 16]);
     let decrypted_phy = DecryptedJoinAcceptPayload::new(data, &key).unwrap();
 
-    let expected_c_f_list = [
+    let expected_c_f_list = CfList::DynamicChannel([
         Frequency::new_from_raw(&[0x18, 0x4F, 0x84]),
         Frequency::new_from_raw(&[0xE8, 0x56, 0x84]),
         Frequency::new_from_raw(&[0xB8, 0x5E, 0x84]),
         Frequency::new_from_raw(&[0x88, 0x66, 0x84]),
         Frequency::new_from_raw(&[0x58, 0x6E, 0x84]),
-    ];
+    ]);
     assert_eq!(decrypted_phy.c_f_list(), Some(expected_c_f_list));
 }
 
