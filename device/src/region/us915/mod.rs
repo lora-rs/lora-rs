@@ -85,9 +85,9 @@ impl RegionHandler for US915 {
     }
 
     fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate {
-        // datarate for JoinRequest is always 0
         let datarate = match frame {
-            Frame::Join => DR::_4,
+            // datarate for JoinRequest is always 0
+            Frame::Join => DR::_0,
             Frame::Data => datarate,
         };
         DATARATES[datarate as usize].clone().unwrap()
@@ -97,6 +97,7 @@ impl RegionHandler for US915 {
             Window::_1 => {
                 // no support for RX1 DR Offset
                 match tx_datarate {
+                    DR::_0 => DR::_10,
                     DR::_1 => DR::_11,
                     DR::_2 => DR::_12,
                     DR::_3 => DR::_13,
