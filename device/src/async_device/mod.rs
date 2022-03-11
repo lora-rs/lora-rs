@@ -31,7 +31,7 @@ pub mod radio;
 /// - T: An asynchronous timer implementation
 /// - C: A CryptoFactory implementation
 /// - RNG: A random number generator implementation
-pub struct Device<'a, R, C, T, RNG>
+pub struct Device<R, C, T, RNG, const N: usize = 256>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
@@ -45,7 +45,7 @@ where
     rng: RNG,
     session: Option<SessionData>,
     mac: Mac,
-    radio_buffer: RadioBuffer<'a>,
+    radio_buffer: RadioBuffer<N>,
     datarate: DR,
 }
 
@@ -62,26 +62,20 @@ pub enum Error<R: radio::PhyRxTx> {
 }
 
 #[allow(dead_code)]
-impl<'a, R, C, T, RNG> Device<'a, R, C, T, RNG>
+impl<R, C, T, RNG, const N: usize> Device<R, C, T, RNG, N>
 where
-    R: radio::PhyRxTx + Timings + 'a,
+    R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
     T: radio::Timer,
     RNG: RngCore,
 {
-    pub fn new(
-        region: region::Configuration,
-        radio: R,
-        timer: T,
-        rng: RNG,
-        radio_buffer: &'a mut [u8],
-    ) -> Self {
+    pub fn new(region: region::Configuration, radio: R, timer: T, rng: RNG) -> Self {
         Self {
             crypto: PhantomData::default(),
             radio,
             session: None,
             mac: Mac::default(),
-            radio_buffer: RadioBuffer::new(radio_buffer),
+            radio_buffer: RadioBuffer::new(),
             timer,
             rng,
             datarate: region.get_default_datarate(),
@@ -114,7 +108,7 @@ where
 
                 // Prepare the buffer with the join payload
                 let random = self.rng.next_u32();
-                let (devnonce, tx_config) = credentials.create_join_request::<C>(
+                let (devnonce, tx_config) = credentials.create_join_request::<C, N>(
                     &mut self.region,
                     random,
                     self.datarate,
