@@ -169,7 +169,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
         if !self.encrypted {
             self.encrypt_payload(key);
         }
-        Ok(&self.data.as_mut()[..])
+        Ok(self.data.as_mut())
     }
 
     fn encrypt_payload(&mut self, key: &keys::AES128) {
@@ -305,7 +305,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     pub fn build(&mut self, key: &keys::AES128) -> Result<&[u8], &str> {
         let d = self.data.as_mut();
         set_mic(d, key, &self.factory);
-        Ok(&d[..])
+        Ok(d)
     }
 }
 
@@ -472,7 +472,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     /// cmds.push(&mac_cmd2);
     /// let nwk_skey = lorawan_encoding::keys::AES128([2; 16]);
     /// let app_skey = lorawan_encoding::keys::AES128([1; 16]);
-    /// phy.build(&[], &cmds[..], &nwk_skey, &app_skey).unwrap();
+    /// phy.build(&[], &cmds, &nwk_skey, &app_skey).unwrap();
     /// ```
     pub fn build<'a, 'b, 'c, 'd, 'e>(
         &mut self,
@@ -543,7 +543,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
             self.factory.new_mac(nwk_skey),
             self.fcnt,
         );
-        d[last_filled + payload_len..last_filled + payload_len + 4].copy_from_slice(&mic.0[..]);
+        d[last_filled + payload_len..last_filled + payload_len + 4].copy_from_slice(&mic.0);
 
         Ok(&d[..last_filled + payload_len + 4])
     }
