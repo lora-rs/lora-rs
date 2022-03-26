@@ -134,7 +134,11 @@ impl Idle {
                                 // allows for synchronous sending
                                 radio::Response::TxDone(ms) => {
                                     let first_window =
-                                        shared.region.get_rx_delay(&Frame::Join, &Window::_1) + ms;
+                                        (shared.region.get_rx_delay(&Frame::Join, &Window::_1)
+                                            as i32
+                                            + ms as i32
+                                            + shared.radio.get_rx_window_offset_ms())
+                                            as u32;
                                     (
                                         self.into_waiting_for_rxwindow(devnonce, first_window)
                                             .into(),
