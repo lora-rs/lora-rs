@@ -91,7 +91,7 @@ impl<const N: usize> RadioBuffer<N> {
 
     #[cfg(feature = "async")]
     pub(crate) fn as_raw_slice(&mut self) -> &mut [u8] {
-        self.packet
+        &mut self.packet
     }
 
     #[cfg(feature = "async")]

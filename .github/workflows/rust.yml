@@ -46,3 +46,35 @@ jobs:
 
       - name: Run tests
         run: cargo test --verbose
+
+  build_nightly:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2022-03-10
+          default: true
+          override: true
+          components: clippy, rustfmt
+
+      - name: Cancel previous runs
+        uses: styfle/cancel-workflow-action@0.5.0
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Check formatting
+        run: cargo fmt  -- --check
+
+      - name: Clippy
+        uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: -- -Dclippy::all
+
+      - name: Build
+        run: cargo build --all --features async --verbose
+
+      - name: Run tests
+        run: cargo test --verbose
