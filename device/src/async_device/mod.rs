@@ -214,6 +214,7 @@ where
                 Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) => {
                     if session_data.devaddr() == &encrypted_data.fhdr().dev_addr() {
                         let fcnt = encrypted_data.fhdr().fcnt() as u32;
+                        let confirmed = encrypted_data.is_confirmed();
                         if encrypted_data.validate_mic(session_data.newskey(), fcnt)
                             && (fcnt > session_data.fcnt_down || fcnt == 0)
                         {
@@ -237,6 +238,10 @@ where
                                 &mut self.region,
                                 &mut decrypted.fhdr().fopts(),
                             );
+
+                            if confirmed {
+                                self.mac.set_confirmed();
+                            }
 
                             match decrypted.frm_payload() {
                                 Ok(FRMPayload::MACCommands(mac_cmds)) => {
@@ -285,7 +290,15 @@ where
                 let fcnt = session_data.fcnt_up();
                 let mut phy: DataPayloadCreator<GenericArray<u8, U256>, C> =
                     DataPayloadCreator::default();
+
+                let mut fctrl = FCtrl(0x0, true);
+                if self.mac.is_confirmed() {
+                    fctrl.set_ack();
+                    self.mac.clear_confirmed();
+                }
+
                 phy.set_confirmed(confirmed)
+                    .set_fctrl(&fctrl)
                     .set_f_port(fport)
                     .set_dev_addr(*session_data.devaddr())
                     .set_fcnt(fcnt);
