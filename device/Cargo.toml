@@ -13,7 +13,7 @@ readme = "README.md"
 description = "A Rust LoRaWAN device stack implementation"
 
 [dependencies]
-lorawan = { path = "../encoding", default-features = false }
+lorawan = { version = "0.7.0", path = "../encoding", default-features = false }
 heapless = "0.7.5"
 as-slice = "*"
 generic-array = "0.14.2"
