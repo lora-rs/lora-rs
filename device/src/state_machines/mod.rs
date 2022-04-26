@@ -1,6 +1,6 @@
 use super::radio::RadioBuffer;
 use super::*;
-use lorawan_encoding::parser::DecryptedDataPayload;
+use lorawan::parser::DecryptedDataPayload;
 
 pub mod no_session;
 pub mod session;

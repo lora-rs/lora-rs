@@ -11,8 +11,8 @@
 //! # Examples
 //!
 //! ```
-//! use lorawan_encoding::parser::*;
-//! use lorawan_encoding::keys::*;
+//! use lorawan::parser::*;
+//! use lorawan::keys::*;
 //!
 //! let data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
 //!     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
@@ -233,8 +233,8 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> JoinRequestPayload<T, F> {
     /// ```
     /// let data = vec![0x00, 0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01, 0x05, 0x04, 0x03,
     ///     0x02, 0x05, 0x04, 0x03, 0x02, 0x2d, 0x10, 0x6a, 0x99, 0x0e, 0x12];
-    /// let phy = lorawan_encoding::parser::JoinRequestPayload::new_with_factory(data,
-    ///     lorawan_encoding::default_crypto::DefaultFactory);
+    /// let phy = lorawan::parser::JoinRequestPayload::new_with_factory(data,
+    ///     lorawan::default_crypto::DefaultFactory);
     /// ```
     pub fn new_with_factory<'a>(data: T, factory: F) -> Result<Self, &'a str> {
         if !Self::can_build_from(data.as_ref()) {
@@ -320,8 +320,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
     /// ```
     /// let mut data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb,
     ///     0x37, 0x42, 0x97, 0x51, 0x42];
-    /// let phy = lorawan_encoding::parser::EncryptedJoinAcceptPayload::new(data);
-    /// let key = lorawan_encoding::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    /// let phy = lorawan::parser::EncryptedJoinAcceptPayload::new(data);
+    /// let key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
     ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
     /// let decrypted = phy.unwrap().decrypt(&key);
     /// ```
@@ -380,12 +380,12 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     /// let dev_nonce = vec![0xcc, 0xdd];
     /// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37,
     ///     0x42, 0x97, 0x51, 0x42];
-    /// let app_key = lorawan_encoding::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    /// let app_key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
     ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
-    /// let join_accept = lorawan_encoding::parser::DecryptedJoinAcceptPayload::new(data, &app_key).unwrap();
+    /// let join_accept = lorawan::parser::DecryptedJoinAcceptPayload::new(data, &app_key).unwrap();
     ///
     /// let nwk_skey = join_accept.derive_newskey(
-    ///     &lorawan_encoding::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
+    ///     &lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
     ///     &app_key,
     /// );
     /// ```
@@ -412,12 +412,12 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     /// let dev_nonce = vec![0xcc, 0xdd];
     /// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37,
     ///     0x42, 0x97, 0x51, 0x42];
-    /// let app_key = lorawan_encoding::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    /// let app_key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
     ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
-    /// let join_accept = lorawan_encoding::parser::DecryptedJoinAcceptPayload::new(data, &app_key).unwrap();
+    /// let join_accept = lorawan::parser::DecryptedJoinAcceptPayload::new(data, &app_key).unwrap();
     ///
     /// let app_skey = join_accept.derive_appskey(
-    ///     &lorawan_encoding::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
+    ///     &lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
     ///     &app_key,
     /// );
     /// ```
@@ -685,8 +685,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
     /// ```
     /// let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
     ///     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
-    /// let key = lorawan_encoding::keys::AES128([1; 16]);
-    /// let enc_phy = lorawan_encoding::parser::EncryptedDataPayload::new(data).unwrap();
+    /// let key = lorawan::keys::AES128([1; 16]);
+    /// let enc_phy = lorawan::parser::EncryptedDataPayload::new(data).unwrap();
     /// let dec_phy = enc_phy.decrypt(None, Some(&key), 1);
     /// ```
     pub fn decrypt<'a, 'b>(
@@ -794,7 +794,7 @@ impl<T: AsRef<[u8]>> DecryptedDataPayload<T> {
 /// ```
 /// let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
 ///     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
-/// if let Ok(lorawan_encoding::parser::PhyPayload::Data(phy)) = lorawan_encoding::parser::parse(data) {
+/// if let Ok(lorawan::parser::PhyPayload::Data(phy)) = lorawan::parser::parse(data) {
 ///     println!("{:?}", phy);
 /// } else {
 ///     panic!("failed to parse data payload");

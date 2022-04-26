@@ -6,8 +6,8 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use lorawan_encoding::maccommandcreator::*;
-use lorawan_encoding::maccommands::*;
+use lorawan::maccommandcreator::*;
+use lorawan::maccommands::*;
 
 #[test]
 fn test_link_check_req_creator() {

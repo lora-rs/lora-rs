@@ -6,12 +6,12 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use lorawan_encoding::creator::*;
-use lorawan_encoding::default_crypto::DefaultFactory;
-use lorawan_encoding::keys::*;
-use lorawan_encoding::maccommandcreator::*;
-use lorawan_encoding::maccommands::*;
-use lorawan_encoding::parser::*;
+use lorawan::creator::*;
+use lorawan::default_crypto::DefaultFactory;
+use lorawan::keys::*;
+use lorawan::maccommandcreator::*;
+use lorawan::maccommands::*;
+use lorawan::parser::*;
 
 fn phy_join_request_payload() -> Vec<u8> {
     let mut res = Vec::new();

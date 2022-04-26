@@ -1,7 +1,7 @@
 use crate::radio::{RadioBuffer, TxConfig};
 use crate::region::{Configuration, Frame, DR};
-use lorawan_encoding::keys::CryptoFactory;
-use lorawan_encoding::{creator::JoinRequestCreator, keys::AES128, parser::EUI64};
+use lorawan::keys::CryptoFactory;
+use lorawan::{creator::JoinRequestCreator, keys::AES128, parser::EUI64};
 
 pub type AppEui = [u8; 8];
 pub type DevEui = [u8; 8];
@@ -14,7 +14,7 @@ pub struct Credentials {
     appkey: AES128,
 }
 
-pub(crate) type DevNonce = lorawan_encoding::parser::DevNonce<[u8; 2]>;
+pub(crate) type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 
 impl Credentials {
     pub fn new(appeui: AppEui, deveui: DevEui, appkey: [u8; 16]) -> Credentials {

@@ -17,7 +17,7 @@ pub use region::Region;
 
 mod state_machines;
 use core::marker::PhantomData;
-use lorawan_encoding::{
+use lorawan::{
     keys::{CryptoFactory, AES128},
     parser::{DecryptedDataPayload, DevAddr},
 };

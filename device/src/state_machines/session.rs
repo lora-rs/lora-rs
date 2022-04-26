@@ -47,7 +47,7 @@ use super::super::State as SuperState;
 use super::super::*;
 use super::region::{Frame, Window};
 use generic_array::{typenum::U256, GenericArray};
-use lorawan_encoding::{
+use lorawan::{
     self,
     creator::DataPayloadCreator,
     maccommands::SerializableMacCommand,

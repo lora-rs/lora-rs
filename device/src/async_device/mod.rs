@@ -11,7 +11,7 @@ use core::marker::PhantomData;
 use futures::{future::select, future::Either, pin_mut};
 use generic_array::{typenum::U256, GenericArray};
 use heapless::Vec;
-use lorawan_encoding::{
+use lorawan::{
     self,
     creator::DataPayloadCreator,
     keys::{CryptoFactory, AES128},
@@ -21,7 +21,7 @@ use lorawan_encoding::{
 };
 use rand_core::RngCore;
 
-type DevNonce = lorawan_encoding::parser::DevNonce<[u8; 2]>;
+type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 use crate::radio::types::RadioBuffer;
 pub use crate::region::DR;
 pub mod radio;
@@ -424,7 +424,7 @@ struct SessionData {
 }
 
 impl SessionData {
-    pub fn derive_new<T: core::convert::AsRef<[u8]>, F: lorawan_encoding::keys::CryptoFactory>(
+    pub fn derive_new<T: core::convert::AsRef<[u8]>, F: lorawan::keys::CryptoFactory>(
         decrypt: &DecryptedJoinAcceptPayload<T, F>,
         devnonce: DevNonce,
         credentials: &Credentials,
