@@ -1,6 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
 // generally, we allow upper_case_acronyms to make it match the LoRaWAN naming conventions better
-use lorawan_encoding::{maccommands::ChannelMask, parser::CfList};
+use lorawan::{maccommands::ChannelMask, parser::CfList};
 
 pub mod constants;
 use crate::mac;
@@ -258,7 +258,7 @@ from_region!(EU868);
 from_region!(EU433);
 
 use super::state_machines::JoinAccept;
-use lorawan_encoding::parser::DecryptedJoinAcceptPayload;
+use lorawan::parser::DecryptedJoinAcceptPayload;
 
 pub(crate) trait RegionHandler {
     fn process_join_accept<T: core::convert::AsRef<[u8]>, C>(

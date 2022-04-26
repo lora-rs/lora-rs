@@ -318,8 +318,8 @@ macro_rules! create_value_reader_fn {
 ///
 /// ```
 /// let mut data = vec![0x02, 0x03, 0x00];
-/// let mac_cmds: Vec<lorawan_encoding::maccommands::MacCommand> =
-///     lorawan_encoding::maccommands::parse_mac_commands(&data[..], true).collect();
+/// let mac_cmds: Vec<lorawan::maccommands::MacCommand> =
+///     lorawan::maccommands::parse_mac_commands(&data[..], true).collect();
 /// ```
 pub fn parse_mac_commands(data: &[u8], uplink: bool) -> MacCommandIterator {
     MacCommandIterator {

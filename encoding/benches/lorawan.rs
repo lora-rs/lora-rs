@@ -14,8 +14,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 extern crate std;
 
-use lorawan_encoding::keys::*;
-use lorawan_encoding::parser::*;
+use lorawan::keys::*;
+use lorawan::parser::*;
 
 #[global_allocator]
 static GLOBAL: trallocator::Trallocator = trallocator::Trallocator::new(System);

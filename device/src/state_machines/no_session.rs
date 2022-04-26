@@ -5,7 +5,7 @@ use super::{
     region::{Frame, Window},
     Shared,
 };
-use lorawan_encoding::{
+use lorawan::{
     self,
     keys::AES128,
     parser::parse_with_factory as lorawan_parse,
@@ -431,7 +431,7 @@ pub struct SessionData {
 }
 
 impl SessionData {
-    pub fn derive_new<T: core::convert::AsRef<[u8]>, F: lorawan_encoding::keys::CryptoFactory>(
+    pub fn derive_new<T: core::convert::AsRef<[u8]>, F: lorawan::keys::CryptoFactory>(
         decrypt: &DecryptedJoinAcceptPayload<T, F>,
         devnonce: DevNonce,
         credentials: &Credentials,

@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use super::*;
-use lorawan_encoding::maccommands::ChannelMask;
+use lorawan::maccommands::ChannelMask;
 
 mod frequencies;
 use frequencies::*;

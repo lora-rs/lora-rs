@@ -39,7 +39,7 @@ The following design features are implemented:
   `radio::PhyRxTx + Timings`
 - the `radio::PhyRxTx` trait enables a state machine design by the implementor
 - a pass through for the LoRaWAN crypto abstraction provided by the
-  lorawan-encoding, paving the way for secure elements and other hardware
+  lorawan crate, paving the way for secure elements and other hardware
   peripherals
 - RX windows for data and join accepts are implemented by `Timeouts` which are
   passed by Response up to the user, minimizing borrowing or owning of such

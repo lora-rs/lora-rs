@@ -83,7 +83,7 @@ macro_rules! impl_mac_cmd_payload {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan_encoding::maccommandcreator::LinkCheckReqCreator::new();
+/// let mut creator = lorawan::maccommandcreator::LinkCheckReqCreator::new();
 /// let res = creator.build();
 /// ```
 pub struct LinkCheckReqCreator {}
@@ -95,7 +95,7 @@ impl_mac_cmd_creator_boilerplate!(LinkCheckReqCreator, 0x02);
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan_encoding::maccommandcreator::LinkCheckAnsCreator::new();
+/// let mut creator = lorawan::maccommandcreator::LinkCheckAnsCreator::new();
 /// let res = creator.set_margin(253).set_gateway_count(254).build();
 /// ```
 pub struct LinkCheckAnsCreator {
@@ -134,7 +134,7 @@ impl LinkCheckAnsCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan_encoding::maccommandcreator::LinkADRReqCreator::new();
+/// let mut creator = lorawan::maccommandcreator::LinkADRReqCreator::new();
 /// let channel_mask_bytes = [0xc7, 0x0b];
 /// let res = creator
 ///     .set_data_rate(0x05)
@@ -215,7 +215,7 @@ impl LinkADRReqCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan_encoding::maccommandcreator::LinkADRAnsCreator::new();
+/// let mut creator = lorawan::maccommandcreator::LinkADRAnsCreator::new();
 /// let res = creator
 ///     .set_channel_mask_ack(true)
 ///     .set_data_rate_ack(true)
@@ -271,7 +271,7 @@ impl LinkADRAnsCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan_encoding::maccommandcreator::DutyCycleReqCreator::new();
+/// let mut creator = lorawan::maccommandcreator::DutyCycleReqCreator::new();
 /// let res = creator.set_max_duty_cycle(0x0f).unwrap().build();
 /// ```
 pub struct DutyCycleReqCreator {
@@ -299,7 +299,7 @@ impl DutyCycleReqCreator {
 /// # Examples
 ///
 /// ```
-/// let creator = lorawan_encoding::maccommandcreator::DutyCycleAnsCreator::new();
+/// let creator = lorawan::maccommandcreator::DutyCycleAnsCreator::new();
 /// let res = creator.build();
 /// ```
 pub struct DutyCycleAnsCreator {}
@@ -311,7 +311,7 @@ impl_mac_cmd_creator_boilerplate!(DutyCycleAnsCreator, 0x04);
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan_encoding::maccommandcreator::RXParamSetupReqCreator::new();
+/// let mut creator = lorawan::maccommandcreator::RXParamSetupReqCreator::new();
 /// let res = creator
 ///     .set_dl_settings(0xcd)
 ///     .set_frequency(&[0x12, 0x34, 0x56])
@@ -356,7 +356,7 @@ impl RXParamSetupReqCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan_encoding::maccommandcreator::RXParamSetupAnsCreator::new();
+/// let mut creator = lorawan::maccommandcreator::RXParamSetupAnsCreator::new();
 /// let res = creator
 ///     .set_channel_ack(true)
 ///     .set_rx2_data_rate_ack(true)
@@ -412,7 +412,7 @@ impl RXParamSetupAnsCreator {
 /// # Examples
 ///
 /// ```
-/// let creator = lorawan_encoding::maccommandcreator::DevStatusReqCreator::new();
+/// let creator = lorawan::maccommandcreator::DevStatusReqCreator::new();
 /// let res = creator.build();
 /// ```
 pub struct DevStatusReqCreator {}
@@ -424,7 +424,7 @@ impl_mac_cmd_creator_boilerplate!(DevStatusReqCreator, 0x06);
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan_encoding::maccommandcreator::DevStatusAnsCreator::new();
+/// let mut creator = lorawan::maccommandcreator::DevStatusAnsCreator::new();
 /// let res = creator.set_battery(0xfe).set_margin(-32).unwrap().build();
 /// ```
 pub struct DevStatusAnsCreator {
@@ -467,7 +467,7 @@ impl DevStatusAnsCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan_encoding::maccommandcreator::NewChannelReqCreator::new();
+/// let mut creator = lorawan::maccommandcreator::NewChannelReqCreator::new();
 /// let res = creator
 ///     .set_channel_index(0x0f)
 ///     .set_frequency(&[0x12, 0x34, 0x56])
@@ -523,7 +523,7 @@ impl NewChannelReqCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan_encoding::maccommandcreator::NewChannelAnsCreator::new();
+/// let mut creator = lorawan::maccommandcreator::NewChannelAnsCreator::new();
 /// let res = creator
 ///     .set_channel_frequency_ack(true)
 ///     .set_data_rate_range_ack(true)
@@ -566,7 +566,7 @@ impl NewChannelAnsCreator {
 /// # Examples
 ///
 /// ```
-/// let mut creator = lorawan_encoding::maccommandcreator::RXTimingSetupReqCreator::new();
+/// let mut creator = lorawan::maccommandcreator::RXTimingSetupReqCreator::new();
 /// let res = creator.set_delay(0x0f).unwrap().build();
 /// ```
 pub struct RXTimingSetupReqCreator {
@@ -597,7 +597,7 @@ impl RXTimingSetupReqCreator {
 /// # Examples
 ///
 /// ```
-/// let creator = lorawan_encoding::maccommandcreator::RXTimingSetupAnsCreator::new();
+/// let creator = lorawan::maccommandcreator::RXTimingSetupAnsCreator::new();
 /// let res = creator.build();
 /// ```
 pub struct RXTimingSetupAnsCreator {}
