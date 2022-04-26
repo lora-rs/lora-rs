@@ -1,7 +1,7 @@
 [package]
 name = "lorawan-device"
-version = "0.2.0"
-authors = ["Louis Thiery <louis@helium.com>"]
+version = "0.7.0"
+authors = ["Louis Thiery <louis@helium.com>", "Ulf Lilleengen <lulf@redhat.com>"]
 edition = "2018"
 categories = [
     "embedded",
@@ -13,7 +13,7 @@ readme = "README.md"
 description = "A Rust LoRaWAN device stack implementation"
 
 [dependencies]
-lorawan-encoding = { path = "../encoding", default-features = false }
+lorawan = { path = "../encoding", default-features = false }
 heapless = "0.7.5"
 as-slice = "*"
 generic-array = "0.14.2"
@@ -22,6 +22,6 @@ futures = { version = "0.3.17", default-features = false, optional = true }
 rand_core = { version = "0.6.2", default-features = false, optional = true }
 
 [features]
-withdefmt = ["defmt", "lorawan-encoding/defmt"]
+defmt = ["dep:defmt", "lorawan/defmt"]
 default = []
 async = ["futures", "rand_core"]
