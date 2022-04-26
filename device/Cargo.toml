@@ -8,7 +8,7 @@ categories = [
     "hardware-support",
     "no-std",
 ]
-license = "Apache 2.0"
+license = "Apache-2.0"
 readme = "README.md"
 description = "A Rust LoRaWAN device stack implementation"
 
