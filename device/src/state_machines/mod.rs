@@ -30,7 +30,7 @@ pub struct JoinAccept {
     pub cflist: Option<[u32; 5]>,
 }
 
-impl<'a, R: radio::PhyRxTx + Timings, const N: usize> Shared<R, N> {
+impl<R: radio::PhyRxTx + Timings, const N: usize> Shared<R, N> {
     pub fn get_mut_radio(&mut self) -> &mut R {
         &mut self.radio
     }
