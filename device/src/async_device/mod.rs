@@ -137,7 +137,8 @@ where
                             Err(Error::InvalidMic)
                         }
                     }
-                    _ => Err(Error::UnableToDecodePayload("")),
+                    Err(err) => Err(Error::UnableToDecodePayload(err)),
+                    _ =>  Err(Error::UnableToDecodePayload("")),
                 }
             }
             JoinMode::ABP {
@@ -336,81 +337,73 @@ where
     /// provided buffer with data if received. Will return a RxTimeout error if no RX within
     /// the windows.
     async fn rx_with_timeout(&mut self, window_delay: u32) -> Result<(), Error<R>> {
+        let num_read = self.rx_with_timeout_inner(window_delay).await?;
+        self.radio_buffer.inc(num_read);
+        Ok(())
+    }
+
+    async fn rx_with_timeout_inner(&mut self, window_delay: u32) -> Result<usize, Error<R>> {
         // The initial window configuration uses window 1 adjusted by window_delay and radio offset
-        let mut window_open = (self.region.get_rx_delay(&Frame::Join, &Window::_1) as i32
+        let rx1_start_delay = (self.region.get_rx_delay(&Frame::Join, &Window::_1) as i32
             + window_delay as i32
             + self.radio.get_rx_window_offset_ms()) as u32;
-        let mut window = Window::_1;
 
+        // Calculate time until next window starts
         let time_between_windows = self.region.get_rx_delay(&Frame::Join, &Window::_2)
             - self.region.get_rx_delay(&Frame::Join, &Window::_1);
 
-        // Prepare buffer for receiption
-        let response: Result<usize, Error<R>>;
-        self.radio_buffer.clear();
-        loop {
-            // Wait until RX window opens
-            self.timer.delay_ms(window_open.into()).await;
+        // Wait until RX1 window opens
+        self.timer.delay_ms(rx1_start_delay.into()).await;
 
-            // Calculate the time until window closes
-            let window_close: u32 = match window {
-                // RxWindow1 one must timeout before RxWindow2
-                Window::_1 => {
-                    if time_between_windows > self.radio.get_rx_window_duration_ms() {
-                        window_open + self.radio.get_rx_window_duration_ms()
-                    } else {
-                        window_open + time_between_windows
-                    }
-                }
-                // RxWindow2 can last however long
-                Window::_2 => window_open + self.radio.get_rx_window_duration_ms(),
-            };
-
+        // RX1
+        {
             // Prepare for RX using correct configuration
             let rx_config = self
                 .region
-                .get_rx_config(self.datarate, &Frame::Join, &window);
+                .get_rx_config(self.datarate, &Frame::Join, &Window::_1);
 
             // Pass the full radio buffer slice to RX
             let rx_fut = self.radio.rx(rx_config, self.radio_buffer.as_raw_slice());
-            let timeout_fut = self.timer.delay_ms(window_close.into());
+            let timeout_fut = self.timer.delay_ms(time_between_windows.into());
 
             pin_mut!(rx_fut);
             pin_mut!(timeout_fut);
             // Wait until either RX is complete or if we've reached window close
             match select(rx_fut, timeout_fut).await {
                 // RX is complete!
-                Either::Left((r, _)) => match r {
-                    Ok((sz, _q)) => {
-                        response = Ok(sz);
-                        break;
-                    }
-                    Err(e) => {
-                        response = Err(Error::Radio(e));
-                        break;
-                    }
+                Either::Left((r, timeout_fut)) => match r {
+                    Ok((sz, _q)) => return Ok(sz),
+                    // Ignore errors or timeouts and wait until the RX2 window is ready.
+                    _ => timeout_fut.await,
                 },
-                // Timeout! Jumpt to next window or report timeout
-                Either::Right(_) => match window {
-                    Window::_1 => {
-                        window = Window::_2;
-                        window_open += time_between_windows;
-                    }
-                    Window::_2 => {
-                        response = Err(Error::RxTimeout);
-                        break;
-                    }
-                },
+                // Timeout! Jumpt to next window.
+                Either::Right(_) => (),
             }
         }
 
-        // Throw error down;
-        let rx_len = response?;
-        if rx_len > 0 {
-            // Ensure radio buffer is consistent after RX
-            self.radio_buffer.inc(rx_len);
+        // RX2
+        {
+            // Prepare for RX using correct configuration
+            let rx_config = self
+                .region
+                .get_rx_config(self.datarate, &Frame::Join, &Window::_2);
+            let window_duration = self.radio.get_rx_window_duration_ms();
+
+            // Pass the full radio buffer slice to RX
+            let rx_fut = self.radio.rx(rx_config, self.radio_buffer.as_raw_slice());
+            let timeout_fut = self.timer.delay_ms(window_duration.into());
+
+            pin_mut!(rx_fut);
+            pin_mut!(timeout_fut);
+            // Wait until either RX is complete or if we've reached window close
+            match select(rx_fut, timeout_fut).await {
+                // RX is complete!
+                Either::Left((Ok((sz, _q)), _)) => return Ok(sz),
+                // Timeout or other RX error.
+                _ => (),
+            }
         }
-        Ok(())
+        Err(Error::RxTimeout)
     }
 }
 
