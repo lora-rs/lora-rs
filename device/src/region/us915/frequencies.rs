@@ -92,7 +92,7 @@ pub(crate) const UPLINK_CHANNEL_MAP: [[u32; 8]; 9] = [
 ];
 
 pub(crate) const DOWNLINK_CHANNEL_MAP: [u32; 8] = [
-    922_300_000,
+    923_300_000,
     923_900_000,
     924_500_000,
     925_100_000,
