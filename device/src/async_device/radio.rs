@@ -16,9 +16,19 @@ where
 /// An asynchronous timer that allows the state machine to await
 /// between RX windows.
 pub trait Timer {
+    fn reset(&mut self);
+
+    type AtFuture<'m>: Future<Output = ()> + 'm
+    where
+        Self: 'm;
+
+    /// Wait until millis milliseconds after reset has passed
+    fn at<'m>(&'m mut self, millis: u64) -> Self::AtFuture<'m>;
+
     type DelayFuture<'m>: Future<Output = ()> + 'm
     where
         Self: 'm;
+    /// Delay for millis milliseconds
     fn delay_ms<'m>(&'m mut self, millis: u64) -> Self::DelayFuture<'m>;
 }
 
