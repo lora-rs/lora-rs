@@ -111,7 +111,7 @@ macro_rules! fixed_len_struct {
 /// PhyPayload is a type that represents a physical LoRaWAN payload.
 ///
 /// It can either be JoinRequest, JoinAccept, or DataPayload.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum PhyPayload<T, F> {
     JoinRequest(JoinRequestPayload<T, F>),
     JoinAccept(JoinAcceptPayload<T, F>),
@@ -132,7 +132,7 @@ impl<T: AsRef<[u8]>, F> AsRef<[u8]> for PhyPayload<T, F> {
 ///
 /// It can either be encrypted for example as a result from the [parse](fn.parse.html)
 /// function or not.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum JoinAcceptPayload<T, F> {
     Encrypted(EncryptedJoinAcceptPayload<T, F>),
     Decrypted(DecryptedJoinAcceptPayload<T, F>),
@@ -152,7 +152,7 @@ impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for JoinAcceptPayload<T, F> {
 ///
 /// It can either be encrypted for example as a result from the [parse](fn.parse.html)
 /// function or not.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum DataPayload<T, F> {
     Encrypted(EncryptedDataPayload<T, F>),
     Decrypted(DecryptedDataPayload<T>),
@@ -212,7 +212,7 @@ impl<T: AsPhyPayloadBytes> MHDRAble for T {
 ///
 /// It can be built either directly through the [new](#method.new) or using the
 /// [parse](fn.parse.html) function.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct JoinRequestPayload<T, F>(T, F);
 
 impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for JoinRequestPayload<T, F> {
@@ -278,7 +278,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> JoinRequestPayload<T, F> {
 ///
 /// It can be built either directly through the [new](#method.new) or using the
 /// [parse](fn.parse.html) function.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct EncryptedJoinAcceptPayload<T, F>(T, F);
 
 impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for EncryptedJoinAcceptPayload<T, F> {
@@ -345,7 +345,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
 ///
 /// It can be built either directly through the [new](#method.new) or using the
 /// [EncryptedJoinAcceptPayload.decrypt](struct.EncryptedJoinAcceptPayload.html#method.decrypt) function.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct DecryptedJoinAcceptPayload<T, F>(T, F);
 
 impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for DecryptedJoinAcceptPayload<T, F> {
@@ -463,7 +463,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum CfList<'a> {
     DynamicChannel([Frequency<'a>; 5]),
     FixedChannel([ChannelMask; 4]),
@@ -609,7 +609,7 @@ impl<T: DataHeader> AsPhyPayloadBytes for T {
 ///
 /// It can be built either directly through the [new](#method.new) or using the
 /// [parse](fn.parse.html) function.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct EncryptedDataPayload<T, F>(T, F);
 
 impl<T: AsRef<[u8]>, F> DataHeader for EncryptedDataPayload<T, F> {
@@ -752,7 +752,7 @@ fn compute_fcnt(old_fcnt: u32, fcnt: u16) -> u32 {
 ///
 /// It can be built either directly through the [new](#method.new) or using the
 /// [EncryptedDataPayload.decrypt](struct.EncryptedDataPayload.html#method.decrypt) function.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct DecryptedDataPayload<T>(T);
 
 impl<T: AsRef<[u8]>> DataHeader for DecryptedDataPayload<T> {
@@ -860,7 +860,7 @@ fn check_phy_data<'a, 'b>(bytes: &'a [u8]) -> Result<(), &'b str> {
 }
 
 /// MHDR represents LoRaWAN MHDR.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct MHDR(u8);
 
 impl MHDR {
@@ -899,7 +899,7 @@ impl From<u8> for MHDR {
 }
 
 /// MType gives the possible message types of the PhyPayload.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum MType {
     JoinRequest,
     JoinAccept,
@@ -912,7 +912,7 @@ pub enum MType {
 }
 
 /// Major gives the supported LoRaWAN payload formats.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Major {
     LoRaWANR1,
     RFU,
@@ -954,7 +954,7 @@ fixed_len_struct! {
 }
 
 /// FHDR represents FHDR from DataPayload.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct FHDR<'a>(&'a [u8], bool);
 
 impl<'a> FHDR<'a> {
@@ -996,7 +996,7 @@ impl<'a> FHDR<'a> {
 }
 
 /// FCtrl represents the FCtrl from FHDR.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct FCtrl(pub u8, pub bool);
 
 impl FCtrl {
@@ -1041,7 +1041,7 @@ impl FCtrl {
 
 /// FRMPayload represents the FRMPayload that can either be the application
 /// data or mac commands.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum FRMPayload<'a> {
     Data(&'a [u8]),
     MACCommands(FRMMacCommands<'a>),
@@ -1049,7 +1049,7 @@ pub enum FRMPayload<'a> {
 }
 
 /// FRMMacCommands represents the mac commands.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct FRMMacCommands<'a>(bool, &'a [u8]);
 
 impl<'a> FRMMacCommands<'a> {

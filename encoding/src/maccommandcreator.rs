@@ -453,7 +453,7 @@ impl DevStatusAnsCreator {
     ///
     /// * margin - the value to be used as margin.
     pub fn set_margin(&mut self, margin: i8) -> Result<&mut Self, &str> {
-        if margin < -32 || margin > 31 {
+        if !(-32..=31).contains(&margin) {
             return Err("margin out of range");
         }
         self.data[2] = ((margin << 2) as u8) >> 2;

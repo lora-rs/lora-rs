@@ -26,7 +26,7 @@ pub struct Configuration {
 }
 
 // This datarate type is public to the device client
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DR {
     _0 = 0,
     _1 = 1,

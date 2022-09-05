@@ -19,7 +19,7 @@ use cmac::crypto_mac::NewMac;
 pub type Cmac = cmac::Cmac<Aes128>;
 
 /// Provides a default implementation for build object for using the crypto functions.
-#[derive(Default, Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Eq)]
 pub struct DefaultFactory;
 
 impl CryptoFactory for DefaultFactory {
