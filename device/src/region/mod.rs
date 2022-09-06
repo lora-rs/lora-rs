@@ -212,10 +212,10 @@ impl Configuration {
         mut_region_dispatch!(self, set_subband, subband)
     }
 
-    pub(crate) fn get_join_frequency(&mut self, datarate: DR, random: u8) -> u32 {
+    fn get_join_frequency(&mut self, datarate: DR, random: u8) -> u32 {
         mut_region_dispatch!(self, get_join_frequency, datarate, random)
     }
-    pub(crate) fn get_data_frequency(&mut self, datarate: DR, random: u8) -> u32 {
+    fn get_data_frequency(&mut self, datarate: DR, random: u8) -> u32 {
         mut_region_dispatch!(self, get_data_frequency, datarate, random)
     }
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
@@ -236,7 +236,7 @@ impl Configuration {
     pub(crate) fn get_default_datarate(&self) -> DR {
         region_dispatch!(self, get_default_datarate)
     }
-    pub(crate) fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate {
+    fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate {
         region_dispatch!(self, get_tx_datarate, datarate, frame)
     }
     pub(crate) fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate {
