@@ -46,16 +46,22 @@ impl RegionHandler for AU915 {
         self.subband = Some(subband);
     }
 
-    fn get_tx_dr_and_frequency(&mut self, random: u8, datarate: DR, frame: &Frame) -> (Datarate, u32) {
-        ({
+    fn get_tx_dr_and_frequency(
+        &mut self,
+        random: u8,
+        datarate: DR,
+        frame: &Frame,
+    ) -> (Datarate, u32) {
+        (
+            {
                 let datarate = match frame {
                     // datarate for JoinRequest is always 0
                     Frame::Join => DR::_0,
                     Frame::Data => datarate,
                 };
                 DATARATES[datarate as usize].clone().unwrap()
-            }, match frame {
-            Frame::Data => {
+            },
+            {
                 let subband_channel = random & 0b111;
                 let subband = if datarate == DR::_4 {
                     8
@@ -66,20 +72,8 @@ impl RegionHandler for AU915 {
                 };
                 self.last_tx = (subband, subband_channel);
                 UPLINK_CHANNEL_MAP[subband as usize][subband_channel as usize]
-            }
-            Frame::Join => {
-                let subband_channel = random & 0b111;
-                let subband = if datarate == DR::_4 {
-                    8
-                } else if let Some(subband) = &self.subband {
-                    subband - 1
-                } else {
-                    (random >> 3) & 0b111
-                };
-                self.last_tx = (subband, subband_channel);
-                UPLINK_CHANNEL_MAP[subband as usize][subband_channel as usize]
-            }
-        })
+            },
+        )
     }
 
     fn get_rx_frequency(&self, _frame: &Frame, window: &Window) -> u32 {

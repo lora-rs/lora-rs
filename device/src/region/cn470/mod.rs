@@ -39,19 +39,16 @@ impl RegionHandler for CN470 {
         }
     }
 
-    fn get_tx_dr_and_frequency(&mut self, random: u8, datarate: DR, frame: &Frame) -> (Datarate, u32) {
-        (        DATARATES[datarate as usize].clone()
-                 , match frame {
-            Frame::Data => {
-                let channel = random as usize % UPLINK_MAP.len();
-                self.last_tx = channel;
-                UPLINK_MAP[channel]
-            }
-            Frame::Join => {
-                let channel = random as usize % UPLINK_MAP.len();
-                self.last_tx = channel;
-                UPLINK_MAP[channel]
-            },
+    fn get_tx_dr_and_frequency(
+        &mut self,
+        random: u8,
+        datarate: DR,
+        frame: &Frame,
+    ) -> (Datarate, u32) {
+        (DATARATES[datarate as usize].clone(), {
+            let channel = random as usize % UPLINK_MAP.len();
+            self.last_tx = channel;
+            UPLINK_MAP[channel]
         })
     }
 

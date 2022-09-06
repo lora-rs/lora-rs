@@ -39,29 +39,37 @@ impl RegionHandler for EU868 {
         }
     }
 
-    fn get_tx_dr_and_frequency(&mut self, random: u8, datarate: DR, frame: &Frame) -> (Datarate, u32) {
-        (DATARATES[datarate as usize].clone(), match frame {
-            Frame::Data => {
-                if let Some(cf_list) = self.cf_list {
-                    let channel = random as usize & 0b111;
-                    self.last_tx = channel;
-                    if channel < JOIN_CHANNELS.len() {
-                        JOIN_CHANNELS[channel]
+    fn get_tx_dr_and_frequency(
+        &mut self,
+        random: u8,
+        datarate: DR,
+        frame: &Frame,
+    ) -> (Datarate, u32) {
+        (
+            DATARATES[datarate as usize].clone(),
+            match frame {
+                Frame::Data => {
+                    if let Some(cf_list) = self.cf_list {
+                        let channel = random as usize & 0b111;
+                        self.last_tx = channel;
+                        if channel < JOIN_CHANNELS.len() {
+                            JOIN_CHANNELS[channel]
+                        } else {
+                            cf_list[channel - JOIN_CHANNELS.len()]
+                        }
                     } else {
-                        cf_list[channel - JOIN_CHANNELS.len()]
+                        let channel = random as usize % JOIN_CHANNELS.len();
+                        self.last_tx = channel;
+                        JOIN_CHANNELS[channel]
                     }
-                } else {
+                }
+                Frame::Join => {
                     let channel = random as usize % JOIN_CHANNELS.len();
                     self.last_tx = channel;
                     JOIN_CHANNELS[channel]
                 }
-            }
-            Frame::Join => {
-                let channel = random as usize % JOIN_CHANNELS.len();
-                self.last_tx = channel;
-                JOIN_CHANNELS[channel]
             },
-        })
+        )
     }
 
     fn get_rx_frequency(&self, _frame: &Frame, window: &Window) -> u32 {

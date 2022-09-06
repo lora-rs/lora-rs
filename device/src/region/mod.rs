@@ -178,7 +178,12 @@ impl Configuration {
         }
     }
 
-    fn get_tx_dr_and_frequency(&mut self, random: u8, datarate: DR, frame: &Frame) -> (Datarate, u32) {
+    fn get_tx_dr_and_frequency(
+        &mut self,
+        random: u8,
+        datarate: DR,
+        frame: &Frame,
+    ) -> (Datarate, u32) {
         mut_region_dispatch!(self, get_tx_dr_and_frequency, random, datarate, frame)
     }
 
@@ -277,7 +282,12 @@ pub(crate) trait RegionHandler {
         DR::_0
     }
 
-    fn get_tx_dr_and_frequency(&mut self, random: u8, datarate: DR, frame: &Frame) -> (Datarate, u32);
+    fn get_tx_dr_and_frequency(
+        &mut self,
+        random: u8,
+        datarate: DR,
+        frame: &Frame,
+    ) -> (Datarate, u32);
 
     fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32;
     fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate;
