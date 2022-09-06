@@ -65,18 +65,18 @@ impl RegionHandler for US915 {
         (
             {
                 let datarate = match frame {
-                    Frame::Join => if subband==7 {
-                        DR::_4
-                    } else {
-                        DR::_0
-                    },
+                    Frame::Join => {
+                        if subband == 7 {
+                            DR::_4
+                        } else {
+                            DR::_0
+                        }
+                    }
                     Frame::Data => datarate,
                 };
                 DATARATES[datarate as usize].clone().unwrap()
             },
-            {
-                UPLINK_CHANNEL_MAP[subband as usize][subband_channel as usize]
-            },
+            { UPLINK_CHANNEL_MAP[subband as usize][subband_channel as usize] },
         )
     }
 

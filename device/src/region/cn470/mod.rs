@@ -43,7 +43,7 @@ impl RegionHandler for CN470 {
         &mut self,
         random: u8,
         datarate: DR,
-        frame: &Frame,
+        _frame: &Frame,
     ) -> (Datarate, u32) {
         (DATARATES[datarate as usize].clone(), {
             let channel = random as usize % UPLINK_MAP.len();
