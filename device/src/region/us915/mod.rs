@@ -53,25 +53,28 @@ impl RegionHandler for US915 {
         datarate: DR,
         frame: &Frame,
     ) -> (Datarate, u32) {
+        let subband_channel = random & 0b111;
+        let subband = if datarate == DR::_4 {
+            8
+        } else if let Some(subband) = &self.subband {
+            subband - 1
+        } else {
+            (random >> 3) & 0b111
+        };
+        self.last_tx = (subband, subband_channel);
         (
             {
                 let datarate = match frame {
-                    // datarate for JoinRequest is always 0
-                    Frame::Join => DR::_0,
+                    Frame::Join => if subband==7 {
+                        DR::_4
+                    } else {
+                        DR::_0
+                    },
                     Frame::Data => datarate,
                 };
                 DATARATES[datarate as usize].clone().unwrap()
             },
             {
-                let subband_channel = random & 0b111;
-                let subband = if datarate == DR::_4 {
-                    8
-                } else if let Some(subband) = &self.subband {
-                    subband - 1
-                } else {
-                    (random >> 3) & 0b111
-                };
-                self.last_tx = (subband, subband_channel);
                 UPLINK_CHANNEL_MAP[subband as usize][subband_channel as usize]
             },
         )

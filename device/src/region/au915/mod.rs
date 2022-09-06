@@ -61,7 +61,6 @@ impl RegionHandler for AU915 {
             (random >> 3) & 0b111
         };
         self.last_tx = (subband, subband_channel);
-
         (
             {
                 let datarate = match frame {
