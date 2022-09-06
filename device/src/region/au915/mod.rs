@@ -93,12 +93,13 @@ impl RegionHandler for AU915 {
                 // no support for RX1 DR Offset
                 match tx_datarate {
                     DR::_0 => DR::_8,
-                    DR::_1 => DR::_8,
-                    DR::_2 => DR::_8,
-                    DR::_3 => DR::_8,
-                    DR::_4 => DR::_8,
-                    DR::_5 => DR::_8,
-                    DR::_6 => DR::_8,
+                    DR::_1 => DR::_9,
+                    DR::_2 => DR::_10,
+                    DR::_3 => DR::_11,
+                    DR::_4 => DR::_12,
+                    DR::_5 => DR::_13,
+                    DR::_6 => DR::_13,
+                    DR::_7 => DR::_9,
                     _ => panic!("Invalid TX datarate"),
                 }
             }
