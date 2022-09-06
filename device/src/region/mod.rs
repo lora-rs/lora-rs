@@ -166,19 +166,20 @@ impl Configuration {
     }
 
     pub(crate) fn create_tx_config(&mut self, random: u8, datarate: DR, frame: &Frame) -> TxConfig {
-        let dr = self.get_tx_datarate(datarate, frame);
+        let (dr, frequency) = self.get_tx_dr_and_frequency(random, datarate, frame);
         TxConfig {
             pw: self.get_dbm(),
             rf: RfConfig {
-                frequency: match frame {
-                    Frame::Data => self.get_data_frequency(datarate, random as u8),
-                    Frame::Join => self.get_join_frequency(datarate, random as u8),
-                },
+                frequency,
                 bandwidth: dr.bandwidth,
                 spreading_factor: dr.spreading_factor,
                 coding_rate: self.get_coding_rate(),
             },
         }
+    }
+
+    fn get_tx_dr_and_frequency(&mut self, random: u8, datarate: DR, frame: &Frame) -> (Datarate, u32) {
+        mut_region_dispatch!(self, get_tx_dr_and_frequency, random, datarate, frame)
     }
 
     pub(crate) fn get_rx_config(
@@ -211,13 +212,6 @@ impl Configuration {
     pub fn set_subband(&mut self, subband: u8) {
         mut_region_dispatch!(self, set_subband, subband)
     }
-
-    fn get_join_frequency(&mut self, datarate: DR, random: u8) -> u32 {
-        mut_region_dispatch!(self, get_join_frequency, datarate, random)
-    }
-    fn get_data_frequency(&mut self, datarate: DR, random: u8) -> u32 {
-        mut_region_dispatch!(self, get_data_frequency, datarate, random)
-    }
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
         match frame {
             Frame::Join => match window {
@@ -235,9 +229,6 @@ impl Configuration {
     }
     pub(crate) fn get_default_datarate(&self) -> DR {
         region_dispatch!(self, get_default_datarate)
-    }
-    fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate {
-        region_dispatch!(self, get_tx_datarate, datarate, frame)
     }
     pub(crate) fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate {
         region_dispatch!(self, get_rx_datarate, datarate, frame, window)
@@ -282,15 +273,13 @@ pub(crate) trait RegionHandler {
     fn set_subband(&mut self, _subband: u8) {
         // does not apply to every region
     }
-
-    fn get_join_frequency(&mut self, datarate: DR, random: u8) -> u32;
-    fn get_data_frequency(&mut self, datarate: DR, random: u8) -> u32;
-    fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32;
-
     fn get_default_datarate(&self) -> DR {
         DR::_0
     }
-    fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate;
+
+    fn get_tx_dr_and_frequency(&mut self, random: u8, datarate: DR, frame: &Frame) -> (Datarate, u32);
+
+    fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32;
     fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate;
     fn get_dbm(&self) -> i8 {
         DEFAULT_DBM
