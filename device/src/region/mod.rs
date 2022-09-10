@@ -7,11 +7,13 @@ use crate::mac;
 pub(crate) use crate::radio::*;
 use constants::*;
 
+mod au915;
 mod cn470;
 mod eu433;
 mod eu868;
 mod us915;
 
+pub use au915::AU915;
 pub use cn470::CN470;
 pub use eu433::EU433;
 pub use eu868::EU868;
@@ -52,6 +54,7 @@ pub enum Region {
     CN470,
     EU868,
     EU433,
+    AU915,
 }
 
 enum State {
@@ -59,6 +62,7 @@ enum State {
     CN470(CN470),
     EU868(EU868),
     EU433(EU433),
+    AU915(AU915),
 }
 
 impl State {
@@ -68,6 +72,7 @@ impl State {
             Region::CN470 => State::CN470(CN470::new()),
             Region::EU868 => State::EU868(EU868::new()),
             Region::EU433 => State::EU433(EU433::new()),
+            Region::AU915 => State::AU915(AU915::new()),
         }
     }
 }
@@ -96,6 +101,7 @@ macro_rules! mut_region_dispatch {
         State::CN470(state) => state.$t(),
         State::EU868(state) => state.$t(),
         State::EU433(state) => state.$t(),
+        State::AU915(state) => state.$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
@@ -104,6 +110,7 @@ macro_rules! mut_region_dispatch {
         State::CN470(state) => state.$t($($arg)*),
         State::EU868(state) => state.$t($($arg)*),
         State::EU433(state) => state.$t($($arg)*),
+        State::AU915(state) => state.$t($($arg)*),
     }
   };
 }
@@ -115,6 +122,7 @@ macro_rules! region_dispatch {
         State::CN470(state) => state.$t(),
         State::EU868(state) => state.$t(),
         State::EU433(state) => state.$t(),
+        State::AU915(state) => state.$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
@@ -123,6 +131,7 @@ macro_rules! region_dispatch {
         State::CN470(state) => state.$t($($arg)*),
         State::EU868(state) => state.$t($($arg)*),
         State::EU433(state) => state.$t($($arg)*),
+        State::AU915(state) => state.$t($($arg)*),
     }
   };
 }
@@ -157,19 +166,25 @@ impl Configuration {
     }
 
     pub(crate) fn create_tx_config(&mut self, random: u8, datarate: DR, frame: &Frame) -> TxConfig {
-        let dr = self.get_tx_datarate(datarate, frame);
+        let (dr, frequency) = self.get_tx_dr_and_frequency(random, datarate, frame);
         TxConfig {
             pw: self.get_dbm(),
             rf: RfConfig {
-                frequency: match frame {
-                    Frame::Data => self.get_data_frequency(datarate, random as u8),
-                    Frame::Join => self.get_join_frequency(datarate, random as u8),
-                },
+                frequency,
                 bandwidth: dr.bandwidth,
                 spreading_factor: dr.spreading_factor,
                 coding_rate: self.get_coding_rate(),
             },
         }
+    }
+
+    fn get_tx_dr_and_frequency(
+        &mut self,
+        random: u8,
+        datarate: DR,
+        frame: &Frame,
+    ) -> (Datarate, u32) {
+        mut_region_dispatch!(self, get_tx_dr_and_frequency, random, datarate, frame)
     }
 
     pub(crate) fn get_rx_config(
@@ -202,13 +217,6 @@ impl Configuration {
     pub fn set_subband(&mut self, subband: u8) {
         mut_region_dispatch!(self, set_subband, subband)
     }
-
-    pub(crate) fn get_join_frequency(&mut self, datarate: DR, random: u8) -> u32 {
-        mut_region_dispatch!(self, get_join_frequency, datarate, random)
-    }
-    pub(crate) fn get_data_frequency(&mut self, datarate: DR, random: u8) -> u32 {
-        mut_region_dispatch!(self, get_data_frequency, datarate, random)
-    }
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
         match frame {
             Frame::Join => match window {
@@ -226,9 +234,6 @@ impl Configuration {
     }
     pub(crate) fn get_default_datarate(&self) -> DR {
         region_dispatch!(self, get_default_datarate)
-    }
-    pub(crate) fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate {
-        region_dispatch!(self, get_tx_datarate, datarate, frame)
     }
     pub(crate) fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate {
         region_dispatch!(self, get_rx_datarate, datarate, frame, window)
@@ -252,10 +257,12 @@ macro_rules! from_region {
         }
     };
 }
+
 from_region!(US915);
 from_region!(CN470);
 from_region!(EU868);
 from_region!(EU433);
+from_region!(AU915);
 
 use super::state_machines::JoinAccept;
 use lorawan::parser::DecryptedJoinAcceptPayload;
@@ -271,15 +278,18 @@ pub(crate) trait RegionHandler {
     fn set_subband(&mut self, _subband: u8) {
         // does not apply to every region
     }
-
-    fn get_join_frequency(&mut self, datarate: DR, random: u8) -> u32;
-    fn get_data_frequency(&mut self, datarate: DR, random: u8) -> u32;
-    fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32;
-
     fn get_default_datarate(&self) -> DR {
         DR::_0
     }
-    fn get_tx_datarate(&self, datarate: DR, frame: &Frame) -> Datarate;
+
+    fn get_tx_dr_and_frequency(
+        &mut self,
+        random: u8,
+        datarate: DR,
+        frame: &Frame,
+    ) -> (Datarate, u32);
+
+    fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32;
     fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate;
     fn get_dbm(&self) -> i8 {
         DEFAULT_DBM
