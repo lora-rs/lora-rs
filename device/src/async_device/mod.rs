@@ -374,7 +374,7 @@ where
 
             // Pass the full radio buffer slice to RX
             let rx_fut = self.radio.rx(rx_config, self.radio_buffer.as_raw_slice());
-            let timeout_fut = self.timer.delay_ms(window_duration.into());
+            let timeout_fut = self.timer.at(window_duration.into());
 
             pin_mut!(rx_fut);
             pin_mut!(timeout_fut);
