@@ -25,6 +25,7 @@ type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 use crate::radio::types::RadioBuffer;
 pub use crate::region::DR;
 pub mod radio;
+use core::cmp::min;
 
 /// Type representing a LoRaWAN cabable device. A device is bound to the following types:
 /// - R: An asynchronous radio implementation
@@ -354,6 +355,8 @@ where
             + window_delay as i32
             + self.radio.get_rx_window_offset_ms()) as u32;
 
+        let rx1_end_delay = rx1_start_delay + self.radio.get_rx_window_duration_ms();
+
         let rx2_start_delay = (self.region.get_rx_delay(frame, &Window::_2) as i32
             + window_delay as i32
             + self.radio.get_rx_window_offset_ms()) as u32;
@@ -366,8 +369,8 @@ where
         {
             // Prepare for RX using correct configuration
             let rx_config = self.region.get_rx_config(self.datarate, frame, &Window::_1);
-
-            let window_duration = self.radio.get_rx_window_duration_ms();
+            // Cap window duration so RX2 can start on time
+            let window_duration = min(rx1_end_delay, rx2_start_delay);
 
             // Pass the full radio buffer slice to RX
             let rx_fut = self.radio.rx(rx_config, self.radio_buffer.as_raw_slice());
