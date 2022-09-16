@@ -7,16 +7,20 @@ use crate::mac;
 pub(crate) use crate::radio::*;
 use constants::*;
 
+mod as923;
 mod au915;
 mod cn470;
 mod eu433;
 mod eu868;
+mod in865;
 mod us915;
 
+pub use as923::AS923;
 pub use au915::AU915;
 pub use cn470::CN470;
 pub use eu433::EU433;
 pub use eu868::EU868;
+pub use in865::IN865;
 pub use us915::US915;
 
 pub struct Configuration {
@@ -55,6 +59,11 @@ pub enum Region {
     EU868,
     EU433,
     AU915,
+    AS923_1,
+    AS923_2,
+    AS923_3,
+    AS923_4,
+    IN865,
 }
 
 enum State {
@@ -63,6 +72,8 @@ enum State {
     EU868(EU868),
     EU433(EU433),
     AU915(AU915),
+    AS923(AS923),
+    IN865(IN865),
 }
 
 impl State {
@@ -73,6 +84,11 @@ impl State {
             Region::EU868 => State::EU868(EU868::new()),
             Region::EU433 => State::EU433(EU433::new()),
             Region::AU915 => State::AU915(AU915::new()),
+            Region::AS923_1 => State::AS923(AS923::new(as923::AS923Subband::_1)),
+            Region::AS923_2 => State::AS923(AS923::new(as923::AS923Subband::_2)),
+            Region::AS923_3 => State::AS923(AS923::new(as923::AS923Subband::_3)),
+            Region::AS923_4 => State::AS923(AS923::new(as923::AS923Subband::_4)),
+            Region::IN865 => State::IN865(IN865::new()),
         }
     }
 }
@@ -102,6 +118,8 @@ macro_rules! mut_region_dispatch {
         State::EU868(state) => state.$t(),
         State::EU433(state) => state.$t(),
         State::AU915(state) => state.$t(),
+        State::AS923(state) => state.$t(),
+        State::IN865(state) => state.$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
@@ -111,6 +129,8 @@ macro_rules! mut_region_dispatch {
         State::EU868(state) => state.$t($($arg)*),
         State::EU433(state) => state.$t($($arg)*),
         State::AU915(state) => state.$t($($arg)*),
+        State::AS923(state) => state.$t($($arg)*),
+        State::IN865(state) => state.$t($($arg)*),
     }
   };
 }
@@ -123,6 +143,8 @@ macro_rules! region_dispatch {
         State::EU868(state) => state.$t(),
         State::EU433(state) => state.$t(),
         State::AU915(state) => state.$t(),
+        State::AS923(state) => state.$t(),
+        State::IN865(state) => state.$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
@@ -132,6 +154,8 @@ macro_rules! region_dispatch {
         State::EU868(state) => state.$t($($arg)*),
         State::EU433(state) => state.$t($($arg)*),
         State::AU915(state) => state.$t($($arg)*),
+        State::AS923(state) => state.$t($($arg)*),
+        State::IN865(state) => state.$t($($arg)*),
     }
   };
 }
@@ -263,6 +287,8 @@ from_region!(CN470);
 from_region!(EU868);
 from_region!(EU433);
 from_region!(AU915);
+from_region!(AS923);
+from_region!(IN865);
 
 use super::state_machines::JoinAccept;
 use lorawan::parser::DecryptedJoinAcceptPayload;
