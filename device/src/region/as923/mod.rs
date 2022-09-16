@@ -15,6 +15,7 @@ const AS_DBM: i8 = 16;
 mod datarates;
 use datarates::*;
 
+#[derive(Debug, Copy, Clone)]
 pub enum AS923Subband {
     _1,
     _2,
