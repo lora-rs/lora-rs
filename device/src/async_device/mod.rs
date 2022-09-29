@@ -20,6 +20,7 @@ use lorawan::{
     parser::{parse_with_factory as lorawan_parse, *},
 };
 use rand_core::RngCore;
+use serde::{Deserialize, Serialize};
 
 type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 use crate::radio::types::RadioBuffer;
@@ -71,10 +72,19 @@ where
     RNG: RngCore,
 {
     pub fn new(region: region::Configuration, radio: R, timer: T, rng: RNG) -> Self {
+        Self::new_with_session(region, radio, timer, rng, None)
+    }
+    pub fn new_with_session(
+        region: region::Configuration,
+        radio: R,
+        timer: T,
+        rng: RNG,
+        session: Option<SessionData>,
+    ) -> Self {
         Self {
             crypto: PhantomData::default(),
             radio,
-            session: None,
+            session,
             mac: Mac::default(),
             radio_buffer: RadioBuffer::new(),
             timer,
@@ -82,6 +92,10 @@ where
             datarate: region.get_default_datarate(),
             region,
         }
+    }
+
+    pub fn get_session(&mut self) -> Option<SessionData> {
+        self.session
     }
 
     /// Retrieve the current data rate being used by this device.
@@ -435,7 +449,8 @@ where
 }
 
 /// Contains data for the current session
-struct SessionData {
+#[derive(Copy, Clone, Serialize, Deserialize)]
+pub struct SessionData {
     newskey: AES128,
     appskey: AES128,
     devaddr: DevAddr<[u8; 4]>,
