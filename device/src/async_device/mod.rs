@@ -94,8 +94,8 @@ where
         }
     }
 
-    pub fn get_session(&mut self) -> Option<SessionData> {
-        self.session
+    pub fn get_session(&mut self) -> &Option<SessionData> {
+        &self.session
     }
 
     /// Retrieve the current data rate being used by this device.
@@ -449,7 +449,7 @@ where
 }
 
 /// Contains data for the current session
-#[derive(Copy, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct SessionData {
     newskey: AES128,
     appskey: AES128,
