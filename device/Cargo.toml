@@ -20,9 +20,10 @@ generic-array = "0.14.2"
 defmt = { version = "0.3.0", optional = true }
 futures = { version = "0.3.17", default-features = false, optional = true }
 rand_core = { version = "0.6.2", default-features = false, optional = true }
-serde = { version = "1.0.145", default-features = false, features = ["derive"]}
+serde = { version = "1.0.145", default-features = false, features = ["derive"], optional = true}
 
 [features]
 defmt = ["dep:defmt", "lorawan/defmt"]
 default = []
 async = ["futures", "rand_core"]
+serde = ["dep:serde"]

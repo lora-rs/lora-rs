@@ -20,7 +20,6 @@ use lorawan::{
     parser::{parse_with_factory as lorawan_parse, *},
 };
 use rand_core::RngCore;
-use serde::{Deserialize, Serialize};
 
 type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 use crate::radio::types::RadioBuffer;
@@ -449,7 +448,8 @@ where
 }
 
 /// Contains data for the current session
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SessionData {
     newskey: AES128,
     appskey: AES128,

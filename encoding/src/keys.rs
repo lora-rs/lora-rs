@@ -6,11 +6,11 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 use super::securityhelpers::generic_array::{typenum::U16, GenericArray};
-use serde::{Deserialize, Serialize};
 
 /// AES128 represents 128 bit AES key.
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Default, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub struct AES128(pub [u8; 16]);
 
 impl From<[u8; 16]> for AES128 {
