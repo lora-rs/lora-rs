@@ -44,6 +44,7 @@ macro_rules! fixed_len_struct {
         struct $type:ident[$size:expr];
     ) => {
         $(#[$outer])*
+        #[derive(Debug, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         pub struct $type<T: AsRef<[u8]>>(T);
 
