@@ -34,7 +34,6 @@ use super::maccommands::{
 };
 use super::securityhelpers;
 use super::securityhelpers::generic_array::GenericArray;
-use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "default-crypto")]
 use super::default_crypto::DefaultFactory;
@@ -45,7 +44,7 @@ macro_rules! fixed_len_struct {
         struct $type:ident[$size:expr];
     ) => {
         $(#[$outer])*
-        #[derive(Debug, Eq, Serialize, Deserialize)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         pub struct $type<T: AsRef<[u8]>>(T);
 
         impl<T: AsRef<[u8]>> $type<T> {
