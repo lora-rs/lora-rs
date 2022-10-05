@@ -131,6 +131,7 @@ where
                 match lorawan_parse(self.radio_buffer.as_mut(), C::default()) {
                     Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(encrypted))) => {
                         let decrypt = encrypted.decrypt(credentials.appkey());
+                        self.region.process_join_accept(&decrypt);
                         if decrypt.validate_mic(credentials.appkey()) {
                             let data = SessionData::derive_new(&decrypt, devnonce, &credentials);
                             self.session.replace(data);
