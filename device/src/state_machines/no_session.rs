@@ -64,7 +64,10 @@ impl NoSession {
         self,
         event: Event<R>,
         shared: &mut Shared<R, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
+    ) -> (
+        SuperState,
+        Result<Response, super::super::Error<R::PhyError>>,
+    ) {
         match self {
             NoSession::Idle(state) => state.handle_event::<R, C, N>(event, shared),
             NoSession::SendingJoin(state) => state.handle_event::<R, C, N>(event, shared),
@@ -87,10 +90,7 @@ pub enum Error {
     NewSessionWhileWaitingForJoinResponse,
 }
 
-impl<R> From<Error> for super::super::Error<R>
-where
-    R: radio::PhyRxTx,
-{
+impl<R> From<Error> for super::super::Error<R> {
     fn from(error: Error) -> super::super::Error<R> {
         super::super::Error::NoSession(error)
     }
@@ -105,7 +105,10 @@ impl Idle {
         self,
         event: Event<R>,
         shared: &mut Shared<R, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
+    ) -> (
+        SuperState,
+        Result<Response, super::super::Error<R::PhyError>>,
+    ) {
         match event {
             // NewSession Request or a Timeout from previously failed Join attempt
             Event::NewSessionRequest | Event::TimeoutFired => {
@@ -192,7 +195,10 @@ impl SendingJoin {
         self,
         event: Event<R>,
         shared: &mut Shared<R, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
+    ) -> (
+        SuperState,
+        Result<Response, super::super::Error<R::PhyError>>,
+    ) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -251,7 +257,10 @@ impl WaitingForRxWindow {
         self,
         event: Event<R>,
         shared: &mut Shared<R, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
+    ) -> (
+        SuperState,
+        Result<Response, super::super::Error<R::PhyError>>,
+    ) {
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
@@ -327,7 +336,10 @@ impl WaitingForJoinResponse {
         self,
         event: Event<R>,
         shared: &mut Shared<R, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
+    ) -> (
+        SuperState,
+        Result<Response, super::super::Error<R::PhyError>>,
+    ) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {

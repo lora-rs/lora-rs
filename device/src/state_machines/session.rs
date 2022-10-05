@@ -105,10 +105,7 @@ pub enum Error {
     SendDataWhileWaitingForRx,
 }
 
-impl<R> From<Error> for super::super::Error<R>
-where
-    R: radio::PhyRxTx,
-{
+impl<R> From<Error> for super::super::Error<R> {
     fn from(error: Error) -> super::super::Error<R> {
         super::super::Error::Session(error)
     }
@@ -132,7 +129,10 @@ impl Session {
         self,
         event: Event<R>,
         shared: &mut Shared<R, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
+    ) -> (
+        SuperState,
+        Result<Response, super::super::Error<R::PhyError>>,
+    ) {
         match self {
             Session::Idle(state) => state.handle_event::<R, C, N>(event, shared),
             Session::SendingData(state) => state.handle_event::<R, C, N>(event, shared),
@@ -192,7 +192,10 @@ impl Idle {
         mut self,
         event: Event<R>,
         shared: &mut Shared<R, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
+    ) -> (
+        SuperState,
+        Result<Response, super::super::Error<R::PhyError>>,
+    ) {
         match event {
             Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
@@ -276,7 +279,10 @@ impl SendingData {
         self,
         event: Event<R>,
         shared: &mut Shared<R, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
+    ) -> (
+        SuperState,
+        Result<Response, super::super::Error<R::PhyError>>,
+    ) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -332,7 +338,10 @@ impl WaitingForRxWindow {
         self,
         event: Event<R>,
         shared: &mut Shared<R, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
+    ) -> (
+        SuperState,
+        Result<Response, super::super::Error<R::PhyError>>,
+    ) {
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
@@ -410,7 +419,10 @@ impl WaitingForRx {
         mut self,
         event: Event<R>,
         shared: &mut Shared<R, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R>>) {
+    ) -> (
+        SuperState,
+        Result<Response, super::super::Error<R::PhyError>>,
+    ) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -563,7 +575,10 @@ fn data_rxwindow1_timeout<
     confirmed: bool,
     timestamp_ms: TimestampMs,
     shared: &mut Shared<R, N>,
-) -> (SuperState, Result<Response, super::super::Error<R>>) {
+) -> (
+    SuperState,
+    Result<Response, super::super::Error<R::PhyError>>,
+) {
     let (new_state, first_window) = match state {
         Session::Idle(state) => {
             let first_window = (shared.region.get_rx_delay(&Frame::Data, &Window::_1) as i32
