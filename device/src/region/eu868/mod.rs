@@ -12,6 +12,8 @@ pub struct EU868 {
     subband: Option<u8>,
     last_tx: usize,
     cf_list: Option<[u32; 5]>,
+    rx1_offset: u8,
+    rx2_dr: u8,
 }
 
 impl EU868 {
@@ -33,6 +35,9 @@ impl RegionHandler for EU868 {
                 new_cf_list[index] = freq.value();
             }
         }
+        let dl_settings = join_accept.dl_settings();
+        self.rx1_offset = dl_settings.rx1_dr_offset();
+        self.rx2_dr = dl_settings.rx2_data_rate();
         self.cf_list = Some(new_cf_list);
         JoinAccept {
             cflist: Some(new_cf_list),
@@ -90,10 +95,10 @@ impl RegionHandler for EU868 {
         }
     }
 
-    fn get_rx_datarate(&self, datarate: DR, _frame: &Frame, window: &Window) -> Datarate {
-        let datarate = match window {
-            Window::_1 => datarate,
-            Window::_2 => DR::_0,
+    fn get_rx_datarate(&self, tx_datarate: DR, _frame: &Frame, window: &Window) -> Datarate {
+        let datarate: u8 = match window {
+            Window::_1 => tx_datarate as u8 + self.rx1_offset,
+            Window::_2 => self.rx2_dr,
         };
         DATARATES[datarate as usize].clone()
     }
