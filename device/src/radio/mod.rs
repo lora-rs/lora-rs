@@ -28,17 +28,14 @@ where
 }
 
 #[derive(Debug)]
-pub enum Error<R>
-where
-    R: PhyRxTx,
-{
+pub enum Error<R> {
     TxRequestDuringTx,
     TxRequestDuringRx,
     RxRequestDuringTx,
     RxRequestDuringRx,
     CancelRxWhileIdle,
     CancelRxDuringTx,
-    PhyError(R::PhyError),
+    PhyError(R),
 }
 
 use core::fmt;
@@ -52,7 +49,7 @@ pub trait PhyRxTx {
 
     // we require mutability so we may decrypt in place
     fn get_received_packet(&mut self) -> &mut [u8];
-    fn handle_event(&mut self, event: Event<Self>) -> Result<Response<Self>, Error<Self>>
+    fn handle_event(&mut self, event: Event<Self>) -> Result<Response<Self>, Error<Self::PhyError>>
     where
         Self: core::marker::Sized;
 }
