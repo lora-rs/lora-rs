@@ -6,7 +6,7 @@ const JOIN_CHANNELS: [u32; 3] = [868_100_000, 868_300_000, 868_500_000];
 mod datarates;
 use datarates::*;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct EU868 {
     subband: Option<u8>,

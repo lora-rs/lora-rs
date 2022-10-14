@@ -7,7 +7,7 @@ use frequencies::*;
 mod datarates;
 use datarates::*;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct CN470 {
     last_tx: usize,

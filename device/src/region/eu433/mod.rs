@@ -6,7 +6,7 @@ const JOIN_CHANNELS: [u32; 3] = [433_175_000, 433_375_000, 433_575_000];
 mod datarates;
 use datarates::*;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct EU433 {
     last_tx: usize,

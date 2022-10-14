@@ -10,7 +10,7 @@ use datarates::*;
 
 const US_DBM: i8 = 21;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct US915 {
     subband: Option<u8>,
