@@ -2,12 +2,9 @@ pub use crate::radio::{types::*, RfConfig, RxQuality, TxConfig};
 use core::future::Future;
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub struct Error<R: PhyRxTx>(pub R::PhyError);
+pub struct Error<E>(pub E);
 
-impl<R> From<Error<R>> for super::Error<R>
-where
-    R: PhyRxTx,
-{
+impl<R> From<Error<R>> for super::Error<R> {
     fn from(radio_error: Error<R>) -> super::Error<R> {
         super::Error::Radio(radio_error.0)
     }

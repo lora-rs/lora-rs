@@ -51,8 +51,8 @@ where
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Error<R: radio::PhyRxTx> {
-    Radio(R::PhyError),
+pub enum Error<R> {
+    Radio(R),
     NetworkNotJoined,
     UnableToPreparePayload(&'static str),
     InvalidDevAddr,
@@ -111,7 +111,7 @@ where
     /// the LoRaWAN network has been joined successfully, or an error has occured.
     ///
     /// Repeatedly calling join using OTAA will result in a new LoRaWAN session to be created.
-    pub async fn join(&mut self, join_mode: &JoinMode) -> Result<(), Error<R>> {
+    pub async fn join(&mut self, join_mode: &JoinMode) -> Result<(), Error<R::PhyError>> {
         match join_mode {
             JoinMode::OTAA {
                 deveui,
@@ -144,6 +144,7 @@ where
                 match lorawan_parse(self.radio_buffer.as_mut(), C::default()) {
                     Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(encrypted))) => {
                         let decrypt = encrypted.decrypt(credentials.appkey());
+                        self.region.process_join_accept(&decrypt);
                         if decrypt.validate_mic(credentials.appkey()) {
                             let data = SessionData::derive_new(&decrypt, devnonce, &credentials);
                             self.session.replace(data);
@@ -170,7 +171,12 @@ where
 
     /// Send data on a given port with the expected confirmation. The returned future completes
     /// when the data have been sent successfully, or an error has occured.
-    pub async fn send(&mut self, data: &[u8], fport: u8, confirmed: bool) -> Result<(), Error<R>> {
+    pub async fn send(
+        &mut self,
+        data: &[u8],
+        fport: u8,
+        confirmed: bool,
+    ) -> Result<(), Error<R::PhyError>> {
         self.send_recv_internal(data, fport, confirmed, None)
             .await?;
         Ok(())
@@ -187,7 +193,7 @@ where
         rx: &mut [u8],
         fport: u8,
         confirmed: bool,
-    ) -> Result<usize, Error<R>> {
+    ) -> Result<usize, Error<R::PhyError>> {
         self.send_recv_internal(data, fport, confirmed, Some(rx))
             .await
     }
@@ -199,7 +205,7 @@ where
         fport: u8,
         confirmed: bool,
         rx: Option<&mut [u8]>,
-    ) -> Result<usize, Error<R>> {
+    ) -> Result<usize, Error<R::PhyError>> {
         if self.session.is_none() {
             return Err(Error::NetworkNotJoined);
         }
@@ -296,7 +302,12 @@ where
     }
 
     // Prepare radio buffer with data using session state
-    fn prepare_buffer(&mut self, data: &[u8], fport: u8, confirmed: bool) -> Result<u32, Error<R>> {
+    fn prepare_buffer(
+        &mut self,
+        data: &[u8],
+        fport: u8,
+        confirmed: bool,
+    ) -> Result<u32, Error<R::PhyError>> {
         match self.session {
             Some(ref session_data) => {
                 // check if FCnt is used up
@@ -352,7 +363,11 @@ where
     /// Attempt to receive data within RX1 and RX2 windows. This function will populate the
     /// provided buffer with data if received. Will return a RxTimeout error if no RX within
     /// the windows.
-    async fn rx_with_timeout(&mut self, frame: &Frame, window_delay: u32) -> Result<(), Error<R>> {
+    async fn rx_with_timeout(
+        &mut self,
+        frame: &Frame,
+        window_delay: u32,
+    ) -> Result<(), Error<R::PhyError>> {
         let num_read = self.rx_with_timeout_inner(frame, window_delay).await?;
         self.radio_buffer.inc(num_read);
         Ok(())
@@ -362,7 +377,7 @@ where
         &mut self,
         frame: &Frame,
         window_delay: u32,
-    ) -> Result<usize, Error<R>> {
+    ) -> Result<usize, Error<R::PhyError>> {
         // The initial window configuration uses window 1 adjusted by window_delay and radio offset
         let rx1_start_delay = (self.region.get_rx_delay(frame, &Window::_1) as i32
             + window_delay as i32

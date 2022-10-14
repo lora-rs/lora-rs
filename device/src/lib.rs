@@ -57,16 +57,13 @@ pub enum Response {
 }
 
 #[derive(Debug)]
-pub enum Error<R: radio::PhyRxTx> {
+pub enum Error<R> {
     Radio(radio::Error<R>),
     Session(session::Error),
     NoSession(no_session::Error),
 }
 
-impl<R> From<radio::Error<R>> for Error<R>
-where
-    R: radio::PhyRxTx,
-{
+impl<R> From<radio::Error<R>> for Error<R> {
     fn from(radio_error: radio::Error<R>) -> Error<R> {
         Error::Radio(radio_error)
     }
@@ -211,7 +208,12 @@ where
         )
     }
 
-    pub fn send(&mut self, data: &[u8], fport: u8, confirmed: bool) -> Result<Response, Error<R>> {
+    pub fn send(
+        &mut self,
+        data: &[u8],
+        fport: u8,
+        confirmed: bool,
+    ) -> Result<Response, Error<R::PhyError>> {
         self.handle_event(Event::SendDataRequest(SendData {
             data,
             fport,
@@ -245,7 +247,7 @@ where
         self.get_shared().take_join_accept()
     }
 
-    pub fn handle_event(&mut self, event: Event<R>) -> Result<Response, Error<R>> {
+    pub fn handle_event(&mut self, event: Event<R>) -> Result<Response, Error<R::PhyError>> {
         let (new_state, result) = match self.state.take().unwrap() {
             State::NoSession(state) => state.handle_event::<R, C, N>(event, &mut self.shared),
             State::Session(state) => state.handle_event::<R, C, N>(event, &mut self.shared),
