@@ -7,6 +7,7 @@ mod datarates;
 use datarates::*;
 
 #[derive(Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::upper_case_acronyms)]
 pub struct EU433 {
     last_tx: usize,

@@ -50,6 +50,7 @@ pub enum DR {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Region {
     US915,
     CN470,

@@ -10,6 +10,7 @@ use datarates::*;
 const AU_DBM: i8 = 21;
 
 #[derive(Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::upper_case_acronyms)]
 pub struct AU915 {
     subband: Option<u8>,
