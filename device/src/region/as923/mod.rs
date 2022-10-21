@@ -15,7 +15,6 @@ const AS_DBM: i8 = 16;
 mod datarates;
 use datarates::*;
 
-#[derive(Debug, Copy, Clone)]
 pub enum AS923Subband {
     _1,
     _2,
@@ -72,21 +71,21 @@ impl RegionHandler for AS923 {
                     if let Some(cf_list) = self.cf_list {
                         let channel = random as usize & 0b111;
                         self.last_tx = channel;
-                        if channel < JOIN_CHANNELS.len() {
-                            JOIN_CHANNELS[channel][self.subband as usize]
+                        if channel < JOIN_CHANNELS[self.subband as usize].len() {
+                            JOIN_CHANNELS[self.subband as usize][channel]
                         } else {
-                            cf_list[channel - JOIN_CHANNELS.len()]
+                            cf_list[channel - JOIN_CHANNELS[self.subband as usize].len()]
                         }
                     } else {
-                        let channel = random as usize % JOIN_CHANNELS.len();
+                        let channel = random as usize % JOIN_CHANNELS[self.subband as usize]len();
                         self.last_tx = channel;
-                        JOIN_CHANNELS[channel][self.subband as usize]
+                        JOIN_CHANNELS[self.subband as usize][channel]
                     }
                 }
                 Frame::Join => {
-                    let channel = random as usize % JOIN_CHANNELS.len();
+                    let channel = random as usize % JOIN_CHANNELS[self.subband as usize].len();
                     self.last_tx = channel;
-                    JOIN_CHANNELS[channel][self.subband as usize]
+                    JOIN_CHANNELS[self.subband as usize][channel]
                 }
             },
         )
@@ -97,13 +96,13 @@ impl RegionHandler for AS923 {
             Window::_1 => {
                 let channel = self.last_tx;
                 if let Some(cf_list) = self.cf_list {
-                    if channel < JOIN_CHANNELS.len() {
-                        JOIN_CHANNELS[channel][self.subband as usize]
+                    if channel < JOIN_CHANNELS[self.subband as usize].len() {
+                        JOIN_CHANNELS[self.subband as usize][channel]
                     } else {
-                        cf_list[channel - JOIN_CHANNELS.len()]
+                        cf_list[channel - JOIN_CHANNELS[self.subband as usize].len()]
                     }
                 } else {
-                    JOIN_CHANNELS[channel][self.subband as usize]
+                    JOIN_CHANNELS[self.subband as usize][channel]
                 }
             }
             Window::_2 => RX2_FREQUENCY[self.subband as usize],
