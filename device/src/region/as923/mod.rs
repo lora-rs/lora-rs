@@ -77,7 +77,7 @@ impl RegionHandler for AS923 {
                             cf_list[channel - JOIN_CHANNELS[self.subband as usize].len()]
                         }
                     } else {
-                        let channel = random as usize % JOIN_CHANNELS[self.subband as usize]len();
+                        let channel = random as usize % JOIN_CHANNELS[self.subband as usize].len();
                         self.last_tx = channel;
                         JOIN_CHANNELS[self.subband as usize][channel]
                     }
