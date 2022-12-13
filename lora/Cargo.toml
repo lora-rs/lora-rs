@@ -1,0 +1,20 @@
+[package]
+name = "lora"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[lib]
+
+[features]
+defmt = ["dep:defmt"]
+
+[dependencies]
+
+defmt = { version = "0.3", optional = true }
+log = { version = "0.4.14", optional = true }
+
+embedded-hal = { version = "0.2.6" }
+embedded-hal-async = { version = "=0.2.0-alpha.0" }
+futures = { version = "0.3.17", default-features = false, features = [ "async-await" ] }
+
