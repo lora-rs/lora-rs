@@ -2,9 +2,9 @@ use core::fmt::Debug;
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum RadioError<BUS> {
-    SPI(BUS),
+#[derive(defmt::Format)]
+pub enum RadioError {
+    SPI,
     CS,
     Reset,
     AntRx,
