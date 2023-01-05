@@ -20,21 +20,21 @@ const SX126X_MAX_LORA_SYMB_NUM_TIMEOUT: u8 = 248;
 
 // Provides board-specific functionality for Semtech SX126x-based boards
 
-impl<SPI> LoRa<SPI>
+impl<SPI, IV> LoRa<SPI, IV>
 where
     SPI: SpiBus<u8> + 'static,
+    IV: InterfaceVariant + 'static,
 {
     // Initialize the radio driver
     pub(super) async fn sub_init(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         delay: &mut impl DelayUs,
     ) -> Result<(), RadioError> {
-        self.brd_reset(iv, delay).await?;
-        self.brd_wakeup(iv).await?;
-        self.sub_set_standby(iv, StandbyMode::RC).await?;
-        self.brd_io_tcxo_init(iv).await?;
-        self.brd_io_rf_switch_init(iv).await?;
+        self.brd_reset(delay).await?;
+        self.brd_wakeup().await?;
+        self.sub_set_standby(StandbyMode::RC).await?;
+        self.brd_io_tcxo_init().await?;
+        self.brd_io_rf_switch_init().await?;
         self.image_calibrated = false;
         Ok(())
     }
@@ -42,36 +42,33 @@ where
     // Wakeup the radio if it is in Sleep mode and check that Busy is low
     pub(super) async fn sub_check_device_ready(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<(), RadioError> {
         let operating_mode = self.brd_get_operating_mode();
         if operating_mode == RadioMode::Sleep || operating_mode == RadioMode::ReceiveDutyCycle {
-            self.brd_wakeup(iv).await?;
+            self.brd_wakeup().await?;
         }
-        iv.wait_on_busy().await
+        self.iv.wait_on_busy().await
     }
 
     // Save the payload to be sent in the radio buffer
     pub(super) async fn sub_set_payload(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         payload: &[u8],
     ) -> Result<(), RadioError> {
-        self.brd_write_buffer(iv, 0x00, payload).await?;
+        self.brd_write_buffer(0x00, payload).await?;
         Ok(())
     }
 
     // Read the payload received.
     pub(super) async fn sub_get_payload(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         buffer: &mut [u8],
     ) -> Result<u8, RadioError> {
-        let (size, offset) = self.sub_get_rx_buffer_status(iv).await?;
+        let (size, offset) = self.sub_get_rx_buffer_status().await?;
         if (size as usize) > buffer.len() {
             Err(RadioError::PayloadSizeMismatch(size as usize, buffer.len()))
         } else {
-            self.brd_read_buffer(iv, offset, buffer).await?;
+            self.brd_read_buffer(offset, buffer).await?;
             Ok(size)
         }
     }
@@ -79,12 +76,11 @@ where
     // Send a payload
     pub(super) async fn sub_send_payload(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         payload: &[u8],
         timeout: u32,
     ) -> Result<(), RadioError> {
-        self.sub_set_payload(iv, payload).await?;
-        self.sub_set_tx(iv, timeout).await?;
+        self.sub_set_payload(payload).await?;
+        self.sub_set_tx(timeout).await?;
         Ok(())
     }
 
@@ -97,7 +93,6 @@ where
     // The random numbers produced by the generator do not have a uniform or Gaussian distribution. If uniformity is needed, perform appropriate software post-processing.
     pub(super) async fn sub_get_random(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<u32, RadioError> {
         let mut reg_ana_lna_buffer_original = [0x00u8];
         let mut reg_ana_mixer_buffer_original = [0x00u8];
@@ -105,29 +100,29 @@ where
         let mut reg_ana_mixer_buffer = [0x00u8];
         let mut number_buffer = [0x00u8, 0x00u8, 0x00u8, 0x00u8];
 
-        self.brd_read_registers(iv, Register::AnaLNA, &mut reg_ana_lna_buffer_original)
+        self.brd_read_registers(Register::AnaLNA, &mut reg_ana_lna_buffer_original)
             .await?;
         reg_ana_lna_buffer[0] = reg_ana_lna_buffer_original[0] & (!(1 << 0));
-        self.brd_write_registers(iv, Register::AnaLNA, &reg_ana_lna_buffer)
+        self.brd_write_registers(Register::AnaLNA, &reg_ana_lna_buffer)
             .await?;
 
-        self.brd_read_registers(iv, Register::AnaMixer, &mut reg_ana_mixer_buffer_original)
+        self.brd_read_registers(Register::AnaMixer, &mut reg_ana_mixer_buffer_original)
             .await?;
         reg_ana_mixer_buffer[0] = reg_ana_mixer_buffer_original[0] & (!(1 << 7));
-        self.brd_write_registers(iv, Register::AnaMixer, &reg_ana_mixer_buffer)
+        self.brd_write_registers(Register::AnaMixer, &reg_ana_mixer_buffer)
             .await?;
 
         // Set radio in continuous reception
-        self.sub_set_rx(iv, 0xFFFFFFu32).await?;
+        self.sub_set_rx(0xFFFFFFu32).await?;
 
-        self.brd_read_registers(iv, Register::GeneratedRandomNumber, &mut number_buffer)
+        self.brd_read_registers(Register::GeneratedRandomNumber, &mut number_buffer)
             .await?;
 
-        self.sub_set_standby(iv, StandbyMode::RC).await?;
+        self.sub_set_standby(StandbyMode::RC).await?;
 
-        self.brd_write_registers(iv, Register::AnaLNA, &reg_ana_lna_buffer_original)
+        self.brd_write_registers(Register::AnaLNA, &reg_ana_lna_buffer_original)
             .await?;
-        self.brd_write_registers(iv, Register::AnaMixer, &reg_ana_mixer_buffer_original)
+        self.brd_write_registers(Register::AnaMixer, &reg_ana_mixer_buffer_original)
             .await?;
 
         Ok(Self::convert_u8_buffer_to_u32(&number_buffer))
@@ -136,16 +131,15 @@ where
     // Set the radio in sleep mode
     pub(super) async fn sub_set_sleep(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         sleep_config: SleepParams,
     ) -> Result<(), RadioError> {
-        self.brd_ant_sleep(iv)?;
+        self.iv.disable_rf_switch().await?;
 
         if !sleep_config.warm_start {
             self.image_calibrated = false;
         }
 
-        self.brd_write_command(iv, OpCode::SetSleep, &[sleep_config.value()])
+        self.brd_write_command(OpCode::SetSleep, &[sleep_config.value()])
             .await?;
         self.brd_set_operating_mode(RadioMode::Sleep);
         Ok(())
@@ -154,10 +148,9 @@ where
     // Set the radio in configuration mode
     pub(super) async fn sub_set_standby(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         mode: StandbyMode,
     ) -> Result<(), RadioError> {
-        self.brd_write_command(iv, OpCode::SetStandby, &[mode.value()])
+        self.brd_write_command(OpCode::SetStandby, &[mode.value()])
             .await?;
         if mode == StandbyMode::RC {
             self.brd_set_operating_mode(RadioMode::StandbyRC);
@@ -165,17 +158,15 @@ where
             self.brd_set_operating_mode(RadioMode::StandbyXOSC);
         }
 
-        self.brd_ant_sleep(iv)?;
-        Ok(())
+        self.iv.disable_rf_switch().await
     }
 
     // Set the radio in FS mode
     pub(super) async fn sub_set_fs(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<(), RadioError> {
         // antenna settings ???
-        self.brd_write_command(iv, OpCode::SetFS, &[]).await?;
+        self.brd_write_command(OpCode::SetFS, &[]).await?;
         self.brd_set_operating_mode(RadioMode::FrequencySynthesis);
         Ok(())
     }
@@ -183,7 +174,6 @@ where
     // Set the radio in transmission mode with timeout specified
     pub(super) async fn sub_set_tx(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         timeout: u32,
     ) -> Result<(), RadioError> {
         let buffer = [
@@ -192,17 +182,16 @@ where
             Self::timeout_3(timeout),
         ];
 
-        self.brd_ant_set_tx(iv)?;
+        self.iv.enable_rf_switch_tx().await?;
 
         self.brd_set_operating_mode(RadioMode::Transmit);
-        self.brd_write_command(iv, OpCode::SetTx, &buffer).await?;
+        self.brd_write_command(OpCode::SetTx, &buffer).await?;
         Ok(())
     }
 
     // Set the radio in reception mode with timeout specified
     pub(super) async fn sub_set_rx(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         timeout: u32,
     ) -> Result<(), RadioError> {
         let buffer = [
@@ -211,19 +200,18 @@ where
             Self::timeout_3(timeout),
         ];
 
-        self.brd_ant_set_rx(iv)?;
+        self.iv.enable_rf_switch_rx().await?;
 
         self.brd_set_operating_mode(RadioMode::Receive);
-        self.brd_write_registers(iv, Register::RxGain, &[0x94u8])
+        self.brd_write_registers(Register::RxGain, &[0x94u8])
             .await?;
-        self.brd_write_command(iv, OpCode::SetRx, &buffer).await?;
+        self.brd_write_command(OpCode::SetRx, &buffer).await?;
         Ok(())
     }
 
     // Set the radio in reception mode with Boosted LNA gain and timeout specified
     pub(super) async fn sub_set_rx_boosted(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         timeout: u32,
     ) -> Result<(), RadioError> {
         let buffer = [
@@ -232,20 +220,19 @@ where
             Self::timeout_3(timeout),
         ];
 
-        self.brd_ant_set_rx(iv)?;
+        self.iv.enable_rf_switch_rx().await?;
 
         self.brd_set_operating_mode(RadioMode::Receive);
         // set max LNA gain, increase current by ~2mA for around ~3dB in sensitivity
-        self.brd_write_registers(iv, Register::RxGain, &[0x96u8])
+        self.brd_write_registers(Register::RxGain, &[0x96u8])
             .await?;
-        self.brd_write_command(iv, OpCode::SetRx, &buffer).await?;
+        self.brd_write_command(OpCode::SetRx, &buffer).await?;
         Ok(())
     }
 
     // Set the Rx duty cycle management parameters
     pub(super) async fn sub_set_rx_duty_cycle(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         rx_time: u32,
         sleep_time: u32,
     ) -> Result<(), RadioError> {
@@ -260,7 +247,7 @@ where
 
         // antenna settings ???
 
-        self.brd_write_command(iv, OpCode::SetRxDutyCycle, &buffer)
+        self.brd_write_command(OpCode::SetRxDutyCycle, &buffer)
             .await?;
         self.brd_set_operating_mode(RadioMode::ReceiveDutyCycle);
         Ok(())
@@ -269,11 +256,10 @@ where
     // Set the radio in CAD mode
     pub(super) async fn sub_set_cad(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<(), RadioError> {
-        self.brd_ant_set_rx(iv)?;
+        self.iv.enable_rf_switch_rx().await?;
 
-        self.brd_write_command(iv, OpCode::SetCAD, &[]).await?;
+        self.brd_write_command(OpCode::SetCAD, &[]).await?;
         self.brd_set_operating_mode(RadioMode::ChannelActivityDetection);
         Ok(())
     }
@@ -281,11 +267,10 @@ where
     // Set the radio in continuous wave transmission mode
     pub(super) async fn sub_set_tx_continuous_wave(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<(), RadioError> {
-        self.brd_ant_set_tx(iv)?;
+        self.iv.enable_rf_switch_tx().await?;
 
-        self.brd_write_command(iv, OpCode::SetTxContinuousWave, &[])
+        self.brd_write_command(OpCode::SetTxContinuousWave, &[])
             .await?;
         self.brd_set_operating_mode(RadioMode::Transmit);
         Ok(())
@@ -294,11 +279,10 @@ where
     // Set the radio in continuous preamble transmission mode
     pub(super) async fn sub_set_tx_infinite_preamble(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<(), RadioError> {
-        self.brd_ant_set_tx(iv)?;
+        self.iv.enable_rf_switch_tx().await?;
 
-        self.brd_write_command(iv, OpCode::SetTxContinuousPremable, &[])
+        self.brd_write_command(OpCode::SetTxContinuousPremable, &[])
             .await?;
         self.brd_set_operating_mode(RadioMode::Transmit);
         Ok(())
@@ -309,10 +293,9 @@ where
     //   true      timer stop after preamble detection
     pub(super) async fn sub_set_stop_rx_timer_on_preamble_detect(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         enable: bool,
     ) -> Result<(), RadioError> {
-        self.brd_write_command(iv, OpCode::SetStopRxTimerOnPreamble, &[enable as u8])
+        self.brd_write_command(OpCode::SetStopRxTimerOnPreamble, &[enable as u8])
             .await?;
         Ok(())
     }
@@ -320,7 +303,6 @@ where
     // Set the number of symbols the radio will wait to validate a reception
     pub(super) async fn sub_set_lora_symb_num_timeout(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         symb_num: u16,
     ) -> Result<(), RadioError> {
         let mut exp = 0u8;
@@ -333,12 +315,12 @@ where
         }
         reg = mant << ((2 * exp) + 1);
 
-        self.brd_write_command(iv, OpCode::SetLoRaSymbTimeout, &[reg])
+        self.brd_write_command(OpCode::SetLoRaSymbTimeout, &[reg])
             .await?;
 
         if symb_num != 0 {
             reg = exp + (mant << 3);
-            self.brd_write_registers(iv, Register::SynchTimeout, &[reg])
+            self.brd_write_registers(Register::SynchTimeout, &[reg])
                 .await?;
         }
 
@@ -348,10 +330,9 @@ where
     // Set the power regulators operating mode (LDO or DC_DC).  Using only LDO implies that the Rx or Tx current is doubled
     pub(super) async fn sub_set_regulator_mode(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         mode: RegulatorMode,
     ) -> Result<(), RadioError> {
-        self.brd_write_command(iv, OpCode::SetRegulatorMode, &[mode.value()])
+        self.brd_write_command(OpCode::SetRegulatorMode, &[mode.value()])
             .await?;
         Ok(())
     }
@@ -359,10 +340,9 @@ where
     // Calibrate the given radio block
     pub(super) async fn sub_calibrate(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         calibrate_params: CalibrationParams,
     ) -> Result<(), RadioError> {
-        self.brd_write_command(iv, OpCode::Calibrate, &[calibrate_params.value()])
+        self.brd_write_command(OpCode::Calibrate, &[calibrate_params.value()])
             .await?;
         Ok(())
     }
@@ -370,7 +350,6 @@ where
     // Calibrate the image rejection based on the given frequency
     pub(super) async fn sub_calibrate_image(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         freq: u32,
     ) -> Result<(), RadioError> {
         let mut cal_freq = [0x00u8, 0x00u8];
@@ -391,7 +370,7 @@ where
             cal_freq[0] = 0x6B;
             cal_freq[1] = 0x6F;
         }
-        self.brd_write_command(iv, OpCode::CalibrateImage, &cal_freq)
+        self.brd_write_command(OpCode::CalibrateImage, &cal_freq)
             .await?;
         Ok(())
     }
@@ -411,14 +390,12 @@ where
     //   pa_lut          0 for 14dBm LUT, 1 for 22dBm LUT
     pub(super) async fn sub_set_pa_config(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         pa_duty_cycle: u8,
         hp_max: u8,
         device_sel: u8,
         pa_lut: u8,
     ) -> Result<(), RadioError> {
         self.brd_write_command(
-            iv,
             OpCode::SetPAConfig,
             &[pa_duty_cycle, hp_max, device_sel, pa_lut],
         )
@@ -429,10 +406,9 @@ where
     // Define into which mode the chip goes after a TX / RX done
     pub(super) async fn sub_set_rx_tx_fallback_mode(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         fallback_mode: u8,
     ) -> Result<(), RadioError> {
-        self.brd_write_command(iv, OpCode::SetTxFallbackMode, &[fallback_mode])
+        self.brd_write_command(OpCode::SetTxFallbackMode, &[fallback_mode])
             .await?;
         Ok(())
     }
@@ -440,7 +416,6 @@ where
     // Set the IRQ mask and DIO masks
     pub(super) async fn sub_set_dio_irq_params(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         irq_mask: u16,
         dio1_mask: u16,
         dio2_mask: u16,
@@ -456,7 +431,7 @@ where
         buffer[5] = (dio2_mask & 0x00FF) as u8;
         buffer[6] = ((dio3_mask >> 8) & 0x00FF) as u8;
         buffer[7] = (dio3_mask & 0x00FF) as u8;
-        self.brd_write_command(iv, OpCode::CfgDIOIrq, &buffer)
+        self.brd_write_command(OpCode::CfgDIOIrq, &buffer)
             .await?;
         Ok(())
     }
@@ -464,10 +439,9 @@ where
     // Return the current IRQ status
     pub(super) async fn sub_get_irq_status(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<u16, RadioError> {
         let mut irq_status = [0x00u8, 0x00u8];
-        self.brd_read_command(iv, OpCode::GetIrqStatus, &mut irq_status)
+        self.brd_read_command(OpCode::GetIrqStatus, &mut irq_status)
             .await?;
         Ok(((irq_status[0] as u16) << 8) | (irq_status[1] as u16))
     }
@@ -475,10 +449,9 @@ where
     // Indicate if DIO2 is used to control an RF Switch
     pub(super) async fn sub_set_dio2_as_rf_switch_ctrl(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         enable: bool,
     ) -> Result<(), RadioError> {
-        self.brd_write_command(iv, OpCode::SetRFSwitchMode, &[enable as u8])
+        self.brd_write_command(OpCode::SetRFSwitchMode, &[enable as u8])
             .await?;
         Ok(())
     }
@@ -488,7 +461,6 @@ where
     //   timeout             duration given to the TCXO to go to 32MHz
     pub(super) async fn sub_set_dio3_as_tcxo_ctrl(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         tcxo_voltage: TcxoCtrlVoltage,
         timeout: u32,
     ) -> Result<(), RadioError> {
@@ -498,7 +470,7 @@ where
             Self::timeout_2(timeout),
             Self::timeout_3(timeout),
         ];
-        self.brd_write_command(iv, OpCode::SetTCXOMode, &buffer)
+        self.brd_write_command(OpCode::SetTCXOMode, &buffer)
             .await?;
 
         Ok(())
@@ -507,13 +479,12 @@ where
     // Set the RF frequency (Hz)
     pub(super) async fn sub_set_rf_frequency(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         frequency: u32,
     ) -> Result<(), RadioError> {
         let mut buffer = [0x00u8; 4];
 
         if !self.image_calibrated {
-            self.sub_calibrate_image(iv, frequency).await?;
+            self.sub_calibrate_image(frequency).await?;
             self.image_calibrated = true;
         }
 
@@ -523,7 +494,7 @@ where
         buffer[1] = ((freq_in_pll_steps >> 16) & 0xFF) as u8;
         buffer[2] = ((freq_in_pll_steps >> 8) & 0xFF) as u8;
         buffer[3] = (freq_in_pll_steps & 0xFF) as u8;
-        self.brd_write_command(iv, OpCode::SetRFFrequency, &buffer)
+        self.brd_write_command(OpCode::SetRFFrequency, &buffer)
             .await?;
         Ok(())
     }
@@ -531,11 +502,10 @@ where
     // Set the radio for the given protocol (LoRa or GFSK).  This method has to be called before setting RF frequency, modulation paramaters, and packet paramaters.
     pub(super) async fn sub_set_packet_type(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         packet_type: PacketType,
     ) -> Result<(), RadioError> {
         self.packet_type = packet_type;
-        self.brd_write_command(iv, OpCode::SetPacketType, &[packet_type.value()])
+        self.brd_write_command(OpCode::SetPacketType, &[packet_type.value()])
             .await?;
         Ok(())
     }
@@ -550,15 +520,14 @@ where
     //   ramp_time       transmission ramp up time
     pub(super) async fn sub_set_tx_params(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         mut power: i8,
         ramp_time: RampTime,
     ) -> Result<(), RadioError> {
         if self.brd_get_radio_type() == RadioType::SX1261 {
             if power == 15 {
-                self.sub_set_pa_config(iv, 0x06, 0x00, 0x01, 0x01).await?;
+                self.sub_set_pa_config(0x06, 0x00, 0x01, 0x01).await?;
             } else {
-                self.sub_set_pa_config(iv, 0x04, 0x00, 0x01, 0x01).await?;
+                self.sub_set_pa_config(0x04, 0x00, 0x01, 0x01).await?;
             }
 
             if power >= 14 {
@@ -569,13 +538,13 @@ where
         } else {
             // Provide better resistance of the SX1262 Tx to antenna mismatch (see DS_SX1261-2_V1.2 datasheet chapter 15.2)
             let mut tx_clamp_cfg = [0x00u8];
-            self.brd_read_registers(iv, Register::TxClampCfg, &mut tx_clamp_cfg)
+            self.brd_read_registers(Register::TxClampCfg, &mut tx_clamp_cfg)
                 .await?;
             tx_clamp_cfg[0] = tx_clamp_cfg[0] | (0x0F << 1);
-            self.brd_write_registers(iv, Register::TxClampCfg, &tx_clamp_cfg)
+            self.brd_write_registers(Register::TxClampCfg, &tx_clamp_cfg)
                 .await?;
 
-            self.sub_set_pa_config(iv, 0x04, 0x07, 0x00, 0x01).await?;
+            self.sub_set_pa_config(0x04, 0x07, 0x00, 0x01).await?;
 
             if power > 22 {
                 power = 22;
@@ -585,7 +554,7 @@ where
         }
 
         // power conversion of negative number from i8 to u8 ???
-        self.brd_write_command(iv, OpCode::SetTxParams, &[power as u8, ramp_time.value()])
+        self.brd_write_command(OpCode::SetTxParams, &[power as u8, ramp_time.value()])
             .await?;
         Ok(())
     }
@@ -593,13 +562,12 @@ where
     // Set the modulation parameters
     pub(super) async fn sub_set_modulation_params(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<(), RadioError> {
         if self.modulation_params.is_some() {
             let mut buffer = [0x00u8; 4];
 
             // Since this driver only supports LoRa, ensure the packet type is set accordingly
-            self.sub_set_packet_type(iv, PacketType::LoRa).await?;
+            self.sub_set_packet_type(PacketType::LoRa).await?;
 
             let modulation_params = self.modulation_params.unwrap();
             buffer[0] = modulation_params.spreading_factor.value();
@@ -607,7 +575,7 @@ where
             buffer[2] = modulation_params.coding_rate.value();
             buffer[3] = modulation_params.low_data_rate_optimize;
 
-            self.brd_write_command(iv, OpCode::SetModulationParams, &buffer)
+            self.brd_write_command(OpCode::SetModulationParams, &buffer)
                 .await?;
             Ok(())
         } else {
@@ -618,13 +586,12 @@ where
     // Set the packet parameters
     pub(super) async fn sub_set_packet_params(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<(), RadioError> {
         if self.packet_params.is_some() {
             let mut buffer = [0x00u8; 6];
 
             // Since this driver only supports LoRa, ensure the packet type is set accordingly
-            self.sub_set_packet_type(iv, PacketType::LoRa).await?;
+            self.sub_set_packet_type(PacketType::LoRa).await?;
 
             let packet_params = self.packet_params.unwrap();
             buffer[0] = ((packet_params.preamble_length >> 8) & 0xFF) as u8;
@@ -634,7 +601,7 @@ where
             buffer[4] = packet_params.crc_on as u8;
             buffer[5] = packet_params.iq_inverted as u8;
 
-            self.brd_write_command(iv, OpCode::SetPacketParams, &buffer)
+            self.brd_write_command(OpCode::SetPacketParams, &buffer)
                 .await?;
             Ok(())
         } else {
@@ -651,7 +618,6 @@ where
 
     pub(super) async fn sub_set_cad_params(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         symbols: CADSymbols,
         det_peak: u8,
         det_min: u8,
@@ -668,7 +634,7 @@ where
         buffer[5] = Self::timeout_2(timeout);
         buffer[6] = Self::timeout_3(timeout);
 
-        self.brd_write_command(iv, OpCode::SetCADParams, &buffer)
+        self.brd_write_command(OpCode::SetCADParams, &buffer)
             .await?;
         self.brd_set_operating_mode(RadioMode::ChannelActivityDetection);
         Ok(())
@@ -677,12 +643,10 @@ where
     // Set the data buffer base address for transmission and reception
     pub(super) async fn sub_set_buffer_base_address(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         tx_base_address: u8,
         rx_base_address: u8,
     ) -> Result<(), RadioError> {
         self.brd_write_command(
-            iv,
             OpCode::SetBufferBaseAddress,
             &[tx_base_address, rx_base_address],
         )
@@ -693,10 +657,9 @@ where
     // Get the current radio status
     pub(super) async fn sub_get_status(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<RadioStatus, RadioError> {
         let status = self
-            .brd_read_command(iv, OpCode::GetStatus, &mut [])
+            .brd_read_command(OpCode::GetStatus, &mut [])
             .await?;
         Ok(RadioStatus {
             cmd_status: (status & (0x07 << 1)) >> 1,
@@ -707,10 +670,9 @@ where
     // Get the instantaneous RSSI value for the last packet received
     pub(super) async fn sub_get_rssi_inst(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<i8, RadioError> {
         let mut buffer = [0x00u8];
-        self.brd_read_command(iv, OpCode::GetRSSIInst, &mut buffer)
+        self.brd_read_command(OpCode::GetRSSIInst, &mut buffer)
             .await?;
         let rssi: i8 = ((-(buffer[0] as i32)) >> 1) as i8; // check this ???
         Ok(rssi)
@@ -719,18 +681,17 @@ where
     // Get the last received packet buffer status
     pub(super) async fn sub_get_rx_buffer_status(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<(u8, u8), RadioError> {
         if self.packet_params.is_some() {
             let mut status = [0x00u8; 2];
             let mut payload_length_buffer = [0x00u8];
 
-            self.brd_read_command(iv, OpCode::GetRxBufferStatus, &mut status)
+            self.brd_read_command(OpCode::GetRxBufferStatus, &mut status)
                 .await?;
             if (self.sub_get_packet_type() == PacketType::LoRa)
                 && self.packet_params.unwrap().implicit_header
             {
-                self.brd_read_registers(iv, Register::PayloadLength, &mut payload_length_buffer)
+                self.brd_read_registers(Register::PayloadLength, &mut payload_length_buffer)
                     .await?;
             } else {
                 payload_length_buffer[0] = status[0];
@@ -748,10 +709,9 @@ where
     // Get the last received packet payload status
     pub(super) async fn sub_get_packet_status(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<PacketStatus, RadioError> {
         let mut status = [0x00u8; 3];
-        self.brd_read_command(iv, OpCode::GetPacketStatus, &mut status)
+        self.brd_read_command(OpCode::GetPacketStatus, &mut status)
             .await?;
 
         // check this ???
@@ -771,10 +731,9 @@ where
     // Get the possible system errors
     pub(super) async fn sub_get_device_errors(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<RadioSystemError, RadioError> {
         let mut errors = [0x00u8; 2];
-        self.brd_read_command(iv, OpCode::GetErrors, &mut errors)
+        self.brd_read_command(OpCode::GetErrors, &mut errors)
             .await?;
 
         Ok(RadioSystemError {
@@ -792,9 +751,8 @@ where
     // Clear all the errors in the device
     pub(super) async fn sub_clear_device_errors(
         &mut self,
-        iv: &mut impl InterfaceVariant,
     ) -> Result<(), RadioError> {
-        self.brd_write_command(iv, OpCode::ClrErrors, &[0x00u8, 0x00u8])
+        self.brd_write_command(OpCode::ClrErrors, &[0x00u8, 0x00u8])
             .await?;
         Ok(())
     }
@@ -802,13 +760,12 @@ where
     // Clear the IRQs
     pub(super) async fn sub_clear_irq_status(
         &mut self,
-        iv: &mut impl InterfaceVariant,
         irq: u16,
     ) -> Result<(), RadioError> {
         let mut buffer = [0x00u8, 0x00u8];
         buffer[0] = ((irq >> 8) & 0xFF) as u8;
         buffer[1] = (irq & 0xFF) as u8;
-        self.brd_write_command(iv, OpCode::ClrIrqStatus, &buffer)
+        self.brd_write_command(OpCode::ClrIrqStatus, &buffer)
             .await?;
         Ok(())
     }
