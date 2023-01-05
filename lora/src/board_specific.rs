@@ -1,4 +1,3 @@
-use embedded_hal_async::delay::DelayUs;
 use embedded_hal_async::spi::*;
 
 use crate::InterfaceVariant;
@@ -47,32 +46,6 @@ where
         &mut self,
     ) -> Result<(), RadioError> {
         Ok(()) // no operation currently
-    }
-
-    // Hardware reset of the radio
-    pub(super) async fn brd_reset(
-        &mut self,
-        _delay: &mut impl DelayUs,
-    ) -> Result<(), RadioError> {
-        self.iv.reset().await
-        /*
-        delay.delay_ms(10).await.map_err(|_| DelayError)?;
-        self.reset.set_low().map_err(|_| Reset)?;
-        delay.delay_ms(20).await.map_err(|_| DelayError)?;
-        self.reset.set_high().map_err(|_| Reset)?;
-        delay.delay_ms(10).await.map_err(|_| DelayError)?;
-        Ok(())
-        */
-    }
-
-    // Wait while the busy pin is high
-    pub(super) async fn brd_wait_on_busy(
-        &mut self,
-    ) -> Result<(), RadioError> {
-        /*
-        self.busy.wait_for_low().await.map_err(|_| Busy)?;
-        */
-        Ok(())
     }
 
     // Wake up the radio
@@ -266,37 +239,6 @@ where
     pub(super) fn brd_get_radio_type(&mut self) -> RadioType {
         RadioType::SX1262
     }
-
-    /*
-
-    // Quiesce the antenna(s).
-    pub(super) fn brd_ant_sleep(
-        &mut self,
-    ) -> Result<(), RadioError> {
-        // self.antenna_tx.set_low().map_err(|_| AntTx)?;
-        // self.antenna_rx.set_low().map_err(|_| AntRx)?;
-        Ok(())
-    }
-
-    // Prepare the antenna(s) for a receive operation
-    pub(super) fn brd_ant_set_rx(
-        &mut self,
-    ) -> Result<(), RadioError> {
-        // self.antenna_tx.set_low().map_err(|_| AntTx)?;
-        // self.antenna_rx.set_high().map_err(|_| AntRx)?;
-        Ok(())
-    }
-
-    // Prepare the antenna(s) for a send operation
-    pub(super) fn brd_ant_set_tx(
-        &mut self,
-    ) -> Result<(), RadioError> {
-        // self.antenna_rx.set_low().map_err(|_| AntRx)?;
-        // self.antenna_tx.set_high().map_err(|_| AntTx)?;
-        Ok(())
-    }
-
-    */
 
     // Check if the given RF frequency is supported by the hardware
     pub(super) async fn brd_check_rf_frequency(

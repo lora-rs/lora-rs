@@ -1,4 +1,3 @@
-use embedded_hal_async::delay::DelayUs;
 use embedded_hal_async::spi::*;
 
 use crate::InterfaceVariant;
@@ -28,9 +27,8 @@ where
     // Initialize the radio driver
     pub(super) async fn sub_init(
         &mut self,
-        delay: &mut impl DelayUs,
     ) -> Result<(), RadioError> {
-        self.brd_reset(delay).await?;
+        self.iv.reset().await?;
         self.brd_wakeup().await?;
         self.sub_set_standby(StandbyMode::RC).await?;
         self.brd_io_tcxo_init().await?;

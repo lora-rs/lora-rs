@@ -33,7 +33,7 @@ const RADIO_WAKEUP_TIME: u32 = 3;
 /// Provides high-level access to Semtech SX126x-based boards
 pub struct LoRa<SPI, IV> {
     spi: SPI,
-    iv:IV,
+    iv: IV,
     operating_mode: RadioMode,
     rx_continuous: bool,
     max_payload_length: u8,
@@ -62,12 +62,7 @@ where
     IV: InterfaceVariant + 'static,
 {
     /// Builds and returns a new instance of the radio. Only one instance of the radio should exist at a time ()
-    pub async fn new(
-        spi: SPI,
-        iv: IV,
-        delay: &mut impl DelayUs,
-        enable_public_network: bool,
-    ) -> Result<Self, RadioError> {
+    pub async fn new(spi: SPI, iv: IV, enable_public_network: bool) -> Result<Self, RadioError> {
         let mut lora = Self {
             spi,
             iv,
@@ -81,20 +76,16 @@ where
             image_calibrated: false,
             frequency_error: 0u32, // where is volatile FrequencyError modified ???
         };
-        lora.init(delay).await?;
+        lora.init().await?;
         lora.set_lora_modem(enable_public_network).await?;
         Ok(lora)
     }
 
     /// Initialize the radio
-    pub async fn init(
-        &mut self,
-        delay: &mut impl DelayUs,
-    ) -> Result<(), RadioError> {
-        self.sub_init(delay).await?;
+    pub async fn init(&mut self) -> Result<(), RadioError> {
+        self.sub_init().await?;
         self.sub_set_standby(StandbyMode::RC).await?;
-        self.sub_set_regulator_mode(RegulatorMode::UseDCDC)
-            .await?;
+        self.sub_set_regulator_mode(RegulatorMode::UseDCDC).await?;
         self.sub_set_buffer_base_address(0x00u8, 0x00u8).await?;
         self.sub_set_tx_params(0i8, RampTime::Ramp200Us).await?;
         self.sub_set_dio_irq_params(
@@ -123,10 +114,7 @@ where
     }
 
     /// Configure the radio for LoRa (FSK support should be provided in a separate driver, if desired)
-    pub async fn set_lora_modem(
-        &mut self,
-        enable_public_network: bool,
-    ) -> Result<(), RadioError> {
+    pub async fn set_lora_modem(&mut self, enable_public_network: bool) -> Result<(), RadioError> {
         self.sub_set_packet_type(PacketType::LoRa).await?;
         if enable_public_network {
             self.brd_write_registers(
@@ -152,10 +140,7 @@ where
     }
 
     /// Sets the channel frequency
-    pub async fn set_channel(
-        &mut self,
-        frequency: u32,
-    ) -> Result<(), RadioError> {
+    pub async fn set_channel(&mut self, frequency: u32) -> Result<(), RadioError> {
         self.sub_set_rf_frequency(frequency).await?;
         Ok(())
     }
@@ -168,9 +153,7 @@ where
 
     /// Generate a 32 bit random value based on the RSSI readings, after disabling all interrupts.   Ensure set_lora_modem() is called befrorehand.
     /// After calling this function either set_rx_config() or set_tx_config() must be called.
-    pub async fn get_random_value(
-        &mut self,
-    ) -> Result<u32, RadioError> {
+    pub async fn get_random_value(&mut self) -> Result<u32, RadioError> {
         self.sub_set_dio_irq_params(
             IrqMask::None.value(),
             IrqMask::None.value(),
@@ -223,8 +206,7 @@ where
             self.max_payload_length = 0xFFu8;
         }
 
-        self.sub_set_stop_rx_timer_on_preamble_detect(false)
-            .await?;
+        self.sub_set_stop_rx_timer_on_preamble_detect(false).await?;
 
         let mut low_data_rate_optimize = 0x00u8;
         if (((spreading_factor == SpreadingFactor::_11)
@@ -348,11 +330,8 @@ where
         self.brd_read_registers(Register::TxModulation, &mut tx_modulation)
             .await?;
         if bandwidth == Bandwidth::_500KHz {
-            self.brd_write_registers(
-                Register::TxModulation,
-                &[tx_modulation[0] & (!(1 << 2))],
-            )
-            .await?;
+            self.brd_write_registers(Register::TxModulation, &[tx_modulation[0] & (!(1 << 2))])
+                .await?;
         } else {
             self.brd_write_registers(Register::TxModulation, &[tx_modulation[0] | (1 << 2)])
                 .await?;
@@ -363,10 +342,7 @@ where
     }
 
     /// Check if the given RF frequency is supported by the hardware [true: supported, false: unsupported]
-    pub async fn check_rf_frequency(
-        &mut self,
-        frequency: u32,
-    ) -> Result<bool, RadioError> {
+    pub async fn check_rf_frequency(&mut self, frequency: u32) -> Result<bool, RadioError> {
         Ok(self.brd_check_rf_frequency(frequency).await?)
     }
 
@@ -407,11 +383,7 @@ where
     }
 
     /// Send the buffer of the given size. Prepares the packet to be sent and sets the radio in transmission [timeout in ms]
-    pub async fn send(
-        &mut self,
-        buffer: &[u8],
-        timeout: u32,
-    ) -> Result<(), RadioError> {
+    pub async fn send(&mut self, buffer: &[u8], timeout: u32) -> Result<(), RadioError> {
         if self.packet_params.is_some() {
             self.sub_set_dio_irq_params(
                 IrqMask::TxDone.value() | IrqMask::RxTxTimeout.value(),
@@ -432,17 +404,12 @@ where
     }
 
     /// Set the radio in sleep mode
-    pub async fn sleep(
-        &mut self,
-        delay: &mut impl DelayUs,
-    ) -> Result<(), RadioError> {
-        self.sub_set_sleep(
-            SleepParams {
-                wakeup_rtc: false,
-                reset: false,
-                warm_start: true,
-            },
-        )
+    pub async fn sleep(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
+        self.sub_set_sleep(SleepParams {
+            wakeup_rtc: false,
+            reset: false,
+            warm_start: true,
+        })
         .await?;
         delay.delay_ms(2).await.map_err(|_| DelayError)?;
         Ok(())
@@ -455,10 +422,7 @@ where
     }
 
     /// Set the radio in reception mode for the given duration [0: continuous, others: timeout (ms)]
-    pub async fn rx(
-        &mut self,
-        timeout: u32,
-    ) -> Result<(), RadioError> {
+    pub async fn rx(&mut self, timeout: u32) -> Result<(), RadioError> {
         self.sub_set_dio_irq_params(
             IrqMask::All.value(),
             IrqMask::All.value(),
@@ -533,10 +497,7 @@ where
     }
 
     /// Set the maximum payload length (in bytes) for a LoRa modem (only).
-    pub async fn set_max_payload_length(
-        &mut self,
-        max: u8,
-    ) -> Result<(), RadioError> {
+    pub async fn set_max_payload_length(&mut self, max: u8) -> Result<(), RadioError> {
         if self.packet_params.is_some() {
             let packet_params = self.packet_params.as_mut().unwrap();
             self.max_payload_length = max;
@@ -639,14 +600,12 @@ where
                     self.brd_set_operating_mode(RadioMode::StandbyRC);
 
                     // implicit header mode timeout behavior (see DS_SX1261-2_V1.2 datasheet chapter 15.3)
-                    self.brd_write_registers(Register::RTCCtrl, &[0x00])
-                        .await?;
+                    self.brd_write_registers(Register::RTCCtrl, &[0x00]).await?;
                     let mut evt_clr = [0x00u8];
                     self.brd_read_registers(Register::EvtClr, &mut evt_clr)
                         .await?;
                     evt_clr[0] |= 1 << 1;
-                    self.brd_write_registers(Register::EvtClr, &evt_clr)
-                        .await?;
+                    self.brd_write_registers(Register::EvtClr, &evt_clr).await?;
                 }
 
                 if receiving_buffer.is_some() && received_len.is_some() {
@@ -673,10 +632,7 @@ where
     // SX126x-specific functions
 
     /// Set the radio in reception mode with Max LNA gain for the given time (SX126x radios only) [0: continuous, others timeout in ms]
-    pub async fn set_rx_boosted(
-        &mut self,
-        timeout: u32,
-    ) -> Result<(), RadioError> {
+    pub async fn set_rx_boosted(&mut self, timeout: u32) -> Result<(), RadioError> {
         self.sub_set_dio_irq_params(
             IrqMask::All.value(),
             IrqMask::All.value(),
