@@ -1,6 +1,4 @@
 #![no_std]
-#![cfg_attr(feature = "async", feature(generic_associated_types))]
-#![cfg_attr(feature = "async", feature(type_alias_impl_trait))]
 
 use heapless::Vec;
 
@@ -90,7 +88,7 @@ where
             Event::RadioEvent(_) => "RadioEvent(?)",
             Event::TimeoutFired => "TimeoutFired",
         };
-        write!(f, "lorawan_device::Event::{}", event)
+        write!(f, "lorawan_device::Event::{event}")
     }
 }
 

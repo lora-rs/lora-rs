@@ -138,7 +138,7 @@ where
                     .radio
                     .tx(tx_config, self.radio_buffer.as_ref())
                     .await
-                    .map_err(|e| Error::Radio(e))?;
+                    .map_err(Error::Radio)?;
 
                 // Receive join response within RX window
                 self.timer.reset();
@@ -228,7 +228,7 @@ where
             .radio
             .tx(tx_config, self.radio_buffer.as_ref())
             .await
-            .map_err(|e| Error::Radio(e))?;
+            .map_err(Error::Radio)?;
 
         // Wait for received data within window
         self.timer.reset();
@@ -443,12 +443,11 @@ where
             // Wait until either RX is complete or if we've reached window close
             match select(rx_fut, timeout_fut).await {
                 // RX is complete!
-                Either::Left((Ok((sz, _q)), _)) => return Ok(sz),
+                Either::Left((Ok((sz, _q)), _)) => Ok(sz),
                 // Timeout or other RX error.
-                _ => (),
+                _ => Err(Error::RxTimeout),
             }
         }
-        Err(Error::RxTimeout)
     }
 }
 

@@ -20,13 +20,13 @@ pub trait Timer {
         Self: 'm;
 
     /// Wait until millis milliseconds after reset has passed
-    fn at<'m>(&'m mut self, millis: u64) -> Self::AtFuture<'m>;
+    fn at(&mut self, millis: u64) -> Self::AtFuture<'_>;
 
     type DelayFuture<'m>: Future<Output = ()> + 'm
     where
         Self: 'm;
     /// Delay for millis milliseconds
-    fn delay_ms<'m>(&'m mut self, millis: u64) -> Self::DelayFuture<'m>;
+    fn delay_ms(&mut self, millis: u64) -> Self::DelayFuture<'_>;
 }
 
 /// An asynchronous radio implementation that can transmit and receive data.

@@ -474,13 +474,13 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     /// let app_skey = lorawan::keys::AES128([1; 16]);
     /// phy.build(&[], &cmds, &nwk_skey, &app_skey).unwrap();
     /// ```
-    pub fn build<'a, 'b, 'c, 'd, 'e>(
+    pub fn build<'a>(
         &mut self,
         payload: &[u8],
-        cmds: &'a [&'b dyn SerializableMacCommand],
-        nwk_skey: &'c keys::AES128,
-        app_skey: &'d keys::AES128,
-    ) -> Result<&[u8], &'e str> {
+        cmds: &[&dyn SerializableMacCommand],
+        nwk_skey: &keys::AES128,
+        app_skey: &keys::AES128,
+    ) -> Result<&[u8], &'a str> {
         let d = self.data.as_mut();
         let mut last_filled = 8; // MHDR + FHDR without the FOpts
         let has_fport = self.data_f_port.is_some();
