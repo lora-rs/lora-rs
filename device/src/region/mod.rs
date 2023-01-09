@@ -19,6 +19,7 @@ pub use eu433::EU433;
 pub use eu868::EU868;
 pub use us915::US915;
 
+#[derive(Clone)]
 pub struct Configuration {
     state: State,
     join_accept_delay1: u32,
@@ -49,6 +50,7 @@ pub enum DR {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Region {
     US915,
     CN470,
@@ -57,6 +59,7 @@ pub enum Region {
     AU915,
 }
 
+#[derive(Clone)]
 enum State {
     US915(US915),
     CN470(CN470),

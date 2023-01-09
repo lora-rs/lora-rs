@@ -97,6 +97,10 @@ where
         &self.session
     }
 
+    pub fn get_region(&mut self) -> &region::Configuration {
+        &self.region
+    }
+
     /// Retrieve the current data rate being used by this device.
     pub fn get_datarate(&mut self) -> region::DR {
         self.datarate

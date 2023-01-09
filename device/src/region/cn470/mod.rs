@@ -7,7 +7,8 @@ use frequencies::*;
 mod datarates;
 use datarates::*;
 
-#[derive(Default)]
+#[derive(Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[allow(clippy::upper_case_acronyms)]
 pub struct CN470 {
     last_tx: usize,
