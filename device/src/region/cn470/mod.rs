@@ -55,7 +55,7 @@ impl RegionHandler for CN470 {
 
     fn get_rx_frequency(&self, _frame: &Frame, window: &Window) -> u32 {
         match window {
-            Window::_1 => DOWNLINK_MAP[self.last_tx as usize % 2],
+            Window::_1 => DOWNLINK_MAP[self.last_tx % 2],
             Window::_2 => 505_300_000,
         }
     }

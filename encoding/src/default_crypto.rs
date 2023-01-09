@@ -143,7 +143,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedJoinAcceptPayload<T, DefaultFactory>
     ///     0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
     /// let phy = lorawan::parser::DecryptedJoinAcceptPayload::new(&mut data[..], &key);
     /// ```
-    pub fn new<'a, 'b>(data: T, key: &'a AES128) -> Result<Self, &'b str> {
+    pub fn new<'a>(data: T, key: &AES128) -> Result<Self, &'a str> {
         Self::new_with_factory(data, key, DefaultFactory)
     }
 }

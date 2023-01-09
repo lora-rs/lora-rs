@@ -53,11 +53,7 @@ impl MacAnsTrait for RxDelayAns {
         *self = false;
     }
     fn get(&self) -> u8 {
-        if *self {
-            1
-        } else {
-            0
-        }
+        u8::from(*self)
     }
 }
 

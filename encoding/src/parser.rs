@@ -541,7 +541,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<
     /// * bytes - the data from which the PhyPayload is to be built.
     /// * key - the key that is to be used to decrypt the payload.
     /// * factory - the factory that shall be used to create object for crypto functions.
-    pub fn new_with_factory<'a, 'b>(data: T, key: &'a AES128, factory: F) -> Result<Self, &'b str> {
+    pub fn new_with_factory<'a>(data: T, key: &AES128, factory: F) -> Result<Self, &'a str> {
         let t = EncryptedJoinAcceptPayload::new_with_factory(data, factory)?;
         let res = t.decrypt(key);
         if res.validate_mic(key) {
@@ -842,7 +842,7 @@ where
     }
 }
 
-fn check_phy_data<'a, 'b>(bytes: &'a [u8]) -> Result<(), &'b str> {
+fn check_phy_data<'a>(bytes: &[u8]) -> Result<(), &'a str> {
     let len = bytes.len();
     if len == 0 {
         return Err("can not parse empty payload as LoRaWAN phy payload");
