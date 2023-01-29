@@ -5,103 +5,133 @@
 
 //! lora provides a configurable LoRa physical layer for various MCU/Semtech chip combinations.
 
-pub(crate) mod board_specific;
-pub mod capabilities;
+pub mod sx1261_2;
+pub mod sx1276_7_8_9;
 pub(crate) mod fmt;
 pub mod mod_params;
-pub(crate) mod subroutine;
+pub mod mod_traits;
+pub(crate) mod interface;
 
-use embedded_hal_async::delay::DelayUs;
-use embedded_hal_async::spi::*;
-use mod_params::RadioError::*;
+use interface::*;
 use mod_params::*;
-
-// Syncwords for public and private networks
-const LORA_MAC_PUBLIC_SYNCWORD: u16 = 0x3444;
-const LORA_MAC_PRIVATE_SYNCWORD: u16 = 0x1424;
-
-// Maximum number of registers that can be added to the retention list
-const MAX_NUMBER_REGS_IN_RETENTION: u8 = 4;
-
-// Possible LoRa bandwidths
-const LORA_BANDWIDTHS: [Bandwidth; 3] =
-    [Bandwidth::_125KHz, Bandwidth::_250KHz, Bandwidth::_500KHz];
-
-// Radio complete wakeup time with margin for temperature compensation [ms]
-const RADIO_WAKEUP_TIME: u32 = 3;
+use mod_traits::*;
 
 /// Provides high-level access to Semtech SX126x-based boards
-pub struct LoRa<SPI, IV> {
-    spi: SPI,
-    iv: IV,
-    operating_mode: RadioMode,
+pub struct LoRa<RK> {
+    radio_kind: RK,
+    radio_mode: RadioMode,
     rx_continuous: bool,
-    max_payload_length: u8,
-    modulation_params: Option<ModulationParams>,
-    packet_type: PacketType,
-    packet_params: Option<PacketParams>,
     packet_status: Option<PacketStatus>,
     image_calibrated: bool,
-    frequency_error: u32,
 }
 
-pub trait InterfaceVariant {
-    async fn set_nss_low(&mut self) -> Result<(), RadioError>;
-    async fn set_nss_high(&mut self) -> Result<(), RadioError>;
-    async fn reset(&mut self) -> Result<(), RadioError>;
-    async fn wait_on_busy(&mut self) -> Result<(), RadioError>;
-    async fn await_irq(&mut self) -> Result<(), RadioError>;
-    async fn enable_rf_switch_rx(&mut self) -> Result<(), RadioError>;
-    async fn enable_rf_switch_tx(&mut self) -> Result<(), RadioError>;
-    async fn disable_rf_switch(&mut self) -> Result<(), RadioError>;
-}
-
-impl<SPI, IV> LoRa<SPI, IV>
+impl<RK> LoRa<RK>
 where
-    SPI: SpiBus<u8> + 'static,
-    IV: InterfaceVariant + 'static,
+    RK: RadioKind + 'static,
 {
-    /// Builds and returns a new instance of the radio. Only one instance of the radio should exist at a time ()
-    pub async fn new(spi: SPI, iv: IV, enable_public_network: bool) -> Result<Self, RadioError> {
+    /// Builds and returns a new instance of the radio.
+    pub async fn new(radio_kind: RK, enable_public_network: bool) -> Result<Self, RadioError> {
         let mut lora = Self {
-            spi,
-            iv,
-            operating_mode: RadioMode::Sleep,
+            radio_kind,
+            radio_mode: RadioMode::Sleep,
             rx_continuous: false,
-            max_payload_length: 0xFFu8,
-            modulation_params: None,
-            packet_type: PacketType::LoRa,
-            packet_params: None,
             packet_status: None,
             image_calibrated: false,
-            frequency_error: 0u32, // where is volatile FrequencyError modified ???
         };
-        lora.init().await?;
-        lora.set_lora_modem(enable_public_network).await?;
+        lora.init(enable_public_network).await?;
+        
         Ok(lora)
     }
 
-    /// Initialize the radio
-    pub async fn init(&mut self) -> Result<(), RadioError> {
-        self.sub_init().await?;
-        self.sub_set_standby(StandbyMode::RC).await?;
-        self.sub_set_regulator_mode(RegulatorMode::UseDCDC).await?;
-        self.sub_set_buffer_base_address(0x00u8, 0x00u8).await?;
-        self.sub_set_tx_params(0i8, RampTime::Ramp200Us).await?;
-        self.sub_set_dio_irq_params(
-            IrqMask::All.value(),
-            IrqMask::All.value(),
-            IrqMask::None.value(),
-            IrqMask::None.value(),
-        )
-        .await?;
+    pub fn create_modulation_params(&mut self, spreading_factor: SpreadingFactor,
+        bandwidth: Bandwidth,
+        coding_rate: CodingRate) -> Result<ModulationParams, RadioError> {
+            match self.radio_kind.get_radio_type() {
+                RadioType::SX1261 | RadioType::SX1262 => ModulationParams::new_for_sx1261_2(spreading_factor, bandwidth, coding_rate)
+            }
+    }
 
-        self.add_register_to_retention_list(Register::RxGain.addr())
-            .await?;
-        self.add_register_to_retention_list(Register::TxModulation.addr())
-            .await?;
+    pub fn create_rx_packet_params(&mut self, preamble_length: u16,
+        implicit_header: bool,
+        max_payload_length: u8,
+        crc_on: bool,
+        iq_inverted: bool,
+        modulation_params: ModulationParams) -> Result<PacketParams, RadioError> {
+            match self.radio_kind.get_radio_type() {
+                RadioType::SX1261 | RadioType::SX1262 => PacketParams::new_for_sx1261_2(preamble_length, implicit_header, max_payload_length, crc_on, iq_inverted, modulation_params)
+            }
+    }
+
+    pub fn create_tx_packet_params(&mut self, preamble_length: u16,
+        implicit_header: bool,
+        crc_on: bool,
+        iq_inverted: bool,
+        modulation_params: ModulationParams) -> Result<PacketParams, RadioError> {
+            match self.radio_kind.get_radio_type() {
+                RadioType::SX1261 | RadioType::SX1262 => PacketParams::new_for_sx1261_2(preamble_length, implicit_header, 0, crc_on, iq_inverted, modulation_params)
+            }
+    }
+
+    pub async fn init(&mut self, enable_public_network: bool) -> Result<(), RadioError> {
+        self.image_calibrated = false;
+        self.radio_kind.reset().await?;
+        self.radio_kind.ensure_ready(self.radio_mode).await?;
+        self.radio_kind.init_rf_switch().await?;
+        self.radio_kind.set_standby().await?;
+        self.radio_mode = RadioMode::Standby;
+        self.radio_kind.set_lora_modem(enable_public_network).await?;
+        self.radio_kind.set_oscillator().await?;
+        self.radio_kind.set_regulator_mode().await?;
+        self.radio_kind.set_tx_rx_buffer_base_address(0, 0).await?;
+        self.radio_kind.set_tx_power_and_ramp_time(0, false).await?;
+        self.radio_kind.update_retention_list().await?;
+
         Ok(())
     }
+
+    pub async fn set_tx_config(&mut self, mod_params: ModulationParams, power: i8)  -> Result<(), RadioError> {
+        self.radio_kind.ensure_ready(self.radio_mode).await?;
+        if self.radio_mode != RadioMode::Standby {
+            self.radio_kind.set_standby().await?;
+        }
+        self.radio_kind.set_modulation_params(mod_params).await?;
+        self.radio_kind.set_tx_power_and_ramp_time(power, true).await
+    }
+
+    // timeout: ms
+    pub async fn tx(&mut self, tx_pkt_params: &mut PacketParams, frequency_in_hz: u32, buffer: &[u8], timeout_in_ms: u32) -> Result<(), RadioError> {
+        self.radio_kind.ensure_ready(self.radio_mode).await?;
+        if self.radio_mode != RadioMode::Standby {
+            self.radio_kind.set_standby().await?;
+        }
+
+        tx_pkt_params.set_payload_length(buffer.len())?;
+        self.radio_kind.set_packet_params(tx_pkt_params).await?;
+        if !self.image_calibrated {
+            self.radio_kind.calibrate_image(frequency_in_hz).await?;
+            self.image_calibrated = true;
+        }
+        self.radio_kind.set_channel(frequency_in_hz).await?;
+        self.radio_kind.set_payload(buffer).await?;
+        self.radio_mode = RadioMode::Transmit;
+        self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
+        self.radio_kind.do_tx(timeout_in_ms).await?;
+        match self.radio_kind.process_irq(self.radio_mode, None, None, None).await {
+            Ok(()) => {
+                self.radio_mode = RadioMode::Standby;  // chip IRQ processing returns internal state to Standby
+                return Ok(());
+            },
+            Err(err) => {
+                self.radio_kind.ensure_ready(self.radio_mode).await?;
+                self.radio_kind.set_standby().await?;
+                self.radio_mode = RadioMode::Standby;
+                return Err(err);
+            }
+        }
+    }
+
+    
+    /*
 
     /// Return current radio state
     pub fn get_status(&mut self) -> RadioState {
@@ -111,38 +141,6 @@ where
             RadioMode::ChannelActivityDetection => RadioState::ChannelActivityDetecting,
             _ => RadioState::Idle,
         }
-    }
-
-    /// Configure the radio for LoRa (FSK support should be provided in a separate driver, if desired)
-    pub async fn set_lora_modem(&mut self, enable_public_network: bool) -> Result<(), RadioError> {
-        self.sub_set_packet_type(PacketType::LoRa).await?;
-        if enable_public_network {
-            self.brd_write_registers(
-                Register::LoRaSyncword,
-                &[
-                    ((LORA_MAC_PUBLIC_SYNCWORD >> 8) & 0xFF) as u8,
-                    (LORA_MAC_PUBLIC_SYNCWORD & 0xFF) as u8,
-                ],
-            )
-            .await?;
-        } else {
-            self.brd_write_registers(
-                Register::LoRaSyncword,
-                &[
-                    ((LORA_MAC_PRIVATE_SYNCWORD >> 8) & 0xFF) as u8,
-                    (LORA_MAC_PRIVATE_SYNCWORD & 0xFF) as u8,
-                ],
-            )
-            .await?;
-        }
-
-        Ok(())
-    }
-
-    /// Sets the channel frequency
-    pub async fn set_channel(&mut self, frequency: u32) -> Result<(), RadioError> {
-        self.sub_set_rf_frequency(frequency).await?;
-        Ok(())
     }
 
     /* Checks if the channel is free for the given time.  This is currently not implemented until a substitute
@@ -200,11 +198,13 @@ where
         if self.rx_continuous {
             symb_timeout_final = 0;
         }
+        /*
         if fixed_len {
             self.max_payload_length = payload_len;
         } else {
             self.max_payload_length = 0xFFu8;
         }
+        */
 
         self.sub_set_stop_rx_timer_on_preamble_detect(false).await?;
 
@@ -234,7 +234,8 @@ where
         let packet_params = PacketParams {
             preamble_length: preamble_length_final,
             implicit_header: fixed_len,
-            payload_length: self.max_payload_length,
+            payload_length: 0xff, // self.max_payload_length,
+            max_payload_length: 0xFFu8,
             crc_on: crc_on,
             iq_inverted: iq_inverted,
         };
@@ -259,85 +260,6 @@ where
             self.brd_write_registers(Register::IQPolarity, &[iq_polarity[0] | (1 << 2)])
                 .await?;
         }
-        Ok(())
-    }
-
-    /// Set the transmission parameters for the LoRa modem (only).
-    ///   power                output power [dBm]
-    ///   spreading_factor     [6: 64, 7: 128, 8: 256, 9: 512, 10: 1024, 11: 2048, 12: 4096 chips/symbol]
-    ///   bandwidth            [0: 125 kHz, 1: 250 kHz, 2: 500 kHz, 3: Reserved]
-    ///   coding_rate          [1: 4/5, 2: 4/6, 3: 4/7, 4: 4/8]
-    ///   preamble_length      length in symbols (the hardware adds 4 more symbols)
-    ///   fixed_len            fixed length packets [0: variable, 1: fixed]
-    ///   crc_on               [0: OFF, 1: ON]
-    ///   freq_hop_on          intra-packet frequency hopping [0: OFF, 1: ON]
-    ///   hop_period           number of symbols between each hop
-    ///   iq_inverted          invert IQ signals [0: not inverted, 1: inverted]
-    pub async fn set_tx_config(
-        &mut self,
-        power: i8,
-        spreading_factor: SpreadingFactor,
-        bandwidth: Bandwidth,
-        coding_rate: CodingRate,
-        preamble_length: u16,
-        fixed_len: bool,
-        crc_on: bool,
-        _freq_hop_on: bool,
-        _hop_period: u8,
-        iq_inverted: bool,
-    ) -> Result<(), RadioError> {
-        let mut low_data_rate_optimize = 0x00u8;
-        if (((spreading_factor == SpreadingFactor::_11)
-            || (spreading_factor == SpreadingFactor::_12))
-            && (bandwidth == Bandwidth::_125KHz))
-            || ((spreading_factor == SpreadingFactor::_12) && (bandwidth == Bandwidth::_250KHz))
-        {
-            low_data_rate_optimize = 0x01u8;
-        }
-
-        let modulation_params = ModulationParams {
-            spreading_factor: spreading_factor,
-            bandwidth: bandwidth,
-            coding_rate: coding_rate,
-            low_data_rate_optimize: low_data_rate_optimize,
-        };
-
-        let mut preamble_length_final = preamble_length;
-        if ((spreading_factor == SpreadingFactor::_5) || (spreading_factor == SpreadingFactor::_6))
-            && (preamble_length < 12)
-        {
-            preamble_length_final = 12;
-        }
-
-        let packet_params = PacketParams {
-            preamble_length: preamble_length_final,
-            implicit_header: fixed_len,
-            payload_length: self.max_payload_length,
-            crc_on: crc_on,
-            iq_inverted: iq_inverted,
-        };
-
-        self.modulation_params = Some(modulation_params);
-        self.packet_params = Some(packet_params);
-
-        self.standby().await?;
-        self.sub_set_modulation_params().await?;
-        self.sub_set_packet_params().await?;
-
-        // Handle modulation quality with the 500 kHz LoRa bandwidth (see DS_SX1261-2_V1.2 datasheet chapter 15.1)
-
-        let mut tx_modulation = [0x00u8];
-        self.brd_read_registers(Register::TxModulation, &mut tx_modulation)
-            .await?;
-        if bandwidth == Bandwidth::_500KHz {
-            self.brd_write_registers(Register::TxModulation, &[tx_modulation[0] & (!(1 << 2))])
-                .await?;
-        } else {
-            self.brd_write_registers(Register::TxModulation, &[tx_modulation[0] | (1 << 2)])
-                .await?;
-        }
-
-        self.brd_set_rf_tx_power(power).await?;
         Ok(())
     }
 
@@ -382,27 +304,6 @@ where
         }
     }
 
-    /// Send the buffer of the given size. Prepares the packet to be sent and sets the radio in transmission [timeout in ms]
-    pub async fn send(&mut self, buffer: &[u8], timeout: u32) -> Result<(), RadioError> {
-        if self.packet_params.is_some() {
-            self.sub_set_dio_irq_params(
-                IrqMask::TxDone.value() | IrqMask::RxTxTimeout.value(),
-                IrqMask::TxDone.value() | IrqMask::RxTxTimeout.value(),
-                IrqMask::None.value(),
-                IrqMask::None.value(),
-            )
-            .await?;
-
-            let mut packet_params = self.packet_params.as_mut().unwrap();
-            packet_params.payload_length = buffer.len() as u8;
-            self.sub_set_packet_params().await?;
-            self.sub_send_payload(buffer, timeout).await?;
-            Ok(())
-        } else {
-            Err(RadioError::PacketParamsMissing)
-        }
-    }
-
     /// Set the radio in sleep mode
     pub async fn sleep(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
         self.sub_set_sleep(SleepParams {
@@ -412,12 +313,6 @@ where
         })
         .await?;
         delay.delay_ms(2).await.map_err(|_| DelayError)?;
-        Ok(())
-    }
-
-    /// Set the radio in standby mode
-    pub async fn standby(&mut self) -> Result<(), RadioError> {
-        self.sub_set_standby(StandbyMode::RC).await?;
         Ok(())
     }
 
@@ -500,132 +395,12 @@ where
     pub async fn set_max_payload_length(&mut self, max: u8) -> Result<(), RadioError> {
         if self.packet_params.is_some() {
             let packet_params = self.packet_params.as_mut().unwrap();
-            self.max_payload_length = max;
+            // self.max_payload_length = max;
             packet_params.payload_length = max;
             self.sub_set_packet_params().await?;
             Ok(())
         } else {
             Err(RadioError::PacketParamsMissing)
-        }
-    }
-
-    /// Get the time required for the board plus radio to get out of sleep [ms]
-    pub fn get_wakeup_time(&mut self) -> u32 {
-        self.brd_get_board_tcxo_wakeup_time() + RADIO_WAKEUP_TIME
-    }
-
-    /// Process the radio irq
-    pub async fn process_irq(
-        &mut self,
-        receiving_buffer: Option<&mut [u8]>,
-        received_len: Option<&mut u8>,
-        cad_activity_detected: Option<&mut bool>,
-    ) -> Result<(), RadioError> {
-        loop {
-            info!("process_irq loop entered");
-
-            let de = self.sub_get_device_errors().await?;
-            info!("device_errors: rc_64khz_calibration = {}, rc_13mhz_calibration = {}, pll_calibration = {}, adc_calibration = {}, image_calibration = {}, xosc_start = {}, pll_lock = {}, pa_ramp = {}",
-                               de.rc_64khz_calibration, de.rc_13mhz_calibration, de.pll_calibration, de.adc_calibration, de.image_calibration, de.xosc_start, de.pll_lock, de.pa_ramp);
-            let st = self.sub_get_status().await?;
-            info!(
-                "radio status: cmd_status: {:x}, chip_mode: {:x}",
-                st.cmd_status, st.chip_mode
-            );
-
-            self.iv.await_irq().await?;
-            let operating_mode = self.brd_get_operating_mode();
-            let irq_flags = self.sub_get_irq_status().await?;
-            self.sub_clear_irq_status(irq_flags).await?;
-            info!("process_irq DIO1 satisfied: irq_flags = {:x}", irq_flags);
-
-            // check for errors and unexpected interrupt masks (based on operation mode)
-            if (irq_flags & IrqMask::HeaderError.value()) == IrqMask::HeaderError.value() {
-                if !self.rx_continuous {
-                    self.brd_set_operating_mode(RadioMode::StandbyRC);
-                }
-                return Err(RadioError::HeaderError);
-            } else if (irq_flags & IrqMask::CRCError.value()) == IrqMask::CRCError.value() {
-                if operating_mode == RadioMode::Receive {
-                    if !self.rx_continuous {
-                        self.brd_set_operating_mode(RadioMode::StandbyRC);
-                    }
-                    return Err(RadioError::CRCErrorOnReceive);
-                } else {
-                    return Err(RadioError::CRCErrorUnexpected);
-                }
-            } else if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
-                if operating_mode == RadioMode::Transmit {
-                    self.brd_set_operating_mode(RadioMode::StandbyRC);
-                    return Err(RadioError::TransmitTimeout);
-                } else if operating_mode == RadioMode::Receive {
-                    self.brd_set_operating_mode(RadioMode::StandbyRC);
-                    return Err(RadioError::ReceiveTimeout);
-                } else {
-                    return Err(RadioError::TimeoutUnexpected);
-                }
-            } else if ((irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value())
-                && (operating_mode != RadioMode::Transmit)
-            {
-                return Err(RadioError::TransmitDoneUnexpected);
-            } else if ((irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value())
-                && (operating_mode != RadioMode::Receive)
-            {
-                return Err(RadioError::ReceiveDoneUnexpected);
-            } else if (((irq_flags & IrqMask::CADActivityDetected.value())
-                == IrqMask::CADActivityDetected.value())
-                || ((irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value()))
-                && (operating_mode != RadioMode::ChannelActivityDetection)
-            {
-                return Err(RadioError::CADUnexpected);
-            }
-
-            if (irq_flags & IrqMask::HeaderValid.value()) == IrqMask::HeaderValid.value() {
-                info!("HeaderValid");
-            } else if (irq_flags & IrqMask::PreambleDetected.value())
-                == IrqMask::PreambleDetected.value()
-            {
-                info!("PreambleDetected");
-            } else if (irq_flags & IrqMask::SyncwordValid.value()) == IrqMask::SyncwordValid.value()
-            {
-                info!("SyncwordValid");
-            }
-
-            // handle completions
-            if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
-                self.brd_set_operating_mode(RadioMode::StandbyRC);
-                return Ok(());
-            } else if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
-                if !self.rx_continuous {
-                    self.brd_set_operating_mode(RadioMode::StandbyRC);
-
-                    // implicit header mode timeout behavior (see DS_SX1261-2_V1.2 datasheet chapter 15.3)
-                    self.brd_write_registers(Register::RTCCtrl, &[0x00]).await?;
-                    let mut evt_clr = [0x00u8];
-                    self.brd_read_registers(Register::EvtClr, &mut evt_clr)
-                        .await?;
-                    evt_clr[0] |= 1 << 1;
-                    self.brd_write_registers(Register::EvtClr, &evt_clr).await?;
-                }
-
-                if receiving_buffer.is_some() && received_len.is_some() {
-                    *(received_len.unwrap()) =
-                        self.sub_get_payload(receiving_buffer.unwrap()).await?;
-                }
-                self.packet_status = self.sub_get_packet_status().await?.into();
-                return Ok(());
-            } else if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
-                if cad_activity_detected.is_some() {
-                    *(cad_activity_detected.unwrap()) = (irq_flags
-                        & IrqMask::CADActivityDetected.value())
-                        == IrqMask::CADActivityDetected.value();
-                }
-                self.brd_set_operating_mode(RadioMode::StandbyRC);
-                return Ok(());
-            }
-
-            // if DIO1 was driven high for reasons other than an error or operation completion (currently, PreambleDetected, SyncwordValid, and HeaderValid
-            // are in that category), loop to wait again
         }
     }
 
@@ -667,41 +442,6 @@ where
     }
 
     // Utilities
-
-    async fn add_register_to_retention_list(
-        &mut self,
-        register_address: u16,
-    ) -> Result<(), RadioError> {
-        let mut buffer = [0x00u8; (1 + (2 * MAX_NUMBER_REGS_IN_RETENTION)) as usize];
-
-        // Read the address and registers already added to the list
-        self.brd_read_registers(Register::RetentionList, &mut buffer)
-            .await?;
-
-        let number_of_registers = buffer[0];
-        for i in 0..number_of_registers {
-            if register_address
-                == ((buffer[(1 + (2 * i)) as usize] as u16) << 8)
-                    | (buffer[(2 + (2 * i)) as usize] as u16)
-            {
-                return Ok(()); // register already in list
-            }
-        }
-
-        if number_of_registers < MAX_NUMBER_REGS_IN_RETENTION {
-            buffer[0] += 1; // increment number of registers
-
-            buffer[(1 + (2 * number_of_registers)) as usize] =
-                ((register_address >> 8) & 0xFF) as u8;
-            buffer[(2 + (2 * number_of_registers)) as usize] = (register_address & 0xFF) as u8;
-            self.brd_write_registers(Register::RetentionList, &buffer)
-                .await?;
-
-            Ok(())
-        } else {
-            Err(RadioError::RetentionListExceeded)
-        }
-    }
 
     fn get_lora_time_on_air_numerator(
         spreading_factor: SpreadingFactor,
@@ -762,4 +502,5 @@ where
 
         (((4 * intermediate) + 1) * (1 << (spreading_factor.value() - 2))) as u32
     }
+    */
 }
