@@ -11,14 +11,6 @@ pub struct RadioSystemError {
     pub pa_ramp: bool,
 }
 
-#[derive(Clone, Copy)]
-pub struct PacketStatus {
-    pub rssi: i8,
-    pub snr: i8,
-    pub signal_rssi: i8,
-    pub freq_error: u32,
-}
-
 pub struct RadioStatus {
     pub cmd_status: u8,
     pub chip_mode: u8,
@@ -133,6 +125,7 @@ impl OpCode {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct SleepParams {
     pub wakeup_rtc: bool, // get out of sleep mode if wakeup signal received from RTC
     pub reset: bool,

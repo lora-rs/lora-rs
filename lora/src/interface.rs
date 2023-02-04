@@ -46,6 +46,7 @@ where
         &mut self,
         write_buffers: &[&[u8]],
         read_buffer: &mut [u8],
+        read_length: Option<u8>
     ) -> Result<(), RadioError> {
         let mut input = [0u8];
 
@@ -61,8 +62,13 @@ where
                 flush_result?;
             }
         }
+
+        let number_to_read = match read_length {
+            Some(len) => len as usize,
+            None => read_buffer.len()
+        };
         
-        for i in 0..read_buffer.len() {
+        for i in 0..number_to_read {
             let transfer_result = self.spi.transfer(&mut input, &[0x00]).await.map_err(|_| SPI);
             let flush_result = self.spi.flush().await.map_err(|_| SPI);
             if transfer_result != Ok(()) {

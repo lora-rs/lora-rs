@@ -63,9 +63,7 @@ impl PacketType {
 #[derive(Clone, Copy)]
 pub struct PacketStatus {
     pub rssi: i8,
-    pub snr: i8,
-    pub signal_rssi: i8,
-    pub freq_error: u32,
+    pub snr: i8
 }
 
 #[derive(Clone, Copy, PartialEq)]
