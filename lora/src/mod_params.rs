@@ -9,6 +9,7 @@ pub enum RadioError {
     RfSwitchRx,
     RfSwitchTx,
     Busy,
+    Irq,
     DIO1,
     DelayError,
     InvalidBaseAddress(usize, usize),
@@ -63,24 +64,28 @@ impl PacketType {
 #[derive(Clone, Copy)]
 pub struct PacketStatus {
     pub rssi: i8,
-    pub snr: i8
+    pub snr: i8,
 }
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum RadioType {
     SX1261,
     SX1262,
+    SX1276,
+    SX1277,
+    SX1278,
+    SX1279
 }
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum RadioMode {
-    Sleep,                     // sleep mode
-    Standby,                   // standby mode
-    FrequencySynthesis,        // frequency synthesis mode
-    Transmit,                  // transmit mode
-    Receive,                   // receive mode
-    ReceiveDutyCycle,          // receive duty cycle mode
-    ChannelActivityDetection,  // channel activity detection mode
+    Sleep,                    // sleep mode
+    Standby,                  // standby mode
+    FrequencySynthesis,       // frequency synthesis mode
+    Transmit,                 // transmit mode
+    Receive,                  // receive mode
+    ReceiveDutyCycle,         // receive duty cycle mode
+    ChannelActivityDetection, // channel activity detection mode
 }
 
 pub enum RadioState {
@@ -110,20 +115,14 @@ impl RadioStatus {
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum SpreadingFactor {
-    _5 = 0x05,
-    _6 = 0x06,
-    _7 = 0x07,
-    _8 = 0x08,
-    _9 = 0x09,
-    _10 = 0x0A,
-    _11 = 0x0B,
-    _12 = 0x0C,
-}
-
-impl SpreadingFactor {
-    pub fn value(self) -> u8 {
-        self as u8
-    }
+    _5,
+    _6,
+    _7,
+    _8,
+    _9,
+    _10,
+    _11,
+    _12,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -163,19 +162,29 @@ impl CodingRate {
 
 #[derive(Clone, Copy)]
 pub struct ModulationParams {
-    pub (crate) spreading_factor: SpreadingFactor,
-    pub (crate) bandwidth: Bandwidth,
-    pub (crate) coding_rate: CodingRate,
-    pub (crate) low_data_rate_optimize: u8,
+    pub(crate) spreading_factor: SpreadingFactor,
+    pub(crate) bandwidth: Bandwidth,
+    pub(crate) coding_rate: CodingRate,
+    pub(crate) low_data_rate_optimize: u8,
 }
 
 #[derive(Clone, Copy)]
 pub struct PacketParams {
-    pub (crate) preamble_length: u16,  // number of LoRa symbols in the preamble
-    pub (crate) implicit_header: bool, // if the header is explicit, it will be transmitted in the LoRa packet, but is not transmitted if the header is implicit (known fixed length)
-    pub (crate) payload_length: u8,
-    pub (crate) crc_on: bool,
-    pub (crate) iq_inverted: bool,
+    pub(crate) preamble_length: u16, // number of LoRa symbols in the preamble
+    pub(crate) implicit_header: bool, // if the header is explicit, it will be transmitted in the LoRa packet, but is not transmitted if the header is implicit (known fixed length)
+    pub(crate) payload_length: u8,
+    pub(crate) crc_on: bool,
+    pub(crate) iq_inverted: bool,
+}
+
+impl PacketParams {
+    pub(crate) fn set_payload_length(&mut self, payload_length: usize) -> Result<(), RadioError> {
+        if payload_length > 255 {
+            return Err(RadioError::PayloadSizeUnexpected(payload_length));
+        }
+        self.payload_length = payload_length as u8;
+        Ok(())
+    }
 }
 
 #[derive(Clone, Copy)]

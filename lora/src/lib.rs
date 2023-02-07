@@ -29,14 +29,14 @@ where
     RK: RadioKind + 'static,
 {
     /// Builds and returns a new instance of the radio.
-    pub async fn new(radio_kind: RK, enable_public_network: bool) -> Result<Self, RadioError> {
+    pub async fn new(radio_kind: RK, enable_public_network: bool, delay: &mut impl DelayUs) -> Result<Self, RadioError> {
         let mut lora = Self {
             radio_kind,
             radio_mode: RadioMode::Sleep,
             rx_continuous: false,
             image_calibrated: false,
         };
-        lora.init(enable_public_network).await?;
+        lora.init(enable_public_network, delay).await?;
 
         Ok(lora)
     }
@@ -50,6 +50,9 @@ where
         match self.radio_kind.get_radio_type() {
             RadioType::SX1261 | RadioType::SX1262 => {
                 ModulationParams::new_for_sx1261_2(spreading_factor, bandwidth, coding_rate)
+            }
+            RadioType::SX1276 | RadioType::SX1277 | RadioType::SX1278 | RadioType::SX1279 => {
+                ModulationParams::new_for_sx1276_7_8_9(spreading_factor, bandwidth, coding_rate)
             }
         }
     }
@@ -71,6 +74,14 @@ where
                 iq_inverted,
                 modulation_params,
             ),
+            RadioType::SX1276 | RadioType::SX1277 | RadioType::SX1278 | RadioType::SX1279 => PacketParams::new_for_sx1276_7_8_9(
+                preamble_length,
+                implicit_header,
+                0,
+                crc_on,
+                iq_inverted,
+                modulation_params,
+            )
         }
     }
 
@@ -92,12 +103,20 @@ where
                 iq_inverted,
                 modulation_params,
             ),
+            RadioType::SX1276 | RadioType::SX1277 | RadioType::SX1278 | RadioType::SX1279 => PacketParams::new_for_sx1276_7_8_9(
+                preamble_length,
+                implicit_header,
+                max_payload_length,
+                crc_on,
+                iq_inverted,
+                modulation_params,
+            )
         }
     }
 
-    pub async fn init(&mut self, enable_public_network: bool) -> Result<(), RadioError> {
+    pub async fn init(&mut self, enable_public_network: bool, delay: &mut impl DelayUs) -> Result<(), RadioError> {
         self.image_calibrated = false;
-        self.radio_kind.reset().await?;
+        self.radio_kind.reset(delay).await?;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         self.radio_kind.init_rf_switch().await?;
         self.radio_kind.set_standby().await?;
@@ -109,13 +128,11 @@ where
         self.radio_kind.set_oscillator().await?;
         self.radio_kind.set_regulator_mode().await?;
         self.radio_kind.set_tx_rx_buffer_base_address(0, 0).await?;
-        self.radio_kind.set_tx_power_and_ramp_time(0, false).await?;
+        self.radio_kind.set_tx_power_and_ramp_time(0, false, false).await?;
         self.radio_kind
             .set_irq_params(Some(self.radio_mode))
             .await?;
-        self.radio_kind.update_retention_list().await?;
-
-        Ok(())
+        self.radio_kind.update_retention_list().await
     }
 
     pub async fn sleep(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
@@ -134,6 +151,7 @@ where
         &mut self,
         mod_params: ModulationParams,
         power: i8,
+        tx_boosted_if_possible: bool
     ) -> Result<(), RadioError> {
         self.rx_continuous = false;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
@@ -143,7 +161,7 @@ where
         }
         self.radio_kind.set_modulation_params(mod_params).await?;
         self.radio_kind
-            .set_tx_power_and_ramp_time(power, true)
+            .set_tx_power_and_ramp_time(power, tx_boosted_if_possible, true)
             .await
     }
 

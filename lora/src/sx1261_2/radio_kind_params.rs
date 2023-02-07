@@ -221,7 +221,7 @@ impl RampTime {
     }
 }
 
-pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, RadioError>  {
+pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, RadioError> {
     match spreading_factor {
         SpreadingFactor::_5 => Ok(0x05),
         SpreadingFactor::_6 => Ok(0x06),
@@ -234,7 +234,7 @@ pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, R
     }
 }
 
-pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError>  {
+pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError> {
     match bandwidth {
         Bandwidth::_500KHz => Ok(0x06),
         Bandwidth::_250KHz => Ok(0x05),
@@ -242,7 +242,7 @@ pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError>  {
     }
 }
 
-pub fn coding_rate_value(coding_rate: CodingRate) -> Result<u8, RadioError>  {
+pub fn coding_rate_value(coding_rate: CodingRate) -> Result<u8, RadioError> {
     match coding_rate {
         CodingRate::_4_5 => Ok(0x01),
         CodingRate::_4_6 => Ok(0x02),

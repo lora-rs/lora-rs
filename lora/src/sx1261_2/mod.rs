@@ -35,10 +35,11 @@ const SX126X_MAX_LORA_SYMB_NUM_TIMEOUT: u8 = 248;
 const BRD_TCXO_WAKEUP_TIME: u32 = 10;
 
 impl ModulationParams {
-    pub fn new_for_sx1261_2(spreading_factor: SpreadingFactor,
+    pub fn new_for_sx1261_2(
+        spreading_factor: SpreadingFactor,
         bandwidth: Bandwidth,
         coding_rate: CodingRate) -> Result<Self, RadioError> {
-            let mut low_data_rate_optimize = 0x00u8;
+        let mut low_data_rate_optimize = 0x00u8;
         if (((spreading_factor == SpreadingFactor::_11)
             || (spreading_factor == SpreadingFactor::_12))
             && (bandwidth == Bandwidth::_125KHz))
@@ -57,7 +58,6 @@ impl PacketParams {
         payload_length: u8,
         crc_on: bool,
         iq_inverted: bool, modulation_params: ModulationParams) -> Result<Self, RadioError> {
-
         if ((modulation_params.spreading_factor == SpreadingFactor::_5) || (modulation_params.spreading_factor == SpreadingFactor::_6))
             && (preamble_length < 12)
         {
@@ -65,14 +65,6 @@ impl PacketParams {
         }
             
         Ok(Self { preamble_length, implicit_header, payload_length, crc_on, iq_inverted })
-    }
-
-    pub(crate) fn set_payload_length(&mut self, payload_length: usize) -> Result<(), RadioError> {
-        if payload_length > 255 {
-            return Err(RadioError::PayloadSizeUnexpected(payload_length));
-        }
-        self.payload_length = payload_length as u8;
-        Ok(())
     }
 }
 
@@ -147,6 +139,11 @@ where
         Ok(())
     }
 
+    async fn set_pa_config(&mut self, pa_duty_cycle: u8, hp_max: u8, device_sel: u8, pa_lut: u8) -> Result<(), RadioError> {
+        let op_code_and_pa_config = [OpCode::SetPAConfig.value(), pa_duty_cycle, hp_max, device_sel, pa_lut];
+        self.intf.write(&[&op_code_and_pa_config], false).await
+    }
+
     fn timeout_1(timeout: u32) -> u8 {
         ((timeout >> 16) & 0xFF) as u8
     }
@@ -186,8 +183,8 @@ where
         self.radio_type
     }
 
-    async fn reset(&mut self) -> Result<(), RadioError> {
-        self.intf.iv.reset().await
+    async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
+        self.intf.iv.reset(delay).await
     }
 
     // Wakeup the radio if it is in Sleep or ReceiveDutyCycle mode; otherwise, ensure it is not busy.
@@ -278,7 +275,7 @@ where
     //   power        RF output power (dBm)
     //   is_tx_prep   indicates which ramp up time to use
     //   OCP ???
-    async fn set_tx_power_and_ramp_time(&mut self, mut power: i8, is_tx_prep: bool) -> Result<(), RadioError> {
+    async fn set_tx_power_and_ramp_time(&mut self, mut power: i8, _tx_boosted_if_possible: bool, is_tx_prep: bool) -> Result<(), RadioError> {
         let ramp_time = match is_tx_prep {
             true => RampTime::Ramp40Us,    // for instance, prior to TX or CAD
             false => RampTime::Ramp200Us,  // for instance, on initialization
@@ -319,22 +316,20 @@ where
         self.intf.write(&[&op_code_and_tx_params], false).await
     }
 
-    async fn set_pa_config(&mut self, pa_duty_cycle: u8, hp_max: u8, device_sel: u8, pa_lut: u8) -> Result<(), RadioError> {
-        let op_code_and_pa_config = [OpCode::SetPAConfig.value(), pa_duty_cycle, hp_max, device_sel, pa_lut];
-        self.intf.write(&[&op_code_and_pa_config], false).await
-    }
-
     async fn update_retention_list(&mut self) -> Result<(), RadioError> {
         self.add_register_to_retention_list(Register::RxGain).await?;
         self.add_register_to_retention_list(Register::TxModulation).await
     }
 
     async fn set_modulation_params(&mut self, mod_params: ModulationParams) -> Result<(), RadioError> {
+        let spreading_factor_val = spreading_factor_value(mod_params.spreading_factor)?;
+        let bandwidth_val = bandwidth_value(mod_params.bandwidth)?;
+        let coding_rate_val = coding_rate_value(mod_params.coding_rate)?;
         let op_code_and_mod_params = [
             OpCode::SetModulationParams.value(),
-            mod_params.spreading_factor.value(),
-            mod_params.bandwidth.value(),
-            mod_params.coding_rate.value(),
+            spreading_factor_val,
+            bandwidth_val,
+            coding_rate_val,
             mod_params.low_data_rate_optimize
             ];
         self.intf.write(&[&op_code_and_mod_params], false).await?;
