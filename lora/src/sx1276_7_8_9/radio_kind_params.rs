@@ -20,9 +20,14 @@ impl LoRaMode {
 #[derive(Clone, Copy)]
 pub enum IrqMask {
     None = 0x00,
+    CADActivityDetected = 0x01,
+    FhssChangedChannel = 0x02,
+    CADDone = 0x04,
     TxDone = 0x08,
-    RxDone = 0x40,
+    HeaderValid = 0x10,
     CRCError = 0x20,
+    RxDone = 0x40,
+    RxTimeout = 0x80,
     All = 0xFF,
 }
 
@@ -158,9 +163,9 @@ pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, R
 
 pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError>  {
     match bandwidth {
-        Bandwidth::_500KHz => Ok(0x06),
-        Bandwidth::_250KHz => Ok(0x05),
-        Bandwidth::_125KHz => Ok(0x04),
+        Bandwidth::_125KHz => Ok(0x07),
+        Bandwidth::_250KHz => Ok(0x08),
+        Bandwidth::_500KHz => Ok(0x09),
     }
 }
 
@@ -170,5 +175,14 @@ pub fn coding_rate_value(coding_rate: CodingRate) -> Result<u8, RadioError>  {
         CodingRate::_4_6 => Ok(0x02),
         CodingRate::_4_7 => Ok(0x03),
         CodingRate::_4_8 => Ok(0x04),
+    }
+}
+
+pub fn coding_rate_denominator_value(coding_rate: CodingRate) -> Result<u8, RadioError>  {
+    match coding_rate {
+        CodingRate::_4_5 => Ok(0x05),
+        CodingRate::_4_6 => Ok(0x06),
+        CodingRate::_4_7 => Ok(0x07),
+        CodingRate::_4_8 => Ok(0x08),
     }
 }

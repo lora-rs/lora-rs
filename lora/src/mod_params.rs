@@ -17,6 +17,7 @@ pub enum RadioError {
     PayloadSizeMismatch(usize, usize),
     RetentionListExceeded,
     InvalidBandwidth,
+    InvalidExplicitHeaderRequest,
     HeaderError,
     CRCErrorUnexpected,
     CRCErrorOnReceive,
@@ -127,16 +128,12 @@ pub enum SpreadingFactor {
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Bandwidth {
-    _500KHz = 0x06,
-    _250KHz = 0x05,
-    _125KHz = 0x04,
+    _125KHz,
+    _250KHz, 
+    _500KHz,
 }
 
 impl Bandwidth {
-    pub fn value(self) -> u8 {
-        self as u8
-    }
-
     pub fn value_in_hz(self) -> u32 {
         match self {
             Bandwidth::_125KHz => 125000u32,
@@ -148,16 +145,10 @@ impl Bandwidth {
 
 #[derive(Clone, Copy)]
 pub enum CodingRate {
-    _4_5 = 0x01,
-    _4_6 = 0x02,
-    _4_7 = 0x03,
-    _4_8 = 0x04,
-}
-
-impl CodingRate {
-    pub fn value(self) -> u8 {
-        self as u8
-    }
+    _4_5,
+    _4_6,
+    _4_7,
+    _4_8,
 }
 
 #[derive(Clone, Copy)]
