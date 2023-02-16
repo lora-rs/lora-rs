@@ -15,6 +15,7 @@ pub enum RadioError {
     InvalidBaseAddress(usize, usize),
     PayloadSizeUnexpected(usize),
     PayloadSizeMismatch(usize, usize),
+    InvalidSymbolTimeout,
     RetentionListExceeded,
     InvalidBandwidth,
     InvalidExplicitHeaderRequest,
@@ -64,8 +65,8 @@ impl PacketType {
 
 #[derive(Clone, Copy)]
 pub struct PacketStatus {
-    pub rssi: i8,
-    pub snr: i8,
+    pub rssi: i16,
+    pub snr: i16,
 }
 
 #[derive(Clone, Copy, PartialEq)]

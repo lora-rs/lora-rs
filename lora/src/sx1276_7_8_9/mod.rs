@@ -5,17 +5,15 @@ use crate::{mod_params::*, Interface, InterfaceVariant, RadioKind};
 use radio_kind_params::*;
 use embedded_hal_async::{spi::*, delay::DelayUs};
 
-// Syncword for public and private networks
-const LORA_MAC_SYNCWORD: u8 = 0x34;
+// Syncwords for public and private networks
+const LORA_MAC_PUBLIC_SYNCWORD: u8 = 0x34;  // corresponds to sx126x 0x3444
+const LORA_MAC_PRIVATE_SYNCWORD: u8 = 0x12;  // corresponds to sx126x 0x1424
 
 // TCXO flag
 const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
 
 // Frequency synthesizer step for frequency calculation (Hz)
 const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625;  // FXOSC (32 MHz) * 1000000 (Hz/MHz) / 524288 (2^19)
-
-// Number of symbols for symbol detection timeout
-const LORA_SYMB_NUM_TIMEOUT: u8 = 0x05;
 
 // Possible LoRa bandwidths
 const LORA_BANDWIDTHS: [Bandwidth; 3] =
@@ -134,9 +132,14 @@ where
         Ok(false)  // warm start unavailable for sx127x ???
     }
 
-    /// The sx127x LoRa mode is set when setting a mode while in sleep mode.  Only one type of sync word is supported.
-    async fn set_lora_modem(&mut self, _enable_public_network: bool) -> Result<(), RadioError> {
-        self.write_register(Register::RegSyncWord, LORA_MAC_SYNCWORD, false).await
+    /// The sx127x LoRa mode is set when setting a mode while in sleep mode.
+    async fn set_lora_modem(&mut self, enable_public_network: bool) -> Result<(), RadioError> {
+        if enable_public_network {
+            self.write_register(Register::RegSyncWord, LORA_MAC_PUBLIC_SYNCWORD, false).await
+
+        } else {
+            self.write_register(Register::RegSyncWord, LORA_MAC_PRIVATE_SYNCWORD, false).await
+        }
     }
 
     async fn set_oscillator(&mut self) -> Result<(), RadioError> {
@@ -298,107 +301,56 @@ where
         self.write_register(Register::RegOpMode, LoRaMode::Tx.value(), false).await
     }
 
-    async fn do_rx(&mut self, rx_pkt_params: &PacketParams, rx_continuous: bool, rx_boosted_if_supported: bool, symbol_timeout: u16, rx_timeout_in_ms: u32) -> Result<(), RadioError> {
+    async fn do_rx(&mut self, _rx_pkt_params: &PacketParams, rx_continuous: bool, rx_boosted_if_supported: bool, symbol_timeout: u16, _rx_timeout_in_ms: u32) -> Result<(), RadioError> {
+        self.intf.iv.enable_rf_switch_rx().await?;
+
         let mut symbol_timeout_final = symbol_timeout;
-        let mut rx_timeout_in_ms_final = rx_timeout_in_ms << 6;
         if rx_continuous {
             symbol_timeout_final = 0;
-            rx_timeout_in_ms_final = 0;
         }
+        if symbol_timeout_final > 0x00ffu16 {
+            return Err(RadioError::InvalidSymbolTimeout);
+        }
+        self.set_lora_symbol_num_timeout(symbol_timeout_final as u8).await?;
 
         let mut lna_gain_final = LnaGain::G1.value();
         if rx_boosted_if_supported {
             lna_gain_final = LnaGain::G1.boosted_value();
         }
+        self.write_register(Register::RegLna, lna_gain_final, false).await?;
 
-        self.set_lora_symbol_num_timeout(LORA_SYMB_NUM_TIMEOUT).await?;
-        
-        /*
-        self.intf.iv.enable_rf_switch_rx().await?;
+        self.write_register(Register::RegFifoAddrPtr, 0x00u8, false).await?;
+        self.write_register(Register::RegPayloadLength, 0xffu8, false).await?;  // reset payload length (from original code) ???
 
-        // stop the Rx timer on header/syncword detection rather than preamble detection
-        let op_code_and_false_flag = [OpCode::SetStopRxTimerOnPreamble.value(), 0x00u8];
-        self.intf.write(&[&op_code_and_false_flag], false).await?;
-
-
-        // Optimize the Inverted IQ Operation (see DS_SX1261-2_V1.2 datasheet chapter 15.4)
-        let mut iq_polarity = [0x00u8];
-        self.intf.read(&[&[OpCode::ReadRegister.value(), Register::IQPolarity.addr1(), Register::IQPolarity.addr2(), 0x00u8]], &mut iq_polarity, None).await?;
-        if rx_pkt_params.iq_inverted {
-            let register_and_iq_polarity = [
-                OpCode::WriteRegister.value(),
-                Register::IQPolarity.addr1(), Register::IQPolarity.addr2(),
-                iq_polarity[0] & (!(1 << 2))
-                ];
-            self.intf.write(&[&register_and_iq_polarity], false).await?;
+        if rx_continuous {
+            self.write_register(Register::RegOpMode, LoRaMode::RxContinuous.value(), false).await
         } else {
-            let register_and_iq_polarity = [
-                OpCode::WriteRegister.value(),
-                Register::IQPolarity.addr1(), Register::IQPolarity.addr2(),
-                iq_polarity[0] | (1 << 2)
-                ];
-            self.intf.write(&[&register_and_iq_polarity], false).await?;
+            self.write_register(Register::RegOpMode, LoRaMode::RxSingle.value(), false).await
         }
-
-        let mut write_buffer = [Register::RegLna.write_addr(), lna_gain_final];
-        self.intf.write(&[&write_buffer], false).await?;
-
-        let op_code_and_timeout = [
-            OpCode::SetRx.value(),
-            Self::timeout_1(rx_timeout_in_ms_final),
-            Self::timeout_2(rx_timeout_in_ms_final),
-            Self::timeout_3(rx_timeout_in_ms_final)];
-        self.intf.write(&[&op_code_and_timeout], false).await
-        */
-        Ok(())
     }
 
-    async fn get_rx_payload(&mut self, rx_pkt_params: &PacketParams, receiving_buffer: &mut [u8]) -> Result<u8, RadioError> {
-        /*
-        let op_code = [OpCode::GetRxBufferStatus.value()];
-        let mut rx_buffer_status = [0x00u8; 2];
-        self.intf.read_with_status(&[&op_code], &mut rx_buffer_status).await?;  // handle return status ???
-
-        let mut payload_length_buffer = [0x00u8];
-        if rx_pkt_params.implicit_header {
-            self.intf.read(&[&[OpCode::ReadRegister.value(), Register::PayloadLength.addr1(), Register::PayloadLength.addr2(), 0x00u8]], &mut payload_length_buffer, None).await?;
-        } else {
-            payload_length_buffer[0] = rx_buffer_status[0];
-        }
-
-        let payload_length = payload_length_buffer[0];
-        let offset = rx_buffer_status[1];
-
+    async fn get_rx_payload(&mut self, _rx_pkt_params: &PacketParams, receiving_buffer: &mut [u8]) -> Result<u8, RadioError> {
+        let payload_length = self.read_register(Register::RegRxNbBytes).await?;
         if (payload_length as usize) > receiving_buffer.len() {
-            Err(RadioError::PayloadSizeMismatch(payload_length as usize, receiving_buffer.len()))
-        } else {
-            self.intf.read(&[&[OpCode::ReadBuffer.value(), offset, 0x00u8]], receiving_buffer, Some(payload_length)).await?;
-            Ok(payload_length)
+            return Err(RadioError::PayloadSizeMismatch(payload_length as usize, receiving_buffer.len()));
         }
-        */
-        Ok(0)
+        let fifo_addr = self.read_register(Register::RegFifoRxCurrentAddr).await?;
+        self.write_register(Register::RegFifoAddrPtr, fifo_addr, false).await?;
+        for i in 0..payload_length {
+            let byte = self.read_register(Register::RegFifo).await?;
+            receiving_buffer[i as usize] = byte;
+        }
+        self.write_register(Register::RegFifoAddrPtr, 0x00u8, false).await?;
+
+        Ok(payload_length)
     }
 
     async fn get_rx_packet_status(&mut self) -> Result<PacketStatus, RadioError> {
-        /*
-        let op_code = [OpCode::GetPacketStatus.value()];
-        let mut pkt_status = [0x00u8; 3];
-        self.intf.read_with_status(&[&op_code], &mut pkt_status).await?;  // handle return status ???
-
-        // check this ???
-        let rssi = ((-(pkt_status[0] as i32)) >> 1) as i8;
-        let snr = ((pkt_status[1] as i8) + 2) >> 2;
-        let _signal_rssi = ((-(pkt_status[2] as i32)) >> 1) as i8;  // unused currently
-
-        Ok(PacketStatus {
-            rssi,
-            snr,
-        })
-        */
-        Ok(PacketStatus {
-            rssi: 0,
-            snr: 0,
-        })
+        let rssi_raw = self.read_register(Register::RegPktRssiValue).await?;
+        let rssi = (rssi_raw as i16) - 157i16; // or -164 for low frequency port ???
+        let snr_raw = self.read_register(Register::RegPktRssiValue).await?;
+        let snr = snr_raw as i16;
+        Ok(PacketStatus { rssi, snr })
     }
 
     // Set the IRQ mask to disable unwanted interrupts, enable interrupts on DIO0 (the IRQ pin), and allow interrupts.
@@ -438,7 +390,7 @@ where
     }
 
     /// Process the radio irq
-    async fn process_irq(&mut self, radio_mode: RadioMode, rx_continuous: bool) -> Result<(), RadioError> {
+    async fn process_irq(&mut self, radio_mode: RadioMode, _rx_continuous: bool) -> Result<(), RadioError> {
         loop {
             info!("process_irq loop entered");
 
@@ -491,7 +443,7 @@ where
                 return Ok(());
             }
 
-            // if an interrupt occurred for other than an error or operation completion (currently, HeaderValid is in that category), loop to wait again
+            // if an interrupt occurred for other than an error or operation completion (currently, only HeaderValid is in that category), loop to wait again
         }
     }
 }

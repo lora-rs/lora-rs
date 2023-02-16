@@ -6,8 +6,8 @@ use radio_kind_params::*;
 use embedded_hal_async::{spi::*, delay::DelayUs};
 
 // Syncwords for public and private networks
-const LORA_MAC_PUBLIC_SYNCWORD: u16 = 0x3444;
-const LORA_MAC_PRIVATE_SYNCWORD: u16 = 0x1424;
+const LORA_MAC_PUBLIC_SYNCWORD: u16 = 0x3444;   // corresponds to sx127x 0x34
+const LORA_MAC_PRIVATE_SYNCWORD: u16 = 0x1424;  // corresponds to sx127x 0x12
 
 // Maximum number of registers that can be added to the retention list
 const MAX_NUMBER_REGS_IN_RETENTION: u8 = 4;
@@ -505,9 +505,9 @@ where
         self.intf.read_with_status(&[&op_code], &mut pkt_status).await?;  // handle return status ???
 
         // check this ???
-        let rssi = ((-(pkt_status[0] as i32)) >> 1) as i8;
-        let snr = ((pkt_status[1] as i8) + 2) >> 2;
-        let _signal_rssi = ((-(pkt_status[2] as i32)) >> 1) as i8;  // unused currently
+        let rssi = ((-(pkt_status[0] as i32)) >> 1) as i16;
+        let snr = (((pkt_status[1] as i8) + 2) >> 2) as i16;
+        let _signal_rssi = ((-(pkt_status[2] as i32)) >> 1) as i16;  // unused currently
 
         Ok(PacketStatus {
             rssi,
