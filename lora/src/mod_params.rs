@@ -178,31 +178,3 @@ impl PacketParams {
         Ok(())
     }
 }
-
-#[derive(Clone, Copy)]
-pub enum CADSymbols {
-    _1 = 0x00,
-    _2 = 0x01,
-    _4 = 0x02,
-    _8 = 0x03,
-    _16 = 0x04,
-}
-
-impl CADSymbols {
-    pub fn value(self) -> u8 {
-        self as u8
-    }
-}
-
-#[derive(Clone, Copy)]
-pub enum CADExitMode {
-    CADOnly = 0x00,
-    CADRx = 0x01,
-    CADLBT = 0x10,
-}
-
-impl CADExitMode {
-    pub fn value(self) -> u8 {
-        self as u8
-    }
-}

@@ -8,6 +8,7 @@ pub enum LoRaMode {
     Tx = 0x03,
     RxContinuous = 0x05,
     RxSingle = 0x06,
+    Cad = 0x07
 }
 
 impl LoRaMode {

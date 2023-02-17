@@ -58,10 +58,12 @@ pub trait RadioKind {
         receiving_buffer: &mut [u8],
     ) -> Result<u8, RadioError>;
     async fn get_rx_packet_status(&mut self) -> Result<PacketStatus, RadioError>;
+    async fn do_cad(&mut self, mod_params: ModulationParams, rx_boosted_if_supported: bool) -> Result<(), RadioError>;
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError>;
     async fn process_irq(
         &mut self,
         radio_mode: RadioMode,
         rx_continuous: bool,
+        cad_activity_detected: Option<&mut bool>
     ) -> Result<(), RadioError>;
 }

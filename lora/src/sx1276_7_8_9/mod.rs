@@ -353,6 +353,18 @@ where
         Ok(PacketStatus { rssi, snr })
     }
 
+    async fn do_cad(&mut self, _mod_params: ModulationParams, rx_boosted_if_supported: bool) -> Result<(), RadioError> {
+        self.intf.iv.enable_rf_switch_rx().await?;
+
+        let mut lna_gain_final = LnaGain::G1.value();
+        if rx_boosted_if_supported {
+            lna_gain_final = LnaGain::G1.boosted_value();
+        }
+        self.write_register(Register::RegLna, lna_gain_final, false).await?;
+
+        self.write_register(Register::RegOpMode, LoRaMode::Cad.value(), false).await
+    }
+
     // Set the IRQ mask to disable unwanted interrupts, enable interrupts on DIO0 (the IRQ pin), and allow interrupts.
     // ??? remove magic numbers
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError> {
@@ -375,6 +387,15 @@ where
 
                 self.write_register(Register::RegIrqFlags, 0x00u8, false).await?;
             }
+            Some(RadioMode::ChannelActivityDetection) => {
+                self.write_register(Register::RegIrqFlagsMask, IrqMask::All.value() ^ (IrqMask::CADDone.value() | IrqMask::CADActivityDetected.value()), false).await?;
+
+                let mut dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
+                dio_mapping_1 = (dio_mapping_1 & 0x3f) | 0x80u8;
+                self.write_register(Register::RegDioMapping1, dio_mapping_1, false).await?;
+
+                self.write_register(Register::RegIrqFlags, 0x00u8, false).await?;
+            }
             _ => {
                 self.write_register(Register::RegIrqFlagsMask, IrqMask::All.value(), false).await?;
 
@@ -390,7 +411,7 @@ where
     }
 
     /// Process the radio irq
-    async fn process_irq(&mut self, radio_mode: RadioMode, _rx_continuous: bool) -> Result<(), RadioError> {
+    async fn process_irq(&mut self, radio_mode: RadioMode, _rx_continuous: bool, cad_activity_detected: Option<&mut bool>) -> Result<(), RadioError> {
         loop {
             info!("process_irq loop entered");
 
@@ -440,6 +461,11 @@ where
             } else if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
                 return Ok(());
             } else if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+                if cad_activity_detected.is_some() {
+                    *(cad_activity_detected.unwrap()) = (irq_flags
+                        & IrqMask::CADActivityDetected.value())
+                        == IrqMask::CADActivityDetected.value();
+                }
                 return Ok(());
             }
 
