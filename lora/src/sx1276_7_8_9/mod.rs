@@ -301,7 +301,12 @@ where
         self.write_register(Register::RegOpMode, LoRaMode::Tx.value(), false).await
     }
 
-    async fn do_rx(&mut self, _rx_pkt_params: &PacketParams, rx_continuous: bool, rx_boosted_if_supported: bool, symbol_timeout: u16, _rx_timeout_in_ms: u32) -> Result<(), RadioError> {
+    async fn do_rx(&mut self, _rx_pkt_params: &PacketParams, duty_cycle_params: Option<&DutyCycleParams>, rx_continuous: bool, rx_boosted_if_supported: bool, symbol_timeout: u16, _rx_timeout_in_ms: u32) -> Result<(), RadioError> {
+        match duty_cycle_params {
+            Some(&_duty_cycle) => return Err(RadioError::DutyCycleUnsupported),
+            None => ()
+        }
+
         self.intf.iv.enable_rf_switch_rx().await?;
 
         let mut symbol_timeout_final = symbol_timeout;
@@ -378,7 +383,7 @@ where
 
                 self.write_register(Register::RegIrqFlags, 0x00u8, false).await?;
             }
-            Some(RadioMode::Receive) | Some(RadioMode::ReceiveDutyCycle) => {
+            Some(RadioMode::Receive) => {
                 self.write_register(Register::RegIrqFlagsMask, IrqMask::All.value() ^ (IrqMask::RxDone.value() | IrqMask::RxTimeout.value() | IrqMask::CRCError.value()), false).await?;
 
                 let mut dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;

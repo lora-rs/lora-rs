@@ -47,6 +47,7 @@ pub trait RadioKind {
     async fn do_rx(
         &mut self,
         rx_pkt_params: &PacketParams,
+        duty_cycle_params: Option<&DutyCycleParams>,
         rx_continuous: bool,
         rx_boosted_if_supported: bool,
         symbol_timeout: u16,

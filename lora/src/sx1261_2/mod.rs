@@ -420,14 +420,19 @@ where
         self.intf.write(&[&op_code_and_timeout], false).await
     }
 
-    async fn do_rx(&mut self, rx_pkt_params: &PacketParams, rx_continuous: bool, rx_boosted_if_supported: bool, symbol_timeout: u16, rx_timeout_in_ms: u32) -> Result<(), RadioError> {
+    async fn do_rx(&mut self, rx_pkt_params: &PacketParams, duty_cycle_params: Option<&DutyCycleParams>, rx_continuous: bool, rx_boosted_if_supported: bool, symbol_timeout: u16, rx_timeout_in_ms: u32) -> Result<(), RadioError> {
+        match duty_cycle_params {
+            Some(&_duty_cycle) => if rx_continuous { return Err(RadioError::DutyCycleRxContinuousUnsupported) },
+            None => ()
+        }
+        
         self.intf.iv.enable_rf_switch_rx().await?;
 
         let mut symbol_timeout_final = symbol_timeout;
         let mut rx_timeout_in_ms_final = rx_timeout_in_ms << 6;
         if rx_continuous {
             symbol_timeout_final = 0;
-            rx_timeout_in_ms_final = 0;
+            rx_timeout_in_ms_final = 0x00ffffffu32;
         }
 
         let mut rx_gain_final = 0x94u8;
@@ -468,12 +473,27 @@ where
                 ];
         self.intf.write(&[&register_and_rx_gain], false).await?;
 
-        let op_code_and_timeout = [
-            OpCode::SetRx.value(),
-            Self::timeout_1(rx_timeout_in_ms_final),
-            Self::timeout_2(rx_timeout_in_ms_final),
-            Self::timeout_3(rx_timeout_in_ms_final)];
-        self.intf.write(&[&op_code_and_timeout], false).await
+        match duty_cycle_params {
+            Some(&duty_cycle) => {
+                let op_code_and_duty_cycle = [
+                    OpCode::SetRxDutyCycle.value(),
+                    Self::timeout_1(duty_cycle.rx_time),
+                    Self::timeout_2(duty_cycle.rx_time),
+                    Self::timeout_3(duty_cycle.rx_time),
+                    Self::timeout_1(duty_cycle.sleep_time),
+                    Self::timeout_2(duty_cycle.sleep_time),
+                    Self::timeout_3(duty_cycle.sleep_time)];
+                self.intf.write(&[&op_code_and_duty_cycle], false).await
+            }
+            None => {
+                let op_code_and_timeout = [
+                    OpCode::SetRx.value(),
+                    Self::timeout_1(rx_timeout_in_ms_final),
+                    Self::timeout_2(rx_timeout_in_ms_final),
+                    Self::timeout_3(rx_timeout_in_ms_final)];
+                self.intf.write(&[&op_code_and_timeout], false).await
+            }
+        }
     }
 
     async fn get_rx_payload(&mut self, rx_pkt_params: &PacketParams, receiving_buffer: &mut [u8]) -> Result<u8, RadioError> {
@@ -627,7 +647,7 @@ where
             if (irq_flags & IrqMask::HeaderError.value()) == IrqMask::HeaderError.value() {
                 return Err(RadioError::HeaderError);
             } else if (irq_flags & IrqMask::CRCError.value()) == IrqMask::CRCError.value() {
-                if radio_mode == RadioMode::Receive {
+                if (radio_mode == RadioMode::Receive) | (radio_mode == RadioMode::ReceiveDutyCycle) {
                     return Err(RadioError::CRCErrorOnReceive);
                 } else {
                     return Err(RadioError::CRCErrorUnexpected);
@@ -635,7 +655,7 @@ where
             } else if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
                 if radio_mode == RadioMode::Transmit {
                     return Err(RadioError::TransmitTimeout);
-                } else if radio_mode == RadioMode::Receive {
+                } else if (radio_mode == RadioMode::Receive) | (radio_mode == RadioMode::ReceiveDutyCycle) {
                     return Err(RadioError::ReceiveTimeout);
                 } else {
                     return Err(RadioError::TimeoutUnexpected);
@@ -645,7 +665,7 @@ where
             {
                 return Err(RadioError::TransmitDoneUnexpected);
             } else if ((irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value())
-                && (radio_mode != RadioMode::Receive)
+                && !((radio_mode == RadioMode::Receive) | (radio_mode == RadioMode::ReceiveDutyCycle))
             {
                 return Err(RadioError::ReceiveDoneUnexpected);
             } else if (((irq_flags & IrqMask::CADActivityDetected.value())

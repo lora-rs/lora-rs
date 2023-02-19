@@ -27,7 +27,9 @@ pub enum RadioError {
     TimeoutUnexpected,
     TransmitDoneUnexpected,
     ReceiveDoneUnexpected,
-    CADUnexpected,
+    DutyCycleUnsupported,
+    DutyCycleRxContinuousUnsupported,
+    CADUnexpected
 }
 
 pub struct RadioSystemError {
@@ -177,4 +179,10 @@ impl PacketParams {
         self.payload_length = payload_length as u8;
         Ok(())
     }
+}
+
+#[derive(Clone, Copy)]
+pub struct DutyCycleParams {
+    pub rx_time: u32,    // receive interval
+    pub sleep_time: u32, // sleep interval
 }

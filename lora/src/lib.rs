@@ -214,6 +214,7 @@ where
         &mut self,
         mod_params: ModulationParams,
         rx_pkt_params: &PacketParams,
+        duty_cycle_params: Option<&DutyCycleParams>,
         rx_continuous: bool,
         rx_boosted_if_supported: bool,
         frequency_in_hz: u32,
@@ -234,11 +235,14 @@ where
             self.image_calibrated = true;
         }
         self.radio_kind.set_channel(frequency_in_hz).await?;
-        self.radio_mode = RadioMode::Receive;
+        self.radio_mode = match duty_cycle_params {
+            Some(&_duty_cycle) => RadioMode::ReceiveDutyCycle,
+            None => RadioMode::Receive
+        };
         self.radio_kind
             .set_irq_params(Some(self.radio_mode))
             .await?;
-        self.radio_kind.do_rx(rx_pkt_params, self.rx_continuous, rx_boosted_if_supported, symbol_timeout, rx_timeout_in_ms).await
+        self.radio_kind.do_rx(rx_pkt_params, duty_cycle_params, self.rx_continuous, rx_boosted_if_supported, symbol_timeout, rx_timeout_in_ms).await
     }
     
     pub async fn rx(
