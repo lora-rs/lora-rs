@@ -421,15 +421,22 @@ where
     }
 
     async fn do_rx(&mut self, rx_pkt_params: &PacketParams, duty_cycle_params: Option<&DutyCycleParams>, rx_continuous: bool, rx_boosted_if_supported: bool, symbol_timeout: u16, rx_timeout_in_ms: u32) -> Result<(), RadioError> {
+        let mut symbol_timeout_final = symbol_timeout;
+        let mut rx_timeout_in_ms_final = rx_timeout_in_ms << 6;
+        
         match duty_cycle_params {
-            Some(&_duty_cycle) => if rx_continuous { return Err(RadioError::DutyCycleRxContinuousUnsupported) },
+            Some(&_duty_cycle) => {
+                if rx_continuous {
+                    return Err(RadioError::DutyCycleRxContinuousUnsupported);
+                } else {
+                    symbol_timeout_final = 0;
+                }
+            },
             None => ()
         }
         
         self.intf.iv.enable_rf_switch_rx().await?;
 
-        let mut symbol_timeout_final = symbol_timeout;
-        let mut rx_timeout_in_ms_final = rx_timeout_in_ms << 6;
         if rx_continuous {
             symbol_timeout_final = 0;
             rx_timeout_in_ms_final = 0x00ffffffu32;
