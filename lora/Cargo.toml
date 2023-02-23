@@ -8,7 +8,4 @@ license = "MIT OR Apache-2.0"
 defmt = { version = "0.3" }
 log = { version = "0.4.14" }
 
-embedded-hal-02 = { package = "embedded-hal", version = "0.2.6", features = ["unproven"] }
-embedded-hal-1 = { package = "embedded-hal", version = "=1.0.0-alpha.9", optional = true}
 embedded-hal-async = { version = "=0.2.0-alpha.0"}
-futures = { version = "0.3.17", default-features = false, features = [ "async-await" ] }

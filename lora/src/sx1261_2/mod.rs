@@ -12,13 +12,6 @@ const LORA_MAC_PRIVATE_SYNCWORD: u16 = 0x1424;  // corresponds to sx127x 0x12
 // Maximum number of registers that can be added to the retention list
 const MAX_NUMBER_REGS_IN_RETENTION: u8 = 4;
 
-// Possible LoRa bandwidths
-const LORA_BANDWIDTHS: [Bandwidth; 3] =
-    [Bandwidth::_125KHz, Bandwidth::_250KHz, Bandwidth::_500KHz];
-
-// Radio complete wakeup time with margin for temperature compensation [ms]
-const RADIO_WAKEUP_TIME: u32 = 3;
-
 // Internal frequency of the radio
 const SX126X_XTAL_FREQ: u32 = 32000000;
 
@@ -57,7 +50,7 @@ impl PacketParams {
         implicit_header: bool,
         payload_length: u8,
         crc_on: bool,
-        iq_inverted: bool, modulation_params: ModulationParams) -> Result<Self, RadioError> {
+        iq_inverted: bool, modulation_params: &ModulationParams) -> Result<Self, RadioError> {
         if ((modulation_params.spreading_factor == SpreadingFactor::_5) || (modulation_params.spreading_factor == SpreadingFactor::_6))
             && (preamble_length < 12)
         {
@@ -152,15 +145,6 @@ where
     }
     fn timeout_3(timeout: u32) -> u8 {
         (timeout & 0xFF) as u8
-    }
-
-    // check this ???
-    fn convert_u8_buffer_to_u32(buffer: &[u8; 4]) -> u32 {
-        let b0 = buffer[0] as u32;
-        let b1 = buffer[1] as u32;
-        let b2 = buffer[2] as u32;
-        let b3 = buffer[3] as u32;
-        (b0 << 24) | (b1 << 16) | (b2 << 8) | b3
     }
 
     fn convert_freq_in_hz_to_pll_step(freq_in_hz: u32) -> u32 {
@@ -321,23 +305,23 @@ where
         self.add_register_to_retention_list(Register::TxModulation).await
     }
 
-    async fn set_modulation_params(&mut self, mod_params: ModulationParams) -> Result<(), RadioError> {
-        let spreading_factor_val = spreading_factor_value(mod_params.spreading_factor)?;
-        let bandwidth_val = bandwidth_value(mod_params.bandwidth)?;
-        let coding_rate_val = coding_rate_value(mod_params.coding_rate)?;
+    async fn set_modulation_params(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
+        let spreading_factor_val = spreading_factor_value(mdltn_params.spreading_factor)?;
+        let bandwidth_val = bandwidth_value(mdltn_params.bandwidth)?;
+        let coding_rate_val = coding_rate_value(mdltn_params.coding_rate)?;
         let op_code_and_mod_params = [
             OpCode::SetModulationParams.value(),
             spreading_factor_val,
             bandwidth_val,
             coding_rate_val,
-            mod_params.low_data_rate_optimize
+            mdltn_params.low_data_rate_optimize
             ];
         self.intf.write(&[&op_code_and_mod_params], false).await?;
 
         // Handle modulation quality with the 500 kHz LoRa bandwidth (see DS_SX1261-2_V1.2 datasheet chapter 15.1)
         let mut tx_mod = [0x00u8];
         self.intf.read(&[&[OpCode::ReadRegister.value(), Register::TxModulation.addr1(), Register::TxModulation.addr2(), 0x00u8]], &mut tx_mod, None).await?;
-        if mod_params.bandwidth == Bandwidth::_500KHz {
+        if mdltn_params.bandwidth == Bandwidth::_500KHz {
             let register_and_tx_mod_update = [
                 OpCode::WriteRegister.value(),
                 Register::TxModulation.addr1(), Register::TxModulation.addr2(),
@@ -542,7 +526,7 @@ where
         })
     }
 
-    async fn do_cad(&mut self, mod_params: ModulationParams, rx_boosted_if_supported: bool) -> Result<(), RadioError> {
+    async fn do_cad(&mut self, mdltn_params: &ModulationParams, rx_boosted_if_supported: bool) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_rx().await?;
 
         let mut rx_gain_final = 0x94u8;
@@ -561,7 +545,7 @@ where
         // See:
         //  https://lora-developers.semtech.com/documentation/tech-papers-and-guides/channel-activity-detection-ensuring-your-lora-packets-are-sent/how-to-ensure-your-lora-packets-are-sent-properly
         // for default values used here.
-        let spreading_factor_val = spreading_factor_value(mod_params.spreading_factor)?;
+        let spreading_factor_val = spreading_factor_value(mdltn_params.spreading_factor)?;
         let op_code_and_cad_params = [
                 OpCode::SetCADParams.value(),
                 CADSymbols::_8.value(),          // number of symbols for detection
@@ -625,17 +609,6 @@ where
     async fn process_irq(&mut self, radio_mode: RadioMode, rx_continuous: bool, cad_activity_detected: Option<&mut bool>) -> Result<(), RadioError> {
         loop {
             info!("process_irq loop entered");
-
-            /* ???
-            let de = self.sub_get_device_errors().await?;
-            info!("device_errors: rc_64khz_calibration = {}, rc_13mhz_calibration = {}, pll_calibration = {}, adc_calibration = {}, image_calibration = {}, xosc_start = {}, pll_lock = {}, pa_ramp = {}",
-                               de.rc_64khz_calibration, de.rc_13mhz_calibration, de.pll_calibration, de.adc_calibration, de.image_calibration, de.xosc_start, de.pll_lock, de.pa_ramp);
-            let st = self.sub_get_status().await?;
-            info!(
-                "radio status: cmd_status: {:x}, chip_mode: {:x}",
-                st.cmd_status, st.chip_mode
-            );
-            */
 
             self.intf.iv.await_irq().await?;
             let op_code = [OpCode::GetIrqStatus.value()];

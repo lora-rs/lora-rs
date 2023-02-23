@@ -32,17 +32,6 @@ pub enum RadioError {
     CADUnexpected
 }
 
-pub struct RadioSystemError {
-    pub rc_64khz_calibration: bool,
-    pub rc_13mhz_calibration: bool,
-    pub pll_calibration: bool,
-    pub adc_calibration: bool,
-    pub image_calibration: bool,
-    pub xosc_start: bool,
-    pub pll_lock: bool,
-    pub pa_ramp: bool,
-}
-
 #[derive(Clone, Copy, PartialEq)]
 pub enum PacketType {
     GFSK = 0x00,
@@ -154,7 +143,6 @@ pub enum CodingRate {
     _4_8,
 }
 
-#[derive(Clone, Copy)]
 pub struct ModulationParams {
     pub(crate) spreading_factor: SpreadingFactor,
     pub(crate) bandwidth: Bandwidth,
@@ -162,7 +150,6 @@ pub struct ModulationParams {
     pub(crate) low_data_rate_optimize: u8,
 }
 
-#[derive(Clone, Copy)]
 pub struct PacketParams {
     pub(crate) preamble_length: u16, // number of LoRa symbols in the preamble
     pub(crate) implicit_header: bool, // if the header is explicit, it will be transmitted in the LoRa packet, but is not transmitted if the header is implicit (known fixed length)

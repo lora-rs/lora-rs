@@ -1,14 +1,24 @@
 #![no_std]
-#![allow(dead_code)]
 #![feature(async_fn_in_trait)]
 #![allow(incomplete_features)]
+// #![warn(missing_docs)]
+// #![doc = include_str!("../README.md")]
 
-//! lora provides a configurable LoRa physical layer for various MCU/Semtech chip combinations.
+//! This lora crate provides a configurable LoRa physical layer for various MCU/Semtech chip combinations.
+//! Available to any embedded framework which supports https://github.com/rust-embedded/embedded-hal/tree/master/embedded-hal-async and applicable MCUs (for example, stm32, nrf).
+//! Supports Semtech SX126x and Sx127x chips behind one LoRa physical layer API.
+//! Provides a public interface for declaring modulation and packet parameters across LoRaWAN and LoRa point-to-point (P2P) applications, but is agnostic to the use case for its physical layer featrures.
+//! Embassy examples ...
 
+/// The interface between an embedded framework/MCU combination and a Semtech chip.
 pub(crate) mod interface;
+/// Parameters used across the LoRa ceate to support various use cases.
 pub mod mod_params;
+/// Traits that must be supported by an embedded framework/MCU combination (implemented outside this crate) and supported Semtech chips (implemented within this crate)
 pub mod mod_traits;
+/// Specific implementation to support Semtech Sx126x chips
 pub mod sx1261_2;
+/// Specific implementation to support Semtech Sx127x chips
 pub mod sx1276_7_8_9;
 
 use embedded_hal_async::delay::DelayUs;
@@ -16,7 +26,7 @@ use interface::*;
 use mod_params::*;
 use mod_traits::*;
 
-/// Provides high-level access to Semtech SX126x-based boards
+/// Provides physical layer API to support Semtech LoRa chips
 pub struct LoRa<RK> {
     radio_kind: RK,
     radio_mode: RadioMode,
@@ -28,7 +38,7 @@ impl<RK> LoRa<RK>
 where
     RK: RadioKind + 'static,
 {
-    /// Builds and returns a new instance of the radio.
+    /// Build and return a new instance of the LoRa physical layer API to control an initialized LoRa radio
     pub async fn new(radio_kind: RK, enable_public_network: bool, delay: &mut impl DelayUs) -> Result<Self, RadioError> {
         let mut lora = Self {
             radio_kind,
@@ -41,6 +51,7 @@ where
         Ok(lora)
     }
 
+    /// Create modulation parameters for a communication channel
     pub fn create_modulation_params(
         &mut self,
         spreading_factor: SpreadingFactor,
@@ -57,13 +68,14 @@ where
         }
     }
 
+    /// Create packet parameters for a send operation on a communication channel
     pub fn create_tx_packet_params(
         &mut self,
         preamble_length: u16,
         implicit_header: bool,
         crc_on: bool,
         iq_inverted: bool,
-        modulation_params: ModulationParams,
+        modulation_params: &ModulationParams,
     ) -> Result<PacketParams, RadioError> {
         match self.radio_kind.get_radio_type() {
             RadioType::SX1261 | RadioType::SX1262 => PacketParams::new_for_sx1261_2(
@@ -72,7 +84,7 @@ where
                 0,
                 crc_on,
                 iq_inverted,
-                modulation_params,
+                &modulation_params,
             ),
             RadioType::SX1276 | RadioType::SX1277 | RadioType::SX1278 | RadioType::SX1279 => PacketParams::new_for_sx1276_7_8_9(
                 preamble_length,
@@ -80,11 +92,12 @@ where
                 0,
                 crc_on,
                 iq_inverted,
-                modulation_params,
+                &modulation_params,
             )
         }
     }
 
+    /// Create packet parameters for a receive operation on a communication channel
     pub fn create_rx_packet_params(
         &mut self,
         preamble_length: u16,
@@ -92,7 +105,7 @@ where
         max_payload_length: u8,
         crc_on: bool,
         iq_inverted: bool,
-        modulation_params: ModulationParams,
+        modulation_params: &ModulationParams,
     ) -> Result<PacketParams, RadioError> {
         match self.radio_kind.get_radio_type() {
             RadioType::SX1261 | RadioType::SX1262 => PacketParams::new_for_sx1261_2(
@@ -114,6 +127,7 @@ where
         }
     }
 
+    /// Initialize a Semtech chip as the radio for LoRa physical layer communications
     pub async fn init(&mut self, enable_public_network: bool, delay: &mut impl DelayUs) -> Result<(), RadioError> {
         self.image_calibrated = false;
         self.radio_kind.reset(delay).await?;
@@ -135,6 +149,7 @@ where
         self.radio_kind.update_retention_list().await
     }
 
+    /// Place the LoRa physical layer in low power mode, using warm start if the Semtech chip supports it
     pub async fn sleep(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
         if self.radio_mode != RadioMode::Sleep {
             self.radio_kind.ensure_ready(self.radio_mode).await?;
@@ -147,9 +162,10 @@ where
         Ok(())
     }
 
+    /// Prepare the Semtech chip for a send operation
     pub async fn prepare_for_tx(
         &mut self,
-        mod_params: ModulationParams,
+        mdltn_params: &ModulationParams,
         power: i8,
         tx_boosted_if_possible: bool
     ) -> Result<(), RadioError> {
@@ -159,13 +175,13 @@ where
             self.radio_kind.set_standby().await?;
             self.radio_mode = RadioMode::Standby;
         }
-        self.radio_kind.set_modulation_params(mod_params).await?;
+        self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind
             .set_tx_power_and_ramp_time(power, tx_boosted_if_possible, true)
             .await
     }
 
-    // timeout: ms
+    /// Execute a send operation
     pub async fn tx(
         &mut self,
         tx_pkt_params: &mut PacketParams,
@@ -210,9 +226,10 @@ where
         }
     }
 
+    /// Prepare the Semtech chip for a receive operation (single shot, continuous, or duty cycled) and initiate the operation
     pub async fn prepare_for_rx(
         &mut self,
-        mod_params: ModulationParams,
+        mdltn_params: &ModulationParams,
         rx_pkt_params: &PacketParams,
         duty_cycle_params: Option<&DutyCycleParams>,
         rx_continuous: bool,
@@ -228,7 +245,7 @@ where
             self.radio_mode = RadioMode::Standby;
         }
 
-        self.radio_kind.set_modulation_params(mod_params).await?;
+        self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_packet_params(rx_pkt_params).await?;
         if !self.image_calibrated {
             self.radio_kind.calibrate_image(frequency_in_hz).await?;
@@ -245,6 +262,7 @@ where
         self.radio_kind.do_rx(rx_pkt_params, duty_cycle_params, self.rx_continuous, rx_boosted_if_supported, symbol_timeout, rx_timeout_in_ms).await
     }
     
+    /// Obtain the results of a read operation
     pub async fn rx(
         &mut self,
         rx_pkt_params: &PacketParams,
@@ -272,9 +290,10 @@ where
         }
     }
 
+    /// Prepare the Semtech chip for a channel activity detection operation and initiate the operation
     pub async fn prepare_for_cad(
         &mut self,
-        mod_params: ModulationParams,
+        mdltn_params: &ModulationParams,
         rx_boosted_if_supported: bool,
         frequency_in_hz: u32,
     ) -> Result<(), RadioError> {
@@ -285,7 +304,7 @@ where
             self.radio_mode = RadioMode::Standby;
         }
 
-        self.radio_kind.set_modulation_params(mod_params).await?;
+        self.radio_kind.set_modulation_params(mdltn_params).await?;
         if !self.image_calibrated {
             self.radio_kind.calibrate_image(frequency_in_hz).await?;
             self.image_calibrated = true;
@@ -295,9 +314,10 @@ where
         self.radio_kind
             .set_irq_params(Some(self.radio_mode))
             .await?;
-        self.radio_kind.do_cad(mod_params, rx_boosted_if_supported).await
+        self.radio_kind.do_cad(mdltn_params, rx_boosted_if_supported).await
     }
     
+    /// Obtain the results of a channel activity detection operation
     pub async fn cad(
         &mut self,
     ) -> Result<bool, RadioError> {

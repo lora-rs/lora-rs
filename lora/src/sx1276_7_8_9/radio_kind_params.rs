@@ -19,6 +19,7 @@ impl LoRaMode {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum IrqMask {
     None = 0x00,
     CADActivityDetected = 0x01,
@@ -39,6 +40,7 @@ impl IrqMask {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum Register {
     RegFifo = 0x00,
     RegOpMode = 0x01,
@@ -92,6 +94,7 @@ impl Register {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum RampTime {
     Ramp3_4Ms = 0x00,
     Ramp2Ms = 0x01,
@@ -118,6 +121,7 @@ impl RampTime {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum LnaGain {
     G1 = 0x20, // maximum gain (default)
     G2 = 0x40,
@@ -137,6 +141,7 @@ impl LnaGain {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum PaConfig {
     PaBoost = 0x80,
     PaOutputRfoPin = 0x00,
@@ -170,6 +175,7 @@ pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError>  {
     }
 }
 
+#[allow(dead_code)]
 pub fn coding_rate_value(coding_rate: CodingRate) -> Result<u8, RadioError>  {
     match coding_rate {
         CodingRate::_4_5 => Ok(0x01),

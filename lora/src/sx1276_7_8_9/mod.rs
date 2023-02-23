@@ -15,10 +15,6 @@ const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
 // Frequency synthesizer step for frequency calculation (Hz)
 const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625;  // FXOSC (32 MHz) * 1000000 (Hz/MHz) / 524288 (2^19)
 
-// Possible LoRa bandwidths
-const LORA_BANDWIDTHS: [Bandwidth; 3] =
-    [Bandwidth::_125KHz, Bandwidth::_250KHz, Bandwidth::_500KHz];
-
 impl ModulationParams {
     pub fn new_for_sx1276_7_8_9(
         spreading_factor: SpreadingFactor,
@@ -43,7 +39,7 @@ impl PacketParams {
         implicit_header: bool,
         payload_length: u8,
         crc_on: bool,
-        iq_inverted: bool, modulation_params: ModulationParams) -> Result<Self, RadioError> {
+        iq_inverted: bool, modulation_params: &ModulationParams) -> Result<Self, RadioError> {
         if (modulation_params.spreading_factor == SpreadingFactor::_6) && !implicit_header {
             return Err(RadioError::InvalidExplicitHeaderRequest);
         }
@@ -206,18 +202,18 @@ where
         Ok(())
     }
 
-    async fn set_modulation_params(&mut self, mod_params: ModulationParams) -> Result<(), RadioError> {
-        let spreading_factor_val = spreading_factor_value(mod_params.spreading_factor)?;
-        let bandwidth_val = bandwidth_value(mod_params.bandwidth)?;
-        let coding_rate_denominator_val = coding_rate_denominator_value(mod_params.coding_rate)?;
+    async fn set_modulation_params(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
+        let spreading_factor_val = spreading_factor_value(mdltn_params.spreading_factor)?;
+        let bandwidth_val = bandwidth_value(mdltn_params.bandwidth)?;
+        let coding_rate_denominator_val = coding_rate_denominator_value(mdltn_params.coding_rate)?;
         let mut ldro_agc_auto_flags = 0x00u8; // LDRO and AGC Auto both off
-        if mod_params.low_data_rate_optimize != 0 {
+        if mdltn_params.low_data_rate_optimize != 0 {
             ldro_agc_auto_flags = 0x08u8;  // LDRO on and AGC Auto off
         }
 
         let mut optimize = 0xc3u8;
         let mut threshold = 0x0au8;
-        if mod_params.spreading_factor == SpreadingFactor::_6 {
+        if mdltn_params.spreading_factor == SpreadingFactor::_6 {
             optimize = 0xc5u8;
             threshold = 0x0cu8;
         }
@@ -358,7 +354,7 @@ where
         Ok(PacketStatus { rssi, snr })
     }
 
-    async fn do_cad(&mut self, _mod_params: ModulationParams, rx_boosted_if_supported: bool) -> Result<(), RadioError> {
+    async fn do_cad(&mut self, _mdltn_params: &ModulationParams, rx_boosted_if_supported: bool) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_rx().await?;
 
         let mut lna_gain_final = LnaGain::G1.value();

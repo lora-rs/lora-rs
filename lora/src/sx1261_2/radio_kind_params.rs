@@ -1,27 +1,5 @@
 use crate::mod_params::*;
 
-pub struct RadioSystemError {
-    pub rc_64khz_calibration: bool,
-    pub rc_13mhz_calibration: bool,
-    pub pll_calibration: bool,
-    pub adc_calibration: bool,
-    pub image_calibration: bool,
-    pub xosc_start: bool,
-    pub pll_lock: bool,
-    pub pa_ramp: bool,
-}
-
-pub struct RadioStatus {
-    pub cmd_status: u8,
-    pub chip_mode: u8,
-}
-
-impl RadioStatus {
-    pub fn value(self) -> u8 {
-        (self.chip_mode << 4) | (self.cmd_status << 1)
-    }
-}
-
 #[derive(Clone, Copy)]
 pub enum IrqMask {
     None = 0x0000,
@@ -45,6 +23,7 @@ impl IrqMask {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum Register {
     PacketParams = 0x0704,          // packet configuration
     PayloadLength = 0x0702,         // payload size
@@ -75,6 +54,7 @@ impl Register {
 }
 
 #[derive(Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 pub enum OpCode {
     GetStatus = 0xC0,
     WriteRegister = 0x0D,
@@ -139,6 +119,7 @@ impl SleepParams {
 }
 
 #[derive(Clone, Copy, PartialEq)]
+#[allow(dead_code)]
 pub enum StandbyMode {
     RC = 0x00,
     XOSC = 0x01,
@@ -151,6 +132,7 @@ impl StandbyMode {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum RegulatorMode {
     UseLDO = 0x00,
     UseDCDC = 0x01,
@@ -163,6 +145,7 @@ impl RegulatorMode {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub struct CalibrationParams {
     pub rc64k_enable: bool,     // calibrate RC64K clock
     pub rc13m_enable: bool,     // calibrate RC13M clock
@@ -173,6 +156,7 @@ pub struct CalibrationParams {
     pub img_enable: bool,
 }
 
+#[allow(dead_code)]
 impl CalibrationParams {
     pub fn value(self) -> u8 {
         ((self.img_enable as u8) << 6)
@@ -186,6 +170,7 @@ impl CalibrationParams {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum TcxoCtrlVoltage {
     Ctrl1V6 = 0x00,
     Ctrl1V7 = 0x01,
@@ -204,6 +189,7 @@ impl TcxoCtrlVoltage {
 }
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum RampTime {
     Ramp10Us = 0x00,
     Ramp20Us = 0x01,

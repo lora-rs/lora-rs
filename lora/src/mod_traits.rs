@@ -37,7 +37,7 @@ pub trait RadioKind {
     async fn update_retention_list(&mut self) -> Result<(), RadioError>;
     async fn set_modulation_params(
         &mut self,
-        mod_params: ModulationParams,
+        mdltn_params: &ModulationParams,
     ) -> Result<(), RadioError>;
     async fn set_packet_params(&mut self, pkt_params: &PacketParams) -> Result<(), RadioError>;
     async fn calibrate_image(&mut self, frequency_in_hz: u32) -> Result<(), RadioError>;
@@ -59,7 +59,7 @@ pub trait RadioKind {
         receiving_buffer: &mut [u8],
     ) -> Result<u8, RadioError>;
     async fn get_rx_packet_status(&mut self) -> Result<PacketStatus, RadioError>;
-    async fn do_cad(&mut self, mod_params: ModulationParams, rx_boosted_if_supported: bool) -> Result<(), RadioError>;
+    async fn do_cad(&mut self, mdltn_params: &ModulationParams, rx_boosted_if_supported: bool) -> Result<(), RadioError>;
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError>;
     async fn process_irq(
         &mut self,
