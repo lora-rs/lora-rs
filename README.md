@@ -30,7 +30,7 @@ Examples of API usage:
 - <a href="https://github.com/ceekdee/embassy/blob/master/examples/stm32wl/src/bin/lora_p2p_send.rs">stm32wl P2P send and sleep</a>;
 - <a href="https://github.com/ceekdee/embassy/blob/master/examples/stm32l0/src/bin/lora_p2p_receive.rs">stm32l0 P2P receive continuous</a>;
 - <a href="https://github.com/ceekdee/embassy/blob/master/examples/nrf/src/bin/lora_p2p_receive_duty_cycle.rs">nrf duty cycle receive</a>;
-- <a href="https://github.com/ceekdee/embassy/blob/master/examples/nrf/src/bin/lora_cad.rs">nrf channel activity detection/a>;
+- <a href="https://github.com/ceekdee/embassy/blob/master/examples/nrf/src/bin/lora_cad.rs">nrf channel activity detection</a>.
 
 ## Embedded framework/MCU support
 
@@ -53,4 +53,4 @@ For developers wishing to add support for new LoRa chips or enhance support for 
 Example RadioKind implementations and ancillary information:
 
 - <a href="https://github.com/ceekdee/lora/tree/main/src/sx1261_2">the Sx1261/2 radio kind</a>;
-- <a href="https://github.com/ceekdee/lora/tree/main/src/sx1276_7_8_9">the Sx1276/7/8/9 radio kind</a>;
+- <a href="https://github.com/ceekdee/lora/tree/main/src/sx1276_7_8_9">the Sx1276/7/8/9 radio kind</a>.
