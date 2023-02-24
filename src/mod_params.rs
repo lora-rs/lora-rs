@@ -29,7 +29,7 @@ pub enum RadioError {
     ReceiveDoneUnexpected,
     DutyCycleUnsupported,
     DutyCycleRxContinuousUnsupported,
-    CADUnexpected
+    CADUnexpected,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -67,7 +67,7 @@ pub enum RadioType {
     SX1276,
     SX1277,
     SX1278,
-    SX1279
+    SX1279,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -121,7 +121,7 @@ pub enum SpreadingFactor {
 #[derive(Clone, Copy, PartialEq)]
 pub enum Bandwidth {
     _125KHz,
-    _250KHz, 
+    _250KHz,
     _500KHz,
 }
 
@@ -151,7 +151,7 @@ pub struct ModulationParams {
 }
 
 pub struct PacketParams {
-    pub(crate) preamble_length: u16, // number of LoRa symbols in the preamble
+    pub(crate) preamble_length: u16,  // number of LoRa symbols in the preamble
     pub(crate) implicit_header: bool, // if the header is explicit, it will be transmitted in the LoRa packet, but is not transmitted if the header is implicit (known fixed length)
     pub(crate) payload_length: u8,
     pub(crate) crc_on: bool,

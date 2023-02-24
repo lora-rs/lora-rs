@@ -1,5 +1,8 @@
 use embedded_hal_async::spi::SpiBus;
-use crate::{mod_traits::InterfaceVariant, mod_params::RadioError, mod_params::RadioError::*};
+
+use crate::mod_params::RadioError;
+use crate::mod_params::RadioError::*;
+use crate::mod_traits::InterfaceVariant;
 
 pub(crate) struct Interface<SPI, IV> {
     pub(crate) spi: SPI,
@@ -16,11 +19,7 @@ where
     }
 
     // Write one or more buffers to the radio.
-    pub async fn write(
-        &mut self,
-        write_buffers: &[&[u8]],
-        is_sleep_command: bool,
-    ) -> Result<(), RadioError> {
+    pub async fn write(&mut self, write_buffers: &[&[u8]], is_sleep_command: bool) -> Result<(), RadioError> {
         self.iv.set_nss_low().await?;
         for buffer in write_buffers {
             let write_result = self.spi.write(buffer).await.map_err(|_| SPI);
@@ -46,7 +45,7 @@ where
         &mut self,
         write_buffers: &[&[u8]],
         read_buffer: &mut [u8],
-        read_length: Option<u8>
+        read_length: Option<u8>,
     ) -> Result<(), RadioError> {
         let mut input = [0u8];
 
@@ -65,9 +64,9 @@ where
 
         let number_to_read = match read_length {
             Some(len) => len as usize,
-            None => read_buffer.len()
+            None => read_buffer.len(),
         };
-        
+
         for i in 0..number_to_read {
             let transfer_result = self.spi.transfer(&mut input, &[0x00]).await.map_err(|_| SPI);
             let flush_result = self.spi.flush().await.map_err(|_| SPI);

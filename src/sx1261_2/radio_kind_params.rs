@@ -37,11 +37,11 @@ pub enum Register {
     XTATrim = 0x0911,               // device internal trimming capacitor
     OCP = 0x08E7,                   // over current protection max value
     RetentionList = 0x029F,         // retention list
-    IQPolarity = 0x0736, // optimize the inverted IQ operation (see DS_SX1261-2_V1.2 datasheet chapter 15.4)
+    IQPolarity = 0x0736,            // optimize the inverted IQ operation (see DS_SX1261-2_V1.2 datasheet chapter 15.4)
     TxModulation = 0x0889, // modulation quality with 500 kHz LoRa Bandwidth (see DS_SX1261-2_V1.2 datasheet chapter 15.1)
-    TxClampCfg = 0x08D8, // better resistance to antenna mismatch (see DS_SX1261-2_V1.2 datasheet chapter 15.2)
-    RTCCtrl = 0x0902,    // RTC control
-    EvtClr = 0x0944,     // event clear
+    TxClampCfg = 0x08D8,   // better resistance to antenna mismatch (see DS_SX1261-2_V1.2 datasheet chapter 15.2)
+    RTCCtrl = 0x0902,      // RTC control
+    EvtClr = 0x0944,       // event clear
 }
 
 impl Register {
@@ -243,7 +243,7 @@ pub enum CADSymbols {
     _2 = 0x01,
     _4 = 0x02,
     _8 = 0x03,
-    _16 = 0x04
+    _16 = 0x04,
 }
 
 impl CADSymbols {
@@ -251,5 +251,3 @@ impl CADSymbols {
         self as u8
     }
 }
-
-

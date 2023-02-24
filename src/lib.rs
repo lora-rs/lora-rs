@@ -1,8 +1,8 @@
 #![no_std]
 #![feature(async_fn_in_trait)]
 #![allow(incomplete_features)]
-// #![warn(missing_docs)]
-// #![doc = include_str!("../README.md")]
+#![warn(missing_docs)]
+#![doc = include_str!("../README.md")]
 
 //! This lora crate provides a configurable LoRa physical layer for various MCU/Semtech chip combinations.
 //! Available to any embedded framework which supports https://github.com/rust-embedded/embedded-hal/tree/master/embedded-hal-async and applicable MCUs (for example, stm32, nrf).
@@ -39,7 +39,11 @@ where
     RK: RadioKind + 'static,
 {
     /// Build and return a new instance of the LoRa physical layer API to control an initialized LoRa radio
-    pub async fn new(radio_kind: RK, enable_public_network: bool, delay: &mut impl DelayUs) -> Result<Self, RadioError> {
+    pub async fn new(
+        radio_kind: RK,
+        enable_public_network: bool,
+        delay: &mut impl DelayUs,
+    ) -> Result<Self, RadioError> {
         let mut lora = Self {
             radio_kind,
             radio_mode: RadioMode::Sleep,
@@ -86,14 +90,16 @@ where
                 iq_inverted,
                 &modulation_params,
             ),
-            RadioType::SX1276 | RadioType::SX1277 | RadioType::SX1278 | RadioType::SX1279 => PacketParams::new_for_sx1276_7_8_9(
-                preamble_length,
-                implicit_header,
-                0,
-                crc_on,
-                iq_inverted,
-                &modulation_params,
-            )
+            RadioType::SX1276 | RadioType::SX1277 | RadioType::SX1278 | RadioType::SX1279 => {
+                PacketParams::new_for_sx1276_7_8_9(
+                    preamble_length,
+                    implicit_header,
+                    0,
+                    crc_on,
+                    iq_inverted,
+                    &modulation_params,
+                )
+            }
         }
     }
 
@@ -116,14 +122,16 @@ where
                 iq_inverted,
                 modulation_params,
             ),
-            RadioType::SX1276 | RadioType::SX1277 | RadioType::SX1278 | RadioType::SX1279 => PacketParams::new_for_sx1276_7_8_9(
-                preamble_length,
-                implicit_header,
-                max_payload_length,
-                crc_on,
-                iq_inverted,
-                modulation_params,
-            )
+            RadioType::SX1276 | RadioType::SX1277 | RadioType::SX1278 | RadioType::SX1279 => {
+                PacketParams::new_for_sx1276_7_8_9(
+                    preamble_length,
+                    implicit_header,
+                    max_payload_length,
+                    crc_on,
+                    iq_inverted,
+                    modulation_params,
+                )
+            }
         }
     }
 
@@ -136,16 +144,12 @@ where
         self.radio_kind.set_standby().await?;
         self.radio_mode = RadioMode::Standby;
         self.rx_continuous = false;
-        self.radio_kind
-            .set_lora_modem(enable_public_network)
-            .await?;
+        self.radio_kind.set_lora_modem(enable_public_network).await?;
         self.radio_kind.set_oscillator().await?;
         self.radio_kind.set_regulator_mode().await?;
         self.radio_kind.set_tx_rx_buffer_base_address(0, 0).await?;
         self.radio_kind.set_tx_power_and_ramp_time(0, false, false).await?;
-        self.radio_kind
-            .set_irq_params(Some(self.radio_mode))
-            .await?;
+        self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.radio_kind.update_retention_list().await
     }
 
@@ -167,7 +171,7 @@ where
         &mut self,
         mdltn_params: &ModulationParams,
         power: i8,
-        tx_boosted_if_possible: bool
+        tx_boosted_if_possible: bool,
     ) -> Result<(), RadioError> {
         self.rx_continuous = false;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
@@ -189,7 +193,7 @@ where
         buffer: &[u8],
         timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
-        self.rx_continuous = false; 
+        self.rx_continuous = false;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;
@@ -205,9 +209,7 @@ where
         self.radio_kind.set_channel(frequency_in_hz).await?;
         self.radio_kind.set_payload(buffer).await?;
         self.radio_mode = RadioMode::Transmit;
-        self.radio_kind
-            .set_irq_params(Some(self.radio_mode))
-            .await?;
+        self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.radio_kind.do_tx(timeout_in_ms).await?;
         match self
             .radio_kind
@@ -236,7 +238,7 @@ where
         rx_boosted_if_supported: bool,
         frequency_in_hz: u32,
         symbol_timeout: u16,
-        rx_timeout_in_ms: u32
+        rx_timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
         self.rx_continuous = rx_continuous;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
@@ -254,19 +256,26 @@ where
         self.radio_kind.set_channel(frequency_in_hz).await?;
         self.radio_mode = match duty_cycle_params {
             Some(&_duty_cycle) => RadioMode::ReceiveDutyCycle,
-            None => RadioMode::Receive
+            None => RadioMode::Receive,
         };
+        self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.radio_kind
-            .set_irq_params(Some(self.radio_mode))
-            .await?;
-        self.radio_kind.do_rx(rx_pkt_params, duty_cycle_params, self.rx_continuous, rx_boosted_if_supported, symbol_timeout, rx_timeout_in_ms).await
+            .do_rx(
+                rx_pkt_params,
+                duty_cycle_params,
+                self.rx_continuous,
+                rx_boosted_if_supported,
+                symbol_timeout,
+                rx_timeout_in_ms,
+            )
+            .await
     }
-    
+
     /// Obtain the results of a read operation
     pub async fn rx(
         &mut self,
         rx_pkt_params: &PacketParams,
-        receiving_buffer: &mut [u8]
+        receiving_buffer: &mut [u8],
     ) -> Result<(u8, PacketStatus), RadioError> {
         match self
             .radio_kind
@@ -311,25 +320,19 @@ where
         }
         self.radio_kind.set_channel(frequency_in_hz).await?;
         self.radio_mode = RadioMode::ChannelActivityDetection;
-        self.radio_kind
-            .set_irq_params(Some(self.radio_mode))
-            .await?;
+        self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.radio_kind.do_cad(mdltn_params, rx_boosted_if_supported).await
     }
-    
+
     /// Obtain the results of a channel activity detection operation
-    pub async fn cad(
-        &mut self,
-    ) -> Result<bool, RadioError> {
+    pub async fn cad(&mut self) -> Result<bool, RadioError> {
         let mut cad_activity_detected = false;
         match self
             .radio_kind
             .process_irq(self.radio_mode, self.rx_continuous, Some(&mut cad_activity_detected))
             .await
         {
-            Ok(()) => {
-                Ok(cad_activity_detected)
-            }
+            Ok(()) => Ok(cad_activity_detected),
             Err(err) => {
                 self.radio_kind.ensure_ready(self.radio_mode).await?;
                 self.radio_kind.set_standby().await?;

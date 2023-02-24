@@ -8,7 +8,7 @@ pub enum LoRaMode {
     Tx = 0x03,
     RxContinuous = 0x05,
     RxSingle = 0x06,
-    Cad = 0x07
+    Cad = 0x07,
 }
 
 impl LoRaMode {
@@ -81,7 +81,7 @@ pub enum Register {
     RegDioMapping1 = 0x40,
     RegVersion = 0x42,
     RegTcxo = 0x4b,
-    RegPaDac = 0x4d
+    RegPaDac = 0x4d,
 }
 
 impl Register {
@@ -111,7 +111,7 @@ pub enum RampTime {
     Ramp20Us = 0x0c,
     Ramp15Us = 0x0d,
     Ramp12Us = 0x0e,
-    Ramp10Us = 0x0f
+    Ramp10Us = 0x0f,
 }
 
 impl RampTime {
@@ -128,7 +128,7 @@ pub enum LnaGain {
     G3 = 0x60,
     G4 = 0x80,
     G5 = 0xa0,
-    G6 = 0xc0  // minumum gain
+    G6 = 0xc0, // minumum gain
 }
 
 impl LnaGain {
@@ -154,7 +154,7 @@ impl PaConfig {
     }
 }
 
-pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, RadioError>  {
+pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, RadioError> {
     match spreading_factor {
         SpreadingFactor::_5 => Ok(0x05),
         SpreadingFactor::_6 => Ok(0x06),
@@ -167,7 +167,7 @@ pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, R
     }
 }
 
-pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError>  {
+pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError> {
     match bandwidth {
         Bandwidth::_125KHz => Ok(0x07),
         Bandwidth::_250KHz => Ok(0x08),
@@ -176,7 +176,7 @@ pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError>  {
 }
 
 #[allow(dead_code)]
-pub fn coding_rate_value(coding_rate: CodingRate) -> Result<u8, RadioError>  {
+pub fn coding_rate_value(coding_rate: CodingRate) -> Result<u8, RadioError> {
     match coding_rate {
         CodingRate::_4_5 => Ok(0x01),
         CodingRate::_4_6 => Ok(0x02),
@@ -185,7 +185,7 @@ pub fn coding_rate_value(coding_rate: CodingRate) -> Result<u8, RadioError>  {
     }
 }
 
-pub fn coding_rate_denominator_value(coding_rate: CodingRate) -> Result<u8, RadioError>  {
+pub fn coding_rate_denominator_value(coding_rate: CodingRate) -> Result<u8, RadioError> {
     match coding_rate {
         CodingRate::_4_5 => Ok(0x05),
         CodingRate::_4_6 => Ok(0x06),
