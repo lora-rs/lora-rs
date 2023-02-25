@@ -119,6 +119,23 @@ impl OpCode {
     }
 }
 
+// See RM0453 Reference manual STM32WL5x advanced Arm®-based 32-bit MCUs with sub-GHz radio solution, section 5.8.5
+#[derive(Clone, Copy, PartialEq)]
+pub enum OpStatusErrorMask {
+    Timeout = (0x03 << 1),
+    ProcessingError = (0x04 << 1),
+    ExecutionError = (0x05 << 1),
+}
+
+impl OpStatusErrorMask {
+    pub fn is_error(status: u8) -> bool {
+        let error_flags = status & 0x0e;
+        OpStatusErrorMask::Timeout as u8 == error_flags
+            || OpStatusErrorMask::ProcessingError as u8 == error_flags
+            || OpStatusErrorMask::ExecutionError as u8 == error_flags
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct SleepParams {
     pub wakeup_rtc: bool, // get out of sleep mode if wakeup signal received from RTC

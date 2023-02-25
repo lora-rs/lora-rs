@@ -612,7 +612,10 @@ where
     ) -> Result<u8, RadioError> {
         let op_code = [OpCode::GetRxBufferStatus.value()];
         let mut rx_buffer_status = [0x00u8; 2];
-        self.intf.read_with_status(&[&op_code], &mut rx_buffer_status).await?; // handle return status ???
+        let read_status = self.intf.read_with_status(&[&op_code], &mut rx_buffer_status).await?;
+        if OpStatusErrorMask::is_error(read_status) {
+            return Err(RadioError::OpError(read_status));
+        }
 
         let mut payload_length_buffer = [0x00u8];
         if rx_pkt_params.implicit_header {
@@ -655,8 +658,10 @@ where
     async fn get_rx_packet_status(&mut self) -> Result<PacketStatus, RadioError> {
         let op_code = [OpCode::GetPacketStatus.value()];
         let mut pkt_status = [0x00u8; 3];
-        self.intf.read_with_status(&[&op_code], &mut pkt_status).await?; // handle return status ???
-
+        let read_status = self.intf.read_with_status(&[&op_code], &mut pkt_status).await?;
+        if OpStatusErrorMask::is_error(read_status) {
+            return Err(RadioError::OpError(read_status));
+        }
         // check this ???
         let rssi = ((-(pkt_status[0] as i32)) >> 1) as i16;
         let snr = (((pkt_status[1] as i8) + 2) >> 2) as i16;
@@ -760,7 +765,10 @@ where
             self.intf.iv.await_irq().await?;
             let op_code = [OpCode::GetIrqStatus.value()];
             let mut irq_status = [0x00u8, 0x00u8];
-            self.intf.read_with_status(&[&op_code], &mut irq_status).await?; // handle return status ???
+            let read_status = self.intf.read_with_status(&[&op_code], &mut irq_status).await?;
+            if OpStatusErrorMask::is_error(read_status) {
+                return Err(RadioError::OpError(read_status));
+            }
             let irq_flags = ((irq_status[0] as u16) << 8) | (irq_status[1] as u16);
             let op_code_and_irq_status = [OpCode::ClrIrqStatus.value(), irq_status[0], irq_status[1]];
             self.intf.write(&[&op_code_and_irq_status], false).await?;

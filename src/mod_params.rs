@@ -14,6 +14,7 @@ pub enum RadioError {
     Irq,
     DIO1,
     DelayError,
+    OpError(u8),
     InvalidBaseAddress(usize, usize),
     PayloadSizeUnexpected(usize),
     PayloadSizeMismatch(usize, usize),
@@ -101,7 +102,7 @@ impl Bandwidth {
     }
 }
 
-/// Valid coding rates for one or more LoRa chips supported by this crate 
+/// Valid coding rates for one or more LoRa chips supported by this crate
 #[derive(Clone, Copy)]
 #[allow(missing_docs)]
 pub enum CodingRate {
