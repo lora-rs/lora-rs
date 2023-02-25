@@ -4,11 +4,11 @@
 #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
 
-/// The interface between an embedded framework/MCU combination and a Semtech chip.
+/// The read/write interface between an embedded framework/MCU combination and a LoRa chip
 pub(crate) mod interface;
-/// Parameters used across the LoRa ceate to support various use cases.
+/// Parameters used across the lora crate to support various use cases
 pub mod mod_params;
-/// Traits that must be supported by an embedded framework/MCU combination (implemented outside this crate) and supported Semtech chips (implemented within this crate)
+/// Traits implemented externally or internally to support control of LoRa chips
 pub mod mod_traits;
 /// Specific implementation to support Semtech Sx126x chips
 pub mod sx1261_2;
