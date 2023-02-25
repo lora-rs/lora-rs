@@ -32,6 +32,7 @@ const SX126X_MAX_LORA_SYMB_NUM_TIMEOUT: u8 = 248;
 const BRD_TCXO_WAKEUP_TIME: u32 = 10;
 
 impl ModulationParams {
+    /// Create modulation parameters specific to the LoRa chip kind and type
     pub fn new_for_sx1261_2(
         spreading_factor: SpreadingFactor,
         bandwidth: Bandwidth,
@@ -54,6 +55,7 @@ impl ModulationParams {
 }
 
 impl PacketParams {
+    /// Create packet parameters specific to the LoRa chip kind and type
     pub fn new_for_sx1261_2(
         mut preamble_length: u16,
         implicit_header: bool,
@@ -79,6 +81,7 @@ impl PacketParams {
     }
 }
 
+/// Base for the RadioKind implementation for the LoRa chip kind and type
 pub struct SX1261_2<SPI, IV> {
     radio_type: RadioType,
     intf: Interface<SPI, IV>,
@@ -89,6 +92,7 @@ where
     SPI: SpiBus<u8> + 'static,
     IV: InterfaceVariant + 'static,
 {
+    /// Create an instance of the RadioKind implementation for the LoRa chip kind and type
     pub fn new(radio_type: RadioType, spi: SPI, iv: IV) -> Self {
         let intf = Interface::new(spi, iv);
         Self { radio_type, intf }

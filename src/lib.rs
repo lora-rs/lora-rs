@@ -4,12 +4,6 @@
 #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
 
-//! This lora crate provides a configurable LoRa physical layer for various MCU/Semtech chip combinations.
-//! Available to any embedded framework which supports https://github.com/rust-embedded/embedded-hal/tree/master/embedded-hal-async and applicable MCUs (for example, stm32, nrf).
-//! Supports Semtech SX126x and Sx127x chips behind one LoRa physical layer API.
-//! Provides a public interface for declaring modulation and packet parameters across LoRaWAN and LoRa point-to-point (P2P) applications, but is agnostic to the use case for its physical layer featrures.
-//! Embassy examples ...
-
 /// The interface between an embedded framework/MCU combination and a Semtech chip.
 pub(crate) mod interface;
 /// Parameters used across the LoRa ceate to support various use cases.
@@ -26,7 +20,7 @@ use interface::*;
 use mod_params::*;
 use mod_traits::*;
 
-/// Provides physical layer API to support Semtech LoRa chips
+/// Provides the physical layer API to support LoRa chips
 pub struct LoRa<RK> {
     radio_kind: RK,
     radio_mode: RadioMode,

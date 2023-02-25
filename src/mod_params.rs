@@ -1,7 +1,9 @@
 use core::fmt::Debug;
 
+/// Errors types reported during LoRa physical layer processing
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, defmt::Format, PartialEq)]
+#[allow(missing_docs)]
 pub enum RadioError {
     SPI,
     NSS,
@@ -32,35 +34,17 @@ pub enum RadioError {
     CADUnexpected,
 }
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum PacketType {
-    GFSK = 0x00,
-    LoRa = 0x01,
-    None = 0x0F,
-}
-
-impl PacketType {
-    pub const fn value(self) -> u8 {
-        self as u8
-    }
-    pub fn to_enum(value: u8) -> Self {
-        if value == 0x00 {
-            PacketType::GFSK
-        } else if value == 0x01 {
-            PacketType::LoRa
-        } else {
-            PacketType::None
-        }
-    }
-}
-
+/// Status for a received packet
 #[derive(Clone, Copy)]
+#[allow(missing_docs)]
 pub struct PacketStatus {
     pub rssi: i16,
     pub snr: i16,
 }
 
+/// LoRa chips supported by this crate
 #[derive(Clone, Copy, PartialEq)]
+#[allow(missing_docs)]
 pub enum RadioType {
     SX1261,
     SX1262,
@@ -70,7 +54,9 @@ pub enum RadioType {
     SX1279,
 }
 
+/// The state of the radio
 #[derive(Clone, Copy, PartialEq)]
+#[allow(missing_docs)]
 pub enum RadioMode {
     Sleep,                    // sleep mode
     Standby,                  // standby mode
@@ -81,32 +67,9 @@ pub enum RadioMode {
     ChannelActivityDetection, // channel activity detection mode
 }
 
-pub enum RadioState {
-    Idle = 0x00,
-    RxRunning = 0x01,
-    TxRunning = 0x02,
-    ChannelActivityDetecting = 0x03,
-}
-
-impl RadioState {
-    /// Returns the value of the state.
-    pub fn value(self) -> u8 {
-        self as u8
-    }
-}
-
-pub struct RadioStatus {
-    pub cmd_status: u8,
-    pub chip_mode: u8,
-}
-
-impl RadioStatus {
-    pub fn value(self) -> u8 {
-        (self.chip_mode << 4) | (self.cmd_status << 1)
-    }
-}
-
+/// Valid spreading factors for one or more LoRa chips supported by this crate
 #[derive(Clone, Copy, PartialEq)]
+#[allow(missing_docs)]
 pub enum SpreadingFactor {
     _5,
     _6,
@@ -118,7 +81,9 @@ pub enum SpreadingFactor {
     _12,
 }
 
+/// Valid bandwidths for one or more LoRa chips supported by this crate
 #[derive(Clone, Copy, PartialEq)]
+#[allow(missing_docs)]
 pub enum Bandwidth {
     _125KHz,
     _250KHz,
@@ -126,6 +91,7 @@ pub enum Bandwidth {
 }
 
 impl Bandwidth {
+    /// Convert to Hertz
     pub fn value_in_hz(self) -> u32 {
         match self {
             Bandwidth::_125KHz => 125000u32,
@@ -135,7 +101,9 @@ impl Bandwidth {
     }
 }
 
+/// Valid coding rates for one or more LoRa chips supported by this crate 
 #[derive(Clone, Copy)]
+#[allow(missing_docs)]
 pub enum CodingRate {
     _4_5,
     _4_6,
@@ -143,6 +111,7 @@ pub enum CodingRate {
     _4_8,
 }
 
+/// Modulation parameters for a send and/or receive communication channel
 pub struct ModulationParams {
     pub(crate) spreading_factor: SpreadingFactor,
     pub(crate) bandwidth: Bandwidth,
@@ -150,6 +119,7 @@ pub struct ModulationParams {
     pub(crate) low_data_rate_optimize: u8,
 }
 
+/// Packet parameters for a send or receive communication channel
 pub struct PacketParams {
     pub(crate) preamble_length: u16,  // number of LoRa symbols in the preamble
     pub(crate) implicit_header: bool, // if the header is explicit, it will be transmitted in the LoRa packet, but is not transmitted if the header is implicit (known fixed length)
@@ -168,7 +138,9 @@ impl PacketParams {
     }
 }
 
+/// Receive duty cycle parameters
 #[derive(Clone, Copy)]
+#[allow(missing_docs)]
 pub struct DutyCycleParams {
     pub rx_time: u32,    // receive interval
     pub sleep_time: u32, // sleep interval

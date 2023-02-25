@@ -1,5 +1,19 @@
 use crate::mod_params::*;
 
+#[derive(Clone, Copy, PartialEq)]
+#[allow(dead_code)]
+pub enum PacketType {
+    GFSK = 0x00,
+    LoRa = 0x01,
+    None = 0x0F,
+}
+
+impl PacketType {
+    pub const fn value(self) -> u8 {
+        self as u8
+    }
+}
+
 #[derive(Clone, Copy)]
 pub enum IrqMask {
     None = 0x0000,

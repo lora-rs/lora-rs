@@ -19,6 +19,7 @@ const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
 const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625; // FXOSC (32 MHz) * 1000000 (Hz/MHz) / 524288 (2^19)
 
 impl ModulationParams {
+    /// Create modulation parameters specific to the LoRa chip kind and type
     pub fn new_for_sx1276_7_8_9(
         spreading_factor: SpreadingFactor,
         bandwidth: Bandwidth,
@@ -42,6 +43,7 @@ impl ModulationParams {
 }
 
 impl PacketParams {
+    /// Create packet parameters specific to the LoRa chip kind and type
     pub fn new_for_sx1276_7_8_9(
         preamble_length: u16,
         implicit_header: bool,
@@ -63,6 +65,7 @@ impl PacketParams {
     }
 }
 
+/// Base for the RadioKind implementation for the LoRa chip kind and type
 pub struct SX1276_7_8_9<SPI, IV> {
     radio_type: RadioType,
     intf: Interface<SPI, IV>,
@@ -73,6 +76,7 @@ where
     SPI: SpiBus<u8> + 'static,
     IV: InterfaceVariant + 'static,
 {
+    /// Create an instance of the RadioKind implementation for the LoRa chip kind and type
     pub fn new(radio_type: RadioType, spi: SPI, iv: IV) -> Self {
         let intf = Interface::new(spi, iv);
         Self { radio_type, intf }

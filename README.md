@@ -12,7 +12,7 @@
 - allow the user to specify a LoRa chip kind (for example, Sx126x) and specific type (for example, Sx1262) and hide the control of that chip behind the LoRa physical layer API;
 - provide a minimal trait which must be implemented for each desired embedded framework/MCU type/LoRa chip type to allow this crate to interface to the LoRa chip within the embedded framework.
 
-## Wherefore?
+## Wheretofore?
 
 - while the current examples use the Embassy embedded framework, nrf52480, stm32wl, and stm32l0 MCUs, and Sx127x/Sx126x chips, this crate provides a path forward for other embedded frameworks, MCU types, and LoRa chips in a Rust development environment;
 - the links below refer to a fork of Embassy and/or the lora crate in the <a href="https://github.com/ceekdee">ceekdee GitHub repository</a>; however, the intent is to update Embassy to support this lora crate and to move this lora crate to an appropriate embedded framework-agnostic repository;
