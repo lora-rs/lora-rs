@@ -20,6 +20,22 @@ impl LoRaMode {
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
+pub enum DioMapping1Dio0 {
+    RxDone = 0x00,
+    TxDone = 0x40,
+    CadDone = 0x80,
+    Other = 0xc0,
+    Mask = 0x3f,
+}
+
+impl DioMapping1Dio0 {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum IrqMask {
     None = 0x00,
     CADActivityDetected = 0x01,
@@ -142,6 +158,19 @@ impl LnaGain {
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
+pub enum PaDac {
+    _20DbmOn = 0x87,
+    _20DbmOff = 0x84,
+}
+
+impl PaDac {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
 pub enum PaConfig {
     PaBoost = 0x80,
     PaOutputRfoPin = 0x00,
@@ -151,6 +180,45 @@ impl PaConfig {
     // add boosted_value() ???
     pub fn value(self) -> u8 {
         self as u8
+    }
+}
+
+#[derive(Clone, Copy)]
+#[allow(dead_code)]
+pub enum OcpTrim {
+    _45Ma = 0x00,
+    _50Ma = 0x01,
+    _55Ma = 0x02,
+    _60Ma = 0x03,
+    _65Ma = 0x04,
+    _70Ma = 0x05,
+    _75Ma = 0x06,
+    _80Ma = 0x07,
+    _85Ma = 0x08,
+    _90Ma = 0x09,
+    _95Ma = 0x0a,
+    _100Ma = 0x0b,
+    _105Ma = 0x0c,
+    _110Ma = 0x0d,
+    _115Ma = 0x0e,
+    _120Ma = 0x0f,
+    _130Ma = 0x10,
+    _140Ma = 0x11,
+    _150Ma = 0x12,
+    _160Ma = 0x13,
+    _170Ma = 0x14,
+    _180Ma = 0x15,
+    _190Ma = 0x16,
+    _200Ma = 0x17,
+    _210Ma = 0x18,
+    _220Ma = 0x19,
+    _230Ma = 0x1a,
+    _240Ma = 0x1b,
+}
+
+impl OcpTrim {
+    pub fn value(self) -> u8 {
+        (self as u8) | 0x20u8 // value plus OCP on flag
     }
 }
 

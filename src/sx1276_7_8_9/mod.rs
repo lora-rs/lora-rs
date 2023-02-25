@@ -107,16 +107,8 @@ where
     }
 
     // Set the over current protection (mA) on the radio
-    async fn set_ocp(&mut self, ma: u8) -> Result<(), RadioError> {
-        let mut ocp_trim: u8 = 27;
-
-        if ma <= 120 {
-            ocp_trim = (ma - 45) / 5;
-        } else if ma <= 240 {
-            ocp_trim = (ma + 30) / 10;
-        }
-        self.write_register(Register::RegOcp, (ocp_trim & 0x1fu8) | 0x20u8, false)
-            .await // magic number ???
+    async fn set_ocp(&mut self, ocp_trim: OcpTrim) -> Result<(), RadioError> {
+        self.write_register(Register::RegOcp, ocp_trim.value(), false).await
     }
 }
 
@@ -196,7 +188,7 @@ where
         tx_boosted_if_possible: bool,
         is_tx_prep: bool,
     ) -> Result<(), RadioError> {
-        // Fix magic numbers and check algorithm ???
+        // Check algorithm ???
         if tx_boosted_if_possible {
             if power > 17 {
                 if power > 20 {
@@ -206,15 +198,17 @@ where
                 power -= 3;
 
                 // High Power +20 dBm Operation (Semtech SX1276/77/78/79 5.4.3.)
-                self.write_register(Register::RegPaDac, 0x87u8, false).await?;
-                self.set_ocp(140).await?;
+                self.write_register(Register::RegPaDac, PaDac::_20DbmOn.value(), false)
+                    .await?;
+                self.set_ocp(OcpTrim::_140Ma).await?;
             } else {
                 if power < 2 {
                     power = 2;
                 }
                 //Default value PA_HF/LF or +17dBm
-                self.write_register(Register::RegPaDac, 0x84u8, false).await?;
-                self.set_ocp(100).await?;
+                self.write_register(Register::RegPaDac, PaDac::_20DbmOff.value(), false)
+                    .await?;
+                self.set_ocp(OcpTrim::_100Ma).await?;
             }
             power -= 2; // does this account for the power -= 3 above ???
             self.write_register(Register::RegPaConfig, PaConfig::PaBoost.value() | (power as u8), false)
@@ -447,7 +441,6 @@ where
     }
 
     // Set the IRQ mask to disable unwanted interrupts, enable interrupts on DIO0 (the IRQ pin), and allow interrupts.
-    // ??? remove magic numbers
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError> {
         match radio_mode {
             Some(RadioMode::Transmit) => {
@@ -459,7 +452,7 @@ where
                 .await?;
 
                 let mut dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
-                dio_mapping_1 = (dio_mapping_1 & 0x3f) | 0x40u8;
+                dio_mapping_1 = (dio_mapping_1 & DioMapping1Dio0::Mask.value()) | DioMapping1Dio0::TxDone.value();
                 self.write_register(Register::RegDioMapping1, dio_mapping_1, false)
                     .await?;
 
@@ -475,7 +468,7 @@ where
                 .await?;
 
                 let mut dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
-                dio_mapping_1 = dio_mapping_1 & 0x3f;
+                dio_mapping_1 = (dio_mapping_1 & DioMapping1Dio0::Mask.value()) | DioMapping1Dio0::RxDone.value();
                 self.write_register(Register::RegDioMapping1, dio_mapping_1, false)
                     .await?;
 
@@ -490,7 +483,7 @@ where
                 .await?;
 
                 let mut dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
-                dio_mapping_1 = (dio_mapping_1 & 0x3f) | 0x80u8;
+                dio_mapping_1 = (dio_mapping_1 & DioMapping1Dio0::Mask.value()) | DioMapping1Dio0::CadDone.value();
                 self.write_register(Register::RegDioMapping1, dio_mapping_1, false)
                     .await?;
 
@@ -501,7 +494,7 @@ where
                     .await?;
 
                 let mut dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
-                dio_mapping_1 = (dio_mapping_1 & 0x3f) | 0xc0u8;
+                dio_mapping_1 = (dio_mapping_1 & DioMapping1Dio0::Mask.value()) | DioMapping1Dio0::Other.value();
                 self.write_register(Register::RegDioMapping1, dio_mapping_1, false)
                     .await?;
 
