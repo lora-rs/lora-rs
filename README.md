@@ -14,7 +14,7 @@
 
 ## Wheretofore?
 
-- while the current examples use the Embassy embedded framework, nrf52480, stm32wl, and stm32l0 MCUs, and Sx127x/Sx126x chips, this crate provides a path forward for other embedded frameworks, MCU types, and LoRa chips in a Rust development environment;
+- while the current examples use the Embassy embedded framework, nrf52840, stm32wl, and stm32l0 MCUs, and Sx127x/Sx126x chips, this crate provides a path forward for other embedded frameworks, MCU types, and LoRa chips in a Rust development environment;
 - the links below refer to a fork of Embassy and/or the lora crate in the <a href="https://github.com/ceekdee">ceekdee GitHub repository</a>; however, the intent is to update Embassy to support this lora crate and to move this lora crate to an appropriate embedded framework-agnostic repository;
 - the existing LoRa implementations in Embassy remain available after the update to support this lora crate.
 
@@ -29,8 +29,8 @@ Examples of API usage:
 
 - <a href="https://github.com/ceekdee/embassy/blob/master/examples/stm32wl/src/bin/lora_p2p_send.rs">stm32wl P2P send and sleep</a>;
 - <a href="https://github.com/ceekdee/embassy/blob/master/examples/stm32l0/src/bin/lora_p2p_receive.rs">stm32l0 P2P receive continuous</a>;
-- <a href="https://github.com/ceekdee/embassy/blob/master/examples/nrf/src/bin/lora_p2p_receive_duty_cycle.rs">nrf duty cycle receive</a>;
-- <a href="https://github.com/ceekdee/embassy/blob/master/examples/nrf/src/bin/lora_cad.rs">nrf channel activity detection</a>.
+- <a href="https://github.com/ceekdee/embassy/blob/master/examples/nrf52840/src/bin/lora_p2p_receive_duty_cycle.rs">nrf52840 duty cycle receive</a>;
+- <a href="https://github.com/ceekdee/embassy/blob/master/examples/nrf52840/src/bin/lora_cad.rs">nrf52840 channel activity detection</a>.
 
 ## Embedded framework/MCU support
 
@@ -41,7 +41,7 @@ For embedded framework developers wishing to add LoRa support as a feature for o
 Example InterfaceVariant implementations:
 
 - <a href="https://github.com/ceekdee/embassy/blob/master/embassy-stm32/src/lora.rs">Embassy stm32wl/Sx1262 and stm32l0/Sx1276</a>
-- <a href="https://github.com/ceekdee/embassy/blob/master/embassy-nrf/src/lora.rs">Embassy nrf52480/Sx1262</a>
+- <a href="https://github.com/ceekdee/embassy/blob/master/embassy-nrf/src/lora.rs">Embassy nrf52840/Sx1262</a>
 
 ## LoRa chip support
 
