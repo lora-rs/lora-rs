@@ -7,7 +7,7 @@ use radio_kind_params::*;
 
 use crate::mod_params::RadioError::*;
 use crate::mod_params::*;
-use crate::{Interface, InterfaceVariant, RadioKind};
+use crate::{SpiInterface, InterfaceVariant, RadioKind};
 
 // Syncwords for public and private networks
 const LORA_MAC_PUBLIC_SYNCWORD: u16 = 0x3444; // corresponds to sx127x 0x34
@@ -84,7 +84,7 @@ impl PacketParams {
 /// Base for the RadioKind implementation for the LoRa chip kind and type
 pub struct SX1261_2<SPI, IV> {
     radio_type: RadioType,
-    intf: Interface<SPI, IV>,
+    intf: SpiInterface<SPI, IV>,
 }
 
 impl<SPI, IV> SX1261_2<SPI, IV>
@@ -94,7 +94,7 @@ where
 {
     /// Create an instance of the RadioKind implementation for the LoRa chip kind and type
     pub fn new(radio_type: RadioType, spi: SPI, iv: IV) -> Self {
-        let intf = Interface::new(spi, iv);
+        let intf = SpiInterface::new(spi, iv);
         Self { radio_type, intf }
     }
 

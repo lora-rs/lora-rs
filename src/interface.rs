@@ -4,12 +4,12 @@ use crate::mod_params::RadioError;
 use crate::mod_params::RadioError::*;
 use crate::mod_traits::InterfaceVariant;
 
-pub(crate) struct Interface<SPI, IV> {
+pub(crate) struct SpiInterface<SPI, IV> {
     pub(crate) spi: SPI,
     pub(crate) iv: IV,
 }
 
-impl<SPI, IV> Interface<SPI, IV>
+impl<SPI, IV> SpiInterface<SPI, IV>
 where
     SPI: SpiBus<u8> + 'static,
     IV: InterfaceVariant + 'static,
