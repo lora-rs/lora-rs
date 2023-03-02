@@ -7,7 +7,7 @@ use radio_kind_params::*;
 
 use crate::mod_params::RadioError::*;
 use crate::mod_params::*;
-use crate::{SpiInterface, InterfaceVariant, RadioKind};
+use crate::{InterfaceVariant, RadioKind, SpiInterface};
 
 // Syncwords for public and private networks
 const LORA_MAC_PUBLIC_SYNCWORD: u16 = 0x3444; // corresponds to sx127x 0x34
@@ -315,9 +315,10 @@ where
         self.intf.write(&[&op_code_and_base_addrs], false).await
     }
 
-    //   power        RF output power (dBm)
-    //   is_tx_prep   indicates which ramp up time to use
-    //   OCP ???
+    // Set parameters associated with power for a send operation. Currently, over current protection (OCP) uses the default set automatically after set_pa_config()
+    //   power                   RF output power (dBm)
+    //   tx_boosted_if_possible  not pertinent for sx126x
+    //   is_tx_prep              indicates which ramp up time to use
     async fn set_tx_power_and_ramp_time(
         &mut self,
         mut power: i8,

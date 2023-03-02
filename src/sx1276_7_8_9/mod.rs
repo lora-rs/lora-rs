@@ -6,7 +6,7 @@ use embedded_hal_async::spi::*;
 use radio_kind_params::*;
 
 use crate::mod_params::*;
-use crate::{SpiInterface, InterfaceVariant, RadioKind};
+use crate::{InterfaceVariant, RadioKind, SpiInterface};
 
 // Syncwords for public and private networks
 const LORA_MAC_PUBLIC_SYNCWORD: u8 = 0x34; // corresponds to sx126x 0x3444
