@@ -57,7 +57,7 @@ where
         coding_rate: CodingRate,
     ) -> Result<ModulationParams, RadioError> {
         match self.radio_kind.get_radio_type() {
-            RadioType::SX1261 | RadioType::SX1262 => {
+            RadioType::SX1261 | RadioType::SX1262 | RadioType::STM32WLSX1262 => {
                 ModulationParams::new_for_sx1261_2(spreading_factor, bandwidth, coding_rate)
             }
             RadioType::SX1276 | RadioType::SX1277 | RadioType::SX1278 | RadioType::SX1279 => {
@@ -76,7 +76,7 @@ where
         modulation_params: &ModulationParams,
     ) -> Result<PacketParams, RadioError> {
         match self.radio_kind.get_radio_type() {
-            RadioType::SX1261 | RadioType::SX1262 => PacketParams::new_for_sx1261_2(
+            RadioType::SX1261 | RadioType::SX1262 | RadioType::STM32WLSX1262 => PacketParams::new_for_sx1261_2(
                 preamble_length,
                 implicit_header,
                 0,
@@ -108,7 +108,7 @@ where
         modulation_params: &ModulationParams,
     ) -> Result<PacketParams, RadioError> {
         match self.radio_kind.get_radio_type() {
-            RadioType::SX1261 | RadioType::SX1262 => PacketParams::new_for_sx1261_2(
+            RadioType::SX1261 | RadioType::SX1262 | RadioType::STM32WLSX1262 => PacketParams::new_for_sx1261_2(
                 preamble_length,
                 implicit_header,
                 max_payload_length,

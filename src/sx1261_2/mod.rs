@@ -226,10 +226,13 @@ where
         Ok(())
     }
 
-    // Use DIO2 to control an RF Switch
+    // Use DIO2 to control an RF Switch, depending on the radio type.
     async fn init_rf_switch(&mut self) -> Result<(), RadioError> {
-        let op_code_and_indicator = [OpCode::SetRFSwitchMode.value(), true as u8];
-        self.intf.write(&[&op_code_and_indicator], false).await
+        if self.get_radio_type() != RadioType::STM32WLSX1262 {
+            let op_code_and_indicator = [OpCode::SetRFSwitchMode.value(), true as u8];
+            self.intf.write(&[&op_code_and_indicator], false).await?;
+        }
+        Ok(())
     }
 
     // Use standby mode RC (not XOSC).

@@ -49,6 +49,7 @@ pub struct PacketStatus {
 pub enum RadioType {
     SX1261,
     SX1262,
+    STM32WLSX1262,
     SX1276,
     SX1277,
     SX1278,
