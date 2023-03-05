@@ -40,8 +40,7 @@ For embedded framework developers wishing to add LoRa support as a feature for o
 
 Example InterfaceVariant implementations:
 
-- <a href="https://github.com/ceekdee/embassy/blob/master/embassy-stm32/src/lora.rs">Embassy stm32wl/Sx1262 and stm32l0/Sx1276</a>
-- <a href="https://github.com/ceekdee/embassy/blob/master/embassy-nrf/src/lora.rs">Embassy nrf52840/Sx1262</a>
+- <a href="https://github.com/ceekdee/embassy/blob/master/embassy-lora/src/iv.rs">Embassy stm32wl/Sx1262, stm32l0/Sx1276, and nrf52840/Sx1262</a>
 
 ## LoRa chip support
 
