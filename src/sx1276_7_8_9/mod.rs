@@ -24,6 +24,7 @@ impl ModulationParams {
         spreading_factor: SpreadingFactor,
         bandwidth: Bandwidth,
         coding_rate: CodingRate,
+        frequency_in_hz: u32,
     ) -> Result<Self, RadioError> {
         // Section 4.1.1.5 and 4.1.1.6
         let bw_in_hz = bandwidth.value_in_hz();
@@ -38,6 +39,7 @@ impl ModulationParams {
             bandwidth,
             coding_rate,
             low_data_rate_optimize,
+            frequency_in_hz,
         })
     }
 }

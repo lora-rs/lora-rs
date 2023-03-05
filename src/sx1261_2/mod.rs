@@ -37,6 +37,7 @@ impl ModulationParams {
         spreading_factor: SpreadingFactor,
         bandwidth: Bandwidth,
         coding_rate: CodingRate,
+        frequency_in_hz: u32,
     ) -> Result<Self, RadioError> {
         let mut low_data_rate_optimize = 0x00u8;
         if (((spreading_factor == SpreadingFactor::_11) || (spreading_factor == SpreadingFactor::_12))
@@ -50,6 +51,7 @@ impl ModulationParams {
             bandwidth,
             coding_rate,
             low_data_rate_optimize,
+            frequency_in_hz,
         })
     }
 }

@@ -119,6 +119,7 @@ pub struct ModulationParams {
     pub(crate) bandwidth: Bandwidth,
     pub(crate) coding_rate: CodingRate,
     pub(crate) low_data_rate_optimize: u8,
+    pub(crate) frequency_in_hz: u32,
 }
 
 /// Packet parameters for a send or receive communication channel

@@ -55,13 +55,14 @@ where
         spreading_factor: SpreadingFactor,
         bandwidth: Bandwidth,
         coding_rate: CodingRate,
+        frequency_in_hz: u32,
     ) -> Result<ModulationParams, RadioError> {
         match self.radio_kind.get_radio_type() {
             RadioType::SX1261 | RadioType::SX1262 | RadioType::STM32WLSX1262 => {
-                ModulationParams::new_for_sx1261_2(spreading_factor, bandwidth, coding_rate)
+                ModulationParams::new_for_sx1261_2(spreading_factor, bandwidth, coding_rate, frequency_in_hz)
             }
             RadioType::SX1276 | RadioType::SX1277 | RadioType::SX1278 | RadioType::SX1279 => {
-                ModulationParams::new_for_sx1276_7_8_9(spreading_factor, bandwidth, coding_rate)
+                ModulationParams::new_for_sx1276_7_8_9(spreading_factor, bandwidth, coding_rate, frequency_in_hz)
             }
         }
     }
@@ -182,8 +183,8 @@ where
     /// Execute a send operation
     pub async fn tx(
         &mut self,
+        mdltn_params: &ModulationParams,
         tx_pkt_params: &mut PacketParams,
-        frequency_in_hz: u32,
         buffer: &[u8],
         timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
@@ -197,10 +198,10 @@ where
         tx_pkt_params.set_payload_length(buffer.len())?;
         self.radio_kind.set_packet_params(tx_pkt_params).await?;
         if !self.image_calibrated {
-            self.radio_kind.calibrate_image(frequency_in_hz).await?;
+            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
             self.image_calibrated = true;
         }
-        self.radio_kind.set_channel(frequency_in_hz).await?;
+        self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_kind.set_payload(buffer).await?;
         self.radio_mode = RadioMode::Transmit;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
@@ -230,7 +231,6 @@ where
         duty_cycle_params: Option<&DutyCycleParams>,
         rx_continuous: bool,
         rx_boosted_if_supported: bool,
-        frequency_in_hz: u32,
         symbol_timeout: u16,
         rx_timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
@@ -244,10 +244,10 @@ where
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_packet_params(rx_pkt_params).await?;
         if !self.image_calibrated {
-            self.radio_kind.calibrate_image(frequency_in_hz).await?;
+            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
             self.image_calibrated = true;
         }
-        self.radio_kind.set_channel(frequency_in_hz).await?;
+        self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_mode = match duty_cycle_params {
             Some(&_duty_cycle) => RadioMode::ReceiveDutyCycle,
             None => RadioMode::Receive,
@@ -298,7 +298,6 @@ where
         &mut self,
         mdltn_params: &ModulationParams,
         rx_boosted_if_supported: bool,
-        frequency_in_hz: u32,
     ) -> Result<(), RadioError> {
         self.rx_continuous = false;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
@@ -309,10 +308,10 @@ where
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         if !self.image_calibrated {
-            self.radio_kind.calibrate_image(frequency_in_hz).await?;
+            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
             self.image_calibrated = true;
         }
-        self.radio_kind.set_channel(frequency_in_hz).await?;
+        self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_mode = RadioMode::ChannelActivityDetection;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.radio_kind.do_cad(mdltn_params, rx_boosted_if_supported).await
