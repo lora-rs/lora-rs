@@ -26,6 +26,14 @@ impl ModulationParams {
         coding_rate: CodingRate,
         frequency_in_hz: u32,
     ) -> Result<Self, RadioError> {
+        // Parameter validation
+        spreading_factor_value(spreading_factor)?;
+        bandwidth_value(bandwidth)?;
+        coding_rate_value(coding_rate)?;
+        if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000) {
+            return Err(RadioError::InvalidBandwidthForFrequency);
+        }
+
         // Section 4.1.1.5 and 4.1.1.6
         let bw_in_hz = bandwidth.value_in_hz();
         let symbol_duration = 1000 / (bw_in_hz / (0x01u32 << spreading_factor_value(spreading_factor)?));
@@ -54,9 +62,11 @@ impl PacketParams {
         iq_inverted: bool,
         modulation_params: &ModulationParams,
     ) -> Result<Self, RadioError> {
+        // Parameter validation
         if (modulation_params.spreading_factor == SpreadingFactor::_6) && !implicit_header {
-            return Err(RadioError::InvalidExplicitHeaderRequest);
+            return Err(RadioError::InvalidSF6ExplicitHeaderRequest);
         }
+
         Ok(Self {
             preamble_length,
             implicit_header,

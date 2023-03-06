@@ -3,7 +3,7 @@ use core::fmt::Debug;
 /// Errors types reported during LoRa physical layer processing
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, defmt::Format, PartialEq)]
-#[allow(missing_docs)]
+#[allow(dead_code, missing_docs)]
 pub enum RadioError {
     SPI,
     NSS,
@@ -20,8 +20,11 @@ pub enum RadioError {
     PayloadSizeMismatch(usize, usize),
     InvalidSymbolTimeout,
     RetentionListExceeded,
-    InvalidBandwidth,
-    InvalidExplicitHeaderRequest,
+    UnavailableSpreadingFactor,
+    UnavailableBandwidth,
+    UnavailableCodingRate,
+    InvalidBandwidthForFrequency,
+    InvalidSF6ExplicitHeaderRequest,
     HeaderError,
     CRCErrorUnexpected,
     CRCErrorOnReceive,
@@ -87,6 +90,13 @@ pub enum SpreadingFactor {
 #[derive(Clone, Copy, PartialEq)]
 #[allow(missing_docs)]
 pub enum Bandwidth {
+    _7KHz,
+    _10KHz,
+    _15KHz,
+    _20KHz,
+    _31KHz,
+    _41KHz,
+    _62KHz,
     _125KHz,
     _250KHz,
     _500KHz,
@@ -96,6 +106,13 @@ impl Bandwidth {
     /// Convert to Hertz
     pub fn value_in_hz(self) -> u32 {
         match self {
+            Bandwidth::_7KHz => 7810u32,
+            Bandwidth::_10KHz => 10420u32,
+            Bandwidth::_15KHz => 15630u32,
+            Bandwidth::_20KHz => 20830u32,
+            Bandwidth::_31KHz => 31250u32,
+            Bandwidth::_41KHz => 41670u32,
+            Bandwidth::_62KHz => 62500u32,
             Bandwidth::_125KHz => 125000u32,
             Bandwidth::_250KHz => 250000u32,
             Bandwidth::_500KHz => 500000u32,

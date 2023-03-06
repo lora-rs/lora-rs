@@ -224,7 +224,7 @@ impl OcpTrim {
 
 pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, RadioError> {
     match spreading_factor {
-        SpreadingFactor::_5 => Ok(0x05),
+        SpreadingFactor::_5 => Err(RadioError::UnavailableSpreadingFactor),
         SpreadingFactor::_6 => Ok(0x06),
         SpreadingFactor::_7 => Ok(0x07),
         SpreadingFactor::_8 => Ok(0x08),
@@ -237,6 +237,13 @@ pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, R
 
 pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError> {
     match bandwidth {
+        Bandwidth::_7KHz => Ok(0x00),
+        Bandwidth::_10KHz => Ok(0x01),
+        Bandwidth::_15KHz => Ok(0x02),
+        Bandwidth::_20KHz => Ok(0x03),
+        Bandwidth::_31KHz => Ok(0x04),
+        Bandwidth::_41KHz => Ok(0x05),
+        Bandwidth::_62KHz => Ok(0x06),
         Bandwidth::_125KHz => Ok(0x07),
         Bandwidth::_250KHz => Ok(0x08),
         Bandwidth::_500KHz => Ok(0x09),

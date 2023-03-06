@@ -253,9 +253,16 @@ pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, R
 
 pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError> {
     match bandwidth {
-        Bandwidth::_500KHz => Ok(0x06),
-        Bandwidth::_250KHz => Ok(0x05),
+        Bandwidth::_7KHz => Ok(0x00),
+        Bandwidth::_10KHz => Ok(0x08),
+        Bandwidth::_15KHz => Ok(0x01),
+        Bandwidth::_20KHz => Ok(0x09),
+        Bandwidth::_31KHz => Ok(0x02),
+        Bandwidth::_41KHz => Ok(0x0a),
+        Bandwidth::_62KHz => Ok(0x03),
         Bandwidth::_125KHz => Ok(0x04),
+        Bandwidth::_250KHz => Ok(0x05),
+        Bandwidth::_500KHz => Ok(0x06),
     }
 }
 

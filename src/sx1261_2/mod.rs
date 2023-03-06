@@ -39,6 +39,14 @@ impl ModulationParams {
         coding_rate: CodingRate,
         frequency_in_hz: u32,
     ) -> Result<Self, RadioError> {
+        // Parameter validation
+        spreading_factor_value(spreading_factor)?;
+        bandwidth_value(bandwidth)?;
+        coding_rate_value(coding_rate)?;
+        if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000) {
+            return Err(RadioError::InvalidBandwidthForFrequency);
+        }
+        
         let mut low_data_rate_optimize = 0x00u8;
         if (((spreading_factor == SpreadingFactor::_11) || (spreading_factor == SpreadingFactor::_12))
             && (bandwidth == Bandwidth::_125KHz))
