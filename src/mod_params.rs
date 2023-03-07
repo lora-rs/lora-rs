@@ -25,6 +25,8 @@ pub enum RadioError {
     UnavailableCodingRate,
     InvalidBandwidthForFrequency,
     InvalidSF6ExplicitHeaderRequest,
+    InvalidOutputPower,
+    InvalidOutputPowerForFrequency,
     HeaderError,
     CRCErrorUnexpected,
     CRCErrorOnReceive,

@@ -173,11 +173,10 @@ impl PaDac {
 #[allow(dead_code)]
 pub enum PaConfig {
     PaBoost = 0x80,
-    PaOutputRfoPin = 0x00,
+    MaxPower7NoPaBoost = 0x70,
 }
 
 impl PaConfig {
-    // add boosted_value() ???
     pub fn value(self) -> u8 {
         self as u8
     }

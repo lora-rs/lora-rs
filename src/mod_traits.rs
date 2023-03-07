@@ -53,7 +53,8 @@ pub trait RadioKind {
     /// Perform any necessary LoRa chip power setup prior to a send operation
     async fn set_tx_power_and_ramp_time(
         &mut self,
-        power: i8,
+        output_power: i32,
+        mdltn_params: Option<&ModulationParams>,
         tx_boosted_if_possible: bool,
         is_tx_prep: bool,
     ) -> Result<(), RadioError>;

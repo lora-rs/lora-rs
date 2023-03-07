@@ -143,7 +143,9 @@ where
         self.radio_kind.set_oscillator().await?;
         self.radio_kind.set_regulator_mode().await?;
         self.radio_kind.set_tx_rx_buffer_base_address(0, 0).await?;
-        self.radio_kind.set_tx_power_and_ramp_time(0, false, false).await?;
+        self.radio_kind
+            .set_tx_power_and_ramp_time(0, None, false, false)
+            .await?;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.radio_kind.update_retention_list().await
     }
@@ -165,7 +167,7 @@ where
     pub async fn prepare_for_tx(
         &mut self,
         mdltn_params: &ModulationParams,
-        power: i8,
+        output_power: i32,
         tx_boosted_if_possible: bool,
     ) -> Result<(), RadioError> {
         self.rx_continuous = false;
@@ -176,7 +178,7 @@ where
         }
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind
-            .set_tx_power_and_ramp_time(power, tx_boosted_if_possible, true)
+            .set_tx_power_and_ramp_time(output_power, Some(mdltn_params), tx_boosted_if_possible, true)
             .await
     }
 

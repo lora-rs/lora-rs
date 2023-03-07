@@ -46,7 +46,7 @@ impl ModulationParams {
         if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000) {
             return Err(RadioError::InvalidBandwidthForFrequency);
         }
-        
+
         let mut low_data_rate_optimize = 0x00u8;
         if (((spreading_factor == SpreadingFactor::_11) || (spreading_factor == SpreadingFactor::_12))
             && (bandwidth == Bandwidth::_125KHz))
@@ -329,34 +329,60 @@ where
     }
 
     // Set parameters associated with power for a send operation. Currently, over current protection (OCP) uses the default set automatically after set_pa_config()
-    //   power                   RF output power (dBm)
+    //   output_power            desired RF output power (dBm)
+    //   mdltn_params            needed for a power vs channel frequency validation
     //   tx_boosted_if_possible  not pertinent for sx126x
     //   is_tx_prep              indicates which ramp up time to use
     async fn set_tx_power_and_ramp_time(
         &mut self,
-        mut power: i8,
+        output_power: i32,
+        mdltn_params: Option<&ModulationParams>,
         _tx_boosted_if_possible: bool,
         is_tx_prep: bool,
     ) -> Result<(), RadioError> {
+        let tx_params_power;
         let ramp_time = match is_tx_prep {
             true => RampTime::Ramp40Us,   // for instance, prior to TX or CAD
             false => RampTime::Ramp200Us, // for instance, on initialization
         };
 
-        // check power = 15 processing since it gets set to 14 ???
         if self.radio_type == RadioType::SX1261 {
-            if power == 15 {
-                self.set_pa_config(0x06, 0x00, 0x01, 0x01).await?;
-            } else {
-                self.set_pa_config(0x04, 0x00, 0x01, 0x01).await?;
+            if (output_power < -17) || (output_power > 15) {
+                return Err(RadioError::InvalidOutputPower);
+            }
+            if output_power == 15 {
+                match mdltn_params {
+                    Some(m_p) => {
+                        if m_p.frequency_in_hz < 400_000_000 {
+                            return Err(RadioError::InvalidOutputPowerForFrequency);
+                        }
+                    }
+                    None => (),
+                }
             }
 
-            if power >= 14 {
-                power = 14;
-            } else if power < -17 {
-                power = -17;
+            match output_power {
+                15 => {
+                    self.set_pa_config(0x06, 0x00, 0x01, 0x01).await?;
+                    tx_params_power = 14;
+                }
+                14 => {
+                    self.set_pa_config(0x04, 0x00, 0x01, 0x01).await?;
+                    tx_params_power = 14;
+                }
+                10 => {
+                    self.set_pa_config(0x01, 0x00, 0x01, 0x01).await?;
+                    tx_params_power = 14;
+                }
+                _ => {
+                    self.set_pa_config(0x04, 0x00, 0x01, 0x01).await?;
+                    tx_params_power = output_power as u8;
+                }
             }
         } else {
+            if (output_power < -9) || (output_power > 22) {
+                return Err(RadioError::InvalidOutputPower);
+            }
             // Provide better resistance of the SX1262 Tx to antenna mismatch (see DS_SX1261-2_V1.2 datasheet chapter 15.2)
             let mut tx_clamp_cfg = [0x00u8];
             self.intf
@@ -380,17 +406,31 @@ where
             ];
             self.intf.write(&[&register_and_tx_clamp_cfg], false).await?;
 
-            self.set_pa_config(0x04, 0x07, 0x00, 0x01).await?;
-
-            if power > 22 {
-                power = 22;
-            } else if power < -9 {
-                power = -9;
+            match output_power {
+                22 => {
+                    self.set_pa_config(0x04, 0x07, 0x00, 0x01).await?;
+                    tx_params_power = 22;
+                }
+                20 => {
+                    self.set_pa_config(0x03, 0x05, 0x00, 0x01).await?;
+                    tx_params_power = 22;
+                }
+                17 => {
+                    self.set_pa_config(0x02, 0x03, 0x00, 0x01).await?;
+                    tx_params_power = 22;
+                }
+                14 => {
+                    self.set_pa_config(0x02, 0x02, 0x00, 0x01).await?;
+                    tx_params_power = 22;
+                }
+                _ => {
+                    self.set_pa_config(0x04, 0x07, 0x00, 0x01).await?;
+                    tx_params_power = output_power as u8;
+                }
             }
         }
 
-        // power conversion of negative number from i8 to u8 ???
-        let op_code_and_tx_params = [OpCode::SetTxParams.value(), power as u8, ramp_time.value()];
+        let op_code_and_tx_params = [OpCode::SetTxParams.value(), tx_params_power, ramp_time.value()];
         self.intf.write(&[&op_code_and_tx_params], false).await
     }
 
@@ -877,5 +917,20 @@ where
             // if an interrupt occurred for other than an error or operation completion (currently, PreambleDetected, SyncwordValid, and HeaderValid
             // are in that category), loop to wait again
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    // use super::*;
+
+    #[test]
+    // -17 (0xEF) to +14 (0x0E) dBm by step of 1 dB if low power PA is selected
+    // -9 (0xF7) to +22 (0x16) dBm by step of 1 dB if high power PA is selected
+    fn power_level_negative_value_conversion() {
+        let mut i32_val: i32 = -17;
+        assert_eq!(i32_val as u8, 0xefu8);
+        i32_val = -9;
+        assert_eq!(i32_val as u8, 0xf7u8);
     }
 }

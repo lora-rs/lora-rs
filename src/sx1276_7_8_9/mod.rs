@@ -158,7 +158,7 @@ where
         self.intf.iv.disable_rf_switch().await?;
         self.write_register(Register::RegOpMode, LoRaMode::Sleep.value(), true)
             .await?;
-        Ok(false) // warm start unavailable for sx127x ???
+        Ok(false) // warm start unavailable for sx127x
     }
 
     /// The sx127x LoRa mode is set when setting a mode while in sleep mode.
@@ -192,50 +192,59 @@ where
         self.write_register(Register::RegFifoRxBaseAddr, 0x00u8, false).await
     }
 
-    //   power        RF output power (dBm)
-    //   is_tx_prep   indicates which ramp up time to use
+    // Set parameters associated with power for a send operation.
+    //   p_out                   desired RF output power (dBm)
+    //   mdltn_params            needed for a power vs channel frequency validation
+    //   tx_boosted_if_possible  determine if transmit boost is requested
+    //   is_tx_prep              indicates which ramp up time to use
     async fn set_tx_power_and_ramp_time(
         &mut self,
-        mut power: i8,
+        p_out: i32,
+        _mdltn_params: Option<&ModulationParams>,
         tx_boosted_if_possible: bool,
         is_tx_prep: bool,
     ) -> Result<(), RadioError> {
-        // Check algorithm ???
         if tx_boosted_if_possible {
-            if power > 17 {
-                if power > 20 {
-                    power = 20;
-                }
-                // subtract 3 from power, so 18 - 20 maps to 15 - 17
-                power -= 3;
+            if (p_out < 2) || (p_out > 20) {
+                return Err(RadioError::InvalidOutputPower);
+            }
 
-                // High Power +20 dBm Operation (Semtech SX1276/77/78/79 5.4.3.)
+            // Pout=17-(15-OutputPower)
+            let output_power: i32 = p_out - 2;
+
+            if p_out > 17 {
                 self.write_register(Register::RegPaDac, PaDac::_20DbmOn.value(), false)
                     .await?;
-                self.set_ocp(OcpTrim::_140Ma).await?;
+                self.set_ocp(OcpTrim::_240Ma).await?;
             } else {
-                if power < 2 {
-                    power = 2;
-                }
-                //Default value PA_HF/LF or +17dBm
                 self.write_register(Register::RegPaDac, PaDac::_20DbmOff.value(), false)
                     .await?;
                 self.set_ocp(OcpTrim::_100Ma).await?;
             }
-            power -= 2; // does this account for the power -= 3 above ???
-            self.write_register(Register::RegPaConfig, PaConfig::PaBoost.value() | (power as u8), false)
-                .await?;
+            self.write_register(
+                Register::RegPaConfig,
+                PaConfig::PaBoost.value() | (output_power as u8),
+                false,
+            )
+            .await?;
         } else {
-            // RFO
-            if power < 0 {
-                power = 0;
-            } else if power > 14 {
-                power = 14;
+            if (p_out < -4) || (p_out > 14) {
+                return Err(RadioError::InvalidOutputPower);
             }
 
-            // no DAC or OCP setting ???
-            self.write_register(Register::RegPaConfig, 0x70 | (power as u8), false)
+            // Pmax=10.8+0.6*MaxPower, where MaxPower is set below as 7 and therefore Pmax is 15
+            // Pout=Pmax-(15-OutputPower)
+            let output_power: i32 = p_out;
+
+            self.write_register(Register::RegPaDac, PaDac::_20DbmOff.value(), false)
                 .await?;
+            self.set_ocp(OcpTrim::_100Ma).await?;
+            self.write_register(
+                Register::RegPaConfig,
+                PaConfig::MaxPower7NoPaBoost.value() | (output_power as u8),
+                false,
+            )
+            .await?;
         }
 
         let ramp_time = match is_tx_prep {
@@ -330,7 +339,7 @@ where
 
     // Calibrate the image rejection based on the given frequency
     async fn calibrate_image(&mut self, _frequency_in_hz: u32) -> Result<(), RadioError> {
-        // An automatic process, but can set bit ImageCalStart in RegImageCal, when the device is in Standby mode ???
+        // An automatic process, but can set bit ImageCalStart in RegImageCal, when the device is in Standby mode.
         Ok(())
     }
 
@@ -393,7 +402,7 @@ where
         self.write_register(Register::RegLna, lna_gain_final, false).await?;
 
         self.write_register(Register::RegFifoAddrPtr, 0x00u8, false).await?;
-        self.write_register(Register::RegPayloadLength, 0xffu8, false).await?; // reset payload length (from original code) ???
+        self.write_register(Register::RegPayloadLength, 0xffu8, false).await?; // reset payload length (from original implementation)
 
         if rx_continuous {
             self.write_register(Register::RegOpMode, LoRaMode::RxContinuous.value(), false)
