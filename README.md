@@ -9,7 +9,7 @@
 ## How?
 
 - separate out modulation parameters and packet parameters as separate concerns to address the nuances in LoRa chip support and to allow flexible specification of various LoRaWAN and P2P send/receive channels, even in the same use case;
-- allow the user to specify a LoRa chip kind (for example, Sx126x) and specific type (for example, Sx1262) and hide the control of that chip behind the LoRa physical layer API;
+- allow the user to specify a LoRa chip kind (for example, Sx1261/2) and specific LoRa board type (for example, Stm32wlSx1262) and hide the control of that LoRa board behind the LoRa physical layer API;
 - provide a minimal trait which must be implemented for each desired embedded framework/MCU type/LoRa chip type to allow this crate to interface to the LoRa chip within the embedded framework.
 
 ## Wheretofore?

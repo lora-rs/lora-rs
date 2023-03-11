@@ -77,9 +77,9 @@ impl PacketParams {
     }
 }
 
-/// Base for the RadioKind implementation for the LoRa chip kind and type
+/// Base for the RadioKind implementation for the LoRa chip kind and board type
 pub struct SX1276_7_8_9<SPI, IV> {
-    radio_type: RadioType,
+    board_type: BoardType,
     intf: SpiInterface<SPI, IV>,
 }
 
@@ -88,10 +88,10 @@ where
     SPI: SpiBus<u8> + 'static,
     IV: InterfaceVariant + 'static,
 {
-    /// Create an instance of the RadioKind implementation for the LoRa chip kind and type
-    pub fn new(radio_type: RadioType, spi: SPI, iv: IV) -> Self {
+    /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
+    pub fn new(board_type: BoardType, spi: SPI, iv: IV) -> Self {
         let intf = SpiInterface::new(spi, iv);
-        Self { radio_type, intf }
+        Self { board_type, intf }
     }
 
     // Utility functions
@@ -129,8 +129,8 @@ where
     SPI: SpiBus<u8> + 'static,
     IV: InterfaceVariant + 'static,
 {
-    fn get_radio_type(&mut self) -> RadioType {
-        self.radio_type
+    fn get_board_type(&self) -> BoardType {
+        self.board_type
     }
 
     async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {

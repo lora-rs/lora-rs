@@ -26,8 +26,8 @@ pub trait InterfaceVariant {
 /// Functions implemented for a specific kind of LoRa chip, called internally by the outward facing
 /// LoRa physical layer API
 pub trait RadioKind {
-    /// Get the specific type of the LoRa chip (for example, Sx1262)
-    fn get_radio_type(&mut self) -> RadioType;
+    /// Get the specific type of the LoRa board (for example, Stm32wlSx1262)
+    fn get_board_type(&self) -> BoardType;
     /// Reset the loRa chip
     async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError>;
     /// Ensure the LoRa chip is in the appropriate state to allow operation requests

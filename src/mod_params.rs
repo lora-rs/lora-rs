@@ -48,17 +48,37 @@ pub struct PacketStatus {
     pub snr: i16,
 }
 
+/// LoRa boards supported by this crate
+#[derive(Clone, Copy, PartialEq)]
+#[allow(missing_docs)]
+pub enum BoardType {
+    GenericSx1261, // placeholder for Sx1261-specific features
+    Rak4631Sx1262,
+    Stm32l0Sx1276,
+    Stm32wlSx1262,
+}
+
 /// LoRa chips supported by this crate
 #[derive(Clone, Copy, PartialEq)]
 #[allow(missing_docs)]
-pub enum RadioType {
-    SX1261,
-    SX1262,
-    STM32WLSX1262,
-    SX1276,
-    SX1277,
-    SX1278,
-    SX1279,
+pub enum ChipType {
+    Sx1261,
+    Sx1262,
+    Sx1276,
+    Sx1277,
+    Sx1278,
+    Sx1279,
+}
+
+impl From<BoardType> for ChipType {
+    fn from(board_type: BoardType) -> Self {
+        match board_type {
+            BoardType::GenericSx1261 => ChipType::Sx1261,
+            BoardType::Rak4631Sx1262 => ChipType::Sx1262,
+            BoardType::Stm32l0Sx1276 => ChipType::Sx1276,
+            BoardType::Stm32wlSx1262 => ChipType::Sx1262,
+        }
+    }
 }
 
 /// The state of the radio

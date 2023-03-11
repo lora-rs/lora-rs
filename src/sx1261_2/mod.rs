@@ -91,9 +91,9 @@ impl PacketParams {
     }
 }
 
-/// Base for the RadioKind implementation for the LoRa chip kind and type
+/// Base for the RadioKind implementation for the LoRa chip kind and board type
 pub struct SX1261_2<SPI, IV> {
-    radio_type: RadioType,
+    board_type: BoardType,
     intf: SpiInterface<SPI, IV>,
 }
 
@@ -102,10 +102,10 @@ where
     SPI: SpiBus<u8> + 'static,
     IV: InterfaceVariant + 'static,
 {
-    /// Create an instance of the RadioKind implementation for the LoRa chip kind and type
-    pub fn new(radio_type: RadioType, spi: SPI, iv: IV) -> Self {
+    /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
+    pub fn new(board_type: BoardType, spi: SPI, iv: IV) -> Self {
         let intf = SpiInterface::new(spi, iv);
-        Self { radio_type, intf }
+        Self { board_type, intf }
     }
 
     // Utility functions
@@ -217,8 +217,8 @@ where
     SPI: SpiBus<u8> + 'static,
     IV: InterfaceVariant + 'static,
 {
-    fn get_radio_type(&mut self) -> RadioType {
-        self.radio_type
+    fn get_board_type(&self) -> BoardType {
+        self.board_type
     }
 
     async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
@@ -236,9 +236,9 @@ where
         Ok(())
     }
 
-    // Use DIO2 to control an RF Switch, depending on the radio type.
+    // Use DIO2 to control an RF Switch, depending on the board type.
     async fn init_rf_switch(&mut self) -> Result<(), RadioError> {
-        if self.get_radio_type() != RadioType::STM32WLSX1262 {
+        if self.board_type != BoardType::Stm32wlSx1262 {
             let op_code_and_indicator = [OpCode::SetRFSwitchMode.value(), true as u8];
             self.intf.write(&[&op_code_and_indicator], false).await?;
         }
@@ -346,7 +346,8 @@ where
             false => RampTime::Ramp200Us, // for instance, on initialization
         };
 
-        if self.radio_type == RadioType::SX1261 {
+        let chip_type: ChipType = self.board_type.into();
+        if chip_type == ChipType::Sx1261 {
             if (output_power < -17) || (output_power > 15) {
                 return Err(RadioError::InvalidOutputPower);
             }
