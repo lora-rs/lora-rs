@@ -1,5 +1,5 @@
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Bandwidth {
     _125KHz,
     _250KHz,
@@ -7,7 +7,7 @@ pub enum Bandwidth {
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum SpreadingFactor {
     _7,
     _8,
@@ -18,7 +18,7 @@ pub enum SpreadingFactor {
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum CodingRate {
     _4_5,
     _4_6,
