@@ -403,6 +403,62 @@ impl<const N: usize> Default for ChannelMask<N> {
     }
 }
 
+#[cfg(feature = "serde")]
+impl<const N: usize> serde::Serialize for ChannelMask<N> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for e in &self.0 {
+            seq.serialize_element(e)?;
+        }
+        seq.end()
+    }
+}
+
+#[cfg(feature = "serde")]
+struct ChannelMaskDeserializer<const N: usize>;
+
+#[cfg(feature = "serde")]
+impl<'de, const N: usize> serde::de::Visitor<'de> for ChannelMaskDeserializer<N> {
+    type Value = ChannelMask<N>;
+
+    fn expecting(&self, formatter: &mut core::fmt::Formatter) -> core::fmt::Result {
+        formatter.write_str("ChannelMask byte.")
+    }
+
+    fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+    where
+        A: serde::de::SeqAccess<'de>,
+    {
+        let mut arr = [0; N];
+        let mut index = 0;
+        while let Some(el) = seq.next_element()? {
+            if index >= N {
+                return Err(serde::de::Error::custom(
+                    "ChannelMask has too many elements",
+                ));
+            } else {
+                arr[index] = el;
+                index += 1;
+            }
+        }
+        Ok(ChannelMask(arr))
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, const N: usize> serde::Deserialize<'de> for ChannelMask<N> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_seq(ChannelMaskDeserializer {})
+    }
+}
+
 impl<const N: usize> ChannelMask<N> {
     /// Constructs a new ChannelMask from the provided data.
     pub fn new(data: &[u8]) -> Result<Self, &str> {
