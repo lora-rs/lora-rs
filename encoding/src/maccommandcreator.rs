@@ -188,7 +188,7 @@ impl LinkADRReqCreator {
     ///
     /// * channel_mask - instance of maccommands::ChannelMask or anything that can be converted
     /// into it.
-    pub fn set_channel_mask<T: Into<ChannelMask>>(&mut self, channel_mask: T) -> &mut Self {
+    pub fn set_channel_mask<T: Into<ChannelMask<2>>>(&mut self, channel_mask: T) -> &mut Self {
         let converted = channel_mask.into();
         self.data[2] = converted.as_ref()[0];
         self.data[3] = converted.as_ref()[1];

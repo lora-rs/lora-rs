@@ -39,7 +39,7 @@ impl RegionHandler for AU915 {
         JoinAccept { cflist: None }
     }
 
-    fn set_channel_mask(&mut self, _chmask: ChannelMask) {
+    fn set_channel_mask<const N: usize>(&mut self, _chmask: ChannelMask<N>) {
         // one day this should truly be handled
     }
 

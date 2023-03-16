@@ -382,8 +382,8 @@ impl<'a> LinkADRReqPayload<'a> {
     }
 
     /// Usable channels for next transmissions.
-    pub fn channel_mask(&self) -> ChannelMask {
-        ChannelMask::new_from_raw(&self.0[1..3])
+    pub fn channel_mask(&self) -> ChannelMask<2> {
+        ChannelMask::<2>::new_from_raw(&self.0[1..3])
     }
 
     /// Provides information how channel mask is to be interpreted and how many times each message
@@ -395,13 +395,13 @@ impl<'a> LinkADRReqPayload<'a> {
 
 /// ChannelMask represents the ChannelMask from LoRaWAN.
 #[derive(Debug, PartialEq, Eq)]
-pub struct ChannelMask([u8; 2]);
+pub struct ChannelMask<const N: usize>([u8; N]);
 
-impl ChannelMask {
+impl<const N: usize> ChannelMask<N> {
     /// Constructs a new ChannelMask from the provided data.
     pub fn new(data: &[u8]) -> Result<Self, &str> {
-        if data.len() < 2 {
-            return Err("not enough bytes to read");
+        if data.len() < N {
+            return Err("at least {N} bytes expected to read");
         }
         Ok(Self::new_from_raw(data))
     }
@@ -411,7 +411,8 @@ impl ChannelMask {
     ///
     /// Improper use of this method could lead to panic during runtime!
     pub fn new_from_raw(data: &[u8]) -> Self {
-        let payload = [data[0], data[1]];
+        let mut payload = [0; N];
+        payload[..N].copy_from_slice(&data[..N]);
         ChannelMask(payload)
     }
 
@@ -421,15 +422,16 @@ impl ChannelMask {
 
     /// Verifies if a given channel is enabled.
     pub fn is_enabled(&self, index: usize) -> Result<bool, &str> {
-        if index > 15 {
-            return Err("index should be between 0 and 15");
+        let index_limit = N * 8 - 1;
+        if index > index_limit {
+            return Err("index should be between 0 and {index_limit}");
         }
         Ok(self.channel_enabled(index))
     }
 
     /// Provides information for each of the 16 channels if they are enabled.
-    pub fn statuses(&self) -> [bool; 16] {
-        let mut res = [false; 16];
+    pub fn statuses<const M: usize>(&self) -> [bool; M] {
+        let mut res = [false; M];
         for (i, c) in res.iter_mut().enumerate() {
             *c = self.channel_enabled(i);
         }
@@ -437,13 +439,13 @@ impl ChannelMask {
     }
 }
 
-impl From<[u8; 2]> for ChannelMask {
-    fn from(v: [u8; 2]) -> Self {
+impl<const N: usize> From<[u8; N]> for ChannelMask<N> {
+    fn from(v: [u8; N]) -> Self {
         ChannelMask(v)
     }
 }
 
-impl AsRef<[u8]> for ChannelMask {
+impl<const N: usize> AsRef<[u8]> for ChannelMask<N> {
     fn as_ref(&self) -> &[u8] {
         &self.0[..]
     }
