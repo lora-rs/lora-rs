@@ -125,10 +125,9 @@ where
                 let credentials = Credentials::new(*appeui, *deveui, *appkey);
 
                 // Prepare the buffer with the join payload
-                let random = self.rng.next_u32();
-                let (devnonce, tx_config) = credentials.create_join_request::<C, N>(
+                let (devnonce, tx_config) = credentials.create_join_request::<C, RNG, N>(
                     &mut self.region,
-                    random,
+                    &mut self.rng,
                     self.datarate,
                     &mut self.radio_buffer,
                 );
@@ -218,10 +217,9 @@ where
         let _ = self.prepare_buffer(data, fport, confirmed)?;
 
         // Send data
-        let random = self.rng.next_u32();
         let tx_config = self
             .region
-            .create_tx_config(random as u8, self.datarate, &Frame::Data);
+            .create_tx_config(&mut self.rng, self.datarate, &Frame::Data);
 
         // Transmit our data packet
         let ms = self

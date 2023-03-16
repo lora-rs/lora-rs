@@ -3,7 +3,7 @@ use super::super::State as SuperState;
 use super::super::*;
 use super::{
     region::{Frame, Window},
-    Shared,
+    RngCore, Shared,
 };
 use lorawan::{
     self,
@@ -60,20 +60,24 @@ impl NoSession {
         Self::default()
     }
 
-    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+    pub fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        C: CryptoFactory + Default,
+        RNG: RngCore,
+        const N: usize,
+    >(
         self,
         event: Event<R>,
-        shared: &mut Shared<R, N>,
-    ) -> (
-        SuperState,
-        Result<Response, super::super::Error<R::PhyError>>,
-    ) {
+        shared: &mut Shared<R, RNG, N>,
+    ) -> (SuperState, Result<Response, super::Error<R::PhyError>>) {
         match self {
-            NoSession::Idle(state) => state.handle_event::<R, C, N>(event, shared),
-            NoSession::SendingJoin(state) => state.handle_event::<R, C, N>(event, shared),
-            NoSession::WaitingForRxWindow(state) => state.handle_event::<R, C, N>(event, shared),
+            NoSession::Idle(state) => state.handle_event::<R, C, RNG, N>(event, shared),
+            NoSession::SendingJoin(state) => state.handle_event::<R, C, RNG, N>(event, shared),
+            NoSession::WaitingForRxWindow(state) => {
+                state.handle_event::<R, C, RNG, N>(event, shared)
+            }
             NoSession::WaitingForJoinResponse(state) => {
-                state.handle_event::<R, C, N>(event, shared)
+                state.handle_event::<R, C, RNG, N>(event, shared)
             }
         }
     }
@@ -101,10 +105,15 @@ pub struct Idle {
 }
 
 impl Idle {
-    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+    pub fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        C: CryptoFactory + Default,
+        RNG: RngCore,
+        const N: usize,
+    >(
         self,
         event: Event<R>,
-        shared: &mut Shared<R, N>,
+        shared: &mut Shared<R, RNG, N>,
     ) -> (
         SuperState,
         Result<Response, super::super::Error<R::PhyError>>,
@@ -113,10 +122,9 @@ impl Idle {
             // NewSession Request or a Timeout from previously failed Join attempt
             Event::NewSessionRequest | Event::TimeoutFired => {
                 if let Some(credentials) = &shared.credentials {
-                    let random = (shared.get_random)();
-                    let (devnonce, tx_config) = credentials.create_join_request::<C, N>(
+                    let (devnonce, tx_config) = credentials.create_join_request::<C, RNG, N>(
                         &mut shared.region,
-                        random,
+                        &mut shared.rng,
                         shared.datarate,
                         &mut shared.tx_buffer,
                     );
@@ -191,10 +199,15 @@ pub struct SendingJoin {
 }
 
 impl SendingJoin {
-    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+    pub fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        C: CryptoFactory + Default,
+        RNG: RngCore,
+        const N: usize,
+    >(
         self,
         event: Event<R>,
-        shared: &mut Shared<R, N>,
+        shared: &mut Shared<R, RNG, N>,
     ) -> (
         SuperState,
         Result<Response, super::super::Error<R::PhyError>>,
@@ -253,10 +266,15 @@ pub struct WaitingForRxWindow {
 }
 
 impl WaitingForRxWindow {
-    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+    pub fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        C: CryptoFactory + Default,
+        RNG: RngCore,
+        const N: usize,
+    >(
         self,
         event: Event<R>,
-        shared: &mut Shared<R, N>,
+        shared: &mut Shared<R, RNG, N>,
     ) -> (
         SuperState,
         Result<Response, super::super::Error<R::PhyError>>,
@@ -332,10 +350,15 @@ pub struct WaitingForJoinResponse {
 }
 
 impl WaitingForJoinResponse {
-    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+    pub fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        C: CryptoFactory + Default,
+        RNG: RngCore,
+        const N: usize,
+    >(
         self,
         event: Event<R>,
-        shared: &mut Shared<R, N>,
+        shared: &mut Shared<R, RNG, N>,
     ) -> (
         SuperState,
         Result<Response, super::super::Error<R::PhyError>>,
@@ -354,9 +377,8 @@ impl WaitingForJoinResponse {
                                 match &shared.credentials {
                                     Some(credentials) => {
                                         let decrypt = encrypted.decrypt(credentials.appkey());
-                                        shared.downlink = Some(super::Downlink::Join(
-                                            shared.region.process_join_accept(&decrypt),
-                                        ));
+                                        shared.region.process_join_accept(&decrypt);
+                                        shared.downlink = Some(super::Downlink::Join);
                                         if decrypt.validate_mic(credentials.appkey()) {
                                             let session = SessionData::derive_new(
                                                 &decrypt,

@@ -7,13 +7,13 @@ pub mod session;
 
 pub use region::DR;
 
-pub struct Shared<R: radio::PhyRxTx + Timings, const N: usize> {
+pub struct Shared<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize> {
     radio: R,
     credentials: Option<Credentials>,
     region: region::Configuration,
     mac: Mac,
     // TODO: do something nicer for randomness
-    get_random: fn() -> u32,
+    rng: RNG,
     tx_buffer: RadioBuffer<N>,
     downlink: Option<Downlink>,
     datarate: DR,
@@ -22,15 +22,10 @@ pub struct Shared<R: radio::PhyRxTx + Timings, const N: usize> {
 #[allow(clippy::large_enum_variant)]
 enum Downlink {
     Data(DecryptedDataPayload<Vec<u8, 256>>),
-    Join(JoinAccept),
+    Join,
 }
 
-#[derive(Debug)]
-pub struct JoinAccept {
-    pub cflist: Option<[u32; 5]>,
-}
-
-impl<R: radio::PhyRxTx + Timings, const N: usize> Shared<R, N> {
+impl<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize> Shared<R, RNG, N> {
     pub fn get_mut_radio(&mut self) -> &mut R {
         &mut self.radio
     }
@@ -51,31 +46,23 @@ impl<R: radio::PhyRxTx + Timings, const N: usize> Shared<R, N> {
             None
         }
     }
-
-    pub fn take_join_accept(&mut self) -> Option<JoinAccept> {
-        if let Some(Downlink::Join(payload)) = self.downlink.take() {
-            Some(payload)
-        } else {
-            None
-        }
-    }
 }
 
-impl<R: radio::PhyRxTx + Timings, const N: usize> Shared<R, N> {
+impl<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize> Shared<R, RNG, N> {
     pub fn new(
         radio: R,
         credentials: Option<Credentials>,
         region: region::Configuration,
         mac: Mac,
-        get_random: fn() -> u32,
-    ) -> Shared<R, N> {
+        rng: RNG,
+    ) -> Shared<R, RNG, N> {
         let datarate = region.get_default_datarate();
         Shared {
             radio,
             credentials,
             region,
             mac,
-            get_random,
+            rng,
             tx_buffer: RadioBuffer::new(),
             downlink: None,
             datarate,

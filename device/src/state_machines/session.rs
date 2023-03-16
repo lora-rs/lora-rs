@@ -125,29 +125,39 @@ impl Session {
         }
     }
 
-    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+    pub fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        C: CryptoFactory + Default,
+        RNG: RngCore,
+        const N: usize,
+    >(
         self,
         event: Event<R>,
-        shared: &mut Shared<R, N>,
+        shared: &mut Shared<R, RNG, N>,
     ) -> (
         SuperState,
         Result<Response, super::super::Error<R::PhyError>>,
     ) {
         match self {
-            Session::Idle(state) => state.handle_event::<R, C, N>(event, shared),
-            Session::SendingData(state) => state.handle_event::<R, C, N>(event, shared),
-            Session::WaitingForRxWindow(state) => state.handle_event::<R, C, N>(event, shared),
-            Session::WaitingForRx(state) => state.handle_event::<R, C, N>(event, shared),
+            Session::Idle(state) => state.handle_event::<R, C, RNG, N>(event, shared),
+            Session::SendingData(state) => state.handle_event::<R, C, RNG, N>(event, shared),
+            Session::WaitingForRxWindow(state) => state.handle_event::<R, C, RNG, N>(event, shared),
+            Session::WaitingForRx(state) => state.handle_event::<R, C, RNG, N>(event, shared),
         }
     }
 }
 
 impl Idle {
     #[allow(clippy::match_wild_err_arm)]
-    fn prepare_buffer<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+    fn prepare_buffer<
+        R: radio::PhyRxTx + Timings,
+        C: CryptoFactory + Default,
+        RNG: RngCore,
+        const N: usize,
+    >(
         &mut self,
         data: &SendData,
-        shared: &mut Shared<R, N>,
+        shared: &mut Shared<R, RNG, N>,
     ) -> FcntUp {
         let fcnt = self.session.fcnt_up();
         let mut phy: DataPayloadCreator<GenericArray<u8, U256>, C> = DataPayloadCreator::default();
@@ -188,10 +198,15 @@ impl Idle {
         }
         fcnt
     }
-    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+    pub fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        C: CryptoFactory + Default,
+        RNG: RngCore,
+        const N: usize,
+    >(
         mut self,
         event: Event<R>,
-        shared: &mut Shared<R, N>,
+        shared: &mut Shared<R, RNG, N>,
     ) -> (
         SuperState,
         Result<Response, super::super::Error<R::PhyError>>,
@@ -199,13 +214,11 @@ impl Idle {
         match event {
             Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
-                let fcnt = self.prepare_buffer::<R, C, N>(&send_data, shared);
-                let random = (shared.get_random)();
-
+                let fcnt = self.prepare_buffer::<R, C, RNG, N>(&send_data, shared);
                 let event: radio::Event<R> = radio::Event::TxRequest(
                     shared
                         .region
-                        .create_tx_config(random as u8, shared.datarate, &Frame::Data),
+                        .create_tx_config(&mut shared.rng, shared.datarate, &Frame::Data),
                     shared.tx_buffer.as_ref(),
                 );
 
@@ -223,7 +236,7 @@ impl Idle {
                             ),
                             // directly jump to waiting for RxWindow
                             // allows for synchronous sending
-                            radio::Response::TxDone(ms) => data_rxwindow1_timeout::<R, C, N>(
+                            radio::Response::TxDone(ms) => data_rxwindow1_timeout::<R, C, RNG, N>(
                                 Session::Idle(self),
                                 confirmed,
                                 ms,
@@ -241,7 +254,7 @@ impl Idle {
             Event::TimeoutFired => (self.into(), Ok(Response::NoUpdate)),
             Event::NewSessionRequest => {
                 let no_session = NoSession::new();
-                no_session.handle_event::<R, C, N>(Event::NewSessionRequest, shared)
+                no_session.handle_event::<R, C, RNG, N>(Event::NewSessionRequest, shared)
             }
             Event::RadioEvent(_radio_event) => {
                 (self.into(), Err(Error::RadioEventWhileIdle.into()))
@@ -275,10 +288,15 @@ pub struct SendingData {
 }
 
 impl SendingData {
-    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+    pub fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        C: CryptoFactory + Default,
+        RNG: RngCore,
+        const N: usize,
+    >(
         self,
         event: Event<R>,
-        shared: &mut Shared<R, N>,
+        shared: &mut Shared<R, RNG, N>,
     ) -> (
         SuperState,
         Result<Response, super::super::Error<R::PhyError>>,
@@ -293,7 +311,7 @@ impl SendingData {
                             // expect a complete transmit
                             radio::Response::TxDone(ms) => {
                                 let confirmed = self.confirmed;
-                                data_rxwindow1_timeout::<R, C, N>(
+                                data_rxwindow1_timeout::<R, C, RNG, N>(
                                     Session::SendingData(self),
                                     confirmed,
                                     ms,
@@ -334,14 +352,16 @@ pub struct WaitingForRxWindow {
 }
 
 impl WaitingForRxWindow {
-    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+    pub fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        C: CryptoFactory + Default,
+        RNG: RngCore,
+        const N: usize,
+    >(
         self,
         event: Event<R>,
-        shared: &mut Shared<R, N>,
-    ) -> (
-        SuperState,
-        Result<Response, super::super::Error<R::PhyError>>,
-    ) {
+        shared: &mut Shared<R, RNG, N>,
+    ) -> (SuperState, Result<Response, super::Error<R::PhyError>>) {
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
@@ -415,10 +435,15 @@ pub struct WaitingForRx {
 }
 
 impl WaitingForRx {
-    pub fn handle_event<R: radio::PhyRxTx + Timings, C: CryptoFactory + Default, const N: usize>(
+    pub fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        C: CryptoFactory + Default,
+        RNG: RngCore,
+        const N: usize,
+    >(
         mut self,
         event: Event<R>,
-        shared: &mut Shared<R, N>,
+        shared: &mut Shared<R, RNG, N>,
     ) -> (
         SuperState,
         Result<Response, super::super::Error<R::PhyError>>,
@@ -569,12 +594,13 @@ impl WaitingForRx {
 fn data_rxwindow1_timeout<
     R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
+    RNG: RngCore,
     const N: usize,
 >(
     state: Session,
     confirmed: bool,
     timestamp_ms: TimestampMs,
-    shared: &mut Shared<R, N>,
+    shared: &mut Shared<R, RNG, N>,
 ) -> (
     SuperState,
     Result<Response, super::super::Error<R::PhyError>>,

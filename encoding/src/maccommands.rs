@@ -394,8 +394,14 @@ impl<'a> LinkADRReqPayload<'a> {
 }
 
 /// ChannelMask represents the ChannelMask from LoRaWAN.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChannelMask<const N: usize>([u8; N]);
+
+impl<const N: usize> Default for ChannelMask<N> {
+    fn default() -> Self {
+        ChannelMask([0xFF; N])
+    }
+}
 
 impl<const N: usize> ChannelMask<N> {
     /// Constructs a new ChannelMask from the provided data.
@@ -404,6 +410,14 @@ impl<const N: usize> ChannelMask<N> {
             return Err("at least {N} bytes expected to read");
         }
         Ok(Self::new_from_raw(data))
+    }
+
+    pub fn set_bank(&mut self, index: usize, value: u8) {
+        self.0[index] = value;
+    }
+
+    pub fn get_index(&self, index: usize) -> u8 {
+        self.0[index]
     }
 
     /// Constructs a new ChannelMask from the provided data, without verifying if they are
