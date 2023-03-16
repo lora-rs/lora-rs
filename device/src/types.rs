@@ -1,5 +1,6 @@
 use crate::radio::{RadioBuffer, TxConfig};
 use crate::region::{Configuration, Frame, DR};
+use crate::RngCore;
 use lorawan::keys::CryptoFactory;
 use lorawan::{creator::JoinRequestCreator, keys::AES128, parser::EUI64};
 
@@ -39,15 +40,15 @@ impl Credentials {
 
     /// Prepare a join request to be sent. This populates the radio buffer with the request to be
     /// sent, and returns the radio config to use for transmitting.
-    pub(crate) fn create_join_request<C: CryptoFactory + Default, const N: usize>(
+    pub(crate) fn create_join_request<C: CryptoFactory + Default, RNG: RngCore, const N: usize>(
         &self,
         region: &mut Configuration,
-        mut random: u32,
+        rng: &mut RNG,
         datarate: DR,
         buf: &mut RadioBuffer<N>,
     ) -> (DevNonce, TxConfig) {
         // use lowest 16 bits for devnonce
-        let devnonce_bytes = random as u16;
+        let devnonce_bytes = rng.next_u32() as u16;
 
         buf.clear();
 
@@ -63,12 +64,9 @@ impl Credentials {
         let devnonce_copy = DevNonce::new(devnonce).unwrap();
 
         buf.extend_from_slice(vec).unwrap();
-
-        // we'll use the rest for frequency and subband selection
-        random >>= 16;
         (
             devnonce_copy,
-            region.create_tx_config(random as u8, datarate, &Frame::Join),
+            region.create_tx_config(rng, datarate, &Frame::Join),
         )
     }
 }

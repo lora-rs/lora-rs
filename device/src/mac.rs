@@ -85,7 +85,10 @@ impl Mac {
             match cmd {
                 MacCommand::LinkADRReq(payload) => {
                     // we ignore DR and TxPwr
-                    region.set_channel_mask(payload.channel_mask());
+                    region.set_channel_mask(
+                        payload.redundancy().channel_mask_control(),
+                        payload.channel_mask(),
+                    );
                     self.adr_ans.add();
                 }
                 MacCommand::RXTimingSetupReq(payload) => {
