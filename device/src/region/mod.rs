@@ -213,7 +213,7 @@ impl Configuration {
         mut_region_dispatch!(self, process_join_accept, join_accept)
     }
 
-    pub(crate) fn set_channel_mask(&mut self, channel_mask: ChannelMask) {
+    pub(crate) fn set_channel_mask<const N: usize>(&mut self, channel_mask: ChannelMask<N>) {
         mut_region_dispatch!(self, set_channel_mask, channel_mask)
     }
 
@@ -275,7 +275,7 @@ pub(crate) trait RegionHandler {
         &mut self,
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     ) -> JoinAccept;
-    fn set_channel_mask(&mut self, _channel_mask: ChannelMask) {
+    fn set_channel_mask<const N: usize>(&mut self, _channel_mask: ChannelMask<N>) {
         // does not apply to every region
     }
     fn set_subband(&mut self, _subband: u8) {

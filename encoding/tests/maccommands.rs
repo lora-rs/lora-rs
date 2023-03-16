@@ -288,9 +288,9 @@ fn test_channel_mask() {
     expected[0] = true;
     expected[1] = true;
     expected[12] = true;
-    let chan_mask = ChannelMask::new(&data[..]);
+    let chan_mask = ChannelMask::<2>::new(&data[..]);
     assert!(chan_mask.is_ok());
-    assert_eq!(&chan_mask.unwrap().statuses()[..], &expected[..]);
+    assert_eq!(&chan_mask.unwrap().statuses::<16>()[..], &expected[..]);
 }
 
 #[test]
