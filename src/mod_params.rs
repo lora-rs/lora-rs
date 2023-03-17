@@ -53,6 +53,7 @@ pub struct PacketStatus {
 #[allow(missing_docs)]
 pub enum BoardType {
     GenericSx1261, // placeholder for Sx1261-specific features
+    HeltecWifiLoraV31262,
     Rak4631Sx1262,
     Stm32l0Sx1276,
     Stm32wlSx1262,
@@ -74,6 +75,7 @@ impl From<BoardType> for ChipType {
     fn from(board_type: BoardType) -> Self {
         match board_type {
             BoardType::GenericSx1261 => ChipType::Sx1261,
+            BoardType::HeltecWifiLoraV31262 => ChipType::Sx1262,
             BoardType::Rak4631Sx1262 => ChipType::Sx1262,
             BoardType::Stm32l0Sx1276 => ChipType::Sx1276,
             BoardType::Stm32wlSx1262 => ChipType::Sx1262,
