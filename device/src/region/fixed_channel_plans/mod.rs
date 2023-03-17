@@ -143,7 +143,7 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
     }
 
     fn get_rx_frequency(&self, _frame: &Frame, window: &Window) -> u32 {
-        let channel = self.last_tx_channel % 7;
+        let channel = self.last_tx_channel % 8;
         match window {
             Window::_1 => F::downlink_channels()[channel as usize],
             Window::_2 => F::get_default_rx2(),
