@@ -221,6 +221,13 @@ where
             .region
             .create_tx_config(&mut self.rng, self.datarate, &Frame::Data);
 
+        // Unless the same frame is to be retransmitted (see NbTrans parameter of LinkADRReq command, LoRaWAN spec
+        // 1.0.2 section 5.2 for retransmissions), FCnt must be incremented on each transmission.
+        self.session
+            .as_mut()
+            .ok_or(Error::NetworkNotJoined)?
+            .fcnt_up_increment();
+
         // Transmit our data packet
         let ms = self
             .radio
