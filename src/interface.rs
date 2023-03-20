@@ -1,3 +1,4 @@
+use defmt::info;
 use embedded_hal_async::spi::SpiBus;
 
 use crate::mod_params::RadioError;
@@ -37,6 +38,15 @@ where
         if !is_sleep_command {
             self.iv.wait_on_busy().await?;
         }
+
+        // debug ???
+        match write_buffers.len() {
+            1 => info!("write: 0x{:x}", write_buffers[0]),
+            2 => info!("write: 0x{:x} 0x{:x}", write_buffers[0], write_buffers[1]),
+            3 => info!("write: 0x{:x} 0x{:x} 0x{:x}", write_buffers[0], write_buffers[1], write_buffers[2]),
+            _ => info!("write: too many buffers"),
+        }
+        
         Ok(())
     }
 
@@ -82,6 +92,15 @@ where
         self.iv.set_nss_high().await?;
 
         self.iv.wait_on_busy().await?;
+
+        // debug ???
+        match write_buffers.len() {
+            1 => info!("write: 0x{:x}", write_buffers[0]),
+            2 => info!("write: 0x{:x} 0x{:x}", write_buffers[0], write_buffers[1]),
+            3 => info!("write: 0x{:x} 0x{:x} 0x{:x}", write_buffers[0], write_buffers[1], write_buffers[2]),
+            _ => info!("write: too many buffers"),
+        }
+        info!("read {}: 0x{:x}", number_to_read, read_buffer);
 
         Ok(())
     }
@@ -133,6 +152,15 @@ where
         self.iv.set_nss_high().await?;
 
         self.iv.wait_on_busy().await?;
+
+        // debug ???
+        match write_buffers.len() {
+            1 => info!("write: 0x{:x}", write_buffers[0]),
+            2 => info!("write: 0x{:x} 0x{:x}", write_buffers[0], write_buffers[1]),
+            3 => info!("write: 0x{:x} 0x{:x} 0x{:x}", write_buffers[0], write_buffers[1], write_buffers[2]),
+            _ => info!("write: too many buffers"),
+        }
+        info!("read {} status 0x{:x}: 0x{:x}", read_buffer.len(), status[0], read_buffer);
 
         Ok(status[0])
     }
