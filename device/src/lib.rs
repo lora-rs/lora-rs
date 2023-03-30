@@ -256,3 +256,12 @@ where
         result
     }
 }
+
+pub trait GetRandom: private::Sealed {
+    type RNG: RngCore;
+    fn get_rng(&mut self) -> &mut Self::RNG;
+}
+
+mod private {
+    pub trait Sealed {}
+}

@@ -22,28 +22,62 @@ use lorawan::{
 use rand_core::RngCore;
 
 type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
-use crate::radio::types::RadioBuffer;
 pub use crate::region::DR;
+use crate::{private::Sealed, radio::types::RadioBuffer, GetRandom};
 pub mod radio;
 use core::cmp::min;
+
+pub trait OptionalRng: Sealed {}
+struct NoneT;
+
+impl Sealed for NoneT {}
+impl OptionalRng for NoneT {}
+
+impl<T: RngCore> Sealed for T {}
+impl<T: RngCore> OptionalRng for T {}
+
+pub struct Phy<R, G: OptionalRng> {
+    radio: R,
+    rng: G,
+}
+
+impl<R: RngCore> Sealed for Phy<R, NoneT> {}
+impl<R: RngCore> GetRandom for Phy<R, NoneT> {
+    type RNG = R;
+    fn get_rng(&mut self) -> &mut Self::RNG {
+        &mut self.radio
+    }
+}
+
+impl<R, G: RngCore> Sealed for Phy<R, G> {}
+impl<R, G> GetRandom for Phy<R, G>
+where
+    R: radio::PhyRxTx + Timings,
+    G: RngCore,
+{
+    type RNG = G;
+    fn get_rng(&mut self) -> &mut Self::RNG {
+        &mut self.rng
+    }
+}
 
 /// Type representing a LoRaWAN cabable device. A device is bound to the following types:
 /// - R: An asynchronous radio implementation
 /// - T: An asynchronous timer implementation
 /// - C: A CryptoFactory implementation
 /// - RNG: A random number generator implementation
-pub struct Device<R, C, T, RNG, const N: usize = 256>
+pub struct Device<R, C, T, G, const N: usize = 256>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
     C: CryptoFactory + Default,
-    RNG: RngCore,
+    G: OptionalRng,
+    Phy<R, G>: GetRandom,
 {
     crypto: PhantomData<C>,
     region: region::Configuration,
-    radio: R,
+    phy: Phy<R, G>,
     timer: T,
-    rng: RNG,
     session: Option<SessionData>,
     mac: Mac,
     radio_buffer: RadioBuffer<N>,
@@ -62,32 +96,58 @@ pub enum Error<R> {
     UnableToDecodePayload(&'static str),
 }
 
-#[allow(dead_code)]
-impl<R, C, T, RNG, const N: usize> Device<R, C, T, RNG, N>
+impl<R, C, T, const N: usize> Device<R, C, T, NoneT, N>
+where
+    R: radio::PhyRxTx + Timings + RngCore,
+    C: CryptoFactory + Default,
+    T: radio::Timer,
+{
+    /// Create a new instance of [`Device`] with a LoRa chip with a builtin RNG. This means that `radio` should implement [`rand_core::RngCore`].
+    pub fn new_with_builtin_rng(
+        region: region::Configuration,
+        radio: R,
+        timer: T,
+    ) -> Device<R, C, T, NoneT, N> {
+        Device::new_with_session(region, radio, timer, NoneT, None)
+    }
+}
+
+impl<R, C, T, G, const N: usize> Device<R, C, T, G, N>
 where
     R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
     T: radio::Timer,
-    RNG: RngCore,
+    G: RngCore,
 {
-    pub fn new(region: region::Configuration, radio: R, timer: T, rng: RNG) -> Self {
-        Self::new_with_session(region, radio, timer, rng, None)
+    /// Create a new instance of [`Device`] with a RNG external to the LoRa chip. See also [`new_with_builtin_rng`](Self::new_with_builtin_rng)
+    pub fn new(region: region::Configuration, radio: R, timer: T, rng: G) -> Device<R, C, T, G, N> {
+        Device::new_with_session(region, radio, timer, rng, None)
     }
+}
+
+#[allow(dead_code)]
+impl<R, C, T, G, const N: usize> Device<R, C, T, G, N>
+where
+    R: radio::PhyRxTx + Timings,
+    C: CryptoFactory + Default,
+    T: radio::Timer,
+    G: OptionalRng,
+    Phy<R, G>: GetRandom,
+{
     pub fn new_with_session(
         region: region::Configuration,
         radio: R,
         timer: T,
-        rng: RNG,
+        rng: G,
         session: Option<SessionData>,
     ) -> Self {
         Self {
             crypto: PhantomData::default(),
-            radio,
+            phy: Phy { radio, rng },
             session,
             mac: Mac::default(),
             radio_buffer: RadioBuffer::new(),
             timer,
-            rng,
             datarate: region.get_default_datarate(),
             region,
         }
@@ -125,15 +185,17 @@ where
                 let credentials = Credentials::new(*appeui, *deveui, *appkey);
 
                 // Prepare the buffer with the join payload
-                let (devnonce, tx_config) = credentials.create_join_request::<C, RNG, N>(
-                    &mut self.region,
-                    &mut self.rng,
-                    self.datarate,
-                    &mut self.radio_buffer,
-                );
+                let (devnonce, tx_config) = credentials
+                    .create_join_request::<C, <Phy<R, G> as GetRandom>::RNG, N>(
+                        &mut self.region,
+                        self.phy.get_rng(),
+                        self.datarate,
+                        &mut self.radio_buffer,
+                    );
 
                 // Transmit the join payload
                 let ms = self
+                    .phy
                     .radio
                     .tx(tx_config, self.radio_buffer.as_ref())
                     .await
@@ -217,9 +279,9 @@ where
         let _ = self.prepare_buffer(data, fport, confirmed)?;
 
         // Send data
-        let tx_config = self
-            .region
-            .create_tx_config(&mut self.rng, self.datarate, &Frame::Data);
+        let tx_config =
+            self.region
+                .create_tx_config(self.phy.get_rng(), self.datarate, &Frame::Data);
 
         // Unless the same frame is to be retransmitted (see NbTrans parameter of LinkADRReq command, LoRaWAN spec
         // 1.0.2 section 5.2 for retransmissions), FCnt must be incremented on each transmission.
@@ -230,6 +292,7 @@ where
 
         // Transmit our data packet
         let ms = self
+            .phy
             .radio
             .tx(tx_config, self.radio_buffer.as_ref())
             .await
@@ -390,13 +453,13 @@ where
         // The initial window configuration uses window 1 adjusted by window_delay and radio offset
         let rx1_start_delay = (self.region.get_rx_delay(frame, &Window::_1) as i32
             + window_delay as i32
-            + self.radio.get_rx_window_offset_ms()) as u32;
+            + self.phy.radio.get_rx_window_offset_ms()) as u32;
 
-        let rx1_end_delay = rx1_start_delay + self.radio.get_rx_window_duration_ms();
+        let rx1_end_delay = rx1_start_delay + self.phy.radio.get_rx_window_duration_ms();
 
         let rx2_start_delay = (self.region.get_rx_delay(frame, &Window::_2) as i32
             + window_delay as i32
-            + self.radio.get_rx_window_offset_ms()) as u32;
+            + self.phy.radio.get_rx_window_offset_ms()) as u32;
 
         self.radio_buffer.clear();
         // Wait until RX1 window opens
@@ -410,7 +473,10 @@ where
             let window_duration = min(rx1_end_delay, rx2_start_delay);
 
             // Pass the full radio buffer slice to RX
-            let rx_fut = self.radio.rx(rx_config, self.radio_buffer.as_raw_slice());
+            let rx_fut = self
+                .phy
+                .radio
+                .rx(rx_config, self.radio_buffer.as_raw_slice());
             let timeout_fut = self.timer.at(window_duration.into());
 
             pin_mut!(rx_fut);
@@ -437,10 +503,13 @@ where
         {
             // Prepare for RX using correct configuration
             let rx_config = self.region.get_rx_config(self.datarate, frame, &Window::_2);
-            let window_duration = self.radio.get_rx_window_duration_ms();
+            let window_duration = self.phy.radio.get_rx_window_duration_ms();
 
             // Pass the full radio buffer slice to RX
-            let rx_fut = self.radio.rx(rx_config, self.radio_buffer.as_raw_slice());
+            let rx_fut = self
+                .phy
+                .radio
+                .rx(rx_config, self.radio_buffer.as_raw_slice());
             let timeout_fut = self.timer.delay_ms(window_duration.into());
 
             pin_mut!(rx_fut);
