@@ -255,11 +255,16 @@ where
     }
 }
 
-pub trait GetRandom: private::Sealed {
+/// Trait used to mark types which can give out an exclusice reference to [`RngCore`].
+/// This trait is an implementation detail and should not be implemented outside this crate.
+#[doc(hidden)]
+pub trait GetRng: private::Sealed {
     type RNG: RngCore;
     fn get_rng(&mut self) -> &mut Self::RNG;
 }
 
 mod private {
+    /// Super trait used to mark traits with an exhaustive set of
+    /// implementations
     pub trait Sealed {}
 }
