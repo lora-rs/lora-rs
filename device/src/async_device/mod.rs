@@ -23,12 +23,17 @@ use rand_core::RngCore;
 
 type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 pub use crate::region::DR;
-use crate::{private::Sealed, radio::types::RadioBuffer, GetRandom};
+use crate::{private::Sealed, radio::types::RadioBuffer, GetRng};
 pub mod radio;
 use core::cmp::min;
 
+/// Type-level version of the [`None`] variant
+pub struct NoneT;
+
+/// Type-level Option representing a type that can either implement [`RngCore`] or be [`NoneT`].
+/// This trait is an implementation detail and should not be implemented outside this crate.
+#[doc(hidden)]
 pub trait OptionalRng: Sealed {}
-struct NoneT;
 
 impl Sealed for NoneT {}
 impl OptionalRng for NoneT {}
@@ -36,13 +41,19 @@ impl OptionalRng for NoneT {}
 impl<T: RngCore> Sealed for T {}
 impl<T: RngCore> OptionalRng for T {}
 
+/// Representation of the physical radio + RNG. Two variants may be constructed through [`Device`]. Either:
+/// * `R` implements [`RngCore`], or
+/// * `G` implements [`RngCore`].
+///
+/// This allows for seamless functionality with either RNG variant and is an implementation detail. Users are not
+/// expected to construct [`Phy`] directly. Use the constructors for [`Device`] instead.
 pub struct Phy<R, G: OptionalRng> {
     radio: R,
     rng: G,
 }
 
 impl<R: RngCore> Sealed for Phy<R, NoneT> {}
-impl<R: RngCore> GetRandom for Phy<R, NoneT> {
+impl<R: RngCore> GetRng for Phy<R, NoneT> {
     type RNG = R;
     fn get_rng(&mut self) -> &mut Self::RNG {
         &mut self.radio
@@ -50,7 +61,7 @@ impl<R: RngCore> GetRandom for Phy<R, NoneT> {
 }
 
 impl<R, G: RngCore> Sealed for Phy<R, G> {}
-impl<R, G> GetRandom for Phy<R, G>
+impl<R, G> GetRng for Phy<R, G>
 where
     R: radio::PhyRxTx + Timings,
     G: RngCore,
@@ -65,14 +76,15 @@ where
 /// - R: An asynchronous radio implementation
 /// - T: An asynchronous timer implementation
 /// - C: A CryptoFactory implementation
-/// - RNG: A random number generator implementation
+/// - RNG: A random number generator implementation. This is optional depending on whether you construct [`Device`]
+/// with the `new` or `new_with_builtin_rng` methods.
 pub struct Device<R, C, T, G, const N: usize = 256>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
     C: CryptoFactory + Default,
     G: OptionalRng,
-    Phy<R, G>: GetRandom,
+    Phy<R, G>: GetRng,
 {
     crypto: PhantomData<C>,
     region: region::Configuration,
@@ -102,7 +114,8 @@ where
     C: CryptoFactory + Default,
     T: radio::Timer,
 {
-    /// Create a new instance of [`Device`] with a LoRa chip with a builtin RNG. This means that `radio` should implement [`rand_core::RngCore`].
+    /// Create a new instance of [`Device`] with a LoRa chip with a builtin RNG.
+    /// This means that `radio` should implement [`rand_core::RngCore`].
     pub fn new_with_builtin_rng(
         region: region::Configuration,
         radio: R,
@@ -119,7 +132,8 @@ where
     T: radio::Timer,
     G: RngCore,
 {
-    /// Create a new instance of [`Device`] with a RNG external to the LoRa chip. See also [`new_with_builtin_rng`](Self::new_with_builtin_rng)
+    /// Create a new instance of [`Device`] with a RNG external to the LoRa chip.
+    /// See also [`new_with_builtin_rng`](Self::new_with_builtin_rng)
     pub fn new(region: region::Configuration, radio: R, timer: T, rng: G) -> Device<R, C, T, G, N> {
         Device::new_with_session(region, radio, timer, rng, None)
     }
@@ -132,7 +146,7 @@ where
     C: CryptoFactory + Default,
     T: radio::Timer,
     G: OptionalRng,
-    Phy<R, G>: GetRandom,
+    Phy<R, G>: GetRng,
 {
     pub fn new_with_session(
         region: region::Configuration,
@@ -186,7 +200,7 @@ where
 
                 // Prepare the buffer with the join payload
                 let (devnonce, tx_config) = credentials
-                    .create_join_request::<C, <Phy<R, G> as GetRandom>::RNG, N>(
+                    .create_join_request::<C, <Phy<R, G> as GetRng>::RNG, N>(
                         &mut self.region,
                         self.phy.get_rng(),
                         self.datarate,
