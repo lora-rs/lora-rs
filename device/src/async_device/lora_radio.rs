@@ -3,9 +3,10 @@ use core::future::Future;
 use super::radio::{
     Bandwidth, CodingRate, PhyRxTx, RfConfig, RxQuality, SpreadingFactor, TxConfig,
 };
+use super::region::constants::DEFAULT_DBM;
 use super::Timings;
 
-use lora::mod_params::{BoardType, RadioError};
+use lora::mod_params::{BoardType, ChipType, RadioError};
 use lora::mod_traits::RadioKind;
 use lora::LoRa;
 
@@ -67,9 +68,9 @@ where
 {
     fn get_rx_window_offset_ms(&self) -> i32 {
         match self.lora.get_board_type() {
-            BoardType::Rak4631Sx1262 => -50,
+            BoardType::Rak4631Sx1262 => -20,
             BoardType::Stm32l0Sx1276 => -3,
-            BoardType::Stm32wlSx1262 => -3,
+            BoardType::Stm32wlSx1262 => -50,
             _ => -50,
         }
     }
@@ -77,7 +78,7 @@ where
         match self.lora.get_board_type() {
             BoardType::Rak4631Sx1262 => 1050,
             BoardType::Stm32l0Sx1276 => 1003,
-            BoardType::Stm32wlSx1262 => 1003,
+            BoardType::Stm32wlSx1262 => 1050,
             _ => 1050,
         }
     }
@@ -103,8 +104,18 @@ where
             let mut tx_pkt_params =
                 self.lora
                     .create_tx_packet_params(8, false, true, false, &mdltn_params)?;
+            let pw = match self.lora.get_board_type().into() {
+                ChipType::Sx1276 | ChipType::Sx1277 | ChipType::Sx1278 | ChipType::Sx1279 => {
+                    if config.pw > DEFAULT_DBM {
+                        DEFAULT_DBM
+                    } else {
+                        config.pw
+                    }
+                }
+                _ => config.pw,
+            };
             self.lora
-                .prepare_for_tx(&mdltn_params, config.pw.into(), false)
+                .prepare_for_tx(&mdltn_params, pw.into(), false)
                 .await?;
             self.lora
                 .tx(&mdltn_params, &mut tx_pkt_params, buffer, 0xffffff)
