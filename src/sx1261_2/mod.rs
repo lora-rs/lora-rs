@@ -1,6 +1,6 @@
 mod radio_kind_params;
 
-use defmt::info;
+use defmt::debug;
 use embedded_hal_async::delay::DelayUs;
 use embedded_hal_async::spi::*;
 use radio_kind_params::*;
@@ -103,7 +103,8 @@ where
     IV: InterfaceVariant + 'static,
 {
     /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
-    pub fn new(board_type: BoardType, spi: SPI, iv: IV) -> Self {
+    pub fn new(board_type: BoardType, spi: SPI, mut iv: IV) -> Self {
+        iv.set_board_type(board_type);
         let intf = SpiInterface::new(spi, iv);
         Self { board_type, intf }
     }
@@ -435,6 +436,8 @@ where
             }
         }
 
+        debug!("power = {}", tx_params_power);
+
         let op_code_and_tx_params = [OpCode::SetTxParams.value(), tx_params_power, ramp_time.value()];
         self.intf.write(&[&op_code_and_tx_params], false).await
     }
@@ -448,6 +451,10 @@ where
         let spreading_factor_val = spreading_factor_value(mdltn_params.spreading_factor)?;
         let bandwidth_val = bandwidth_value(mdltn_params.bandwidth)?;
         let coding_rate_val = coding_rate_value(mdltn_params.coding_rate)?;
+        debug!(
+            "sf = {}, bw = {}, cr = {}",
+            spreading_factor_val, bandwidth_val, coding_rate_val
+        );
         let op_code_and_mod_params = [
             OpCode::SetModulationParams.value(),
             spreading_factor_val,
@@ -529,6 +536,7 @@ where
     }
 
     async fn set_channel(&mut self, frequency_in_hz: u32) -> Result<(), RadioError> {
+        debug!("channel = {}", frequency_in_hz);
         let freq_in_pll_steps = Self::convert_freq_in_hz_to_pll_step(frequency_in_hz);
         let op_code_and_pll_steps = [
             OpCode::SetRFFrequency.value(),
@@ -819,7 +827,7 @@ where
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<(), RadioError> {
         loop {
-            info!("process_irq loop entered");
+            debug!("process_irq loop entered");
 
             self.intf.iv.await_irq().await?;
             let op_code = [OpCode::GetIrqStatus.value()];
@@ -832,7 +840,7 @@ where
             let op_code_and_irq_status = [OpCode::ClrIrqStatus.value(), irq_status[0], irq_status[1]];
             self.intf.write(&[&op_code_and_irq_status], false).await?;
 
-            info!("process_irq satisfied: irq_flags = {:x}", irq_flags);
+            debug!("process_irq satisfied: irq_flags = {:x}", irq_flags);
 
             // check for errors and unexpected interrupt masks (based on radio mode)
             if (irq_flags & IrqMask::HeaderError.value()) == IrqMask::HeaderError.value() {
@@ -867,11 +875,11 @@ where
             }
 
             if (irq_flags & IrqMask::HeaderValid.value()) == IrqMask::HeaderValid.value() {
-                info!("HeaderValid");
+                debug!("HeaderValid");
             } else if (irq_flags & IrqMask::PreambleDetected.value()) == IrqMask::PreambleDetected.value() {
-                info!("PreambleDetected");
+                debug!("PreambleDetected");
             } else if (irq_flags & IrqMask::SyncwordValid.value()) == IrqMask::SyncwordValid.value() {
-                info!("SyncwordValid");
+                debug!("SyncwordValid");
             }
 
             // handle completions

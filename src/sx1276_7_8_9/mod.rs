@@ -1,6 +1,6 @@
 mod radio_kind_params;
 
-use defmt::info;
+use defmt::debug;
 use embedded_hal_async::delay::DelayUs;
 use embedded_hal_async::spi::*;
 use radio_kind_params::*;
@@ -89,7 +89,8 @@ where
     IV: InterfaceVariant + 'static,
 {
     /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
-    pub fn new(board_type: BoardType, spi: SPI, iv: IV) -> Self {
+    pub fn new(board_type: BoardType, spi: SPI, mut iv: IV) -> Self {
+        iv.set_board_type(board_type);
         let intf = SpiInterface::new(spi, iv);
         Self { board_type, intf }
     }
@@ -534,14 +535,14 @@ where
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<(), RadioError> {
         loop {
-            info!("process_irq loop entered");
+            debug!("process_irq loop entered");
 
             self.intf.iv.await_irq().await?;
 
             let irq_flags = self.read_register(Register::RegIrqFlags).await?;
             self.write_register(Register::RegIrqFlags, 0xffu8, false).await?; // clear all interrupts
 
-            info!("process_irq satisfied: irq_flags = 0x{:x}", irq_flags);
+            debug!("process_irq satisfied: irq_flags = 0x{:x}", irq_flags);
 
             // check for errors and unexpected interrupt masks (based on radio mode)
             if (irq_flags & IrqMask::CRCError.value()) == IrqMask::CRCError.value() {
@@ -572,7 +573,7 @@ where
             }
 
             if (irq_flags & IrqMask::HeaderValid.value()) == IrqMask::HeaderValid.value() {
-                info!("HeaderValid");
+                debug!("HeaderValid");
             }
 
             // handle completions

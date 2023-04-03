@@ -5,6 +5,8 @@ use crate::mod_params::*;
 /// Functions implemented for an embedded framework for an MCU/LoRa chip combination
 /// to allow this crate to control the LoRa chip.
 pub trait InterfaceVariant {
+    /// Set the LoRa board type
+    fn set_board_type(&mut self, board_type: BoardType);
     /// Select the LoRa chip for an operation
     async fn set_nss_low(&mut self) -> Result<(), RadioError>;
     /// De-select the LoRa chip after an operation
