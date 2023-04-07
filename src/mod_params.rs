@@ -86,7 +86,7 @@ impl From<BoardType> for ChipType {
 }
 
 /// The state of the radio
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, defmt::Format, PartialEq)]
 #[allow(missing_docs)]
 pub enum RadioMode {
     Sleep,                    // sleep mode

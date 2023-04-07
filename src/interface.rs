@@ -1,4 +1,4 @@
-use defmt::debug;
+use defmt::trace;
 use embedded_hal_async::spi::SpiBus;
 
 use crate::mod_params::RadioError;
@@ -40,13 +40,15 @@ where
         }
 
         match write_buffers.len() {
-            1 => debug!("write: 0x{:x}", write_buffers[0]),
-            2 => debug!("write: 0x{:x} 0x{:x}", write_buffers[0], write_buffers[1]),
-            3 => debug!(
+            1 => trace!("write: 0x{:x}", write_buffers[0]),
+            2 => trace!("write: 0x{:x} 0x{:x}", write_buffers[0], write_buffers[1]),
+            3 => trace!(
                 "write: 0x{:x} 0x{:x} 0x{:x}",
-                write_buffers[0], write_buffers[1], write_buffers[2]
+                write_buffers[0],
+                write_buffers[1],
+                write_buffers[2]
             ),
-            _ => debug!("write: too many buffers"),
+            _ => trace!("write: too many buffers"),
         }
 
         Ok(())
@@ -96,15 +98,17 @@ where
         self.iv.wait_on_busy().await?;
 
         match write_buffers.len() {
-            1 => debug!("write: 0x{:x}", write_buffers[0]),
-            2 => debug!("write: 0x{:x} 0x{:x}", write_buffers[0], write_buffers[1]),
-            3 => debug!(
+            1 => trace!("write: 0x{:x}", write_buffers[0]),
+            2 => trace!("write: 0x{:x} 0x{:x}", write_buffers[0], write_buffers[1]),
+            3 => trace!(
                 "write: 0x{:x} 0x{:x} 0x{:x}",
-                write_buffers[0], write_buffers[1], write_buffers[2]
+                write_buffers[0],
+                write_buffers[1],
+                write_buffers[2]
             ),
-            _ => debug!("write: too many buffers"),
+            _ => trace!("write: too many buffers"),
         }
-        debug!("read {}: 0x{:x}", number_to_read, read_buffer);
+        trace!("read {}: 0x{:x}", number_to_read, read_buffer);
 
         Ok(())
     }
@@ -158,15 +162,17 @@ where
         self.iv.wait_on_busy().await?;
 
         match write_buffers.len() {
-            1 => debug!("write: 0x{:x}", write_buffers[0]),
-            2 => debug!("write: 0x{:x} 0x{:x}", write_buffers[0], write_buffers[1]),
-            3 => debug!(
+            1 => trace!("write: 0x{:x}", write_buffers[0]),
+            2 => trace!("write: 0x{:x} 0x{:x}", write_buffers[0], write_buffers[1]),
+            3 => trace!(
                 "write: 0x{:x} 0x{:x} 0x{:x}",
-                write_buffers[0], write_buffers[1], write_buffers[2]
+                write_buffers[0],
+                write_buffers[1],
+                write_buffers[2]
             ),
-            _ => debug!("write: too many buffers"),
+            _ => trace!("write: too many buffers"),
         }
-        debug!(
+        trace!(
             "read {} status 0x{:x}: 0x{:x}",
             read_buffer.len(),
             status[0],

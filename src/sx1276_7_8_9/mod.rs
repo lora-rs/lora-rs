@@ -212,6 +212,7 @@ where
 
             // Pout=17-(15-OutputPower)
             let output_power: i32 = p_out - 2;
+            debug!("tx power = {}", output_power);
 
             if p_out > 17 {
                 self.write_register(Register::RegPaDac, PaDac::_20DbmOn.value(), false)
@@ -236,6 +237,7 @@ where
             // Pmax=10.8+0.6*MaxPower, where MaxPower is set below as 7 and therefore Pmax is 15
             // Pout=Pmax-(15-OutputPower)
             let output_power: i32 = p_out;
+            debug!("tx power = {}", output_power);
 
             self.write_register(Register::RegPaDac, PaDac::_20DbmOff.value(), false)
                 .await?;
@@ -263,6 +265,10 @@ where
         let spreading_factor_val = spreading_factor_value(mdltn_params.spreading_factor)?;
         let bandwidth_val = bandwidth_value(mdltn_params.bandwidth)?;
         let coding_rate_denominator_val = coding_rate_denominator_value(mdltn_params.coding_rate)?;
+        debug!(
+            "sf = {}, bw = {}, cr_denom = {}",
+            spreading_factor_val, bandwidth_val, coding_rate_denominator_val
+        );
         let mut ldro_agc_auto_flags = 0x00u8; // LDRO and AGC Auto both off
         if mdltn_params.low_data_rate_optimize != 0 {
             ldro_agc_auto_flags = 0x08u8; // LDRO on and AGC Auto off
@@ -345,6 +351,7 @@ where
     }
 
     async fn set_channel(&mut self, frequency_in_hz: u32) -> Result<(), RadioError> {
+        debug!("channel = {}", frequency_in_hz);
         let frf = (frequency_in_hz as f64 / FREQUENCY_SYNTHESIZER_STEP) as u32;
         self.write_register(Register::RegFrfMsb, ((frf & 0x00FF0000) >> 16) as u8, false)
             .await?;
@@ -527,7 +534,7 @@ where
         Ok(())
     }
 
-    /// Process the radio irq
+    /// Process the radio IRQ.  Log unexpected interrupts, but only bail out on timeout.  Packets from other devices can cause unexpected interrupts.
     async fn process_irq(
         &mut self,
         radio_mode: RadioMode,
@@ -542,54 +549,44 @@ where
             let irq_flags = self.read_register(Register::RegIrqFlags).await?;
             self.write_register(Register::RegIrqFlags, 0xffu8, false).await?; // clear all interrupts
 
-            debug!("process_irq satisfied: irq_flags = 0x{:x}", irq_flags);
-
-            // check for errors and unexpected interrupt masks (based on radio mode)
-            if (irq_flags & IrqMask::CRCError.value()) == IrqMask::CRCError.value() {
-                if radio_mode == RadioMode::Receive {
-                    return Err(RadioError::CRCErrorOnReceive);
-                } else {
-                    return Err(RadioError::CRCErrorUnexpected);
-                }
-            } else if (irq_flags & IrqMask::RxTimeout.value()) == IrqMask::RxTimeout.value() {
-                if radio_mode == RadioMode::Receive {
-                    return Err(RadioError::ReceiveTimeout);
-                } else {
-                    return Err(RadioError::TimeoutUnexpected);
-                }
-            } else if ((irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value())
-                && (radio_mode != RadioMode::Transmit)
-            {
-                return Err(RadioError::TransmitDoneUnexpected);
-            } else if ((irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value())
-                && (radio_mode != RadioMode::Receive)
-            {
-                return Err(RadioError::ReceiveDoneUnexpected);
-            } else if (((irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value())
-                || ((irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value()))
-                && (radio_mode != RadioMode::ChannelActivityDetection)
-            {
-                return Err(RadioError::CADUnexpected);
-            }
+            debug!(
+                "process_irq satisfied: irq_flags = 0x{:x} in radio mode {}",
+                irq_flags, radio_mode
+            );
 
             if (irq_flags & IrqMask::HeaderValid.value()) == IrqMask::HeaderValid.value() {
-                debug!("HeaderValid");
+                debug!("HeaderValid in radio mode {}", radio_mode);
             }
 
-            // handle completions
-            if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
-                return Ok(());
-            } else if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
-                return Ok(());
-            } else if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
-                if cad_activity_detected.is_some() {
-                    *(cad_activity_detected.unwrap()) =
-                        (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
+            if radio_mode == RadioMode::Transmit {
+                if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
+                    debug!("TxDone in radio mode {}", radio_mode);
+                    return Ok(());
                 }
-                return Ok(());
+            } else if radio_mode == RadioMode::Receive {
+                if (irq_flags & IrqMask::CRCError.value()) == IrqMask::CRCError.value() {
+                    debug!("CRCError in radio mode {}", radio_mode);
+                }
+                if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
+                    debug!("RxDone in radio mode {}", radio_mode);
+                    return Ok(());
+                }
+                if (irq_flags & IrqMask::RxTimeout.value()) == IrqMask::RxTimeout.value() {
+                    debug!("RxTimeout in radio mode {}", radio_mode);
+                    return Err(RadioError::ReceiveTimeout);
+                }
+            } else if radio_mode == RadioMode::ChannelActivityDetection {
+                if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+                    debug!("CADDone in radio mode {}", radio_mode);
+                    if cad_activity_detected.is_some() {
+                        *(cad_activity_detected.unwrap()) =
+                            (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
+                    }
+                    return Ok(());
+                }
             }
 
-            // if an interrupt occurred for other than an error or operation completion (currently, only HeaderValid is in that category), loop to wait again
+            // if an interrupt occurred for other than an error or operation completion, loop to wait again
         }
     }
 }
