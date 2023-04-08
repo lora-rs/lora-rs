@@ -627,10 +627,8 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> {
     }
 
     fn can_build_from(bytes: &[u8]) -> bool {
-        let has_acceptable_len = bytes.len() >= 12 &&
-            // TODO: Bug related to possibly insufficient number of bytes
-            fhdr_length(bytes[5]) <= bytes.len();
-        if !has_acceptable_len {
+        // The smallest packets contain MHDR (1 bytes) + FHDR + MIC (4 bytes).
+        if bytes.len() < 12 || 5 + fhdr_length(bytes[5]) > bytes.len() {
             return false;
         }
 
@@ -802,7 +800,7 @@ pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(
 
 /// Parses a payload as LoRaWAN physical payload.
 ///
-/// Check out [parse](fn.parse.html) if you do not need custom crypto factory.  
+/// Check out [parse](fn.parse.html) if you do not need custom crypto factory.
 ///
 /// Returns error "Unsupported major version" if the major version is unsupported.
 ///

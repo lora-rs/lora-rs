@@ -199,6 +199,29 @@ fn test_parse_data_payload() {
 }
 
 #[test]
+fn test_parse_data_payload_no_panic_when_bad_packet() {
+    // This reproduces a panic from https://github.com/ivajloip/rust-lorawan/issues/94.
+    let data = vec![
+        0x40, 0x04, 0x03, 0x02, 0x01, 0x85, 0x01, 0x00, 0xd6, 0xc3, 0xb5, 0x82,
+    ];
+    let phy = parse(data);
+    assert_eq!(
+        phy.err(),
+        Some("can not build EncryptedDataPayload from the provided data")
+    );
+}
+
+#[test]
+fn test_parse_data_payload_no_panic_when_too_short_packet() {
+    let data = vec![0x40, 0x04, 0x03, 0x02, 0x01];
+    let phy = EncryptedDataPayload::new(data);
+    assert_eq!(
+        phy.err(),
+        Some("can not build EncryptedDataPayload from the provided data")
+    );
+}
+
+#[test]
 fn test_new_join_accept_payload_too_short() {
     let mut bytes = phy_join_accept_payload();
     let key = AES128(app_key());
