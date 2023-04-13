@@ -6,48 +6,48 @@ use super::radio::{
 use super::region::constants::DEFAULT_DBM;
 use super::Timings;
 
-use lora::mod_params::{BoardType, ChipType, RadioError};
-use lora::mod_traits::RadioKind;
-use lora::LoRa;
+use lora_phy::mod_params::{BoardType, ChipType, RadioError};
+use lora_phy::mod_traits::RadioKind;
+use lora_phy::LoRa;
 
-/// Convert the spreading factor for use in the external lora crate
-impl From<SpreadingFactor> for lora::mod_params::SpreadingFactor {
+/// Convert the spreading factor for use in the external lora-phy crate
+impl From<SpreadingFactor> for lora_phy::mod_params::SpreadingFactor {
     fn from(sf: SpreadingFactor) -> Self {
         match sf {
-            SpreadingFactor::_7 => lora::mod_params::SpreadingFactor::_7,
-            SpreadingFactor::_8 => lora::mod_params::SpreadingFactor::_8,
-            SpreadingFactor::_9 => lora::mod_params::SpreadingFactor::_9,
-            SpreadingFactor::_10 => lora::mod_params::SpreadingFactor::_10,
-            SpreadingFactor::_11 => lora::mod_params::SpreadingFactor::_11,
-            SpreadingFactor::_12 => lora::mod_params::SpreadingFactor::_12,
+            SpreadingFactor::_7 => lora_phy::mod_params::SpreadingFactor::_7,
+            SpreadingFactor::_8 => lora_phy::mod_params::SpreadingFactor::_8,
+            SpreadingFactor::_9 => lora_phy::mod_params::SpreadingFactor::_9,
+            SpreadingFactor::_10 => lora_phy::mod_params::SpreadingFactor::_10,
+            SpreadingFactor::_11 => lora_phy::mod_params::SpreadingFactor::_11,
+            SpreadingFactor::_12 => lora_phy::mod_params::SpreadingFactor::_12,
         }
     }
 }
 
-/// Convert the bandwidth for use in the external lora crate
-impl From<Bandwidth> for lora::mod_params::Bandwidth {
+/// Convert the bandwidth for use in the external lora-phy crate
+impl From<Bandwidth> for lora_phy::mod_params::Bandwidth {
     fn from(bw: Bandwidth) -> Self {
         match bw {
-            Bandwidth::_125KHz => lora::mod_params::Bandwidth::_125KHz,
-            Bandwidth::_250KHz => lora::mod_params::Bandwidth::_250KHz,
-            Bandwidth::_500KHz => lora::mod_params::Bandwidth::_500KHz,
+            Bandwidth::_125KHz => lora_phy::mod_params::Bandwidth::_125KHz,
+            Bandwidth::_250KHz => lora_phy::mod_params::Bandwidth::_250KHz,
+            Bandwidth::_500KHz => lora_phy::mod_params::Bandwidth::_500KHz,
         }
     }
 }
 
-/// Convert the coding rate for use in the external lora crate
-impl From<CodingRate> for lora::mod_params::CodingRate {
+/// Convert the coding rate for use in the external lora-phy crate
+impl From<CodingRate> for lora_phy::mod_params::CodingRate {
     fn from(cr: CodingRate) -> Self {
         match cr {
-            CodingRate::_4_5 => lora::mod_params::CodingRate::_4_5,
-            CodingRate::_4_6 => lora::mod_params::CodingRate::_4_6,
-            CodingRate::_4_7 => lora::mod_params::CodingRate::_4_7,
-            CodingRate::_4_8 => lora::mod_params::CodingRate::_4_8,
+            CodingRate::_4_5 => lora_phy::mod_params::CodingRate::_4_5,
+            CodingRate::_4_6 => lora_phy::mod_params::CodingRate::_4_6,
+            CodingRate::_4_7 => lora_phy::mod_params::CodingRate::_4_7,
+            CodingRate::_4_8 => lora_phy::mod_params::CodingRate::_4_8,
         }
     }
 }
 
-/// LoRa radio using the physical layer API in the external lora crate
+/// LoRa radio using the physical layer API in the external lora-phy crate
 pub struct LoRaRadio<RK> {
     pub(crate) lora: LoRa<RK>,
 }
@@ -61,14 +61,14 @@ where
     }
 }
 
-/// Provide the timing values for boards supported by the external lora crate
+/// Provide the timing values for boards supported by the external lora-phy crate
 impl<RK> Timings for LoRaRadio<RK>
 where
     RK: RadioKind + 'static,
 {
     fn get_rx_window_offset_ms(&self) -> i32 {
         match self.lora.get_board_type() {
-            BoardType::Rak4631Sx1262 => -20,
+            BoardType::Rak4631Sx1262 => -15,
             BoardType::Stm32l0Sx1276 => -3,
             BoardType::Stm32wlSx1262 => -50,
             _ => -50,
@@ -84,7 +84,7 @@ where
     }
 }
 
-/// Provide the LoRa physical layer rx/tx interface for boards supported by the external lora crate
+/// Provide the LoRa physical layer rx/tx interface for boards supported by the external lora-phy crate
 impl<RK> PhyRxTx for LoRaRadio<RK>
 where
     RK: RadioKind + 'static,
