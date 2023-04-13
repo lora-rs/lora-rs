@@ -15,16 +15,16 @@
 ## Wheretofore?
 
 - while the current examples use the Embassy embedded framework, nrf52840, stm32wl, and stm32l0 MCUs, and Sx127x/Sx126x chips, this crate provides a path forward for other embedded frameworks, MCU types, and LoRa chips in a Rust development environment;
-- the links below refer to a fork of Embassy and/or the lora crate in the <a href="https://github.com/ceekdee">ceekdee GitHub repository</a>; however, the intent is to update Embassy to support this lora crate and to move this lora crate to an appropriate embedded framework-agnostic repository;
-- in order to demonstrate a LoRaWAN capability using the lora crate, one must currently clone the ceekdee versions of rust-lorawan, embassy, and lora so that they are all under the same projects folder (that is, relative paths are used in Embassy Cargo.toml files to link these implementations).  This restriction will be removed once the lora crate is more fully tested and moved to its final repository location.
-- the existing LoRa implementations in Embassy remain available after the update to support this lora crate.
+- the links below refer to a fork of Embassy and/or the lora-phy crate in the <a href="https://github.com/ceekdee">ceekdee GitHub repository</a>; however, the intent is to update Embassy to support this lora-phy crate and to move it to an appropriate embedded framework-agnostic repository;
+- in order to demonstrate a LoRaWAN capability using the lora-phy crate, one must currently clone the ceekdee versions of rust-lorawan, embassy, and lora-phy so that they are all under the same projects folder (that is, relative paths are used in Embassy Cargo.toml files to link these implementations).  This restriction will be removed once the lora-phy crate is more fully tested and moved to its final repository location.
+- the existing LoRa implementations in Embassy remain available after the update to support this lora-phy crate.
 
 ## LoRa physical layer API
 
 For users wishing to implement a LoRaWAN or P2P solution, the following implementation files provide the necessary context:
 
-- <a href="https://github.com/ceekdee/lora/blob/main/src/lib.rs">the API itself</a>;
-- <a href="https://github.com/ceekdee/lora/blob/main/src/mod_params.rs">pertinent ancillary information</a>.
+- <a href="https://github.com/ceekdee/lora-phy/blob/main/src/lib.rs">the API itself</a>;
+- <a href="https://github.com/ceekdee/lora-phy/blob/main/src/mod_params.rs">pertinent ancillary information</a>.
 
 Examples of API usage:
 
@@ -38,7 +38,7 @@ Examples of API usage:
 
 For embedded framework developers wishing to add LoRa support as a feature for one or more MCU/LoRa chip combinations:
 
-- <a href="https://github.com/ceekdee/lora/blob/main/src/mod_traits.rs">the InterfaceVariant trait</a>, which enables this lora crate to interface to a specific embedded framework/MCU/LoRa chip combination.
+- <a href="https://github.com/ceekdee/lora-phy/blob/main/src/mod_traits.rs">the InterfaceVariant trait</a>, which enables this lora-phy crate to interface to a specific embedded framework/MCU/LoRa chip combination.
 
 Example InterfaceVariant implementations:
 
@@ -48,23 +48,23 @@ Example InterfaceVariant implementations:
 
 For developers wishing to add support for new LoRa chips or enhance support for existing chips:
 
-- <a href="https://github.com/ceekdee/lora/blob/main/src/mod_traits.rs">the RadioKind trait</a>, which must be implemented for each kind of LoRa chip for access through the lora crate API;
-- <a href="https://github.com/ceekdee/lora/blob/main/src/interface.rs">the interface implementation</a>, which captures the three key read/write operations allowing control of the LoRa chip from this crate through either opcode or register operations.
+- <a href="https://github.com/ceekdee/lora-phy/blob/main/src/mod_traits.rs">the RadioKind trait</a>, which must be implemented for each kind of LoRa chip for access through the lora-phy crate API;
+- <a href="https://github.com/ceekdee/lora-phy/blob/main/src/interface.rs">the interface implementation</a>, which captures the three key read/write operations allowing control of the LoRa chip from this crate through either opcode or register operations.
 
 Example RadioKind implementations and ancillary information:
 
-- <a href="https://github.com/ceekdee/lora/tree/main/src/sx1261_2">the Sx1261/2 radio kind</a>;
-- <a href="https://github.com/ceekdee/lora/tree/main/src/sx1276_7_8_9">the Sx1276/7/8/9 radio kind</a>.
+- <a href="https://github.com/ceekdee/lora-phy/tree/main/src/sx1261_2">the Sx1261/2 radio kind</a>;
+- <a href="https://github.com/ceekdee/lora-phy/tree/main/src/sx1276_7_8_9">the Sx1276/7/8/9 radio kind</a>.
 
 ## LoRa board-specific support
 
 LoRa boards use LoRa chip features differently.  To suppport these variations within a radio kind implementation, BoardType and ChipType are available:
 
-- <a href="https://github.com/ceekdee/lora/blob/main/src/mod_params.rs">scroll to BoardType and ChipType</a>.
+- <a href="https://github.com/ceekdee/lora-phy/blob/main/src/mod_params.rs">scroll to BoardType and ChipType</a>.
 
 One can add a LoRa board (the board name includes the chip type in case the board may include a range of chip types) and the ChipType, then modify the radio kind processing to support board-specific features.  The ChipType is used for generic checks, alleviating the need to add a new board type check in places where a generic check will do.  BoardType checks only need to be implemented where the specificity is board-related.  There are examples of each type of check here:
 
-- <a href="https://github.com/ceekdee/lora/blob/main/src/sx1261_2/mod.rs">search for BoardType and ChipType</a>.
+- <a href="https://github.com/ceekdee/lora-phy/blob/main/src/sx1261_2/mod.rs">search for BoardType and ChipType</a>.
 
 ## Chat
 
