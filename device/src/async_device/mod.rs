@@ -25,8 +25,8 @@ type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 pub use crate::region::DR;
 use crate::{private::Sealed, radio::types::RadioBuffer, GetRng};
 pub mod radio;
-#[cfg(feature = "external-lora")]
-/// provide the radio through the external lora crate
+#[cfg(feature = "external-lora-phy")]
+/// provide the radio through the external lora-phy crate
 pub mod lora_radio;
 
 use core::cmp::min;

@@ -21,11 +21,11 @@ defmt = { version = "0.3.0", optional = true }
 futures = { version = "0.3.17", default-features = false, optional = true }
 rand_core = { version = "0.6.2", default-features = false }
 serde = { version = "1.0.145", default-features = false, features = ["derive"], optional = true}
-lora = { version = "0.1.0", path = "../../lora", optional = true }
+lora-phy = { version = "0.1.0", path = "../../lora-phy", optional = true }
 
 [features]
 defmt = ["dep:defmt", "lorawan/defmt"]
 default = []
 async = ["futures"]
 serde = ["dep:serde"]
-external-lora = ["dep:lora"]
+external-lora-phy = ["dep:lora-phy"]
