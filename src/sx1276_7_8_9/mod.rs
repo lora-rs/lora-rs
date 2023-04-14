@@ -387,9 +387,8 @@ where
         symbol_timeout: u16,
         _rx_timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
-        match duty_cycle_params {
-            Some(&_duty_cycle) => return Err(RadioError::DutyCycleUnsupported),
-            None => (),
+        if let Some(&_duty_cycle)= duty_cycle_params {
+            return Err(RadioError::DutyCycleUnsupported)
         }
 
         self.intf.iv.enable_rf_switch_rx().await?;

@@ -357,13 +357,10 @@ where
                 return Err(RadioError::InvalidOutputPower);
             }
             if output_power == 15 {
-                match mdltn_params {
-                    Some(m_p) => {
-                        if m_p.frequency_in_hz < 400_000_000 {
-                            return Err(RadioError::InvalidOutputPowerForFrequency);
-                        }
+                if let Some(m_p) = mdltn_params {
+                    if m_p.frequency_in_hz < 400_000_000 {
+                        return Err(RadioError::InvalidOutputPowerForFrequency);
                     }
-                    None => (),
                 }
             }
 
@@ -577,15 +574,12 @@ where
         let mut symbol_timeout_final = symbol_timeout;
         let mut rx_timeout_in_ms_final = rx_timeout_in_ms << 6;
 
-        match duty_cycle_params {
-            Some(&_duty_cycle) => {
-                if rx_continuous {
-                    return Err(RadioError::DutyCycleRxContinuousUnsupported);
-                } else {
-                    symbol_timeout_final = 0;
-                }
+        if let Some(&_duty_cycle) = duty_cycle_params {
+            if rx_continuous {
+                return Err(RadioError::DutyCycleRxContinuousUnsupported);
+            } else {
+                symbol_timeout_final = 0;
             }
-            None => (),
         }
 
         self.intf.iv.enable_rf_switch_rx().await?;

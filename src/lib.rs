@@ -231,6 +231,7 @@ where
     }
 
     /// Prepare the Semtech chip for a receive operation (single shot, continuous, or duty cycled) and initiate the operation
+    #[allow(clippy::too_many_arguments)]
     pub async fn prepare_for_rx(
         &mut self,
         mdltn_params: &ModulationParams,
