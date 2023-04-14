@@ -196,7 +196,7 @@ impl CalibrationParams {
             | ((self.adc_pulse_enable as u8) << 3)
             | ((self.pll_enable as u8) << 2)
             | ((self.rc13m_enable as u8) << 1)
-            | ((self.rc64k_enable as u8) << 0)
+            | (self.rc64k_enable as u8)
     }
 }
 

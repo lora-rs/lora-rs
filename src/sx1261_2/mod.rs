@@ -130,8 +130,8 @@ where
 
         let number_of_registers = buffer[0];
         for i in 0..number_of_registers {
-            if register.addr1() == (buffer[(1 + (2 * i)) as usize] as u8)
-                && register.addr2() == (buffer[(2 + (2 * i)) as usize] as u8)
+            if register.addr1() == buffer[(1 + (2 * i)) as usize]
+                && register.addr2() == buffer[(2 + (2 * i)) as usize]
             {
                 return Ok(()); // register already in list
             }
@@ -353,7 +353,7 @@ where
 
         let chip_type: ChipType = self.board_type.into();
         if chip_type == ChipType::Sx1261 {
-            if (output_power < -17) || (output_power > 15) {
+            if !(-17..=15).contains(&output_power) {
                 return Err(RadioError::InvalidOutputPower);
             }
             if output_power == 15 {
@@ -386,7 +386,7 @@ where
                 }
             }
         } else {
-            if (output_power < -9) || (output_power > 22) {
+            if !(-9..=22).contains(&output_power) {
                 return Err(RadioError::InvalidOutputPower);
             }
             // Provide better resistance of the SX1262 Tx to antenna mismatch (see DS_SX1261-2_V1.2 datasheet chapter 15.2)
@@ -403,7 +403,7 @@ where
                     None,
                 )
                 .await?;
-            tx_clamp_cfg[0] = tx_clamp_cfg[0] | (0x0F << 1);
+            tx_clamp_cfg[0] |= 0x0F << 1;
             let register_and_tx_clamp_cfg = [
                 OpCode::WriteRegister.value(),
                 Register::TxClampCfg.addr1(),
@@ -911,15 +911,13 @@ where
                     debug!("RxTxTimeout in radio mode {}", radio_mode);
                     return Err(RadioError::ReceiveTimeout);
                 }
-            } else if radio_mode == RadioMode::ChannelActivityDetection {
-                if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
-                    debug!("CADDone in radio mode {}", radio_mode);
-                    if cad_activity_detected.is_some() {
-                        *(cad_activity_detected.unwrap()) =
-                            (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
-                    }
-                    return Ok(());
+            } else if radio_mode == RadioMode::ChannelActivityDetection && (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+                debug!("CADDone in radio mode {}", radio_mode);
+                if cad_activity_detected.is_some() {
+                    *(cad_activity_detected.unwrap()) =
+                        (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
                 }
+                return Ok(());
             }
 
             // if an interrupt occurred for other than an error or operation completion, loop to wait again
