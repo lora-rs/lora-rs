@@ -69,7 +69,7 @@ where
     fn get_rx_window_offset_ms(&self) -> i32 {
         match self.lora.get_board_type() {
             BoardType::Rak4631Sx1262 => -15,
-            BoardType::Stm32l0Sx1276 => -3,
+            BoardType::Stm32l0Sx1276 => -15,
             BoardType::Stm32wlSx1262 => -50,
             _ => -50,
         }
@@ -151,7 +151,7 @@ where
                     &mdltn_params,
                     &rx_pkt_params,
                     None,
-                    true, // RX continuous ???
+                    true, // RX continuous
                     false,
                     4,
                     0x00ffffffu32,
@@ -161,7 +161,7 @@ where
                 Ok((received_len, rx_pkt_status)) => {
                     Ok((
                         received_len as usize,
-                        RxQuality::new(rx_pkt_status.rssi, rx_pkt_status.snr as i8), // downcast snr ???
+                        RxQuality::new(rx_pkt_status.rssi, rx_pkt_status.snr as i8), // downcast snr
                     ))
                 }
                 Err(err) => Err(err),
