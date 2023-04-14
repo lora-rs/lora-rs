@@ -2,6 +2,7 @@ use crate::mod_params::*;
 
 #[derive(Clone, Copy, PartialEq)]
 #[allow(dead_code)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum PacketType {
     GFSK = 0x00,
     LoRa = 0x01,
@@ -38,6 +39,7 @@ impl IrqMask {
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum Register {
     PacketParams = 0x0704,          // packet configuration
     PayloadLength = 0x0702,         // payload size
@@ -151,6 +153,7 @@ impl SleepParams {
 
 #[derive(Clone, Copy, PartialEq)]
 #[allow(dead_code)]
+#[allow(clippy::upper_case_acronyms)]
 pub enum StandbyMode {
     RC = 0x00,
     XOSC = 0x01,
@@ -196,7 +199,7 @@ impl CalibrationParams {
             | ((self.adc_pulse_enable as u8) << 3)
             | ((self.pll_enable as u8) << 2)
             | ((self.rc13m_enable as u8) << 1)
-            | ((self.rc64k_enable as u8) << 0)
+            | (self.rc64k_enable as u8)
     }
 }
 
@@ -221,6 +224,7 @@ impl TcxoCtrlVoltage {
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
+#[allow(clippy::enum_variant_names)]
 pub enum RampTime {
     Ramp10Us = 0x00,
     Ramp20Us = 0x01,

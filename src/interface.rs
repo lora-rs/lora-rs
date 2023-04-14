@@ -81,6 +81,7 @@ where
             None => read_buffer.len(),
         };
 
+        #[allow(clippy::needless_range_loop)]
         for i in 0..number_to_read {
             let transfer_result = self.spi.transfer(&mut input, &[0x00]).await.map_err(|_| SPI);
             let flush_result = self.spi.flush().await.map_err(|_| SPI);
@@ -145,6 +146,7 @@ where
             flush_result?;
         }
 
+        #[allow(clippy::needless_range_loop)]
         for i in 0..read_buffer.len() {
             let transfer_result = self.spi.transfer(&mut input, &[0x00]).await.map_err(|_| SPI);
             let flush_result = self.spi.flush().await.map_err(|_| SPI);

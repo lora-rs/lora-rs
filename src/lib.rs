@@ -88,7 +88,7 @@ where
                 0,
                 crc_on,
                 iq_inverted,
-                &modulation_params,
+                modulation_params,
             ),
             ChipType::Sx1276 | ChipType::Sx1277 | ChipType::Sx1278 | ChipType::Sx1279 => {
                 PacketParams::new_for_sx1276_7_8_9(
@@ -97,7 +97,7 @@ where
                     0,
                     crc_on,
                     iq_inverted,
-                    &modulation_params,
+                    modulation_params,
                 )
             }
         }
@@ -219,18 +219,19 @@ where
             .await
         {
             Ok(()) => {
-                return Ok(());
+                Ok(())
             }
             Err(err) => {
                 self.radio_kind.ensure_ready(self.radio_mode).await?;
                 self.radio_kind.set_standby().await?;
                 self.radio_mode = RadioMode::Standby;
-                return Err(err);
+                Err(err)
             }
         }
     }
 
     /// Prepare the Semtech chip for a receive operation (single shot, continuous, or duty cycled) and initiate the operation
+    #[allow(clippy::too_many_arguments)]
     pub async fn prepare_for_rx(
         &mut self,
         mdltn_params: &ModulationParams,

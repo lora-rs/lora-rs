@@ -206,7 +206,7 @@ where
         is_tx_prep: bool,
     ) -> Result<(), RadioError> {
         if tx_boosted_if_possible {
-            if (p_out < 2) || (p_out > 20) {
+            if !(2..=20).contains(&p_out) {
                 return Err(RadioError::InvalidOutputPower);
             }
 
@@ -230,7 +230,7 @@ where
             )
             .await?;
         } else {
-            if (p_out < -4) || (p_out > 14) {
+            if !(-4..=14).contains(&p_out) {
                 return Err(RadioError::InvalidOutputPower);
             }
 
@@ -290,12 +290,12 @@ where
         self.write_register(Register::RegModemConfig2, config_2, false).await?;
 
         let mut config_1 = self.read_register(Register::RegModemConfig1).await?;
-        config_1 = (config_1 & 0x0fu8) | ((bandwidth_val << 4) as u8);
+        config_1 = (config_1 & 0x0fu8) | (bandwidth_val << 4);
         self.write_register(Register::RegModemConfig1, config_1, false).await?;
 
         let cr = coding_rate_denominator_val - 4;
         config_1 = self.read_register(Register::RegModemConfig1).await?;
-        config_1 = (config_1 & 0xf1u8) | ((cr << 1) as u8);
+        config_1 = (config_1 & 0xf1u8) | (cr << 1);
         self.write_register(Register::RegModemConfig1, config_1, false).await?;
 
         let mut config_3 = self.read_register(Register::RegModemConfig3).await?;
@@ -320,17 +320,17 @@ where
 
         let mut config_1 = self.read_register(Register::RegModemConfig1).await?;
         if pkt_params.implicit_header {
-            config_1 = config_1 | 0x01u8;
+            config_1 |= 0x01u8;
         } else {
-            config_1 = config_1 & 0xfeu8;
+            config_1 &= 0xfeu8;
         }
         self.write_register(Register::RegModemConfig1, config_1, false).await?;
 
         let mut config_2 = self.read_register(Register::RegModemConfig2).await?;
         if pkt_params.crc_on {
-            config_2 = config_2 | 0x04u8;
+            config_2 |= 0x04u8;
         } else {
-            config_2 = config_2 & 0xfbu8;
+            config_2 &= 0xfbu8;
         }
         self.write_register(Register::RegModemConfig2, config_2, false).await?;
 
@@ -387,9 +387,8 @@ where
         symbol_timeout: u16,
         _rx_timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
-        match duty_cycle_params {
-            Some(&_duty_cycle) => return Err(RadioError::DutyCycleUnsupported),
-            None => (),
+        if let Some(&_duty_cycle)= duty_cycle_params {
+            return Err(RadioError::DutyCycleUnsupported)
         }
 
         self.intf.iv.enable_rf_switch_rx().await?;
@@ -575,15 +574,13 @@ where
                     debug!("RxTimeout in radio mode {}", radio_mode);
                     return Err(RadioError::ReceiveTimeout);
                 }
-            } else if radio_mode == RadioMode::ChannelActivityDetection {
-                if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
-                    debug!("CADDone in radio mode {}", radio_mode);
-                    if cad_activity_detected.is_some() {
-                        *(cad_activity_detected.unwrap()) =
-                            (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
-                    }
-                    return Ok(());
+            } else if radio_mode == RadioMode::ChannelActivityDetection && (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+                debug!("CADDone in radio mode {}", radio_mode);
+                if cad_activity_detected.is_some() {
+                    *(cad_activity_detected.unwrap()) =
+                        (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
                 }
+                return Ok(());
             }
 
             // if an interrupt occurred for other than an error or operation completion, loop to wait again

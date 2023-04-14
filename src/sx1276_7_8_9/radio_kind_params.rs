@@ -184,6 +184,7 @@ impl PaConfig {
 
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
+#[allow(clippy::enum_variant_names)]
 pub enum OcpTrim {
     _45Ma = 0x00,
     _50Ma = 0x01,

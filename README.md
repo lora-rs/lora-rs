@@ -1,5 +1,7 @@
 # LoRa physical layer (the rustaceous radio)
 
+[![CI](https://github.com/embassy-rs/lora-phy/actions/workflows/ci.yaml/badge.svg)](https://github.com/embassy-rs/lora-phy/actions/workflows/ci.yaml)
+
 ## Why?
 
 - provide one straight-forward LoRa physical layer API which supports both LoRaWAN and point-to-point (P2P) use cases;
