@@ -5,7 +5,6 @@ use embedded_hal_async::delay::DelayUs;
 use embedded_hal_async::spi::*;
 use radio_kind_params::*;
 
-use crate::mod_params::RadioError::*;
 use crate::mod_params::*;
 use crate::{InterfaceVariant, RadioKind, SpiInterface};
 
@@ -130,8 +129,7 @@ where
 
         let number_of_registers = buffer[0];
         for i in 0..number_of_registers {
-            if register.addr1() == buffer[(1 + (2 * i)) as usize]
-                && register.addr2() == buffer[(2 + (2 * i)) as usize]
+            if register.addr1() == buffer[(1 + (2 * i)) as usize] && register.addr2() == buffer[(2 + (2 * i)) as usize]
             {
                 return Ok(()); // register already in list
             }
@@ -262,7 +260,7 @@ where
         };
         let op_code_and_sleep_params = [OpCode::SetSleep.value(), sleep_params.value()];
         self.intf.write(&[&op_code_and_sleep_params], true).await?;
-        delay.delay_ms(2).await.map_err(|_| DelayError)?;
+        delay.delay_ms(2).await;
 
         Ok(sleep_params.warm_start) // indicate if warm start enabled
     }
@@ -905,7 +903,9 @@ where
                     debug!("RxTxTimeout in radio mode {}", radio_mode);
                     return Err(RadioError::ReceiveTimeout);
                 }
-            } else if radio_mode == RadioMode::ChannelActivityDetection && (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+            } else if radio_mode == RadioMode::ChannelActivityDetection
+                && (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value()
+            {
                 debug!("CADDone in radio mode {}", radio_mode);
                 if cad_activity_detected.is_some() {
                     *(cad_activity_detected.unwrap()) =
