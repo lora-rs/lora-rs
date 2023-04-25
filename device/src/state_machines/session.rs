@@ -236,7 +236,7 @@ impl Idle {
                             ),
                             // directly jump to waiting for RxWindow
                             // allows for synchronous sending
-                            radio::Response::TxDone(ms) => data_rxwindow1_timeout::<R, C, RNG, N>(
+                            radio::Response::TxDone(ms) => data_rxwindow1_timeout::<R, RNG, N>(
                                 Session::Idle(self),
                                 confirmed,
                                 ms,
@@ -311,7 +311,7 @@ impl SendingData {
                             // expect a complete transmit
                             radio::Response::TxDone(ms) => {
                                 let confirmed = self.confirmed;
-                                data_rxwindow1_timeout::<R, C, RNG, N>(
+                                data_rxwindow1_timeout::<R, RNG, N>(
                                     Session::SendingData(self),
                                     confirmed,
                                     ms,
@@ -591,12 +591,7 @@ impl WaitingForRx {
     }
 }
 
-fn data_rxwindow1_timeout<
-    R: radio::PhyRxTx + Timings,
-    C: CryptoFactory + Default,
-    RNG: RngCore,
-    const N: usize,
->(
+fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize>(
     state: Session,
     confirmed: bool,
     timestamp_ms: TimestampMs,
