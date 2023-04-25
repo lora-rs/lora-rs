@@ -142,7 +142,7 @@ macro_rules! mac_cmd_zero_len {
             }
         )*
 
-        fn parse_zero_len_mac_cmd<'a, 'b>(data: &'a [u8], uplink: bool) -> Result<(usize, MacCommand<'a>), &'b str> {
+        fn parse_zero_len_mac_cmd<'b>(data: &[u8], uplink: bool) -> Result<(usize, MacCommand<'_>), &'b str> {
             match (data[0], uplink) {
                 $(
                     ($cid, $uplink) => Ok((0, MacCommand::$name($type::new(&[])?))),
@@ -196,7 +196,7 @@ macro_rules! mac_cmds {
             }
         )*
 
-        fn parse_one_mac_cmd<'a, 'b>(data: &'a [u8], uplink: bool) -> Result<(usize, MacCommand<'a>), &'b str> {
+        fn parse_one_mac_cmd<'b>(data: &[u8], uplink: bool) -> Result<(usize, MacCommand<'_>), &'b str> {
             match (data[0], uplink) {
                 $(
                     ($cid, $uplink) if data.len() > $size => Ok(($size, MacCommand::$name($type::new(&data[1.. 1 + $size])?))),
