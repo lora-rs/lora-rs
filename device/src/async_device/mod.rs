@@ -24,7 +24,11 @@ use rand_core::RngCore;
 type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 pub use crate::region::DR;
 use crate::{private::Sealed, radio::types::RadioBuffer, GetRng};
+#[cfg(feature = "external-lora-phy")]
+/// provide the radio through the external lora-phy crate
+pub mod lora_radio;
 pub mod radio;
+
 use core::cmp::min;
 
 /// Type-level version of the [`None`] variant
