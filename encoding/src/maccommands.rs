@@ -333,7 +333,7 @@ mac_cmds! {
     /// DeviceTimeAnsPayload represents the DeviceTimeAns LoRaWAN MACCommand.
     #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq, Eq)]
-    struct DeviceTimeAnsPayload[cmd=DeviceTimeAns, cid=0x0D, uplink=false, size=8]
+    struct DeviceTimeAnsPayload[cmd=DeviceTimeAns, cid=0x0D, uplink=false, size=5]
 }
 
 macro_rules! create_ack_fn {
@@ -870,10 +870,10 @@ impl<'a> TXParamSetupReqPayload<'a> {
         self.0[0] & (1 << 4) != 0
     }
     pub fn uplink_dwell_time(&self) -> bool {
-        self.0[0] & (1 << 4) != 0
+        self.0[0] & (1 << 3) != 0
     }
     pub fn max_eirp(&self) -> u8 {
-        match self.0[0] & (0b111) {
+        match self.0[0] & (0b1111) {
             0 => 8,
             1 => 10,
             2 => 12,
@@ -929,7 +929,7 @@ impl DlChannelAnsPayload<'_> {
 
 impl DeviceTimeAnsPayload<'_> {
     pub fn seconds(&self) -> u32 {
-        u32::from_le_bytes([self.0[0], self.0[1], self.0[2], self.0[3]])
+        u32::from_le_bytes([self.0[3], self.0[2], self.0[1], self.0[0]])
     }
     //raw value in 1/256 seconds
     pub fn nano_seconds(&self) -> u32 {

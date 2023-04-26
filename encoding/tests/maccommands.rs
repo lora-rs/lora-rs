@@ -229,8 +229,67 @@ fn test_rx_timing_setup_ans() {
 }
 
 #[test]
+fn test_tx_param_setup_req() {
+    let data = vec![0x0F];
+    test_helper!(
+        data,
+        TXParamSetupReq,
+        TXParamSetupReqPayload,
+        1,
+        (downlink_dwell_time, false),
+        (uplink_dwell_time, true),
+        (max_eirp, 36),
+    );
+}
+
+#[test]
+fn test_tx_param_setup_ans() {
+    test_helper!(TXParamSetupAns, TXParamSetupAnsPayload);
+}
+#[test]
+fn test_dl_channel_req() {
+    let data = vec![1, 2, 3, 4];
+    test_helper!(
+        data,
+        DlChannelReq,
+        DlChannelReqPayload,
+        4,
+        (channel_index, 1),
+        (frequency, Frequency::new_from_raw(&data[1..4])),
+    );
+}
+#[test]
+fn test_dl_channel_ans() {
+    let data = vec![0x3];
+    test_helper!(
+        data,
+        DlChannelAns,
+        DlChannelAnsPayload,
+        1,
+        (channel_freq_ack, true),
+        (uplink_freq_ack, true),
+    );
+}
+
+#[test]
 fn test_parse_mac_commands_empty_downlink() {
     assert_eq!(parse_mac_commands(&[], false).count(), 0);
+}
+#[test]
+fn test_device_time_req() {
+    test_helper!(DeviceTimeReq, DeviceTimeReqPayload);
+}
+#[test]
+fn test_device_time_ans() {
+    let data = vec![0x1, 0x2, 0x3, 0x4, 0x5];
+    test_helper!(
+        data,
+        DeviceTimeAns,
+        DeviceTimeAnsPayload,
+        5,
+        (seconds, 16909060),
+        (nano_seconds, 0x5 * 3906250),
+    );
 }
 
 #[test]
