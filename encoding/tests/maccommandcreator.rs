@@ -152,7 +152,11 @@ fn test_rx_timing_setup_req_creator() {
     let res = creator.set_delay(0x0f).unwrap().build();
     assert_eq!(res, [RXTimingSetupReqPayload::cid(), 0x0f]);
 }
-
+#[test]
+fn test_rx_timing_setup_ans_creator() {
+    let creator = RXTimingSetupAnsCreator::new();
+    assert_eq!(creator.build(), [RXTimingSetupAnsPayload::cid()]);
+}
 #[test]
 fn test_rx_timing_setup_req_creator_bad_delay() {
     let mut creator = RXTimingSetupReqCreator::new();
