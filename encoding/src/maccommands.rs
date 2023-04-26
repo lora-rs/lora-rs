@@ -24,6 +24,12 @@ pub enum MacCommand<'a> {
     NewChannelAns(NewChannelAnsPayload<'a>),
     RXTimingSetupReq(RXTimingSetupReqPayload<'a>),
     RXTimingSetupAns(RXTimingSetupAnsPayload),
+    TXParamSetupReq(TXParamSetupReqPayload<'a>),
+    TXParamSetupAns(TXParamSetupAnsPayload),
+    DeviceTimeReq(DeviceTimeReqPayload),
+    DeviceTimeAns(DeviceTimeAnsPayload<'a>),
+    DlChannelReq(DlChannelReqPayload<'a>),
+    DlChannelAns(DlChannelAnsPayload<'a>),
 }
 
 impl<'a> MacCommand<'a> {
@@ -44,6 +50,12 @@ impl<'a> MacCommand<'a> {
             MacCommand::NewChannelAns(_) => NewChannelAnsPayload::len(),
             MacCommand::RXTimingSetupReq(_) => RXTimingSetupReqPayload::len(),
             MacCommand::RXTimingSetupAns(_) => RXTimingSetupAnsPayload::len(),
+            MacCommand::TXParamSetupReq(_) => TXParamSetupReqPayload::len(),
+            MacCommand::TXParamSetupAns(_) => TXParamSetupAnsPayload::len(),
+            MacCommand::DeviceTimeReq(_) => DeviceTimeReqPayload::len(),
+            MacCommand::DeviceTimeAns(_) => DeviceTimeAnsPayload::len(),
+            MacCommand::DlChannelReq(_) => DlChannelReqPayload::len(),
+            MacCommand::DlChannelAns(_) => DlChannelAnsPayload::len(),
         }
     }
 
@@ -63,6 +75,12 @@ impl<'a> MacCommand<'a> {
             MacCommand::NewChannelAns(ref v) => v.0,
             MacCommand::RXTimingSetupReq(ref v) => v.0,
             MacCommand::RXTimingSetupAns(_) => &[],
+            MacCommand::TXParamSetupReq(ref v) => v.0,
+            MacCommand::TXParamSetupAns(_) => &[],
+            MacCommand::DeviceTimeReq(_) => &[],
+            MacCommand::DeviceTimeAns(ref v) => v.0,
+            MacCommand::DlChannelReq(ref v) => v.0,
+            MacCommand::DlChannelAns(ref v) => v.0,
         }
     }
 }
@@ -94,6 +112,12 @@ impl<'a> SerializableMacCommand for MacCommand<'a> {
             MacCommand::NewChannelAns(_) => NewChannelAnsPayload::cid(),
             MacCommand::RXTimingSetupReq(_) => RXTimingSetupReqPayload::cid(),
             MacCommand::RXTimingSetupAns(_) => RXTimingSetupAnsPayload::cid(),
+            MacCommand::TXParamSetupReq(_) => TXParamSetupReqPayload::cid(),
+            MacCommand::TXParamSetupAns(_) => TXParamSetupAnsPayload::cid(),
+            MacCommand::DeviceTimeReq(_) => DeviceTimeReqPayload::cid(),
+            MacCommand::DeviceTimeAns(_) => DeviceTimeAnsPayload::cid(),
+            MacCommand::DlChannelReq(_) => DlChannelReqPayload::cid(),
+            MacCommand::DlChannelAns(_) => DlChannelAnsPayload::cid(),
         }
     }
 
@@ -227,6 +251,17 @@ mac_cmd_zero_len! {
     #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq, Eq)]
     struct RXTimingSetupAnsPayload[cmd=RXTimingSetupAns, cid=0x08, uplink=true]
+
+    /// TXParamSetupAnsPayload represents the TXParamSetupAns LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+    #[derive(Debug, PartialEq, Eq)]
+    struct TXParamSetupAnsPayload[cmd=TXParamSetupAns, cid=0x09, uplink=true]
+
+    /// DeviceTimeReqPayload represents the DeviceTimeReq LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+    #[derive(Debug, PartialEq, Eq)]
+    struct DeviceTimeReqPayload[cmd=DeviceTimeReq, cid=0x0D, uplink=true]
+
 }
 
 mac_cmds! {
@@ -279,6 +314,26 @@ mac_cmds! {
     #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     #[derive(Debug, PartialEq, Eq)]
     struct RXTimingSetupReqPayload[cmd=RXTimingSetupReq, cid=0x08, uplink=false, size=1]
+
+    /// TXParamSetupReqPayload represents the TXParamSetupReq LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+    #[derive(Debug, PartialEq, Eq)]
+    struct TXParamSetupReqPayload[cmd=TXParamSetupReq, cid=0x09, uplink=false, size=1]
+
+    /// DlChannelReqPayload represents the DlChannelReq LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+    #[derive(Debug, PartialEq, Eq)]
+    struct DlChannelReqPayload[cmd=DlChannelReq, cid=0x0A, uplink=false, size=4]
+
+    /// DlChannelAnsPayload represents the DlChannelAns LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+    #[derive(Debug, PartialEq, Eq)]
+    struct DlChannelAnsPayload[cmd=DlChannelAns, cid=0x0A, uplink=true, size=1]
+
+    /// DeviceTimeAnsPayload represents the DeviceTimeAns LoRaWAN MACCommand.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+    #[derive(Debug, PartialEq, Eq)]
+    struct DeviceTimeAnsPayload[cmd=DeviceTimeAns, cid=0x0D, uplink=false, size=8]
 }
 
 macro_rules! create_ack_fn {
@@ -807,5 +862,77 @@ impl<'a> RXTimingSetupReqPayload<'a> {
     /// Delay before the first RX window.
     pub fn delay(&self) -> u8 {
         self.0[0] & 0x0f
+    }
+}
+
+impl<'a> TXParamSetupReqPayload<'a> {
+    pub fn downlink_dwell_time(&self) -> bool {
+        self.0[0] & (1 << 4) != 0
+    }
+    pub fn uplink_dwell_time(&self) -> bool {
+        self.0[0] & (1 << 4) != 0
+    }
+    pub fn max_eirp(&self) -> u8 {
+        match self.0[0] & (0b111) {
+            0 => 8,
+            1 => 10,
+            2 => 12,
+            3 => 13,
+            4 => 14,
+            5 => 16,
+            6 => 18,
+            7 => 20,
+            8 => 21,
+            9 => 24,
+            10 => 26,
+            11 => 27,
+            12 => 29,
+            13 => 30,
+            14 => 33,
+            15 => 36,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl DlChannelReqPayload<'_> {
+    create_value_reader_fn!(
+        /// The index of the channel being created or modified.
+        channel_index,
+        0
+    );
+
+    /// The frequency of the new or modified channel.
+    pub fn frequency(&self) -> Frequency {
+        Frequency::new_from_raw(&self.0[1..4])
+    }
+}
+
+impl DlChannelAnsPayload<'_> {
+    create_ack_fn!(
+        /// Channel frequency ok
+        channel_freq_ack,
+        0
+    );
+
+    create_ack_fn!(
+        /// Uplink frequency exists
+        uplink_freq_ack,
+        1
+    );
+
+    /// Whether the device has accepted the new downlink frequency.
+    pub fn ack(&self) -> bool {
+        self.0[0] == 0x01
+    }
+}
+
+impl DeviceTimeAnsPayload<'_> {
+    pub fn seconds(&self) -> u32 {
+        u32::from_le_bytes([self.0[0], self.0[1], self.0[2], self.0[3]])
+    }
+    //raw value in 1/256 seconds
+    pub fn nano_seconds(&self) -> u32 {
+        (self.0[4] as u32) * 3906250
     }
 }
