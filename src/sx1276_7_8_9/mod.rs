@@ -387,8 +387,8 @@ where
         symbol_timeout: u16,
         _rx_timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
-        if let Some(&_duty_cycle)= duty_cycle_params {
-            return Err(RadioError::DutyCycleUnsupported)
+        if let Some(&_duty_cycle) = duty_cycle_params {
+            return Err(RadioError::DutyCycleUnsupported);
         }
 
         self.intf.iv.enable_rf_switch_rx().await?;
@@ -574,7 +574,9 @@ where
                     debug!("RxTimeout in radio mode {}", radio_mode);
                     return Err(RadioError::ReceiveTimeout);
                 }
-            } else if radio_mode == RadioMode::ChannelActivityDetection && (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+            } else if radio_mode == RadioMode::ChannelActivityDetection
+                && (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value()
+            {
                 debug!("CADDone in radio mode {}", radio_mode);
                 if cad_activity_detected.is_some() {
                     *(cad_activity_detected.unwrap()) =

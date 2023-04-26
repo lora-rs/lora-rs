@@ -218,9 +218,7 @@ where
             .process_irq(self.radio_mode, self.rx_continuous, None)
             .await
         {
-            Ok(()) => {
-                Ok(())
-            }
+            Ok(()) => Ok(()),
             Err(err) => {
                 self.radio_kind.ensure_ready(self.radio_mode).await?;
                 self.radio_kind.set_standby().await?;

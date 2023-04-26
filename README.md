@@ -16,10 +16,7 @@
 
 ## Wheretofore?
 
-- while the current examples use the Embassy embedded framework, nrf52840, stm32wl, and stm32l0 MCUs, and Sx127x/Sx126x chips, this crate provides a path forward for other embedded frameworks, MCU types, and LoRa chips in a Rust development environment;
-- some links below refer to a fork of Embassy in the <a href="https://github.com/ceekdee">ceekdee GitHub repository</a>; however, the intent is to update Embassy to support this lora-phy crate;
-- in order to demonstrate a LoRaWAN capability using the lora-phy crate, one must currently clone the ceekdee versions of rust-lorawan and embassy so that they are all under the same projects folder (that is, relative paths are used in Embassy Cargo.toml files to link to rust-lorawan).  This restriction will be removed once the lora-phy crate is more fully tested.
-- the original LoRa implementations in Embassy remain available after the update to support this lora-phy crate.
+- while the current examples use the Embassy embedded framework, nrf52840, rp pico, stm32l0, and stm32wl MCUs, and Sx127x/Sx126x chips, this crate provides a path forward for other embedded frameworks, MCU types, and LoRa chips in a Rust development environment.
 
 ## LoRa physical layer API
 
@@ -30,11 +27,12 @@ For users wishing to implement a LoRaWAN or P2P solution, the following implemen
 
 Examples of API usage:
 
-- <a href="https://github.com/ceekdee/embassy/blob/master/examples/stm32wl/src/bin/lora_p2p_send.rs">stm32wl P2P send and sleep</a>;
-- <a href="https://github.com/ceekdee/embassy/blob/master/examples/stm32wl/src/bin/lora_lorawan.rs">stm32wl LoRaWAN using rust-lorawan</a>;
-- <a href="https://github.com/ceekdee/embassy/blob/master/examples/stm32l0/src/bin/lora_p2p_receive.rs">stm32l0 P2P receive continuous</a>;
-- <a href="https://github.com/ceekdee/embassy/blob/master/examples/nrf52840/src/bin/lora_p2p_receive_duty_cycle.rs">nrf52840 duty cycle receive</a>;
-- <a href="https://github.com/ceekdee/embassy/blob/master/examples/nrf52840/src/bin/lora_cad.rs">nrf52840 channel activity detection</a>.
+- <a href="https://github.com/embassy-rs/embassy/blob/master/examples/stm32wl/src/bin/lora_p2p_send.rs">stm32wl P2P send and sleep</a>;
+- <a href="https://github.com/embassy-rs/embassy/blob/master/examples/stm32wl/src/bin/lora_lorawan.rs">stm32wl LoRaWAN using rust-lorawan</a>;
+- <a href="https://github.com/embassy-rs/embassy/blob/master/examples/stm32l0/src/bin/lora_p2p_receive.rs">stm32l0 P2P receive continuous</a>;
+- <a href="https://github.com/embassy-rs/embassy/blob/master/examples/nrf52840/src/bin/lora_p2p_receive_duty_cycle.rs">nrf52840 duty cycle receive</a>;
+- <a href="https://github.com/embassy-rs/embassy/blob/master/examples/nrf52840/src/bin/lora_cad.rs">nrf52840 channel activity detection</a>;
+- <a href="https://github.com/embassy-rs/embassy/blob/master/examples/rp/src/bin/lora_p2p_send_multicore.rs">rp pico P2P send and sleep using the second core</a>.
 
 ## Embedded framework/MCU support
 
@@ -44,7 +42,7 @@ For embedded framework developers wishing to add LoRa support as a feature for o
 
 Example InterfaceVariant implementations:
 
-- <a href="https://github.com/ceekdee/embassy/blob/master/embassy-lora/src/iv.rs">Embassy stm32wl/Sx1262, stm32l0/Sx1276, and nrf52840/Sx1262</a>
+- <a href="https://github.com/embassy-rs/embassy/blob/master/embassy-lora/src/iv.rs">Embassy stm32wl/Sx1262, stm32l0/Sx1276, and nrf52840/Sx1262</a>
 
 ## LoRa chip support
 
