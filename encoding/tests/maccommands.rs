@@ -230,7 +230,7 @@ fn test_rx_timing_setup_ans() {
 
 #[test]
 fn test_tx_param_setup_req() {
-    let data = vec![0x0F];
+    let data = vec![0b011110];
     test_helper!(
         data,
         TXParamSetupReq,
@@ -238,7 +238,7 @@ fn test_tx_param_setup_req() {
         1,
         (downlink_dwell_time, false),
         (uplink_dwell_time, true),
-        (max_eirp, 36),
+        (max_eirp, 33),
     );
 }
 

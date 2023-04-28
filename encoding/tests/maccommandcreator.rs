@@ -172,13 +172,13 @@ fn test_tx_param_setup_req_creator() {
     creator.set_uplink_dwell_time().set_uplink_dwell_time();
     creator.set_max_eirp(3);
     let res = creator.build();
-    assert_eq!(res, [TXParamSetupReqPayload::cid(), 0x1B]);
+    assert_eq!(res, [TXParamSetupReqPayload::cid(), 0b110011]);
 }
 
 #[test]
 fn test_tx_param_setup_req_creator_bad_max_eirp() {
     let mut creator = TXParamSetupReqCreator::new();
-    assert!(creator.set_max_eirp(8).is_err());
+    assert!(creator.set_max_eirp(17).is_err());
 }
 
 #[test]
