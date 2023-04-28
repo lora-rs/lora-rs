@@ -246,6 +246,7 @@ fn test_tx_param_setup_req() {
 fn test_tx_param_setup_ans() {
     test_helper!(TXParamSetupAns, TXParamSetupAnsPayload);
 }
+
 #[test]
 fn test_dl_channel_req() {
     let data = vec![1, 2, 3, 4];
@@ -258,6 +259,7 @@ fn test_dl_channel_req() {
         (frequency, Frequency::new_from_raw(&data[1..4])),
     );
 }
+
 #[test]
 fn test_dl_channel_ans() {
     let data = vec![0x3];
@@ -275,6 +277,7 @@ fn test_dl_channel_ans() {
 fn test_parse_mac_commands_empty_downlink() {
     assert_eq!(parse_mac_commands(&[], false).count(), 0);
 }
+
 #[test]
 fn test_device_time_req() {
     test_helper!(DeviceTimeReq, DeviceTimeReqPayload);
