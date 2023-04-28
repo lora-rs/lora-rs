@@ -867,10 +867,10 @@ impl<'a> RXTimingSetupReqPayload<'a> {
 
 impl<'a> TXParamSetupReqPayload<'a> {
     pub fn downlink_dwell_time(&self) -> bool {
-        self.0[0] & (1 << 4) != 0
+        self.0[0] & (1 << 5) != 0
     }
     pub fn uplink_dwell_time(&self) -> bool {
-        self.0[0] & (1 << 3) != 0
+        self.0[0] & (1 << 4) != 0
     }
     pub fn max_eirp(&self) -> u8 {
         match self.0[0] & (0b1111) {
@@ -923,7 +923,7 @@ impl DlChannelAnsPayload<'_> {
 
     /// Whether the device has accepted the new downlink frequency.
     pub fn ack(&self) -> bool {
-        self.0[0] == 0x01
+        self.0[0] & 0x03 == 0x03
     }
 }
 
