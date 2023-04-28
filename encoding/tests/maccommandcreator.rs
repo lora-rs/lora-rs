@@ -152,11 +152,13 @@ fn test_rx_timing_setup_req_creator() {
     let res = creator.set_delay(0x0f).unwrap().build();
     assert_eq!(res, [RXTimingSetupReqPayload::cid(), 0x0f]);
 }
+
 #[test]
 fn test_rx_timing_setup_ans_creator() {
     let creator = RXTimingSetupAnsCreator::new();
     assert_eq!(creator.build(), [RXTimingSetupAnsPayload::cid()]);
 }
+
 #[test]
 fn test_rx_timing_setup_req_creator_bad_delay() {
     let mut creator = RXTimingSetupReqCreator::new();
@@ -172,11 +174,13 @@ fn test_tx_param_setup_req_creator() {
     let res = creator.build();
     assert_eq!(res, [TXParamSetupReqPayload::cid(), 0x1B]);
 }
+
 #[test]
 fn test_tx_param_setup_req_creator_bad_max_eirp() {
     let mut creator = TXParamSetupReqCreator::new();
     assert!(creator.set_max_eirp(8).is_err());
 }
+
 #[test]
 fn test_dl_channel_req_creator() {
     let mut creator = DlChannelReqCreator::new();
@@ -185,12 +189,14 @@ fn test_dl_channel_req_creator() {
     let res = creator.build();
     assert_eq!(res, [DlChannelReqPayload::cid(), 0x03, 0x12, 0x34, 0x56]);
 }
+
 #[test]
 fn test_device_time_req_creator() {
     let creator = DeviceTimeReqCreator::new();
     let res = creator.build();
     assert_eq!(res, [DeviceTimeReqPayload::cid()]);
 }
+
 #[test]
 fn test_device_time_ans_creator() {
     let mut creator = DeviceTimeAnsCreator::new();
