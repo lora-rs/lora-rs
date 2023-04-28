@@ -613,19 +613,19 @@ impl_mac_cmd_creator_boilerplate!(TXParamSetupReqCreator, 0x09, 2);
 impl TXParamSetupReqCreator {
     pub fn set_downlink_dwell_time(&mut self) -> &mut Self {
         self.data[1] &= 0xfe;
-        self.data[1] |= (1 << 4) as u8;
+        self.data[1] |= (1 << 5) as u8;
         self
     }
     pub fn set_uplink_dwell_time(&mut self) -> &mut Self {
         self.data[1] &= 0xfe;
-        self.data[1] |= (1 << 3) as u8;
+        self.data[1] |= (1 << 4) as u8;
         self
     }
     pub fn set_max_eirp(&mut self, max_eirp: u8) -> Result<&mut Self, &str> {
-        if max_eirp > 0x07 {
+        if max_eirp > 0x0F {
             return Err("max_eirp out of range");
         }
-        self.data[1] &= 0xf8;
+        self.data[1] &= 0xf0;
         self.data[1] |= max_eirp;
 
         Ok(self)
