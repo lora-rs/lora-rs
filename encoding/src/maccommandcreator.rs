@@ -604,6 +604,112 @@ pub struct RXTimingSetupAnsCreator {}
 
 impl_mac_cmd_creator_boilerplate!(RXTimingSetupAnsCreator, 0x08);
 
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct TXParamSetupReqCreator {
+    data: [u8; 2],
+}
+impl_mac_cmd_creator_boilerplate!(TXParamSetupReqCreator, 0x09, 2);
+impl TXParamSetupReqCreator {
+    pub fn set_downlink_dwell_time(&mut self) -> &mut Self {
+        self.data[1] &= 0xfe;
+        self.data[1] |= (1 << 5) as u8;
+        self
+    }
+    pub fn set_uplink_dwell_time(&mut self) -> &mut Self {
+        self.data[1] &= 0xfe;
+        self.data[1] |= (1 << 4) as u8;
+        self
+    }
+    pub fn set_max_eirp(&mut self, max_eirp: u8) -> Result<&mut Self, &str> {
+        if max_eirp > 0x0F {
+            return Err("max_eirp out of range");
+        }
+        self.data[1] &= 0xf0;
+        self.data[1] |= max_eirp;
+
+        Ok(self)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct TXParamSetupAnsCreator;
+impl_mac_cmd_creator_boilerplate!(TXParamSetupAnsCreator, 0x09);
+
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct DlChannelReqCreator {
+    data: [u8; 5],
+}
+impl_mac_cmd_creator_boilerplate!(DlChannelReqCreator, 0x0A, 5);
+impl DlChannelReqCreator {
+    pub fn set_channel_index(&mut self, index: u8) -> &mut Self {
+        self.data[1] = index;
+        self
+    }
+    pub fn set_frequency<'a, T: Into<Frequency<'a>>>(&mut self, frequency: T) -> &mut Self {
+        let converted = frequency.into();
+        self.data[2..5].copy_from_slice(converted.as_ref());
+
+        self
+    }
+}
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct DlChannelAnsCreator {
+    data: [u8; 2],
+}
+impl_mac_cmd_creator_boilerplate!(DlChannelAnsCreator, 0x0A, 2);
+impl DlChannelAnsCreator {
+    /// Sets the channel frequency acknowledgement of the DlChannelAns to the provided value.
+    ///
+    /// # Argument
+    ///
+    /// * ack - true meaning that the channel frequency was acceptable or false otherwise.
+    pub fn set_channel_frequency_ack(&mut self, ack: bool) -> &mut Self {
+        self.data[1] &= 0xfe;
+        self.data[1] |= ack as u8;
+
+        self
+    }
+
+    /// Sets the uplink frequency exists acknowledgement of the DlChannelAns to the provided value.
+    ///
+    /// # Argument
+    ///
+    /// * ack - true meaning that the data rate range was acceptable or false otherwise.
+    pub fn set_uplink_frequency_exists_ack(&mut self, ack: bool) -> &mut Self {
+        self.data[1] &= 0xfd;
+        self.data[1] |= (ack as u8) << 1;
+
+        self
+    }
+}
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct DeviceTimeReqCreator;
+impl_mac_cmd_creator_boilerplate!(DeviceTimeReqCreator, 0x0D);
+#[derive(Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub struct DeviceTimeAnsCreator {
+    data: [u8; 6],
+}
+impl_mac_cmd_creator_boilerplate!(DeviceTimeAnsCreator, 0x0D, 6);
+impl DeviceTimeAnsCreator {
+    pub fn set_seconds(&mut self, seconds: u32) -> &mut Self {
+        self.data[1..5].copy_from_slice(&seconds.to_le_bytes());
+        self
+    }
+    pub fn set_nano_seconds(&mut self, nano_seconds: u32) -> Result<&mut Self, &str> {
+        if nano_seconds > 1000000000 {
+            return Err("nano_seconds out of range (max 1 second)");
+        }
+        self.data[5] = (nano_seconds / 3906250) as u8;
+        Ok(self)
+    }
+}
+
 pub fn build_mac_commands<'a, T: AsMut<[u8]>>(
     cmds: &[&dyn SerializableMacCommand],
     mut out: T,
