@@ -25,8 +25,8 @@ The following LoRaWAN features are implemented:
 
 - Class A device behavior
 - Over-the-Air Activation (OTAA) and Activation by Personalization (ABP)
-- Regional support for US915, EU868, and CN470
-- Supports CFList in JoinAccept for EU868 and CN470
+- Regional support for US915, and EU868
+- Supports CFList in JoinAccept for EU868
 - the stack starts deriving a new session when the FCnt maxes out the 32-bit
   counter; new session may also be created by any time by the user, as long the
   stack is not mid-transmit
