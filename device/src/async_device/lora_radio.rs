@@ -159,3 +159,29 @@ where
         }
     }
 }
+
+impl<RK> rand_core::RngCore for LoRaRadio<RK>
+where
+    LoRa<RK>: rand_core::RngCore,
+    RK: RadioKind,
+{
+    #[inline]
+    fn next_u32(&mut self) -> u32 {
+        self.lora.next_u32()
+    }
+
+    #[inline]
+    fn next_u64(&mut self) -> u64 {
+        self.lora.next_u64()
+    }
+
+    #[inline]
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        self.lora.fill_bytes(dest)
+    }
+
+    #[inline]
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+        self.lora.try_fill_bytes(dest)
+    }
+}
