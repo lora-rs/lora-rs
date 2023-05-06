@@ -770,6 +770,102 @@ where
         self.intf.write(&[&op_code_for_set_cad], false).await
     }
 
+    #[cfg(feature = "rng")]
+    // Generate a 32 bit random value based on the RSSI readings, after disabling all interrupts.
+    // The random numbers produced by the generator do not have a uniform or Gaussian distribution.
+    // If uniformity is needed, perform appropriate software post-processing.
+    async fn get_random_number(&mut self) -> Result<u32, RadioError> {
+        self.set_irq_params(None).await?;
+
+        let mut reg_ana_lna_buffer_original = [0x00u8];
+        let mut reg_ana_mixer_buffer_original = [0x00u8];
+        let mut reg_ana_lna_buffer = [0x00u8];
+        let mut reg_ana_mixer_buffer = [0x00u8];
+        let mut number_buffer = [0x00u8, 0x00u8, 0x00u8, 0x00u8];
+        self.intf
+            .read(
+                &[&[
+                    OpCode::ReadRegister.value(),
+                    Register::AnaLNA.addr1(),
+                    Register::AnaLNA.addr2(),
+                    0x00u8,
+                ]],
+                &mut reg_ana_lna_buffer_original,
+                None,
+            )
+            .await?;
+        reg_ana_lna_buffer[0] = reg_ana_lna_buffer_original[0] & (!(1 << 0));
+        let mut register_and_ana_lna = [
+            OpCode::WriteRegister.value(),
+            Register::AnaLNA.addr1(),
+            Register::AnaLNA.addr2(),
+            reg_ana_lna_buffer[0],
+        ];
+        self.intf.write(&[&register_and_ana_lna], false).await?;
+
+        self.intf
+            .read(
+                &[&[
+                    OpCode::ReadRegister.value(),
+                    Register::AnaMixer.addr1(),
+                    Register::AnaMixer.addr2(),
+                    0x00u8,
+                ]],
+                &mut reg_ana_mixer_buffer_original,
+                None,
+            )
+            .await?;
+        reg_ana_mixer_buffer[0] = reg_ana_mixer_buffer_original[0] & (!(1 << 7));
+        let mut register_and_ana_mixer = [
+            OpCode::WriteRegister.value(),
+            Register::AnaMixer.addr1(),
+            Register::AnaMixer.addr2(),
+            reg_ana_mixer_buffer[0],
+        ];
+        self.intf.write(&[&register_and_ana_mixer], false).await?;
+
+        // Set radio in continuous reception mode.
+        let op_code_and_timeout = [OpCode::SetRx.value(), 0xffu8, 0xffu8, 0xffu8];
+        self.intf.write(&[&op_code_and_timeout], false).await?;
+
+        self.intf
+            .read(
+                &[&[
+                    OpCode::ReadRegister.value(),
+                    Register::GeneratedRandomNumber.addr1(),
+                    Register::GeneratedRandomNumber.addr2(),
+                    0x00u8,
+                ]],
+                &mut number_buffer,
+                None,
+            )
+            .await?;
+
+        self.set_standby().await?;
+
+        register_and_ana_lna = [
+            OpCode::WriteRegister.value(),
+            Register::AnaLNA.addr1(),
+            Register::AnaLNA.addr2(),
+            reg_ana_lna_buffer_original[0],
+        ];
+        self.intf.write(&[&register_and_ana_lna], false).await?;
+
+        register_and_ana_mixer = [
+            OpCode::WriteRegister.value(),
+            Register::AnaMixer.addr1(),
+            Register::AnaMixer.addr2(),
+            reg_ana_mixer_buffer_original[0],
+        ];
+        self.intf.write(&[&register_and_ana_mixer], false).await?;
+
+        let b0 = number_buffer[0] as u32;
+        let b1 = number_buffer[1] as u32;
+        let b2 = number_buffer[2] as u32;
+        let b3 = number_buffer[3] as u32;
+        Ok((b0 << 24) | (b1 << 16) | (b2 << 8) | b3)
+    }
+
     // Set the IRQ mask and DIO masks
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError> {
         let mut irq_mask: u16 = IrqMask::None.value();
