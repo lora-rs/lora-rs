@@ -171,6 +171,8 @@ where
     }
 }
 
+impl<RK> crate::private::Sealed for LoRaRadio<RK> where LoRa<RK>: lora_phy::mod_traits::AsyncRng {}
+
 #[cfg(feature = "async-rng")]
 impl<RK> GetRandom for LoRaRadio<RK>
 where

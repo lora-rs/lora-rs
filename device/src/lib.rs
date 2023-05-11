@@ -270,6 +270,7 @@ pub trait GetRng: private::Sealed {
 pub enum GetRandomError {
     BufferEmpty,
     InsufficientSize,
+    RngError,
 }
 
 /// Extract random numbers from the provided RNG. Some RNGs, such as the ones onboard SX126x chips, operate better in
@@ -281,6 +282,8 @@ pub enum GetRandomError {
 ///
 /// In sync mode, it is expected to be an extension of [`RngCore`]. The assumption is that a fresh random number is
 /// always immediately available. Therefore [`fill_up_to`] is a no-op and [`get_random`] should never fail.
+///
+/// This trait is an implementation detail and should not be implemented outside this crate.
 pub trait GetRandom: private::Sealed {
     fn get_random(&mut self) -> Result<u32, GetRandomError>;
 
@@ -290,8 +293,11 @@ pub trait GetRandom: private::Sealed {
     async fn fill_up_to(&mut self, num_random_numbers: usize) -> Result<(), GetRandomError>;
 
     #[cfg(not(feature = "async-rng"))]
-    fn fill_up_to(&mut self, num_random_numbers: usize);
+    fn fill_up_to(&mut self, num_random_numbers: usize) -> Result<(), GetRandomError>;
 }
+
+#[cfg(not(feature = "async-rng"))]
+impl<T: RngCore> private::Sealed for T {}
 
 #[cfg(not(feature = "async-rng"))]
 impl<T: RngCore> GetRandom for T {

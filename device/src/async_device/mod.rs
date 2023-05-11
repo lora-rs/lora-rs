@@ -41,7 +41,6 @@ pub trait OptionalRng: Sealed {}
 impl Sealed for NoneT {}
 impl OptionalRng for NoneT {}
 
-impl<T: GetRandom> Sealed for T {}
 impl<T: GetRandom> OptionalRng for T {}
 
 /// Representation of the physical radio + RNG. Two variants may be constructed through [`Device`]. Either:
