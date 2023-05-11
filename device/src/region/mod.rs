@@ -100,6 +100,7 @@ impl State {
         }
     }
 
+    #[allow(dead_code)]
     pub fn region(&self) -> Region {
         match self {
             Self::AS923_1(_) => Region::AS923_1,
@@ -387,6 +388,7 @@ impl Configuration {
         region_dispatch!(self, get_coding_rate)
     }
 
+    #[allow(dead_code)]
     pub(crate) fn get_current_region(&self) -> super::region::Region {
         self.state.region()
     }
