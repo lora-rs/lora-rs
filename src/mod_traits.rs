@@ -98,9 +98,6 @@ pub trait RadioKind {
         mdltn_params: &ModulationParams,
         rx_boosted_if_supported: bool,
     ) -> Result<(), RadioError>;
-    #[cfg(feature = "rng")]
-    /// If supported, generate a 32 bit random value
-    async fn get_random_number(&mut self) -> Result<u32, RadioError>;
     /// Set the LoRa chip to provide notification of specific events based on radio state
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError>;
     /// Process LoRa chip notifications of events
@@ -110,4 +107,23 @@ pub trait RadioKind {
         rx_continuous: bool,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<(), RadioError>;
+}
+
+/// Internal trait for specifying that a [`RadioKind`] object has RNG capability.
+pub(crate) trait RngRadio: RadioKind {
+    async fn get_random_number(&mut self) -> Result<u32, RadioError>;
+}
+
+/// If the LoRa chip supports it, provides an async implementation of the onboard RNG. This trait makes no guarantees
+/// with regards to the distribution of the generated random numbers (ie, uniform or Gaussian). If uniformity is
+/// needed, apply necessary software processing.
+pub trait AsyncRng {
+    /// Generate a 32 bit random value.
+    ///
+    /// # Warning
+    ///
+    /// `prepare_for_xxx()` MUST be called after this operation to set modulation and packet parameters (for
+    /// example: xxx = tx, rx, cad).
+    /// Do not set modulation and packet parameters, do a random number generation, then initiate Tx, Rx, or CAD.
+    async fn get_random_number(&mut self) -> Result<u32, RadioError>;
 }
