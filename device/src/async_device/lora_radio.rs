@@ -63,10 +63,13 @@ where
         return Self { lora };
 
         #[cfg(feature = "async-rng")]
-        return Self {
-            lora,
-            random_buffer: heapless::Vec::new(),
-        };
+        {
+            let random_buffer = heapless::Vec::new();
+            return Self {
+                lora,
+                random_buffer,
+            };
+        }
     }
 }
 
@@ -186,7 +189,11 @@ where
         let current_len = self.random_buffer.len();
         let to_add = num_random_numbers.saturating_sub(current_len);
         for _ in 0..to_add {
-            let rand = self.lora.get_random_number().await.unwrap();
+            let rand = self
+                .lora
+                .get_random_number()
+                .await
+                .map_err(|_| GetRandomError::RngError)?;
             self.random_buffer
                 .push(rand)
                 .map_err(|_| GetRandomError::InsufficientSize)?;

@@ -200,6 +200,14 @@ where
             } => {
                 let credentials = Credentials::new(*appeui, *deveui, *appkey);
 
+                // TODO figure out what is a sensible number here
+                let fix_unwrap_on_next_lines = ();
+                #[cfg(feature = "async-rng")]
+                self.phy.get_rng().fill_up_to(100).await.unwrap();
+
+                #[cfg(not(feature = "async-rng"))]
+                self.phy.get_rng().fill_up_to(100).unwrap();
+
                 // Prepare the buffer with the join payload
                 let (devnonce, tx_config) = credentials
                     .create_join_request::<C, <Phy<R, G> as GetRng>::RNG, N>(
@@ -295,7 +303,13 @@ where
         let _ = self.prepare_buffer(data, fport, confirmed)?;
 
         // TODO figure out how many random numbers we actually need
-        self.phy.get_rng().fill_up_to(100);
+        let fix_unwrap_on_next_lines = ();
+
+        #[cfg(feature = "async-rng")]
+        self.phy.get_rng().fill_up_to(100).await.unwrap();
+
+        #[cfg(not(feature = "async-rng"))]
+        self.phy.get_rng().fill_up_to(100).unwrap();
 
         // Send data
         let tx_config = self
