@@ -22,6 +22,8 @@ pub(crate) use fixed_channel_plans::US915;
 mod dynamic_channel_plans;
 mod fixed_channel_plans;
 
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     UnsupportedChannel,
     ChannelListTooLong,
