@@ -95,22 +95,12 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         datarate: DR,
         _frame: &Frame,
     ) -> (Datarate, u32) {
-        // match frame {
-        //     Frame::Join => {
-        //         // Right now, we only select one of the random 64 channels that are 125 kHz
-        //         // TODO: randomly select from all 72 channels including the 500 kHz channels
-        //         let channel = (rng.next_u32() & 0b111111) as u8;
-        //         self.last_tx_channel = channel;
-        //         // For the join frame, the randomly selected channel dictates the datarate
-        //         // When TODO above is implemented, this does not require changes
-        //         let datarate = if channel > 64 { DR::_4 } else { DR::_0 };
-        //         (
-        //             F::datarates()[datarate as usize].clone().unwrap(),
-        //             F::uplink_channels()[channel as usize],
-        //         )
-        //     }
-        //     Frame::Data => {
-
+        // There is no distinction between join and data frames in the TX frequency selection process.
+        //
+        // Either all channels are enabled when creating a new `Configuration`, or they are selectively
+        // enabled using `Configuration::with_join_channels`. In either case, we just need to select from
+        // the enabled channels.
+        //
         // For the data frame, the datarate impacts which channel sets we can choose from.
         // If the datarate bandwidth is 500 kHz, we must use channels 64-71
         // else, we must use 0-63
@@ -132,8 +122,6 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
             self.last_tx_channel = channel;
             (datarate, F::uplink_channels()[channel as usize])
         }
-        //     }
-        // }
     }
 
     fn get_rx_frequency(&self, _frame: &Frame, window: &Window) -> u32 {
