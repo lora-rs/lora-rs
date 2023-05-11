@@ -13,3 +13,7 @@ defmt = { version = "0.3" }
 log = { version = "0.4.14" }
 
 embedded-hal-async = { version = "=0.2.0-alpha.1"}
+
+
+[features]
+rng = []

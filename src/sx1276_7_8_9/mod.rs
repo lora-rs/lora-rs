@@ -468,6 +468,12 @@ where
             .await
     }
 
+    #[cfg(feature = "rng")]
+    // Generating a 32 bit random value is not currently supported.
+    async fn get_random_number(&mut self) -> Result<u32, RadioError> {
+        Err(RadioError::RngUnsupported)
+    }
+
     // Set the IRQ mask to disable unwanted interrupts, enable interrupts on DIO0 (the IRQ pin), and allow interrupts.
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError> {
         match radio_mode {

@@ -38,6 +38,7 @@ pub enum RadioError {
     DutyCycleUnsupported,
     DutyCycleRxContinuousUnsupported,
     CADUnexpected,
+    RngUnsupported,
 }
 
 /// Status for a received packet

@@ -98,6 +98,9 @@ pub trait RadioKind {
         mdltn_params: &ModulationParams,
         rx_boosted_if_supported: bool,
     ) -> Result<(), RadioError>;
+    #[cfg(feature = "rng")]
+    /// If supported, generate a 32 bit random value
+    async fn get_random_number(&mut self) -> Result<u32, RadioError>;
     /// Set the LoRa chip to provide notification of specific events based on radio state
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError>;
     /// Process LoRa chip notifications of events
