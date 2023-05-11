@@ -22,6 +22,12 @@ pub(crate) use fixed_channel_plans::US915;
 mod dynamic_channel_plans;
 mod fixed_channel_plans;
 
+pub enum Error {
+    UnsupportedChannel,
+    ChannelListTooLong,
+    UnsupportedRegion,
+}
+
 #[derive(Clone)]
 pub struct Configuration {
     state: State,
@@ -91,6 +97,20 @@ impl State {
             Region::EU433 => State::EU433(EU433::default()),
             Region::IN865 => State::IN865(IN865::default()),
             Region::US915 => State::US915(US915::default()),
+        }
+    }
+
+    pub fn region(&self) -> Region {
+        match self {
+            Self::AS923_1(_) => Region::AS923_1,
+            Self::AS923_2(_) => Region::AS923_2,
+            Self::AS923_3(_) => Region::AS923_3,
+            Self::AS923_4(_) => Region::AS923_4,
+            Self::AU915(_) => Region::AU915,
+            Self::EU433(_) => Region::EU433,
+            Self::EU868(_) => Region::EU868,
+            Self::IN865(_) => Region::IN865,
+            Self::US915(_) => Region::US915,
         }
     }
 }
@@ -173,6 +193,85 @@ macro_rules! region_dispatch {
 impl Configuration {
     pub fn new(region: Region) -> Configuration {
         Configuration::with_state(State::new(region))
+    }
+
+    /// Create a new [`Configuration`] with a specific set of channels enabled for joining the network.
+    ///
+    /// When `join` is called on a [`Configuration`] created using this
+    /// method, the network will be attempted to be joined only on the provided
+    /// channel subset.
+    ///
+    /// This method only makes sense for fixed channel plans (AU915, US915). Trying to call
+    /// this constructor with a dynamic channel region will return `Err(())`.
+    ///
+    /// # About supported channels (fixed channel plans only)
+    ///
+    /// Supported channels:
+    ///
+    /// * 64 125 kHz channels (0-63)
+    ///
+    /// If a channel out of this range is specified, `Err(())` will be returned.
+    ///
+    ///
+    /// # Note
+    ///
+    /// It is recommended to try to join the network with a channel bias only a few
+    /// times. If joining is unsuccessful, use
+    /// [`Device::reset_channels`](crate::async_device::Device) to re-enable all the.
+    /// regional plan's channels. The reason for this is if you *only* try to join with,
+    /// a channel bias, and the network is configured to use a strictly different set of
+    /// channels than the ones you provide, the network can NEVER be joined.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(Configuration) if the provided channel set is correct and the region is a fixed channel plan
+    /// * The length of `channel_list` must be <= 72, otherwise `Err(())` will be returned.
+    /// * If a channel out of the specified channel range is specified, `Err(())` will be returned (ie, >= 64).
+    pub fn with_join_channels(
+        region: Region,
+        join_channels: &[u8],
+    ) -> Result<Configuration, Error> {
+        use Region::*;
+        match region {
+            US915 | AU915 => {
+                if join_channels.len() > 64 {
+                    return Err(Error::ChannelListTooLong);
+                }
+
+                let mut config = Configuration::with_state(State::new(region));
+                let empty_mask = ChannelMask::<2>::new_from_raw(&[0x00, 0x00]);
+                let mut masks = [
+                    empty_mask.clone(),
+                    empty_mask.clone(),
+                    empty_mask.clone(),
+                    empty_mask,
+                ];
+
+                // Construct the channel masks from the provided channel list
+                for channel in join_channels {
+                    if *channel >= 64 {
+                        return Err(Error::UnsupportedChannel);
+                    }
+
+                    let mask_idx = (channel / 16) as usize;
+                    let mask = &mut masks[mask_idx];
+
+                    let bank = (*channel as usize - mask_idx * 16) / 8;
+                    let old = mask.get_index(bank);
+                    let bit_pos = channel % 8;
+
+                    mask.set_bank(bank, (1 << bit_pos) | old);
+                }
+
+                // Set the enabled channels in config
+                for (cm_ctrl, mask) in masks.iter().enumerate() {
+                    config.set_channel_mask(cm_ctrl as u8, mask.clone());
+                }
+
+                Ok(config)
+            }
+            _ => Err(Error::UnsupportedRegion),
+        }
     }
 
     fn with_state(state: State) -> Configuration {
@@ -286,6 +385,10 @@ impl Configuration {
 
     pub(crate) fn get_coding_rate(&self) -> CodingRate {
         region_dispatch!(self, get_coding_rate)
+    }
+
+    pub(crate) fn get_current_region(&self) -> super::region::Region {
+        self.state.region()
     }
 }
 
