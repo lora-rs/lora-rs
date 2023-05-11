@@ -2,10 +2,11 @@
 // generally, we allow upper_case_acronyms to make it match the LoRaWAN naming conventions better
 use lorawan::{maccommands::ChannelMask, parser::CfList};
 
-use super::RngCore;
 pub mod constants;
 use crate::mac;
 pub(crate) use crate::radio::*;
+use crate::GetRandom;
+use crate::GetRandomError;
 use constants::*;
 
 pub(crate) use dynamic_channel_plans::AS923_1;
@@ -200,14 +201,14 @@ impl Configuration {
         self.join_accept_delay2 = delay;
     }
 
-    pub(crate) fn create_tx_config<RNG: RngCore>(
+    pub(crate) fn create_tx_config<RNG: GetRandom>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> TxConfig {
-        let (dr, frequency) = self.get_tx_dr_and_frequency(rng, datarate, frame);
-        TxConfig {
+    ) -> Result<TxConfig, GetRandomError> {
+        let (dr, frequency) = self.get_tx_dr_and_frequency(rng, datarate, frame)?;
+        Ok(TxConfig {
             pw: self.get_dbm(),
             rf: RfConfig {
                 frequency,
@@ -215,15 +216,15 @@ impl Configuration {
                 spreading_factor: dr.spreading_factor,
                 coding_rate: self.get_coding_rate(),
             },
-        }
+        })
     }
 
-    fn get_tx_dr_and_frequency<RNG: RngCore>(
+    fn get_tx_dr_and_frequency<RNG: GetRandom>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> (Datarate, u32) {
+    ) -> Result<(Datarate, u32), GetRandomError> {
         mut_region_dispatch!(self, get_tx_dr_and_frequency, rng, datarate, frame)
     }
 
@@ -330,12 +331,12 @@ pub(crate) trait RegionHandler {
     fn get_default_datarate(&self) -> DR {
         DR::_0
     }
-    fn get_tx_dr_and_frequency<RNG: RngCore>(
+    fn get_tx_dr_and_frequency<RNG: GetRandom>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> (Datarate, u32);
+    ) -> Result<(Datarate, u32), GetRandomError>;
 
     fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32;
     fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate;

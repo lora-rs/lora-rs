@@ -128,7 +128,7 @@ impl Session {
     pub fn handle_event<
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
-        RNG: RngCore,
+        RNG: GetRandom,
         const N: usize,
     >(
         self,
@@ -152,7 +152,7 @@ impl Idle {
     fn prepare_buffer<
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
-        RNG: RngCore,
+        RNG: GetRandom,
         const N: usize,
     >(
         &mut self,
@@ -201,7 +201,7 @@ impl Idle {
     pub fn handle_event<
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
-        RNG: RngCore,
+        RNG: GetRandom,
         const N: usize,
     >(
         mut self,
@@ -215,10 +215,12 @@ impl Idle {
             Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
                 let fcnt = self.prepare_buffer::<R, C, RNG, N>(&send_data, shared);
+                shared.rng.fill_up_to(100);
                 let event: radio::Event<R> = radio::Event::TxRequest(
                     shared
                         .region
-                        .create_tx_config(&mut shared.rng, shared.datarate, &Frame::Data),
+                        .create_tx_config(&mut shared.rng, shared.datarate, &Frame::Data)
+                        .unwrap(),
                     shared.tx_buffer.as_ref(),
                 );
 
@@ -291,7 +293,7 @@ impl SendingData {
     pub fn handle_event<
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
-        RNG: RngCore,
+        RNG: GetRandom,
         const N: usize,
     >(
         self,
@@ -355,7 +357,7 @@ impl WaitingForRxWindow {
     pub fn handle_event<
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
-        RNG: RngCore,
+        RNG: GetRandom,
         const N: usize,
     >(
         self,
@@ -438,7 +440,7 @@ impl WaitingForRx {
     pub fn handle_event<
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
-        RNG: RngCore,
+        RNG: GetRandom,
         const N: usize,
     >(
         mut self,
@@ -591,7 +593,7 @@ impl WaitingForRx {
     }
 }
 
-fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize>(
+fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, RNG: GetRandom, const N: usize>(
     state: Session,
     confirmed: bool,
     timestamp_ms: TimestampMs,

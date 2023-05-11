@@ -1,3 +1,5 @@
+use crate::{GetRandom, GetRandomError};
+
 use super::radio::{
     Bandwidth, CodingRate, PhyRxTx, RfConfig, RxQuality, SpreadingFactor, TxConfig,
 };
@@ -5,7 +7,7 @@ use super::region::constants::DEFAULT_DBM;
 use super::Timings;
 
 use lora_phy::mod_params::{BoardType, ChipType, RadioError};
-use lora_phy::mod_traits::RadioKind;
+use lora_phy::mod_traits::{AsyncRng, RadioKind};
 use lora_phy::LoRa;
 
 /// Convert the spreading factor for use in the external lora-phy crate
@@ -48,6 +50,8 @@ impl From<CodingRate> for lora_phy::mod_params::CodingRate {
 /// LoRa radio using the physical layer API in the external lora-phy crate
 pub struct LoRaRadio<RK> {
     pub(crate) lora: LoRa<RK>,
+    #[cfg(feature = "async-rng")]
+    pub(crate) random_buffer: heapless::Vec<u32, 128>,
 }
 
 impl<RK> LoRaRadio<RK>
@@ -55,7 +59,14 @@ where
     RK: RadioKind + 'static,
 {
     pub fn new(lora: LoRa<RK>) -> Self {
-        Self { lora }
+        #[cfg(not(feature = "async-rng"))]
+        return Self { lora };
+
+        #[cfg(feature = "async-rng")]
+        return Self {
+            lora,
+            random_buffer: heapless::Vec::new(),
+        };
     }
 }
 
@@ -160,28 +171,25 @@ where
     }
 }
 
-impl<RK> rand_core::RngCore for LoRaRadio<RK>
+#[cfg(feature = "async-rng")]
+impl<RK> GetRandom for LoRaRadio<RK>
 where
-    LoRa<RK>: rand_core::RngCore,
-    RK: RadioKind,
+    LoRa<RK>: lora_phy::mod_traits::AsyncRng,
 {
-    #[inline]
-    fn next_u32(&mut self) -> u32 {
-        self.lora.next_u32()
+    fn get_random(&mut self) -> Result<u32, crate::GetRandomError> {
+        self.random_buffer.pop().ok_or(GetRandomError::BufferEmpty)
     }
 
-    #[inline]
-    fn next_u64(&mut self) -> u64 {
-        self.lora.next_u64()
-    }
+    async fn fill_up_to(&mut self, num_random_numbers: usize) -> Result<(), GetRandomError> {
+        let current_len = self.random_buffer.len();
+        let to_add = num_random_numbers.saturating_sub(current_len);
+        for _ in 0..to_add {
+            let rand = self.lora.get_random_number().await.unwrap();
+            self.random_buffer
+                .push(rand)
+                .map_err(|_| GetRandomError::InsufficientSize)?;
+        }
 
-    #[inline]
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.lora.fill_bytes(dest)
-    }
-
-    #[inline]
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
-        self.lora.try_fill_bytes(dest)
+        Ok(())
     }
 }

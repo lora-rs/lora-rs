@@ -9,3 +9,6 @@ opt-level = "s"
 
 [profile.release]
 debug = true
+
+[patch.crates-io]
+lora-phy = { git = "https://github.com/jbeaurivage/lora-phy.git", branch = "sx126x-rng" }

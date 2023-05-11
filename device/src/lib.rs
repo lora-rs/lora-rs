@@ -35,7 +35,7 @@ pub struct Device<R, C, RNG, const N: usize>
 where
     R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
-    RNG: RngCore,
+    RNG: GetRandom,
 {
     state: Option<State>,
     shared: Shared<R, RNG, N>,
@@ -143,7 +143,7 @@ impl<R, C, RNG, const N: usize> Device<R, C, RNG, N>
 where
     R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
-    RNG: RngCore,
+    RNG: GetRandom,
 {
     pub fn new(
         region: region::Configuration,
@@ -261,8 +261,49 @@ where
 /// This trait is an implementation detail and should not be implemented outside this crate.
 #[doc(hidden)]
 pub trait GetRng: private::Sealed {
-    type RNG: RngCore;
+    type RNG: GetRandom;
     fn get_rng(&mut self) -> &mut Self::RNG;
+}
+
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum GetRandomError {
+    BufferEmpty,
+    InsufficientSize,
+}
+
+/// Extract random numbers from the provided RNG. Some RNGs, such as the ones onboard SX126x chips, operate better in
+/// an `async` paradigm. [`GetRandom`] provides provisions for both sync and async operation.
+///
+/// In async mode its operating principle is based on filling a buffer with random numbers. As most operations in this
+/// crate require a bounded number of random numbers, we can pre-fill the buffer before beginning the operation and use
+/// the numbers as needed. If the buffer finds itself empty, than [`GetRandomError::RandomBufferEmpty`] is returned.
+///
+/// In sync mode, it is expected to be an extension of [`RngCore`]. The assumption is that a fresh random number is
+/// always immediately available. Therefore [`fill_up_to`] is a no-op and [`get_random`] should never fail.
+pub trait GetRandom: private::Sealed {
+    fn get_random(&mut self) -> Result<u32, GetRandomError>;
+
+    /// Fill the random number buffer up to the number of specified random numbers. When the `async-rng` feature is
+    /// enabled, this method is async. Otherwise it is declared as a regular, sync method.
+    #[cfg(feature = "async-rng")]
+    async fn fill_up_to(&mut self, num_random_numbers: usize) -> Result<(), GetRandomError>;
+
+    #[cfg(not(feature = "async-rng"))]
+    fn fill_up_to(&mut self, num_random_numbers: usize);
+}
+
+#[cfg(not(feature = "async-rng"))]
+impl<T: RngCore> GetRandom for T {
+    /// Get a random number based on [`RngCore`]'s own implementation
+    fn get_random(&mut self) -> Result<u32, GetRandomError> {
+        Ok(self.next_u32())
+    }
+
+    // No-op, as we assume `RngCore` implementations always have a fresh  random number immediately available.
+    fn fill_up_to(&mut self, _num_random_numbers: usize) -> Result<(), GetRandomError> {
+        Ok(())
+    }
 }
 
 mod private {

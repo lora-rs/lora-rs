@@ -1,3 +1,5 @@
+use crate::GetRandomError;
+
 use super::*;
 use core::marker::PhantomData;
 
@@ -53,7 +55,7 @@ impl<
         index_plus_one
     }
 
-    fn get_random_in_range<RNG: RngCore>(&self, rng: &mut RNG) -> usize {
+    fn get_random_in_range<RNG: GetRandom>(&self, rng: &mut RNG) -> Result<usize, GetRandomError> {
         let range = self.highest_additional_channel_index_plus_one() + NUM_JOIN_CHANNELS;
         let cm = if range > 16 {
             0b11111
@@ -62,7 +64,7 @@ impl<
         } else {
             0b111
         };
-        (rng.next_u32() as usize) & cm
+        Ok((rng.get_random()? as usize) & cm)
     }
 }
 
@@ -151,37 +153,37 @@ impl<
         }
     }
 
-    fn get_tx_dr_and_frequency<RNG: RngCore>(
+    fn get_tx_dr_and_frequency<RNG: GetRandom>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> (Datarate, u32) {
+    ) -> Result<(Datarate, u32), GetRandomError> {
         match frame {
             Frame::Join => {
                 // there are at most 8 join channels
-                let mut channel = (rng.next_u32() & 0b111) as u8;
+                let mut channel = (rng.get_random()? & 0b111) as u8;
                 // keep sampling until we select a join channel depending
                 // on the frequency plan
                 while channel as usize >= NUM_JOIN_CHANNELS {
-                    channel = (rng.next_u32() & 0b111) as u8;
+                    channel = (rng.get_random()? & 0b111) as u8;
                 }
                 self.last_tx_channel = channel;
-                (
+                Ok((
                     R::datarates()[datarate as usize].clone().unwrap(),
                     R::join_channels()[channel as usize],
-                )
+                ))
             }
             Frame::Data => {
-                let mut channel = self.get_random_in_range(rng);
+                let mut channel = self.get_random_in_range(rng)?;
                 loop {
                     if self.channel_mask.is_enabled(channel).unwrap() {
                         if let Some(freq) = self.get_channel(channel) {
                             self.last_tx_channel = channel as u8;
-                            return (R::datarates()[datarate as usize].clone().unwrap(), freq);
+                            return Ok((R::datarates()[datarate as usize].clone().unwrap(), freq));
                         }
                     }
-                    channel = self.get_random_in_range(rng)
+                    channel = self.get_random_in_range(rng)?
                 }
             }
         }

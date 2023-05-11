@@ -7,7 +7,7 @@ pub mod session;
 
 pub use region::DR;
 
-pub struct Shared<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize> {
+pub struct Shared<R: radio::PhyRxTx + Timings, RNG: GetRandom, const N: usize> {
     radio: R,
     credentials: Option<Credentials>,
     region: region::Configuration,
@@ -25,7 +25,7 @@ enum Downlink {
     Join,
 }
 
-impl<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize> Shared<R, RNG, N> {
+impl<R: radio::PhyRxTx + Timings, RNG: GetRandom, const N: usize> Shared<R, RNG, N> {
     pub fn get_mut_radio(&mut self) -> &mut R {
         &mut self.radio
     }
@@ -48,7 +48,7 @@ impl<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize> Shared<R, RNG, N
     }
 }
 
-impl<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize> Shared<R, RNG, N> {
+impl<R: radio::PhyRxTx + Timings, RNG: GetRandom, const N: usize> Shared<R, RNG, N> {
     pub fn new(
         radio: R,
         credentials: Option<Credentials>,

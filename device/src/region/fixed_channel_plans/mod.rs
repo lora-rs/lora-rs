@@ -1,3 +1,5 @@
+use crate::GetRandomError;
+
 use super::*;
 use core::marker::PhantomData;
 use lorawan::maccommands::ChannelMask;
@@ -96,25 +98,25 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         }
     }
 
-    fn get_tx_dr_and_frequency<RNG: RngCore>(
+    fn get_tx_dr_and_frequency<RNG: GetRandom>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> (Datarate, u32) {
+    ) -> Result<(Datarate, u32), GetRandomError> {
         match frame {
             Frame::Join => {
                 // Right now, we only select one of the random 64 channels that are 125 kHz
                 // TODO: randomly select from all 72 channels including the 500 kHz channels
-                let channel = (rng.next_u32() & 0b111111) as u8;
+                let channel = (rng.get_random()? & 0b111111) as u8;
                 self.last_tx_channel = channel;
                 // For the join frame, the randomly selected channel dictates the datarate
                 // When TODO above is implemented, this does not require changes
                 let datarate = if channel > 64 { DR::_4 } else { DR::_0 };
-                (
+                Ok((
                     F::datarates()[datarate as usize].clone().unwrap(),
                     F::uplink_channels()[channel as usize],
-                )
+                ))
             }
             Frame::Data => {
                 // For the data frame, the datarate impacts which channel sets we can choose from.
@@ -122,21 +124,21 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
                 // else, we must use 0-63
                 let datarate = F::datarates()[datarate as usize].clone().unwrap();
                 if datarate.bandwidth == Bandwidth::_500KHz {
-                    let mut channel = (rng.next_u32() & 0b111) as u8;
+                    let mut channel = (rng.get_random()? & 0b111) as u8;
                     // keep selecting a random channel until we find one that is enabled
                     while !self.channel_mask.is_enabled(channel.into()).unwrap() {
-                        channel = (rng.next_u32() & 0b111) as u8;
+                        channel = (rng.get_random()? & 0b111) as u8;
                     }
                     self.last_tx_channel = channel;
-                    (datarate, F::uplink_channels()[(64 + channel) as usize])
+                    Ok((datarate, F::uplink_channels()[(64 + channel) as usize]))
                 } else {
-                    let mut channel = (rng.next_u32() & 0b111111) as u8;
+                    let mut channel = (rng.get_random()? & 0b111111) as u8;
                     // keep selecting a random channel until we find one that is enabled
                     while !self.channel_mask.is_enabled(channel.into()).unwrap() {
-                        channel = (rng.next_u32() & 0b111111) as u8;
+                        channel = (rng.get_random()? & 0b111111) as u8;
                     }
                     self.last_tx_channel = channel;
-                    (datarate, F::uplink_channels()[channel as usize])
+                    Ok((datarate, F::uplink_channels()[channel as usize]))
                 }
             }
         }

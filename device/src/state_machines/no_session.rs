@@ -3,7 +3,7 @@ use super::super::State as SuperState;
 use super::super::*;
 use super::{
     region::{Frame, Window},
-    RngCore, Shared,
+    Shared,
 };
 use lorawan::{
     self,
@@ -63,7 +63,7 @@ impl NoSession {
     pub fn handle_event<
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
-        RNG: RngCore,
+        RNG: GetRandom,
         const N: usize,
     >(
         self,
@@ -108,7 +108,7 @@ impl Idle {
     pub fn handle_event<
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
-        RNG: RngCore,
+        RNG: GetRandom,
         const N: usize,
     >(
         self,
@@ -202,7 +202,7 @@ impl SendingJoin {
     pub fn handle_event<
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
-        RNG: RngCore,
+        RNG: GetRandom,
         const N: usize,
     >(
         self,
@@ -269,7 +269,7 @@ impl WaitingForRxWindow {
     pub fn handle_event<
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
-        RNG: RngCore,
+        RNG: GetRandom,
         const N: usize,
     >(
         self,
@@ -353,7 +353,7 @@ impl WaitingForJoinResponse {
     pub fn handle_event<
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
-        RNG: RngCore,
+        RNG: GetRandom,
         const N: usize,
     >(
         self,

@@ -1,6 +1,6 @@
 use crate::radio::{RadioBuffer, TxConfig};
 use crate::region::{Configuration, Frame, DR};
-use crate::RngCore;
+use crate::GetRandom;
 use lorawan::keys::CryptoFactory;
 use lorawan::{creator::JoinRequestCreator, keys::AES128, parser::EUI64};
 
@@ -40,15 +40,23 @@ impl Credentials {
 
     /// Prepare a join request to be sent. This populates the radio buffer with the request to be
     /// sent, and returns the radio config to use for transmitting.
-    pub(crate) fn create_join_request<C: CryptoFactory + Default, RNG: RngCore, const N: usize>(
+    pub(crate) fn create_join_request<
+        C: CryptoFactory + Default,
+        RNG: GetRandom,
+        const N: usize,
+    >(
         &self,
         region: &mut Configuration,
         rng: &mut RNG,
         datarate: DR,
         buf: &mut RadioBuffer<N>,
     ) -> (DevNonce, TxConfig) {
+        // TODO figure out what is a sensible number here
+        rng.fill_up_to(100);
+
         // use lowest 16 bits for devnonce
-        let devnonce_bytes = rng.next_u32() as u16;
+        // Unwrap is OK because we just proved we have at least 100 random numbers available.
+        let devnonce_bytes = rng.get_random().unwrap() as u16;
 
         buf.clear();
 
@@ -63,11 +71,14 @@ impl Credentials {
 
         let devnonce_copy = DevNonce::new(devnonce).unwrap();
 
+        // If the random number buffer is empty, re-fill with 100 random numbers.
+        // TODO make this better as the number of necessary random numbers for a TX should be bounded.s
+        let tx_config = region
+            .create_tx_config(rng, datarate, &Frame::Join)
+            .unwrap();
+
         buf.extend_from_slice(vec).unwrap();
-        (
-            devnonce_copy,
-            region.create_tx_config(rng, datarate, &Frame::Join),
-        )
+        (devnonce_copy, tx_config)
     }
 }
 
