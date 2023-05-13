@@ -134,10 +134,7 @@ impl Session {
         self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (
-        SuperState,
-        Result<Response, super::super::Error<R::PhyError>>,
-    ) {
+    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
         match self {
             Session::Idle(state) => state.handle_event::<R, C, RNG, N>(event, shared),
             Session::SendingData(state) => state.handle_event::<R, C, RNG, N>(event, shared),
@@ -207,18 +204,13 @@ impl Idle {
         mut self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (
-        SuperState,
-        Result<Response, super::super::Error<R::PhyError>>,
-    ) {
+    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
         match event {
             Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
                 let fcnt = self.prepare_buffer::<R, C, RNG, N>(&send_data, shared);
                 let event: radio::Event<R> = radio::Event::TxRequest(
-                    shared
-                        .region
-                        .create_tx_config(&mut shared.rng, shared.datarate, &Frame::Data),
+                    shared.region.create_tx_config(&mut shared.rng, shared.datarate, &Frame::Data),
                     shared.tx_buffer.as_ref(),
                 );
 
@@ -263,18 +255,11 @@ impl Idle {
     }
 
     fn into_sending_data(self, confirmed: bool) -> SendingData {
-        SendingData {
-            session: self.session,
-            confirmed,
-        }
+        SendingData { session: self.session, confirmed }
     }
 
     fn into_waiting_for_rxwindow(self, confirmed: bool, time: u32) -> WaitingForRxWindow {
-        WaitingForRxWindow {
-            session: self.session,
-            rx_window: RxWindow::_1(time),
-            confirmed,
-        }
+        WaitingForRxWindow { session: self.session, rx_window: RxWindow::_1(time), confirmed }
     }
 }
 
@@ -297,10 +282,7 @@ impl SendingData {
         self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (
-        SuperState,
-        Result<Response, super::super::Error<R::PhyError>>,
-    ) {
+    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -337,11 +319,7 @@ impl SendingData {
     }
 
     fn into_waiting_for_rxwindow(self, confirmed: bool, time: u32) -> WaitingForRxWindow {
-        WaitingForRxWindow {
-            session: self.session,
-            rx_window: RxWindow::_1(time),
-            confirmed,
-        }
+        WaitingForRxWindow { session: self.session, rx_window: RxWindow::_1(time), confirmed }
     }
 }
 
@@ -369,15 +347,10 @@ impl WaitingForRxWindow {
                     RxWindow::_1(_) => Window::_1,
                     RxWindow::_2(_) => Window::_2,
                 };
-                let rx_config = shared
-                    .region
-                    .get_rx_config(shared.datarate, &Frame::Join, &window);
+                let rx_config = shared.region.get_rx_config(shared.datarate, &Frame::Join, &window);
 
                 // configure the radio for the RX
-                match shared
-                    .radio
-                    .handle_event(radio::Event::RxRequest(rx_config))
-                {
+                match shared.radio.handle_event(radio::Event::RxRequest(rx_config)) {
                     Ok(_) => {
                         let window_close: u32 = match self.rx_window {
                             // RxWindow1 one must timeout before RxWindow2
@@ -402,29 +375,22 @@ impl WaitingForRxWindow {
                     Err(e) => (self.into(), Err(e.into())),
                 }
             }
-            Event::RadioEvent(_) => (
-                self.into(),
-                Err(Error::RadioEventWhileWaitingForRxWindow.into()),
-            ),
-            Event::NewSessionRequest => (
-                self.into(),
-                Err(Error::NewSessionWhileWaitingForRxWindow.into()),
-            ),
-            Event::SendDataRequest(_) => (
-                self.into(),
-                Err(Error::SendDataWhileWaitingForRxWindow.into()),
-            ),
+            Event::RadioEvent(_) => {
+                (self.into(), Err(Error::RadioEventWhileWaitingForRxWindow.into()))
+            }
+            Event::NewSessionRequest => {
+                (self.into(), Err(Error::NewSessionWhileWaitingForRxWindow.into()))
+            }
+            Event::SendDataRequest(_) => {
+                (self.into(), Err(Error::SendDataWhileWaitingForRxWindow.into()))
+            }
         }
     }
 }
 
 impl From<WaitingForRxWindow> for WaitingForRx {
     fn from(val: WaitingForRxWindow) -> WaitingForRx {
-        WaitingForRx {
-            session: val.session,
-            confirmed: val.confirmed,
-            rx_window: val.rx_window,
-        }
+        WaitingForRx { session: val.session, confirmed: val.confirmed, rx_window: val.rx_window }
     }
 }
 
@@ -444,10 +410,7 @@ impl WaitingForRx {
         mut self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (
-        SuperState,
-        Result<Response, super::super::Error<R::PhyError>>,
-    ) {
+    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -477,8 +440,10 @@ impl WaitingForRx {
 
                                         // there two unwraps that are sane in their own right
                                         // * making a new EncryptedDataPayload with owned bytes will
-                                        //      always work when copy bytes from another EncryptedPayload
-                                        // * the decrypt will always work when we have verified MIC previously
+                                        //   always work when copy bytes from another
+                                        //   EncryptedPayload
+                                        // * the decrypt will always work when we have verified MIC
+                                        //   previously
                                         let decrypted = EncryptedDataPayload::new_with_factory(
                                             copy,
                                             C::default(),
@@ -585,9 +550,7 @@ impl WaitingForRx {
     }
 
     fn into_idle(self) -> Idle {
-        Idle {
-            session: self.session,
-        }
+        Idle { session: self.session }
     }
 }
 
@@ -596,28 +559,19 @@ fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: us
     confirmed: bool,
     timestamp_ms: TimestampMs,
     shared: &mut Shared<R, RNG, N>,
-) -> (
-    SuperState,
-    Result<Response, super::super::Error<R::PhyError>>,
-) {
+) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
     let (new_state, first_window) = match state {
         Session::Idle(state) => {
             let first_window = (shared.region.get_rx_delay(&Frame::Data, &Window::_1) as i32
                 + timestamp_ms as i32
                 + shared.radio.get_rx_window_offset_ms()) as u32;
-            (
-                state.into_waiting_for_rxwindow(confirmed, first_window),
-                first_window,
-            )
+            (state.into_waiting_for_rxwindow(confirmed, first_window), first_window)
         }
         Session::SendingData(state) => {
             let first_window = (shared.region.get_rx_delay(&Frame::Data, &Window::_1) as i32
                 + timestamp_ms as i32
                 + shared.radio.get_rx_window_offset_ms()) as u32;
-            (
-                state.into_waiting_for_rxwindow(confirmed, first_window),
-                first_window,
-            )
+            (state.into_waiting_for_rxwindow(confirmed, first_window), first_window)
         }
         _ => panic!("Invalid state to transition to WaitingForRxWindow"),
     };

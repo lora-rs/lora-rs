@@ -345,7 +345,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
 /// DecryptedJoinAcceptPayload represents a decrypted JoinAccept.
 ///
 /// It can be built either directly through the [new](#method.new) or using the
-/// [EncryptedJoinAcceptPayload.decrypt](struct.EncryptedJoinAcceptPayload.html#method.decrypt) function.
+/// [EncryptedJoinAcceptPayload.decrypt](struct.EncryptedJoinAcceptPayload.html#method.decrypt)
+/// function.
 #[derive(Debug, PartialEq, Eq)]
 pub struct DecryptedJoinAcceptPayload<T, F>(T, F);
 
@@ -554,10 +555,7 @@ pub trait DataHeader {
 
     /// Gives the FHDR of the DataPayload.
     fn fhdr(&self) -> FHDR {
-        FHDR::new_from_raw(
-            &self.as_data_bytes()[1..(1 + self.fhdr_length())],
-            self.is_uplink(),
-        )
+        FHDR::new_from_raw(&self.as_data_bytes()[1..(1 + self.fhdr_length())], self.is_uplink())
     }
 
     /// Gives whether the frame is confirmed
@@ -665,10 +663,10 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
     ///
     /// # Argument
     ///
-    /// * nwk_skey - the Network Session key used to decrypt the mac commands in case the payload
-    ///     is transporting those.
-    /// * app_skey - the Application Session key used to decrypt the application payload in case
-    ///     the payload is transporting that.
+    /// * nwk_skey - the Network Session key used to decrypt the mac commands in case the payload is
+    ///   transporting those.
+    /// * app_skey - the Application Session key used to decrypt the application payload in case the
+    ///   payload is transporting that.
     /// * fcnt - the counter used to encrypt the payload.
     ///
     /// # Examples
@@ -816,9 +814,9 @@ where
     let bytes = data.as_ref();
     check_phy_data(bytes)?;
     match MHDR(bytes[0]).mtype() {
-        MType::JoinRequest => Ok(PhyPayload::JoinRequest(
-            JoinRequestPayload::new_with_factory(data, factory)?,
-        )),
+        MType::JoinRequest => {
+            Ok(PhyPayload::JoinRequest(JoinRequestPayload::new_with_factory(data, factory)?))
+        }
         MType::JoinAccept => Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(
             EncryptedJoinAcceptPayload::new_with_factory(data, factory)?,
         ))),

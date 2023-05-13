@@ -60,11 +60,7 @@ fn bench_complete_data_payload_fhdr(c: &mut Criterion) {
         })
     });
     let n = cnt.load(Ordering::SeqCst);
-    println!(
-        "Approximate memory usage per iteration: {} from {}",
-        GLOBAL.get_sum() / n,
-        n
-    );
+    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.get_sum() / n, n);
 }
 
 fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
@@ -86,11 +82,7 @@ fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
         })
     });
     let n = cnt.load(Ordering::SeqCst);
-    println!(
-        "Approximate memory usage per iteration: {} from {}",
-        GLOBAL.get_sum() / n,
-        n
-    );
+    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.get_sum() / n, n);
 }
 
 fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
@@ -108,21 +100,14 @@ fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
 
             if let PhyPayload::Data(DataPayload::Encrypted(data_payload)) = phy {
                 assert_eq!(
-                    data_payload
-                        .decrypt(None, Some(&key), 1)
-                        .unwrap()
-                        .frm_payload(),
+                    data_payload.decrypt(None, Some(&key), 1).unwrap().frm_payload(),
                     Ok(FRMPayload::Data(&payload[..]))
                 );
             }
         })
     });
     let n = cnt.load(Ordering::SeqCst);
-    println!(
-        "Approximate memory usage per iteration: {} from {}",
-        GLOBAL.get_sum() / n,
-        n
-    );
+    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.get_sum() / n, n);
 }
 
 pub type Cmac = cmac::Cmac<Aes128>;

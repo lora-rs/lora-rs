@@ -33,8 +33,8 @@ pub trait PhyRxTx: Sized {
     /// should only complete once data have been transmitted.
     async fn tx(&mut self, config: TxConfig, buf: &[u8]) -> Result<u32, Self::PhyError>;
 
-    /// Receive data into the provided buffer with the given tranciever configuration. The returned future
-    /// should only complete when RX data have been received.
+    /// Receive data into the provided buffer with the given tranciever configuration. The returned
+    /// future should only complete when RX data have been received.
     async fn rx(
         &mut self,
         config: RfConfig,

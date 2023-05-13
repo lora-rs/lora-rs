@@ -112,10 +112,7 @@ fn data_payload_with_f_opts() -> Vec<u8> {
 }
 
 fn app_key() -> [u8; 16] {
-    [
-        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee,
-        0xff,
-    ]
+    [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]
 }
 
 #[test]
@@ -147,18 +144,14 @@ fn test_mhdr_major() {
 
 #[test]
 fn test_parse_phy_payload_with_too_few_bytes_is_err() {
-    let bytes = vec![
-        0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04,
-    ];
+    let bytes = vec![0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04];
     let phy = parse(bytes);
     assert!(phy.is_err());
 }
 
 #[test]
 fn test_parse_phy_payload_with_unsupported_major_versoin() {
-    let bytes = vec![
-        0x81, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05,
-    ];
+    let bytes = vec![0x81, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05];
     let phy = parse(bytes);
 
     // this is now part of the API.
@@ -170,9 +163,7 @@ fn test_parse_join_request_payload() {
     let phy = parse(phy_join_request_payload());
     assert_eq!(
         phy,
-        Ok(PhyPayload::JoinRequest(
-            JoinRequestPayload::new(phy_join_request_payload()).unwrap()
-        ))
+        Ok(PhyPayload::JoinRequest(JoinRequestPayload::new(phy_join_request_payload()).unwrap()))
     );
 }
 
@@ -201,24 +192,16 @@ fn test_parse_data_payload() {
 #[test]
 fn test_parse_data_payload_no_panic_when_bad_packet() {
     // This reproduces a panic from https://github.com/ivajloip/rust-lorawan/issues/94.
-    let data = vec![
-        0x40, 0x04, 0x03, 0x02, 0x01, 0x85, 0x01, 0x00, 0xd6, 0xc3, 0xb5, 0x82,
-    ];
+    let data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x85, 0x01, 0x00, 0xd6, 0xc3, 0xb5, 0x82];
     let phy = parse(data);
-    assert_eq!(
-        phy.err(),
-        Some("can not build EncryptedDataPayload from the provided data")
-    );
+    assert_eq!(phy.err(), Some("can not build EncryptedDataPayload from the provided data"));
 }
 
 #[test]
 fn test_parse_data_payload_no_panic_when_too_short_packet() {
     let data = vec![0x40, 0x04, 0x03, 0x02, 0x01];
     let phy = EncryptedDataPayload::new(data);
-    assert_eq!(
-        phy.err(),
-        Some("can not build EncryptedDataPayload from the provided data")
-    );
+    assert_eq!(phy.err(), Some("can not build EncryptedDataPayload from the provided data"));
 }
 
 #[test]
@@ -253,10 +236,7 @@ fn test_new_join_accept_c_f_list_empty() {
 fn test_join_accept_app_nonce_extraction() {
     let decrypted_phy = new_decrypted_join_accept();
     let expected = vec![3, 2, 1];
-    assert_eq!(
-        decrypted_phy.app_nonce(),
-        AppNonce::new(&expected[..]).unwrap()
-    );
+    assert_eq!(decrypted_phy.app_nonce(), AppNonce::new(&expected[..]).unwrap());
 }
 
 #[test]
@@ -322,12 +302,9 @@ fn test_validate_data_mic_when_not_ok() {
 
 #[test]
 fn test_new_data_payload_is_none_if_bytes_too_short() {
-    let bytes = &[
-        0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04,
-    ];
-    let bytes_with_fopts = &[
-        0x00, 0x04, 0x03, 0x02, 0x01, 0x01, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04,
-    ];
+    let bytes = &[0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04];
+    let bytes_with_fopts =
+        &[0x00, 0x04, 0x03, 0x02, 0x01, 0x01, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04];
 
     assert!(EncryptedDataPayload::new(bytes).is_err());
     assert!(EncryptedDataPayload::new(bytes_with_fopts).is_err());
@@ -335,9 +312,7 @@ fn test_new_data_payload_is_none_if_bytes_too_short() {
 
 #[test]
 fn test_f_port_could_be_absent_in_data_payload() {
-    let bytes = &[
-        0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04,
-    ];
+    let bytes = &[0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04];
     let data_payload = EncryptedDataPayload::new(bytes).unwrap();
     assert!(data_payload.f_port().is_none());
 }
@@ -436,9 +411,7 @@ fn test_decrypt_downlink_missing_f_port_bug() {
     .unwrap();
     let key = AES128([1; 16]);
     let fcnt = 0;
-    assert!(encrypted_payload
-        .decrypt(Some(&key), None, fcnt as u32)
-        .is_ok());
+    assert!(encrypted_payload.decrypt(Some(&key), None, fcnt as u32).is_ok());
 }
 
 #[test]
@@ -479,10 +452,7 @@ fn test_data_payload_uplink_creator() {
         .set_fctrl(&fctrl) // ADR: true, all others: false
         .set_fcnt(1);
 
-    assert_eq!(
-        phy.build(b"hello", &[], &nwk_skey, &app_skey).unwrap(),
-        &phy_dataup_payload()[..]
-    );
+    assert_eq!(phy.build(b"hello", &[], &nwk_skey, &app_skey).unwrap(), &phy_dataup_payload()[..]);
 }
 
 #[test]
@@ -499,13 +469,7 @@ fn test_long_data_payload_uplink_creator() {
         .set_fcnt(0);
 
     assert_eq!(
-        phy.build(
-            &long_data_payload().into_bytes()[..],
-            &[],
-            &nwk_skey,
-            &app_skey
-        )
-        .unwrap(),
+        phy.build(&long_data_payload().into_bytes()[..], &[], &nwk_skey, &app_skey).unwrap(),
         &phy_long_dataup_payload()[..]
     );
 }
@@ -565,17 +529,10 @@ fn test_data_payload_creator_when_mac_commands_in_payload() {
     let nwk_skey = AES128([1; 16]);
     let mac_cmd1 = MacCommand::LinkCheckReq(LinkCheckReqPayload());
     let mut mac_cmd2 = LinkADRAnsCreator::new();
-    mac_cmd2
-        .set_channel_mask_ack(true)
-        .set_data_rate_ack(false)
-        .set_tx_power_ack(true);
+    mac_cmd2.set_channel_mask_ack(true).set_data_rate_ack(false).set_tx_power_ack(true);
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
     cmds.extend_from_slice(&[&mac_cmd1, &mac_cmd2]);
-    phy.set_confirmed(false)
-        .set_uplink(true)
-        .set_f_port(0)
-        .set_dev_addr(&[4, 3, 2, 1])
-        .set_fcnt(0);
+    phy.set_confirmed(false).set_uplink(true).set_f_port(0).set_dev_addr(&[4, 3, 2, 1]).set_fcnt(0);
     assert_eq!(
         phy.build(b"", &cmds[..], &nwk_skey, &nwk_skey).unwrap(),
         &data_payload_with_fport_zero()[..]
@@ -588,16 +545,10 @@ fn test_data_payload_creator_when_mac_commands_in_f_opts() {
     let nwk_skey = AES128([1; 16]);
     let mac_cmd1 = MacCommand::LinkCheckReq(LinkCheckReqPayload());
     let mut mac_cmd2 = LinkADRAnsCreator::new();
-    mac_cmd2
-        .set_channel_mask_ack(true)
-        .set_data_rate_ack(false)
-        .set_tx_power_ack(true);
+    mac_cmd2.set_channel_mask_ack(true).set_data_rate_ack(false).set_tx_power_ack(true);
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
     cmds.extend_from_slice(&[&mac_cmd1, &mac_cmd2]);
-    phy.set_confirmed(false)
-        .set_uplink(true)
-        .set_dev_addr(&[4, 3, 2, 1])
-        .set_fcnt(0);
+    phy.set_confirmed(false).set_uplink(true).set_dev_addr(&[4, 3, 2, 1]).set_fcnt(0);
 
     assert_eq!(
         phy.build(b"", &cmds[..], &nwk_skey, &nwk_skey).unwrap(),
@@ -624,10 +575,7 @@ fn test_join_request_app_eui_extraction() {
 fn test_join_request_dev_nonce_extraction() {
     let data = phy_join_request_payload();
     let join_request = JoinRequestPayload::new(&data[..]).unwrap();
-    assert_eq!(
-        join_request.dev_nonce(),
-        DevNonce::new(&data[17..19]).unwrap()
-    );
+    assert_eq!(join_request.dev_nonce(), DevNonce::new(&data[17..19]).unwrap());
 }
 
 #[test]

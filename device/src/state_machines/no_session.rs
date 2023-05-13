@@ -36,12 +36,7 @@ macro_rules! into_state {
     )*};
 }
 
-into_state![
-    Idle,
-    SendingJoin,
-    WaitingForRxWindow,
-    WaitingForJoinResponse
-];
+into_state![Idle, SendingJoin, WaitingForRxWindow, WaitingForJoinResponse];
 
 impl From<NoSession> for SuperState {
     fn from(no_session: NoSession) -> SuperState {
@@ -114,10 +109,7 @@ impl Idle {
         self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (
-        SuperState,
-        Result<Response, super::super::Error<R::PhyError>>,
-    ) {
+    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
         match event {
             // NewSession Request or a Timeout from previously failed Join attempt
             Event::NewSessionRequest | Event::TimeoutFired => {
@@ -164,10 +156,7 @@ impl Idle {
                         Err(e) => (self.into(), Err(e.into())),
                     }
                 } else {
-                    (
-                        self.into(),
-                        Err(Error::DeviceDoesNotHaveOtaaCredentials.into()),
-                    )
+                    (self.into(), Err(Error::DeviceDoesNotHaveOtaaCredentials.into()))
                 }
             }
             Event::RadioEvent(_radio_event) => {
@@ -178,10 +167,7 @@ impl Idle {
     }
 
     fn into_sending_join(self, devnonce: DevNonce) -> SendingJoin {
-        SendingJoin {
-            join_attempts: self.join_attempts + 1,
-            devnonce,
-        }
+        SendingJoin { join_attempts: self.join_attempts + 1, devnonce }
     }
 
     fn into_waiting_for_rxwindow(self, devnonce: DevNonce, time: u32) -> WaitingForRxWindow {
@@ -208,10 +194,7 @@ impl SendingJoin {
         self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (
-        SuperState,
-        Result<Response, super::super::Error<R::PhyError>>,
-    ) {
+    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -241,10 +224,9 @@ impl SendingJoin {
                 }
             }
             // anything other than a RadioEvent is unexpected
-            Event::NewSessionRequest => (
-                self.into(),
-                Err(Error::NewSessionWhileWaitingForJoinResponse.into()),
-            ),
+            Event::NewSessionRequest => {
+                (self.into(), Err(Error::NewSessionWhileWaitingForJoinResponse.into()))
+            }
             Event::TimeoutFired => panic!("TODO: implement timeouts"),
             Event::SendDataRequest(_) => (self.into(), Err(Error::SendDataWhileNoSession.into())),
         }
@@ -275,10 +257,7 @@ impl WaitingForRxWindow {
         self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (
-        SuperState,
-        Result<Response, super::super::Error<R::PhyError>>,
-    ) {
+    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
@@ -286,14 +265,9 @@ impl WaitingForRxWindow {
                     JoinRxWindow::_1(_) => Window::_1,
                     JoinRxWindow::_2(_) => Window::_2,
                 };
-                let rx_config = shared
-                    .region
-                    .get_rx_config(shared.datarate, &Frame::Join, &window);
+                let rx_config = shared.region.get_rx_config(shared.datarate, &Frame::Join, &window);
                 // configure the radio for the RX
-                match shared
-                    .radio
-                    .handle_event(radio::Event::RxRequest(rx_config))
-                {
+                match shared.radio.handle_event(radio::Event::RxRequest(rx_config)) {
                     Ok(_) => {
                         let window_close: u32 = match self.join_rx_window {
                             // RxWindow1 one must timeout before RxWindow2
@@ -320,14 +294,12 @@ impl WaitingForRxWindow {
                     Err(e) => (self.into(), Err(e.into())),
                 }
             }
-            Event::RadioEvent(_) => (
-                self.into(),
-                Err(Error::RadioEventWhileWaitingForJoinWindow.into()),
-            ),
-            Event::NewSessionRequest => (
-                self.into(),
-                Err(Error::NewSessionWhileWaitingForJoinWindow.into()),
-            ),
+            Event::RadioEvent(_) => {
+                (self.into(), Err(Error::RadioEventWhileWaitingForJoinWindow.into()))
+            }
+            Event::NewSessionRequest => {
+                (self.into(), Err(Error::NewSessionWhileWaitingForJoinWindow.into()))
+            }
             Event::SendDataRequest(_) => (self.into(), Err(Error::SendDataWhileNoSession.into())),
         }
     }
@@ -359,10 +331,7 @@ impl WaitingForJoinResponse {
         self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (
-        SuperState,
-        Result<Response, super::super::Error<R::PhyError>>,
-    ) {
+    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -395,7 +364,7 @@ impl WaitingForJoinResponse {
                                         return (
                                             self.into(),
                                             Err(Error::DeviceDoesNotHaveOtaaCredentials.into()),
-                                        )
+                                        );
                                     }
                                 }
                             }
@@ -431,18 +400,14 @@ impl WaitingForJoinResponse {
                     }
                     // Timeout during second RxWindow leads to giving up
                     JoinRxWindow::_2(_) => (
-                        Idle {
-                            join_attempts: self.join_attempts,
-                        }
-                        .into(),
+                        Idle { join_attempts: self.join_attempts }.into(),
                         Ok(Response::NoJoinAccept),
                     ),
                 }
             }
-            Event::NewSessionRequest => (
-                self.into(),
-                Err(Error::NewSessionWhileWaitingForJoinResponse.into()),
-            ),
+            Event::NewSessionRequest => {
+                (self.into(), Err(Error::NewSessionWhileWaitingForJoinResponse.into()))
+            }
             Event::SendDataRequest(_) => (self.into(), Err(Error::SendDataWhileNoSession.into())),
         }
     }
@@ -450,9 +415,7 @@ impl WaitingForJoinResponse {
 
 impl From<WaitingForJoinResponse> for Idle {
     fn from(val: WaitingForJoinResponse) -> Idle {
-        Idle {
-            join_attempts: val.join_attempts,
-        }
+        Idle { join_attempts: val.join_attempts }
     }
 }
 
@@ -484,13 +447,7 @@ impl SessionData {
     }
 
     pub fn new(newskey: AES128, appskey: AES128, devaddr: DevAddr<[u8; 4]>) -> SessionData {
-        SessionData {
-            newskey,
-            appskey,
-            devaddr,
-            fcnt_up: 0,
-            fcnt_down: 0,
-        }
+        SessionData { newskey, appskey, devaddr, fcnt_up: 0, fcnt_down: 0 }
     }
 
     pub fn newskey(&self) -> &AES128 {

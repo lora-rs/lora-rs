@@ -69,10 +69,7 @@ pub(crate) struct RadioBuffer<const N: usize> {
 
 impl<const N: usize> RadioBuffer<N> {
     pub(crate) fn new() -> Self {
-        Self {
-            packet: [0; N],
-            pos: 0,
-        }
+        Self { packet: [0; N], pos: 0 }
     }
 
     pub(crate) fn clear(&mut self) {

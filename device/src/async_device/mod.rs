@@ -45,12 +45,14 @@ impl OptionalRng for NoneT {}
 impl<T: RngCore> Sealed for T {}
 impl<T: RngCore> OptionalRng for T {}
 
-/// Representation of the physical radio + RNG. Two variants may be constructed through [`Device`]. Either:
+/// Representation of the physical radio + RNG. Two variants may be constructed through [`Device`].
+/// Either:
 /// * `R` implements [`RngCore`], or
 /// * `G` implements [`RngCore`].
 ///
-/// This allows for seamless functionality with either RNG variant and is an implementation detail. Users are not
-/// expected to construct [`Phy`] directly. Use the constructors for [`Device`] instead.
+/// This allows for seamless functionality with either RNG variant and is an implementation detail.
+/// Users are not expected to construct [`Phy`] directly. Use the constructors for [`Device`]
+/// instead.
 pub struct Phy<R, G: OptionalRng> {
     radio: R,
     rng: G,
@@ -80,7 +82,8 @@ where
 /// - R: An asynchronous radio implementation
 /// - T: An asynchronous timer implementation
 /// - C: A CryptoFactory implementation
-/// - RNG: A random number generator implementation. This is optional depending on whether you construct [`Device`]
+/// - RNG: A random number generator implementation. This is optional depending on whether you
+///   construct [`Device`]
 /// with the `new` or `new_with_builtin_rng` methods.
 pub struct Device<R, C, T, G, const N: usize = 256>
 where
@@ -195,11 +198,7 @@ where
     /// Repeatedly calling join using OTAA will result in a new LoRaWAN session to be created.
     pub async fn join(&mut self, join_mode: &JoinMode) -> Result<(), Error<R::PhyError>> {
         match join_mode {
-            JoinMode::OTAA {
-                deveui,
-                appeui,
-                appkey,
-            } => {
+            JoinMode::OTAA { deveui, appeui, appkey } => {
                 let credentials = Credentials::new(*appeui, *deveui, *appkey);
 
                 // Prepare the buffer with the join payload
@@ -240,13 +239,8 @@ where
                     _ => Err(Error::UnableToDecodePayload("")),
                 }
             }
-            JoinMode::ABP {
-                newskey,
-                appskey,
-                devaddr,
-            } => {
-                self.session
-                    .replace(SessionData::new(*newskey, *appskey, *devaddr));
+            JoinMode::ABP { newskey, appskey, devaddr } => {
+                self.session.replace(SessionData::new(*newskey, *appskey, *devaddr));
                 Ok(())
             }
         }
@@ -260,16 +254,15 @@ where
         fport: u8,
         confirmed: bool,
     ) -> Result<(), Error<R::PhyError>> {
-        self.send_recv_internal(data, fport, confirmed, None)
-            .await?;
+        self.send_recv_internal(data, fport, confirmed, None).await?;
         Ok(())
     }
 
-    /// Send data on a given port with the expected confirmation. If downlink data is provided, the data is
-    /// copied into the provided byte slice.
+    /// Send data on a given port with the expected confirmation. If downlink data is provided, the
+    /// data is copied into the provided byte slice.
     ///
-    /// The returned future completes when the data have been sent successfully and downlink data have been
-    /// copied into the provided buffer, or an error has occured.
+    /// The returned future completes when the data have been sent successfully and downlink data
+    /// have been copied into the provided buffer, or an error has occured.
     pub async fn send_recv(
         &mut self,
         data: &[u8],
@@ -277,8 +270,7 @@ where
         fport: u8,
         confirmed: bool,
     ) -> Result<usize, Error<R::PhyError>> {
-        self.send_recv_internal(data, fport, confirmed, Some(rx))
-            .await
+        self.send_recv_internal(data, fport, confirmed, Some(rx)).await
     }
 
     /// Send data and fill rx buffer if provided
@@ -298,23 +290,16 @@ where
 
         // Send data
         let tx_config =
-            self.region
-                .create_tx_config(self.phy.get_rng(), self.datarate, &Frame::Data);
+            self.region.create_tx_config(self.phy.get_rng(), self.datarate, &Frame::Data);
 
-        // Unless the same frame is to be retransmitted (see NbTrans parameter of LinkADRReq command, LoRaWAN spec
-        // 1.0.2 section 5.2 for retransmissions), FCnt must be incremented on each transmission.
-        self.session
-            .as_mut()
-            .ok_or(Error::NetworkNotJoined)?
-            .fcnt_up_increment();
+        // Unless the same frame is to be retransmitted (see NbTrans parameter of LinkADRReq
+        // command, LoRaWAN spec 1.0.2 section 5.2 for retransmissions), FCnt must be
+        // incremented on each transmission.
+        self.session.as_mut().ok_or(Error::NetworkNotJoined)?.fcnt_up_increment();
 
         // Transmit our data packet
-        let ms = self
-            .phy
-            .radio
-            .tx(tx_config, self.radio_buffer.as_ref())
-            .await
-            .map_err(Error::Radio)?;
+        let ms =
+            self.phy.radio.tx(tx_config, self.radio_buffer.as_ref()).await.map_err(Error::Radio)?;
 
         // Wait for received data within window
         self.timer.reset();
@@ -491,10 +476,7 @@ where
             let window_duration = min(rx1_end_delay, rx2_start_delay);
 
             // Pass the full radio buffer slice to RX
-            let rx_fut = self
-                .phy
-                .radio
-                .rx(rx_config, self.radio_buffer.as_raw_slice());
+            let rx_fut = self.phy.radio.rx(rx_config, self.radio_buffer.as_raw_slice());
             let timeout_fut = self.timer.at(window_duration.into());
 
             pin_mut!(rx_fut);
@@ -524,10 +506,7 @@ where
             let window_duration = self.phy.radio.get_rx_window_duration_ms();
 
             // Pass the full radio buffer slice to RX
-            let rx_fut = self
-                .phy
-                .radio
-                .rx(rx_config, self.radio_buffer.as_raw_slice());
+            let rx_fut = self.phy.radio.rx(rx_config, self.radio_buffer.as_raw_slice());
             let timeout_fut = self.timer.delay_ms(window_duration.into());
 
             pin_mut!(rx_fut);
@@ -574,13 +553,7 @@ impl SessionData {
     }
 
     pub fn new(newskey: AES128, appskey: AES128, devaddr: DevAddr<[u8; 4]>) -> SessionData {
-        SessionData {
-            newskey,
-            appskey,
-            devaddr,
-            fcnt_up: 0,
-            fcnt_down: 0,
-        }
+        SessionData { newskey, appskey, devaddr, fcnt_up: 0, fcnt_down: 0 }
     }
 
     pub fn newskey(&self) -> &AES128 {
