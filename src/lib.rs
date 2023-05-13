@@ -340,13 +340,13 @@ where
             }
         }
     }
+}
 
-    #[cfg(feature = "rng")]
-    /// If supported, generate a 32 bit random value.
-    ///
-    /// Warning: prepare_for_xxx() MUST be called after this operation to set modulation and packet parameters (for example: xxx = tx, rx, cad).
-    /// Do not set modulation and packet parameters, do a random number generation, then initiate Tx, Rx, or CAD.
-    pub async fn get_random_number(&mut self) -> Result<u32, RadioError> {
+impl<RK> AsyncRng for LoRa<RK>
+where
+    RK: RngRadio + 'static,
+{
+    async fn get_random_number(&mut self) -> Result<u32, RadioError> {
         self.rx_continuous = false;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         if self.radio_mode != RadioMode::Standby {
