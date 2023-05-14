@@ -273,6 +273,54 @@ pub enum GetRandomError {
     RngError,
 }
 
+/// Wrapper type around an `u32`, ensuring a random number obtained with [`GetRandom::get_random`] can't be reused
+/// twice. Only the necessary math operations are implemented, but additional operations can be implemented if needed.
+#[repr(transparent)]
+pub struct RandomU32(u32);
+
+impl RandomU32 {
+    pub(crate) fn new(num: u32) -> Self {
+        Self(num)
+    }
+
+    /// Truncate the underlying `u32` to obtain a `u16`.
+    pub(crate) fn into_u16_truncate(self) -> u16 {
+        self.0 as u16
+    }
+}
+
+impl core::ops::BitAnd<usize> for RandomU32 {
+    type Output = usize;
+
+    fn bitand(self, rhs: usize) -> Self::Output {
+        self.0 as usize & rhs
+    }
+}
+
+impl core::ops::BitAnd<u32> for RandomU32 {
+    type Output = u32;
+
+    fn bitand(self, rhs: u32) -> Self::Output {
+        self.0 & rhs
+    }
+}
+
+impl core::ops::Rem<usize> for RandomU32 {
+    type Output = usize;
+
+    fn rem(self, rhs: usize) -> Self::Output {
+        self.0 as usize % rhs
+    }
+}
+
+impl core::ops::Rem<u32> for RandomU32 {
+    type Output = u32;
+
+    fn rem(self, rhs: u32) -> Self::Output {
+        self.0 % rhs
+    }
+}
+
 /// Extract random numbers from the provided RNG. Some RNGs, such as the ones onboard SX126x chips, operate better in
 /// an `async` paradigm. [`GetRandom`] provides provisions for both sync and async operation.
 ///
@@ -285,15 +333,15 @@ pub enum GetRandomError {
 ///
 /// This trait is an implementation detail and should not be implemented outside this crate.
 pub trait GetRandom: private::Sealed {
-    fn get_random(&mut self) -> Result<u32, GetRandomError>;
+    fn get_random(&mut self) -> Result<RandomU32, GetRandomError>;
 
-    /// Fill the random number buffer up to the number of specified random numbers. When the `async-rng` feature is
+    /// Fill the random number buffer with random numbers. When the `async-rng` feature is
     /// enabled, this method is async. Otherwise it is declared as a regular, sync method.
     #[cfg(feature = "async-rng")]
-    async fn fill_up_to(&mut self, num_random_numbers: usize) -> Result<(), GetRandomError>;
+    async fn fill(&mut self) -> Result<(), GetRandomError>;
 
     #[cfg(not(feature = "async-rng"))]
-    fn fill_up_to(&mut self, num_random_numbers: usize) -> Result<(), GetRandomError>;
+    fn fill(&mut self) -> Result<(), GetRandomError>;
 }
 
 #[cfg(not(feature = "async-rng"))]
@@ -302,12 +350,12 @@ impl<T: RngCore> private::Sealed for T {}
 #[cfg(not(feature = "async-rng"))]
 impl<T: RngCore> GetRandom for T {
     /// Get a random number based on [`RngCore`]'s own implementation
-    fn get_random(&mut self) -> Result<u32, GetRandomError> {
-        Ok(self.next_u32())
+    fn get_random(&mut self) -> Result<RandomU32, GetRandomError> {
+        Ok(RandomU32::new(self.next_u32()))
     }
 
     // No-op, as we assume `RngCore` implementations always have a fresh  random number immediately available.
-    fn fill_up_to(&mut self, _num_random_numbers: usize) -> Result<(), GetRandomError> {
+    fn fill(&mut self) -> Result<(), GetRandomError> {
         Ok(())
     }
 }

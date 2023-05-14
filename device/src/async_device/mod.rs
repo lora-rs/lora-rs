@@ -200,13 +200,13 @@ where
             } => {
                 let credentials = Credentials::new(*appeui, *deveui, *appkey);
 
-                // TODO figure out what is a sensible number here
+                // TODO git rid of unwraps
                 let fix_unwrap_on_next_lines = ();
                 #[cfg(feature = "async-rng")]
-                self.phy.get_rng().fill_up_to(100).await.unwrap();
+                self.phy.get_rng().fill().await.unwrap();
 
                 #[cfg(not(feature = "async-rng"))]
-                self.phy.get_rng().fill_up_to(100).unwrap();
+                self.phy.get_rng().fill().unwrap();
 
                 // Prepare the buffer with the join payload
                 let (devnonce, tx_config) = credentials
@@ -306,10 +306,10 @@ where
         let fix_unwrap_on_next_lines = ();
 
         #[cfg(feature = "async-rng")]
-        self.phy.get_rng().fill_up_to(100).await.unwrap();
+        self.phy.get_rng().fill().await.unwrap();
 
         #[cfg(not(feature = "async-rng"))]
-        self.phy.get_rng().fill_up_to(100).unwrap();
+        self.phy.get_rng().fill().unwrap();
 
         // Send data
         let tx_config = self

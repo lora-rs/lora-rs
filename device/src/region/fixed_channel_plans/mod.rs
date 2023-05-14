@@ -98,17 +98,20 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         }
     }
 
+    /// Needs a RNG buffer holding at least 1 random number.
     fn get_tx_dr_and_frequency<RNG: GetRandom>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
     ) -> Result<(Datarate, u32), GetRandomError> {
+        let random_number = rng.get_random()?;
+
         match frame {
             Frame::Join => {
                 // Right now, we only select one of the random 64 channels that are 125 kHz
                 // TODO: randomly select from all 72 channels including the 500 kHz channels
-                let channel = (rng.get_random()? & 0b111111) as u8;
+                let channel = (random_number & 0b111111_u32) as u8;
                 self.last_tx_channel = channel;
                 // For the join frame, the randomly selected channel dictates the datarate
                 // When TODO above is implemented, this does not require changes
@@ -123,23 +126,24 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
                 // If the datarate bandwidth is 500 kHz, we must use channels 64-71
                 // else, we must use 0-63
                 let datarate = F::datarates()[datarate as usize].clone().unwrap();
-                if datarate.bandwidth == Bandwidth::_500KHz {
-                    let mut channel = (rng.get_random()? & 0b111) as u8;
-                    // keep selecting a random channel until we find one that is enabled
-                    while !self.channel_mask.is_enabled(channel.into()).unwrap() {
-                        channel = (rng.get_random()? & 0b111) as u8;
-                    }
-                    self.last_tx_channel = channel;
-                    Ok((datarate, F::uplink_channels()[(64 + channel) as usize]))
+                let enabled_channels = self.channel_mask.as_vec();
+                let mut channel_list = heapless::Vec::<u8, 64>::new();
+
+                let channel_filter = if datarate.bandwidth == Bandwidth::_500KHz {
+                    |c: &&u8| **c >= 64 && **c < 72
                 } else {
-                    let mut channel = (rng.get_random()? & 0b111111) as u8;
-                    // keep selecting a random channel until we find one that is enabled
-                    while !self.channel_mask.is_enabled(channel.into()).unwrap() {
-                        channel = (rng.get_random()? & 0b111111) as u8;
-                    }
-                    self.last_tx_channel = channel;
-                    Ok((datarate, F::uplink_channels()[channel as usize]))
+                    |c: &&u8| **c < 64
+                };
+
+                for channel in enabled_channels.iter().filter(channel_filter) {
+                    channel_list.push(*channel).unwrap();
                 }
+
+                let list_length = channel_list.len();
+                let channel = channel_list[random_number % list_length];
+
+                self.last_tx_channel = channel;
+                Ok((datarate, F::uplink_channels()[channel as usize]))
             }
         }
     }

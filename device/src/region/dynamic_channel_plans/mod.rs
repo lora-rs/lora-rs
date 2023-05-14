@@ -23,6 +23,7 @@ pub(crate) struct DynamicChannelPlan<
     const NUM_DATARATES: usize,
     R: DynamicChannelRegion<NUM_JOIN_CHANNELS, NUM_DATARATES>,
 > {
+    // TODO: change this to a heapless::Vec?
     additional_channels: [Option<u32>; 5],
     channel_mask: ChannelMask<9>,
     last_tx_channel: u8,
@@ -45,26 +46,17 @@ impl<
         }
     }
 
-    fn highest_additional_channel_index_plus_one(&self) -> usize {
-        let mut index_plus_one = 0;
-        for (i, channel) in self.additional_channels.iter().enumerate() {
-            if channel.is_some() {
-                index_plus_one = i + 1;
-            }
-        }
-        index_plus_one
+    /// Number of enabled additional channels
+    fn num_additional_channels(&self) -> usize {
+        self.additional_channels
+            .iter()
+            .filter(|c| c.is_some())
+            .count()
     }
 
     fn get_random_in_range<RNG: GetRandom>(&self, rng: &mut RNG) -> Result<usize, GetRandomError> {
-        let range = self.highest_additional_channel_index_plus_one() + NUM_JOIN_CHANNELS;
-        let cm = if range > 16 {
-            0b11111
-        } else if range > 8 {
-            0b1111
-        } else {
-            0b111
-        };
-        Ok((rng.get_random()? as usize) & cm)
+        let range = self.num_additional_channels() + NUM_JOIN_CHANNELS;
+        Ok(rng.get_random()? % range)
     }
 }
 
@@ -153,38 +145,37 @@ impl<
         }
     }
 
+    /// Needs a RNG buffer holding at least 1 random number.
     fn get_tx_dr_and_frequency<RNG: GetRandom>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
     ) -> Result<(Datarate, u32), GetRandomError> {
+        let random_number = rng.get_random()?;
+
         match frame {
             Frame::Join => {
-                // there are at most 8 join channels
-                let mut channel = (rng.get_random()? & 0b111) as u8;
-                // keep sampling until we select a join channel depending
-                // on the frequency plan
-                while channel as usize >= NUM_JOIN_CHANNELS {
-                    channel = (rng.get_random()? & 0b111) as u8;
-                }
-                self.last_tx_channel = channel;
+                // Select a join channel depending on the frequency plan. There are at most 8 join channels.
+                let channel = random_number % core::cmp::min(NUM_JOIN_CHANNELS, 8);
+
+                self.last_tx_channel = channel as u8;
                 Ok((
                     R::datarates()[datarate as usize].clone().unwrap(),
-                    R::join_channels()[channel as usize],
+                    R::join_channels()[channel],
                 ))
             }
+
+            // TODO verify that the logic is sound here...
             Frame::Data => {
-                let mut channel = self.get_random_in_range(rng)?;
-                loop {
-                    if self.channel_mask.is_enabled(channel).unwrap() {
-                        if let Some(freq) = self.get_channel(channel) {
-                            self.last_tx_channel = channel as u8;
-                            return Ok((R::datarates()[datarate as usize].clone().unwrap(), freq));
-                        }
-                    }
-                    channel = self.get_random_in_range(rng)?
-                }
+                let enabled_channels = self.channel_mask.as_vec();
+                let channel_index = self.get_random_in_range(rng)?;
+                let channel = enabled_channels[channel_index];
+                // TODO don't think unwrap is OK here
+                let freq = self.get_channel(channel as usize).unwrap();
+
+                self.last_tx_channel = channel;
+                Ok((R::datarates()[datarate as usize].clone().unwrap(), freq))
             }
         }
     }

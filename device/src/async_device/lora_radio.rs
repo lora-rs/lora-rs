@@ -50,8 +50,10 @@ impl From<CodingRate> for lora_phy::mod_params::CodingRate {
 /// LoRa radio using the physical layer API in the external lora-phy crate
 pub struct LoRaRadio<RK> {
     pub(crate) lora: LoRa<RK>,
+    // Technically we only need 2 random bytes as that's the most we need in a single
+    // operation, but keep 8 for good measure and future-proofing.
     #[cfg(feature = "async-rng")]
-    pub(crate) random_buffer: heapless::Vec<u32, 128>,
+    pub(crate) random_buffer: heapless::Vec<u32, 8>,
 }
 
 impl<RK> LoRaRadio<RK>
@@ -181,13 +183,17 @@ impl<RK> GetRandom for LoRaRadio<RK>
 where
     LoRa<RK>: lora_phy::mod_traits::AsyncRng,
 {
-    fn get_random(&mut self) -> Result<u32, crate::GetRandomError> {
-        self.random_buffer.pop().ok_or(GetRandomError::BufferEmpty)
+    fn get_random(&mut self) -> Result<crate::RandomU32, crate::GetRandomError> {
+        crate::RandomU32::new(
+            self.random_buffer
+                .pop()
+                .ok_or(GetRandomError::BufferEmpty)?,
+        )
     }
 
-    async fn fill_up_to(&mut self, num_random_numbers: usize) -> Result<(), GetRandomError> {
+    async fn fill(&mut self) -> Result<(), GetRandomError> {
         let current_len = self.random_buffer.len();
-        let to_add = num_random_numbers.saturating_sub(current_len);
+        let to_add = self.random_buffer.capacity().saturating_sub(current_len);
         for _ in 0..to_add {
             let rand = self
                 .lora

@@ -215,7 +215,8 @@ impl Idle {
             Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
                 let fcnt = self.prepare_buffer::<R, C, RNG, N>(&send_data, shared);
-                shared.rng.fill_up_to(100);
+                // Unwrapping is OK because filling the RNG buffer should be a no-op
+                shared.rng.fill().unwrap();
                 let event: radio::Event<R> = radio::Event::TxRequest(
                     shared
                         .region

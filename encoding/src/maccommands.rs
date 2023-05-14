@@ -562,6 +562,19 @@ impl<const N: usize> ChannelMask<N> {
         }
         res
     }
+
+    /// Return a [`heapless::Vec`] containing an ordered list of all enabled channels.
+    /// TODO we should have a way to prove that all frequency plans are bounded to 72 channels.
+    pub fn as_vec(&mut self) -> heapless::Vec<u8, 72> {
+        let mut channel_vec = heapless::Vec::new();
+        for i in 0..N * 8 {
+            if self.channel_enabled(i) {
+                channel_vec.push(i as u8).unwrap();
+            }
+        }
+
+        channel_vec
+    }
 }
 
 impl<const N: usize> From<[u8; N]> for ChannelMask<N> {
