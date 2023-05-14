@@ -928,6 +928,10 @@ where
     /// The random numbers produced by the generator do not have a uniform or Gaussian distribution.
     /// If uniformity is needed, perform appropriate software post-processing.
     async fn get_random_number(&mut self) -> Result<u32, RadioError> {
+        // The stm32wl often returns 0 on the first random number generation operation.  Documentation for the stm32wl does not recommend LNA register modification.
+        if self.board_type == BoardType::Stm32wlSx1262 {
+            return Err(RadioError::RngUnsupported);
+        }
         self.set_irq_params(None).await?;
 
         let mut reg_ana_lna_buffer_original = [0x00u8];
