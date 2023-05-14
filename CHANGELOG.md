@@ -7,7 +7,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## [Unreleased]
 
-## [v1.0.2] - 2023-mm-dd
+## [v1.1.0] - 2023-05-14
+
+### Added
+- Random number generation for LoRa boards which support it.
+
+## [v1.0.2] - 2023-04-26
 
 ### Added
 - .vscode settings.
@@ -15,7 +20,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 ### Changed
 - README to reflect merges into the base rust-lorawan and embassy repositories.
 - formatting.
-
 
 ## [v1.0.1] - 2023-04-21
 
@@ -28,7 +32,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - first release to crates.io.
 
 
-[Unreleased]: https://github.com/embassy-rs/lora-phy/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/embassy-rs/lora-phy/compare/v1.1.0...HEAD
+[v1.1.0]: https://github.com/embassy-rs/lora-phy/compare/v1.0.2...v1.1.0
 [v1.0.2]: https://github.com/embassy-rs/lora-phy/compare/v1.0.1...v1.0.2
 [v1.0.1]: https://github.com/embassy-rs/lora-phy/compare/v1.0.0...v1.0.1
 [v1.0.0]: https://github.com/embassy-rs/lora-phy/tree/v1.0.0
