@@ -293,15 +293,23 @@ where
     }
 
     async fn set_oscillator(&mut self) -> Result<(), RadioError> {
-        let voltage = if self.board_type != BoardType::HeltecWifiLoraV31262 {
-            TcxoCtrlVoltage::Ctrl1V7.value() & 0x07 // voltage used to control the TCXO on/off from DIO3
-        } else {
-            TcxoCtrlVoltage::Ctrl1V8.value() & 0x07
+        // voltage used to control the TCXO on/off from DIO3
+        let voltage = match self.board_type {
+            BoardType::GenericSx1261
+            | BoardType::RpPicoWaveshareSx1262
+            | BoardType::Rak4631Sx1262
+            | BoardType::Stm32l0Sx1276
+            | BoardType::Stm32wlSx1262 => TcxoCtrlVoltage::Ctrl1V7,
+            BoardType::HeltecWifiLoraV31262 => TcxoCtrlVoltage::Ctrl1V8,
+            BoardType::Rak3172Sx1262 => {
+                // uses XTAL instead of TXCO
+                return Ok(());
+            }
         };
         let timeout = BRD_TCXO_WAKEUP_TIME << 6; // duration allowed for TCXO to reach 32MHz
         let op_code_and_tcxo_control = [
             OpCode::SetTCXOMode.value(),
-            voltage,
+            voltage.value() & 0x07,
             Self::timeout_1(timeout),
             Self::timeout_2(timeout),
             Self::timeout_3(timeout),

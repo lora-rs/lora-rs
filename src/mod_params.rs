@@ -57,6 +57,7 @@ pub enum BoardType {
     HeltecWifiLoraV31262,
     RpPicoWaveshareSx1262,
     Rak4631Sx1262,
+    Rak3172Sx1262,
     Stm32l0Sx1276,
     Stm32wlSx1262,
 }
@@ -80,6 +81,7 @@ impl From<BoardType> for ChipType {
             BoardType::HeltecWifiLoraV31262 => ChipType::Sx1262,
             BoardType::RpPicoWaveshareSx1262 => ChipType::Sx1262,
             BoardType::Rak4631Sx1262 => ChipType::Sx1262,
+            BoardType::Rak3172Sx1262 => ChipType::Sx1262,
             BoardType::Stm32l0Sx1276 => ChipType::Sx1276,
             BoardType::Stm32wlSx1262 => ChipType::Sx1262,
         }
