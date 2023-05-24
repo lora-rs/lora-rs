@@ -30,7 +30,7 @@ pub struct LoRa<RK> {
 
 impl<RK> LoRa<RK>
 where
-    RK: RadioKind + 'static,
+    RK: RadioKind,
 {
     /// Build and return a new instance of the LoRa physical layer API to control an initialized LoRa radio
     pub async fn new(
@@ -344,7 +344,7 @@ where
 
 impl<RK> AsyncRng for LoRa<RK>
 where
-    RK: RngRadio + 'static,
+    RK: RngRadio,
 {
     async fn get_random_number(&mut self) -> Result<u32, RadioError> {
         self.rx_continuous = false;
