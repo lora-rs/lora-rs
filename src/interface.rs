@@ -12,8 +12,8 @@ pub(crate) struct SpiInterface<SPI, IV> {
 
 impl<SPI, IV> SpiInterface<SPI, IV>
 where
-    SPI: SpiBus<u8> + 'static,
-    IV: InterfaceVariant + 'static,
+    SPI: SpiBus<u8>,
+    IV: InterfaceVariant,
 {
     pub fn new(spi: SPI, iv: IV) -> Self {
         Self { spi, iv }

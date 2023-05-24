@@ -85,8 +85,8 @@ pub struct SX1276_7_8_9<SPI, IV> {
 
 impl<SPI, IV> SX1276_7_8_9<SPI, IV>
 where
-    SPI: SpiBus<u8> + 'static,
-    IV: InterfaceVariant + 'static,
+    SPI: SpiBus<u8>,
+    IV: InterfaceVariant,
 {
     /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
     pub fn new(board_type: BoardType, spi: SPI, mut iv: IV) -> Self {
@@ -127,8 +127,8 @@ where
 
 impl<SPI, IV> RadioKind for SX1276_7_8_9<SPI, IV>
 where
-    SPI: SpiBus<u8> + 'static,
-    IV: InterfaceVariant + 'static,
+    SPI: SpiBus<u8>,
+    IV: InterfaceVariant,
 {
     fn get_board_type(&self) -> BoardType {
         self.board_type
