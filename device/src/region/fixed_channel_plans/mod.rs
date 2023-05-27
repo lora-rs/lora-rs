@@ -1,6 +1,5 @@
-use crate::GetRandomError;
-
 use super::*;
+use crate::RngBufferEmpty;
 use core::marker::PhantomData;
 use lorawan::maccommands::ChannelMask;
 
@@ -104,7 +103,7 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> Result<(Datarate, u32), GetRandomError> {
+    ) -> Result<(Datarate, u32), RngBufferEmpty> {
         let random_number = rng.get_random()?;
 
         match frame {

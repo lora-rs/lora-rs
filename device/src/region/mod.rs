@@ -6,7 +6,7 @@ pub mod constants;
 use crate::mac;
 pub(crate) use crate::radio::*;
 use crate::GetRandom;
-use crate::GetRandomError;
+use crate::RngBufferEmpty;
 use constants::*;
 
 pub(crate) use dynamic_channel_plans::AS923_1;
@@ -206,7 +206,7 @@ impl Configuration {
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> Result<TxConfig, GetRandomError> {
+    ) -> Result<TxConfig, RngBufferEmpty> {
         let (dr, frequency) = self.get_tx_dr_and_frequency(rng, datarate, frame)?;
         Ok(TxConfig {
             pw: self.get_dbm(),
@@ -224,7 +224,7 @@ impl Configuration {
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> Result<(Datarate, u32), GetRandomError> {
+    ) -> Result<(Datarate, u32), RngBufferEmpty> {
         mut_region_dispatch!(self, get_tx_dr_and_frequency, rng, datarate, frame)
     }
 
@@ -336,7 +336,7 @@ pub(crate) trait RegionHandler {
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> Result<(Datarate, u32), GetRandomError>;
+    ) -> Result<(Datarate, u32), RngBufferEmpty>;
 
     fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32;
     fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate;

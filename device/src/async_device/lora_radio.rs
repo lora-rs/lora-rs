@@ -1,4 +1,4 @@
-use crate::{GetRandom, GetRandomError};
+use crate::GetRandom;
 
 use super::radio::{
     Bandwidth, CodingRate, PhyRxTx, RfConfig, RxQuality, SpreadingFactor, TxConfig,
@@ -67,10 +67,10 @@ where
         #[cfg(feature = "async-rng")]
         {
             let random_buffer = heapless::Vec::new();
-            return Self {
+            Self {
                 lora,
                 random_buffer,
-            };
+            }
         }
     }
 }
@@ -179,19 +179,22 @@ where
 impl<RK> crate::private::Sealed for LoRaRadio<RK> where LoRa<RK>: lora_phy::mod_traits::AsyncRng {}
 
 #[cfg(feature = "async-rng")]
-impl<RK> GetRandom for LoRaRadio<RK>
+impl<RK, E> GetRandom for LoRaRadio<RK>
 where
+    LoRaRadio<RK>: PhyRxTx<PhyError = E>,
     LoRa<RK>: lora_phy::mod_traits::AsyncRng,
+    E: core::fmt::Debug,
 {
-    fn get_random(&mut self) -> Result<crate::RandomU32, crate::GetRandomError> {
-        crate::RandomU32::new(
-            self.random_buffer
-                .pop()
-                .ok_or(GetRandomError::BufferEmpty)?,
-        )
+    type Error = super::Error<E>;
+
+    fn get_random(&mut self) -> Result<crate::RandomU32, crate::RngBufferEmpty> {
+        self.random_buffer
+            .pop()
+            .map(crate::RandomU32::new)
+            .ok_or(crate::RngBufferEmpty)
     }
 
-    async fn fill(&mut self) -> Result<(), GetRandomError> {
+    async fn fill(&mut self) -> Result<(), Self::Error> {
         let current_len = self.random_buffer.len();
         let to_add = self.random_buffer.capacity().saturating_sub(current_len);
         for _ in 0..to_add {
@@ -199,10 +202,10 @@ where
                 .lora
                 .get_random_number()
                 .await
-                .map_err(|_| GetRandomError::RngError)?;
-            self.random_buffer
-                .push(rand)
-                .map_err(|_| GetRandomError::InsufficientSize)?;
+                .map_err(|_| super::Error::Rng)?;
+
+            // Unwrapping is OK because we'll never exceed the Vec's capacity
+            self.random_buffer.push(rand).unwrap();
         }
 
         Ok(())

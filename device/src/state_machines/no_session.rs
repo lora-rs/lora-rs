@@ -122,6 +122,8 @@ impl Idle {
             // NewSession Request or a Timeout from previously failed Join attempt
             Event::NewSessionRequest | Event::TimeoutFired => {
                 if let Some(credentials) = &shared.credentials {
+                    // Unwrapping because we assume that the RngCore-based GetRandom implementation never underflows
+                    // its RNG buffer.
                     let (devnonce, tx_config) = credentials.create_join_request::<C, RNG, N>(
                         &mut shared.region,
                         &mut shared.rng,

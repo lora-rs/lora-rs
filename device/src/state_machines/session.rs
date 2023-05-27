@@ -215,8 +215,16 @@ impl Idle {
             Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
                 let fcnt = self.prepare_buffer::<R, C, RNG, N>(&send_data, shared);
-                // Unwrapping is OK because filling the RNG buffer should be a no-op
+
+                // Unwrapping is OK because filling the RNG buffer should be a no-op based on the RngCore
+                // implementation.
+                #[cfg(not(feature = "async-rng"))]
                 shared.rng.fill().unwrap();
+
+                // If the `async-rng` feature is enabled, we can't use `shared.rng.fill` becaus it's async.
+                // This should not cause problems because we expect the GetRandom implementation to be based
+                // on RngCore, which technically doesn't require to fill the RNG buffer (it's a no-op).
+
                 let event: radio::Event<R> = radio::Event::TxRequest(
                     shared
                         .region

@@ -98,6 +98,7 @@ where
     datarate: DR,
 }
 
+#[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error<R> {
     Radio(R),
@@ -107,6 +108,7 @@ pub enum Error<R> {
     RxTimeout,
     SessionExpired,
     InvalidMic,
+    Rng,
     UnableToDecodePayload(&'static str),
 }
 
@@ -200,13 +202,11 @@ where
             } => {
                 let credentials = Credentials::new(*appeui, *deveui, *appkey);
 
-                // TODO git rid of unwraps
-                let fix_unwrap_on_next_lines = ();
                 #[cfg(feature = "async-rng")]
-                self.phy.get_rng().fill().await.unwrap();
+                self.phy.get_rng().fill().await.map_err(|_| Error::Rng)?;
 
                 #[cfg(not(feature = "async-rng"))]
-                self.phy.get_rng().fill().unwrap();
+                self.phy.get_rng().fill().map_err(|_| Error::Rng)?;
 
                 // Prepare the buffer with the join payload
                 let (devnonce, tx_config) = credentials
@@ -302,14 +302,11 @@ where
         // Prepare transmission buffer
         let _ = self.prepare_buffer(data, fport, confirmed)?;
 
-        // TODO figure out how many random numbers we actually need
-        let fix_unwrap_on_next_lines = ();
-
         #[cfg(feature = "async-rng")]
-        self.phy.get_rng().fill().await.unwrap();
+        self.phy.get_rng().fill().await.map_err(|_| Error::Rng)?;
 
         #[cfg(not(feature = "async-rng"))]
-        self.phy.get_rng().fill().unwrap();
+        self.phy.get_rng().fill().map_err(|_| Error::Rng)?;
 
         // Send data
         let tx_config = self

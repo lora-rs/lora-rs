@@ -1,6 +1,5 @@
-use crate::GetRandomError;
-
 use super::*;
+use crate::RngBufferEmpty;
 use core::marker::PhantomData;
 
 mod as923;
@@ -23,7 +22,6 @@ pub(crate) struct DynamicChannelPlan<
     const NUM_DATARATES: usize,
     R: DynamicChannelRegion<NUM_JOIN_CHANNELS, NUM_DATARATES>,
 > {
-    // TODO: change this to a heapless::Vec?
     additional_channels: [Option<u32>; 5],
     channel_mask: ChannelMask<9>,
     last_tx_channel: u8,
@@ -54,8 +52,8 @@ impl<
             .count()
     }
 
-    fn get_random_in_range<RNG: GetRandom>(&self, rng: &mut RNG) -> Result<usize, GetRandomError> {
-        let range = self.num_additional_channels() + NUM_JOIN_CHANNELS;
+    fn get_random_in_range<RNG: GetRandom>(&self, rng: &mut RNG) -> Result<usize, RngBufferEmpty> {
+        let range = NUM_JOIN_CHANNELS + self.num_additional_channels();
         Ok(rng.get_random()? % range)
     }
 }
@@ -151,8 +149,9 @@ impl<
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> Result<(Datarate, u32), GetRandomError> {
+    ) -> Result<(Datarate, u32), RngBufferEmpty> {
         let random_number = rng.get_random()?;
+        let datarate = R::datarates()[datarate as usize].clone().unwrap();
 
         match frame {
             Frame::Join => {
@@ -160,22 +159,20 @@ impl<
                 let channel = random_number % core::cmp::min(NUM_JOIN_CHANNELS, 8);
 
                 self.last_tx_channel = channel as u8;
-                Ok((
-                    R::datarates()[datarate as usize].clone().unwrap(),
-                    R::join_channels()[channel],
-                ))
+                Ok((datarate, R::join_channels()[channel]))
             }
 
-            // TODO verify that the logic is sound here...
             Frame::Data => {
                 let enabled_channels = self.channel_mask.as_vec();
                 let channel_index = self.get_random_in_range(rng)?;
                 let channel = enabled_channels[channel_index];
-                // TODO don't think unwrap is OK here
+                // Unwrapping here should be OK: if self.channel_mask and self.additional_channels are in sync, we
+                // should only ever try to get channels that are enabled, therefore are Some in self.
+                // additional_channels.
                 let freq = self.get_channel(channel as usize).unwrap();
 
                 self.last_tx_channel = channel;
-                Ok((R::datarates()[datarate as usize].clone().unwrap(), freq))
+                Ok((datarate, freq))
             }
         }
     }

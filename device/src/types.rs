@@ -56,8 +56,7 @@ impl Credentials {
         buf: &mut RadioBuffer<N>,
     ) -> (DevNonce, TxConfig) {
         // Use lowest 16 bits for devnonce
-        // TODO unrwap is probably not OK here
-        let fix_unwrap_on_next_line = ();
+        // Unwrapping is OK: if a panic occurs, that's because the RNG buffer isn't full enough.
         let devnonce_bytes = rng.get_random().unwrap().into_u16_truncate();
 
         buf.clear();
@@ -73,8 +72,8 @@ impl Credentials {
 
         let devnonce_copy = DevNonce::new(devnonce).unwrap();
 
-        // If the random number buffer is empty, re-fill with 100 random numbers.
-        // TODO make this better as the number of necessary random numbers for a TX should be bounded.s
+        // Unwrapping here because if an error occurs, that's because the RNG buffer isn't full enough, and that's a
+        // programming error.
         let tx_config = region
             .create_tx_config(rng, datarate, &Frame::Join)
             .unwrap();
