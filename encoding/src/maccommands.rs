@@ -377,11 +377,7 @@ macro_rules! create_value_reader_fn {
 ///     lorawan::maccommands::parse_mac_commands(&data[..], true).collect();
 /// ```
 pub fn parse_mac_commands(data: &[u8], uplink: bool) -> MacCommandIterator {
-    MacCommandIterator {
-        index: 0,
-        data,
-        uplink,
-    }
+    MacCommandIterator { index: 0, data, uplink }
 }
 
 /// Implementation of iterator for mac commands.
@@ -492,9 +488,7 @@ impl<'de, const N: usize> serde::de::Visitor<'de> for ChannelMaskDeserializer<N>
         let mut index = 0;
         while let Some(el) = seq.next_element()? {
             if index >= N {
-                return Err(serde::de::Error::custom(
-                    "ChannelMask has too many elements",
-                ));
+                return Err(serde::de::Error::custom("ChannelMask has too many elements"));
             } else {
                 arr[index] = el;
                 index += 1;
@@ -760,9 +754,9 @@ impl<'a> DevStatusAnsPayload<'a> {
     create_value_reader_fn!(
         /// The battery level of the device.
         ///
-        /// Note: 0 means that the device is powered by an external source, 255 means that the device
-        /// was unable to measure its battery level, any other value represents the actual battery
-        /// level.
+        /// Note: 0 means that the device is powered by an external source, 255 means that the
+        /// device was unable to measure its battery level, any other value represents the
+        /// actual battery level.
         battery,
         0
     );

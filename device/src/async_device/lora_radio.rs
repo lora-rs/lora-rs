@@ -82,7 +82,8 @@ where
     }
 }
 
-/// Provide the LoRa physical layer rx/tx interface for boards supported by the external lora-phy crate
+/// Provide the LoRa physical layer rx/tx interface for boards supported by the external lora-phy
+/// crate
 impl<RK> PhyRxTx for LoRaRadio<RK>
 where
     RK: RadioKind + 'static,
@@ -97,8 +98,7 @@ where
             config.rf.frequency,
         )?;
         let mut tx_pkt_params =
-            self.lora
-                .create_tx_packet_params(8, false, true, false, &mdltn_params)?;
+            self.lora.create_tx_packet_params(8, false, true, false, &mdltn_params)?;
         let pw = match self.lora.get_board_type().into() {
             ChipType::Sx1276 | ChipType::Sx1277 | ChipType::Sx1278 | ChipType::Sx1279 => {
                 if config.pw > DEFAULT_DBM {
@@ -109,12 +109,8 @@ where
             }
             _ => config.pw,
         };
-        self.lora
-            .prepare_for_tx(&mdltn_params, pw.into(), false)
-            .await?;
-        self.lora
-            .tx(&mdltn_params, &mut tx_pkt_params, buffer, 0xffffff)
-            .await?;
+        self.lora.prepare_for_tx(&mdltn_params, pw.into(), false).await?;
+        self.lora.tx(&mdltn_params, &mut tx_pkt_params, buffer, 0xffffff).await?;
         Ok(0)
     }
 

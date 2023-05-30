@@ -55,20 +55,15 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
             return Err("data slice is too short");
         }
         d[0] = 0x20;
-        Ok(Self {
-            data,
-            with_c_f_list: false,
-            encrypted: false,
-            factory,
-        })
+        Ok(Self { data, with_c_f_list: false, encrypted: false, factory })
     }
 
     /// Sets the AppNonce of the JoinAccept to the provided value.
     ///
     /// # Argument
     ///
-    /// * app_nonce - instance of lorawan::parser::AppNonce or anything that can
-    ///   be converted into it.
+    /// * app_nonce - instance of lorawan::parser::AppNonce or anything that can be converted into
+    ///   it.
     pub fn set_app_nonce<H: AsRef<[u8]>, T: Into<parser::AppNonce<H>>>(
         &mut self,
         app_nonce: T,
@@ -83,8 +78,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * net_id - instance of lorawan::parser::NwkAddr or anything that can
-    ///   be converted into it.
+    /// * net_id - instance of lorawan::parser::NwkAddr or anything that can be converted into it.
     pub fn set_net_id<H: AsRef<[u8]>, T: Into<parser::NwkAddr<H>>>(
         &mut self,
         net_id: T,
@@ -99,8 +93,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can
-    ///   be converted into it.
+    /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can be converted into it.
     pub fn set_dev_addr<H: AsRef<[u8]>, T: Into<parser::DevAddr<H>>>(
         &mut self,
         dev_addr: T,
@@ -115,8 +108,8 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * dl_settings - instance of lorawan::maccommands::DLSettings or anything
-    ///   that can be converted into it.
+    /// * dl_settings - instance of lorawan::maccommands::DLSettings or anything that can be
+    ///   converted into it.
     pub fn set_dl_settings<T: Into<DLSettings>>(&mut self, dl_settings: T) -> &mut Self {
         let converted = dl_settings.into();
         self.data.as_mut()[11] = converted.raw_value();
@@ -213,12 +206,7 @@ impl JoinAcceptCreator<[u8; 33], DefaultFactory> {
     pub fn new() -> Self {
         let mut data = [0; 33];
         data[0] = 0x20;
-        Self {
-            data,
-            with_c_f_list: false,
-            encrypted: false,
-            factory: DefaultFactory,
-        }
+        Self { data, with_c_f_list: false, encrypted: false, factory: DefaultFactory }
     }
 }
 
@@ -252,8 +240,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * app_eui - instance of lorawan::parser::EUI64 or anything that can
-    ///   be converted into it.
+    /// * app_eui - instance of lorawan::parser::EUI64 or anything that can be converted into it.
     pub fn set_app_eui<H: AsRef<[u8]>, T: Into<parser::EUI64<H>>>(
         &mut self,
         app_eui: T,
@@ -268,8 +255,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * dev_eui - instance of lorawan::parser::EUI64 or anything that can
-    ///   be converted into it.
+    /// * dev_eui - instance of lorawan::parser::EUI64 or anything that can be converted into it.
     pub fn set_dev_eui<H: AsRef<[u8]>, T: Into<parser::EUI64<H>>>(
         &mut self,
         dev_eui: T,
@@ -284,8 +270,8 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * dev_nonce - instance of lorawan::parser::DevNonce or anything that can
-    ///   be converted into it.
+    /// * dev_nonce - instance of lorawan::parser::DevNonce or anything that can be converted into
+    ///   it.
     pub fn set_dev_nonce<H: AsRef<[u8]>, T: Into<parser::DevNonce<H>>>(
         &mut self,
         dev_nonce: T,
@@ -344,12 +330,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
             return Err("data slice is too short");
         }
         d[0] = 0x40;
-        Ok(DataPayloadCreator {
-            data,
-            data_f_port: None,
-            fcnt: 0,
-            factory,
-        })
+        Ok(DataPayloadCreator { data, data_f_port: None, fcnt: 0, factory })
     }
 
     /// Sets whether the packet is uplink or downlink.
@@ -388,8 +369,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     ///
     /// # Argument
     ///
-    /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can
-    ///   be converted into it.
+    /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can be converted into it.
     pub fn set_dev_addr<H: AsRef<[u8]>, T: Into<parser::DevAddr<H>>>(
         &mut self,
         dev_addr: T,
@@ -450,10 +430,9 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     /// # Argument
     ///
     /// * payload - the FRMPayload (application) to be sent.
-    /// * nwk_skey - the key to be used for setting the MIC and possibly for
-    ///   MAC command encryption.
-    /// * app_skey - the key to be used for payload encryption if fport not 0,
-    ///   otherwise nwk_skey is only used.
+    /// * nwk_skey - the key to be used for setting the MIC and possibly for MAC command encryption.
+    /// * app_skey - the key to be used for payload encryption if fport not 0, otherwise nwk_skey is
+    ///   only used.
     ///
     ///
     /// # Example
@@ -573,11 +552,6 @@ impl DataPayloadCreator<GenericArray<u8, U256>, DefaultFactory> {
     pub fn new() -> Self {
         let mut data: GenericArray<u8, U256> = GenericArray::default();
         data[0] = 0x40;
-        Self {
-            data,
-            data_f_port: None,
-            fcnt: 0,
-            factory: DefaultFactory,
-        }
+        Self { data, data_f_port: None, fcnt: 0, factory: DefaultFactory }
     }
 }

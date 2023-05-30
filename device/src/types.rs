@@ -19,11 +19,7 @@ pub(crate) type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 
 impl Credentials {
     pub fn new(appeui: AppEui, deveui: DevEui, appkey: [u8; 16]) -> Credentials {
-        Credentials {
-            deveui,
-            appeui,
-            appkey: appkey.into(),
-        }
+        Credentials { deveui, appeui, appkey: appkey.into() }
     }
 
     pub fn appeui(&self) -> &AppEui {
@@ -64,10 +60,7 @@ impl Credentials {
         let devnonce_copy = DevNonce::new(devnonce).unwrap();
 
         buf.extend_from_slice(vec).unwrap();
-        (
-            devnonce_copy,
-            region.create_tx_config(rng, datarate, &Frame::Join),
-        )
+        (devnonce_copy, region.create_tx_config(rng, datarate, &Frame::Join))
     }
 }
 
@@ -87,11 +80,7 @@ impl SessionKeys {
             | (session_devaddr[2] as u32) << 8
             | (session_devaddr[1] as u32) << 16
             | (session_devaddr[0] as u32) << 24;
-        SessionKeys {
-            newskey: *session_data.newskey(),
-            appskey: *session_data.appskey(),
-            devaddr,
-        }
+        SessionKeys { newskey: *session_data.newskey(), appskey: *session_data.appskey(), devaddr }
     }
 }
 use core::fmt;

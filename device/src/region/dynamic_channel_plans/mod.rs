@@ -112,32 +112,21 @@ impl<
         match channel_mask_control {
             0 | 1 | 2 | 3 | 4 => {
                 let base_index = channel_mask_control as usize * 2;
-                self.channel_mask
-                    .set_bank(base_index, channel_mask.get_index(0));
-                self.channel_mask
-                    .set_bank(base_index + 1, channel_mask.get_index(1));
+                self.channel_mask.set_bank(base_index, channel_mask.get_index(0));
+                self.channel_mask.set_bank(base_index + 1, channel_mask.get_index(1));
             }
             5 => {
                 let channel_mask: u16 =
                     channel_mask.get_index(0) as u16 | ((channel_mask.get_index(1) as u16) << 8);
-                self.channel_mask
-                    .set_bank(0, ((channel_mask & 0b1) * 0xFF) as u8);
-                self.channel_mask
-                    .set_bank(1, ((channel_mask & 0b10) * 0xFF) as u8);
-                self.channel_mask
-                    .set_bank(2, ((channel_mask & 0b100) * 0xFF) as u8);
-                self.channel_mask
-                    .set_bank(3, ((channel_mask & 0b1000) * 0xFF) as u8);
-                self.channel_mask
-                    .set_bank(4, ((channel_mask & 0b10000) * 0xFF) as u8);
-                self.channel_mask
-                    .set_bank(5, ((channel_mask & 0b100000) * 0xFF) as u8);
-                self.channel_mask
-                    .set_bank(6, ((channel_mask & 0b1000000) * 0xFF) as u8);
-                self.channel_mask
-                    .set_bank(7, ((channel_mask & 0b10000000) * 0xFF) as u8);
-                self.channel_mask
-                    .set_bank(8, ((channel_mask & 0b100000000) * 0xFF) as u8);
+                self.channel_mask.set_bank(0, ((channel_mask & 0b1) * 0xFF) as u8);
+                self.channel_mask.set_bank(1, ((channel_mask & 0b10) * 0xFF) as u8);
+                self.channel_mask.set_bank(2, ((channel_mask & 0b100) * 0xFF) as u8);
+                self.channel_mask.set_bank(3, ((channel_mask & 0b1000) * 0xFF) as u8);
+                self.channel_mask.set_bank(4, ((channel_mask & 0b10000) * 0xFF) as u8);
+                self.channel_mask.set_bank(5, ((channel_mask & 0b100000) * 0xFF) as u8);
+                self.channel_mask.set_bank(6, ((channel_mask & 0b1000000) * 0xFF) as u8);
+                self.channel_mask.set_bank(7, ((channel_mask & 0b10000000) * 0xFF) as u8);
+                self.channel_mask.set_bank(8, ((channel_mask & 0b100000000) * 0xFF) as u8);
             }
             6 => {
                 // all channels on

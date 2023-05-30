@@ -126,16 +126,8 @@ pub trait Timings {
 }
 
 pub enum JoinMode {
-    OTAA {
-        deveui: [u8; 8],
-        appeui: [u8; 8],
-        appkey: [u8; 16],
-    },
-    ABP {
-        newskey: AES128,
-        appskey: AES128,
-        devaddr: DevAddr<[u8; 4]>,
-    },
+    OTAA { deveui: [u8; 8], appeui: [u8; 8], appkey: [u8; 16] },
+    ABP { newskey: AES128, appskey: AES128, devaddr: DevAddr<[u8; 4]> },
 }
 
 #[allow(dead_code)]
@@ -152,11 +144,7 @@ where
         rng: RNG,
     ) -> Device<R, C, RNG, N> {
         let (shared, state) = match join_mode {
-            JoinMode::OTAA {
-                deveui,
-                appeui,
-                appkey,
-            } => (
+            JoinMode::OTAA { deveui, appeui, appkey } => (
                 Shared::new(
                     radio,
                     Some(Credentials::new(appeui, deveui, appkey)),
@@ -166,21 +154,13 @@ where
                 ),
                 State::new(),
             ),
-            JoinMode::ABP {
-                newskey,
-                appskey,
-                devaddr,
-            } => (
+            JoinMode::ABP { newskey, appskey, devaddr } => (
                 Shared::new(radio, None, region, Mac::default(), rng),
                 State::new_abp(newskey, appskey, devaddr),
             ),
         };
 
-        Device {
-            crypto: PhantomData::default(),
-            shared,
-            state: Some(state),
-        }
+        Device { crypto: PhantomData::default(), shared, state: Some(state) }
     }
 
     pub fn get_radio(&mut self) -> &mut R {
@@ -206,10 +186,7 @@ where
     }
 
     pub fn ready_to_send_data(&self) -> bool {
-        matches!(
-            &self.state.as_ref().unwrap(),
-            State::Session(session::Session::Idle(_))
-        )
+        matches!(&self.state.as_ref().unwrap(), State::Session(session::Session::Idle(_)))
     }
 
     pub fn send(
@@ -218,11 +195,7 @@ where
         fport: u8,
         confirmed: bool,
     ) -> Result<Response, Error<R::PhyError>> {
-        self.handle_event(Event::SendDataRequest(SendData {
-            data,
-            fport,
-            confirmed,
-        }))
+        self.handle_event(Event::SendDataRequest(SendData { data, fport, confirmed }))
     }
 
     pub fn get_fcnt_up(&self) -> Option<u32> {
@@ -235,9 +208,7 @@ where
 
     pub fn get_session_keys(&self) -> Option<SessionKeys> {
         if let State::Session(session) = &self.state.as_ref().unwrap() {
-            Some(SessionKeys::copy_from_session_data(
-                session.get_session_data(),
-            ))
+            Some(SessionKeys::copy_from_session_data(session.get_session_data()))
         } else {
             None
         }

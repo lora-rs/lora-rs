@@ -1,0 +1,23 @@
+# This file defines the Rust style for automatic reformatting.
+# See also https://rust-lang.github.io/rustfmt
+
+# Rust language edition.
+edition = "2021"
+
+# Line endings will be converted to \n.
+newline_style = "Unix"
+
+# The "Default" setting has a heuristic which splits lines too aggresively.
+use_small_heuristics = "Max"
+
+# Always put if else statements on multiple lines.
+single_line_if_else_max_width = 0
+
+# Version of the formatting rules to use.
+# version = "Two"
+
+# Max width of comments before wrapping.
+# comment_width = 100
+
+# Wrap comments above comment_width.
+# wrap_comments = true

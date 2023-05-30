@@ -106,18 +106,13 @@ impl Mac {
 
     pub fn get_cmds(&mut self, macs: &mut Vec<MacCommand, 8>) {
         for _ in 0..self.adr_ans.get() {
-            macs.push(MacCommand::LinkADRAns(
-                LinkADRAnsPayload::new(&[0x07]).unwrap(),
-            ))
-            .unwrap();
+            macs.push(MacCommand::LinkADRAns(LinkADRAnsPayload::new(&[0x07]).unwrap())).unwrap();
         }
         self.adr_ans.clear();
 
         if self.rx_delay_ans.get() != 0 {
-            macs.push(MacCommand::RXTimingSetupAns(
-                RXTimingSetupAnsPayload::new(&[]).unwrap(),
-            ))
-            .unwrap();
+            macs.push(MacCommand::RXTimingSetupAns(RXTimingSetupAnsPayload::new(&[]).unwrap()))
+                .unwrap();
         }
         self.rx_delay_ans.clear();
     }

@@ -255,12 +255,7 @@ impl Configuration {
         channel_mask_control: u8,
         channel_mask: ChannelMask<2>,
     ) {
-        mut_region_dispatch!(
-            self,
-            handle_link_adr_channel_mask,
-            channel_mask_control,
-            channel_mask
-        )
+        mut_region_dispatch!(self, handle_link_adr_channel_mask, channel_mask_control, channel_mask)
     }
 
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {

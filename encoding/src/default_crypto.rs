@@ -174,10 +174,10 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedDataPayload<T> {
     ///
     /// # Argument
     ///
-    /// * nwk_skey - the Network Session key used to decrypt the mac commands in case the payload
-    ///     is transporting those.
-    /// * app_skey - the Application Session key used to decrypt the application payload in case
-    ///     the payload is transporting that.
+    /// * nwk_skey - the Network Session key used to decrypt the mac commands in case the payload is
+    ///   transporting those.
+    /// * app_skey - the Application Session key used to decrypt the application payload in case the
+    ///   payload is transporting that.
     /// * fcnt - the counter used to encrypt the payload.
     ///
     /// # Examples
