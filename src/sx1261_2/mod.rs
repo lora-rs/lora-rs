@@ -835,12 +835,17 @@ where
             let op_code = [OpCode::GetIrqStatus.value()];
             let mut irq_status = [0x00u8, 0x00u8];
             let read_status = self.intf.read_with_status(&[&op_code], &mut irq_status).await?;
-            if OpStatusErrorMask::is_error(read_status) {
-                return Err(RadioError::OpError(read_status));
-            }
             let irq_flags = ((irq_status[0] as u16) << 8) | (irq_status[1] as u16);
             let op_code_and_irq_status = [OpCode::ClrIrqStatus.value(), irq_status[0], irq_status[1]];
             self.intf.write(&[&op_code_and_irq_status], false).await?;
+
+            // Report a read status error for debugging only.  Normal timeouts are sometimes reported as a read status error.
+            if OpStatusErrorMask::is_error(read_status) {
+                debug!(
+                    "process_irq read status error = 0x{:x} in radio mode {}",
+                    read_status, radio_mode
+                );
+            }
 
             debug!(
                 "process_irq satisfied: irq_flags = 0x{:x} in radio mode {}",
