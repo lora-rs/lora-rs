@@ -63,10 +63,14 @@ where
         frequency_in_hz: u32,
     ) -> Result<ModulationParams, RadioError> {
         match self.radio_kind.get_board_type().into() {
-            ChipType::Sx1261 | ChipType::Sx1262 => {
+            ChipType::Sx1261 | ChipType::Sx1262 | ChipType::CustomSx1261_2 => {
                 ModulationParams::new_for_sx1261_2(spreading_factor, bandwidth, coding_rate, frequency_in_hz)
             }
-            ChipType::Sx1276 | ChipType::Sx1277 | ChipType::Sx1278 | ChipType::Sx1279 => {
+            ChipType::Sx1276
+            | ChipType::Sx1277
+            | ChipType::Sx1278
+            | ChipType::Sx1279
+            | ChipType::CustomSx1276_7_8_9 => {
                 ModulationParams::new_for_sx1276_7_8_9(spreading_factor, bandwidth, coding_rate, frequency_in_hz)
             }
         }
@@ -82,7 +86,7 @@ where
         modulation_params: &ModulationParams,
     ) -> Result<PacketParams, RadioError> {
         match self.radio_kind.get_board_type().into() {
-            ChipType::Sx1261 | ChipType::Sx1262 => PacketParams::new_for_sx1261_2(
+            ChipType::Sx1261 | ChipType::Sx1262 | ChipType::CustomSx1261_2 => PacketParams::new_for_sx1261_2(
                 preamble_length,
                 implicit_header,
                 0,
@@ -90,16 +94,18 @@ where
                 iq_inverted,
                 modulation_params,
             ),
-            ChipType::Sx1276 | ChipType::Sx1277 | ChipType::Sx1278 | ChipType::Sx1279 => {
-                PacketParams::new_for_sx1276_7_8_9(
-                    preamble_length,
-                    implicit_header,
-                    0,
-                    crc_on,
-                    iq_inverted,
-                    modulation_params,
-                )
-            }
+            ChipType::Sx1276
+            | ChipType::Sx1277
+            | ChipType::Sx1278
+            | ChipType::Sx1279
+            | ChipType::CustomSx1276_7_8_9 => PacketParams::new_for_sx1276_7_8_9(
+                preamble_length,
+                implicit_header,
+                0,
+                crc_on,
+                iq_inverted,
+                modulation_params,
+            ),
         }
     }
 
@@ -114,7 +120,7 @@ where
         modulation_params: &ModulationParams,
     ) -> Result<PacketParams, RadioError> {
         match self.radio_kind.get_board_type().into() {
-            ChipType::Sx1261 | ChipType::Sx1262 => PacketParams::new_for_sx1261_2(
+            ChipType::Sx1261 | ChipType::Sx1262 | ChipType::CustomSx1261_2 => PacketParams::new_for_sx1261_2(
                 preamble_length,
                 implicit_header,
                 max_payload_length,
@@ -122,16 +128,18 @@ where
                 iq_inverted,
                 modulation_params,
             ),
-            ChipType::Sx1276 | ChipType::Sx1277 | ChipType::Sx1278 | ChipType::Sx1279 => {
-                PacketParams::new_for_sx1276_7_8_9(
-                    preamble_length,
-                    implicit_header,
-                    max_payload_length,
-                    crc_on,
-                    iq_inverted,
-                    modulation_params,
-                )
-            }
+            ChipType::Sx1276
+            | ChipType::Sx1277
+            | ChipType::Sx1278
+            | ChipType::Sx1279
+            | ChipType::CustomSx1276_7_8_9 => PacketParams::new_for_sx1276_7_8_9(
+                preamble_length,
+                implicit_header,
+                max_payload_length,
+                crc_on,
+                iq_inverted,
+                modulation_params,
+            ),
         }
     }
 
