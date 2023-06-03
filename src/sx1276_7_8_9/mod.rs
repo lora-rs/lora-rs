@@ -537,13 +537,25 @@ where
     async fn process_irq(
         &mut self,
         radio_mode: RadioMode,
-        _rx_continuous: bool,
+        rx_continuous: bool,
+        delay: &mut impl DelayUs,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<(), RadioError> {
+        let mut i = 0;
         loop {
             debug!("process_irq loop entered");
 
-            self.intf.iv.await_irq().await?;
+            if rx_continuous {
+                self.intf.iv.await_irq().await?;
+            } else {
+                delay.delay_ms(10).await;
+                i += 1;
+            }
+
+            // ???
+            if i >= 100 {
+                return Ok(());
+            }
 
             let irq_flags = self.read_register(Register::RegIrqFlags).await?;
             self.write_register(Register::RegIrqFlags, 0xffu8, false).await?; // clear all interrupts

@@ -603,8 +603,8 @@ where
             rx_gain_final = 0x96u8;
         }
 
-        // stop the Rx timer on header/syncword detection rather than preamble detection
-        let op_code_and_false_flag = [OpCode::SetStopRxTimerOnPreamble.value(), 0x00u8];
+        // stop the Rx timer on preamble detection
+        let op_code_and_false_flag = [OpCode::SetStopRxTimerOnPreamble.value(), 0x01u8];
         self.intf.write(&[&op_code_and_false_flag], false).await?;
 
         self.set_lora_symbol_num_timeout(symbol_timeout_final).await?;
@@ -826,12 +826,25 @@ where
         &mut self,
         radio_mode: RadioMode,
         rx_continuous: bool,
+        delay: &mut impl DelayUs,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<(), RadioError> {
+        let mut i = 0;
         loop {
             debug!("process_irq loop entered");
 
-            self.intf.iv.await_irq().await?;
+            if rx_continuous {
+                self.intf.iv.await_irq().await?;
+            } else {
+                delay.delay_ms(10).await;
+                i += 1;
+            }
+
+            // ???
+            if i >= 100 {
+                return Ok(());
+            }
+
             let op_code = [OpCode::GetIrqStatus.value()];
             let mut irq_status = [0x00u8, 0x00u8];
             let read_status = self.intf.read_with_status(&[&op_code], &mut irq_status).await?;

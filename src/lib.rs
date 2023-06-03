@@ -21,30 +21,29 @@ use mod_params::*;
 use mod_traits::*;
 
 /// Provides the physical layer API to support LoRa chips
-pub struct LoRa<RK> {
+pub struct LoRa<RK, DLY> {
     radio_kind: RK,
+    delay: DLY,
     radio_mode: RadioMode,
     rx_continuous: bool,
     image_calibrated: bool,
 }
 
-impl<RK> LoRa<RK>
+impl<RK, DLY> LoRa<RK, DLY>
 where
     RK: RadioKind,
+    DLY: DelayUs,
 {
     /// Build and return a new instance of the LoRa physical layer API to control an initialized LoRa radio
-    pub async fn new(
-        radio_kind: RK,
-        enable_public_network: bool,
-        delay: &mut impl DelayUs,
-    ) -> Result<Self, RadioError> {
+    pub async fn new(radio_kind: RK, enable_public_network: bool, delay: DLY) -> Result<Self, RadioError> {
         let mut lora = Self {
             radio_kind,
+            delay,
             radio_mode: RadioMode::Sleep,
             rx_continuous: false,
             image_calibrated: false,
         };
-        lora.init(enable_public_network, delay).await?;
+        lora.init(enable_public_network).await?;
 
         Ok(lora)
     }
@@ -144,9 +143,9 @@ where
     }
 
     /// Initialize a Semtech chip as the radio for LoRa physical layer communications
-    pub async fn init(&mut self, enable_public_network: bool, delay: &mut impl DelayUs) -> Result<(), RadioError> {
+    pub async fn init(&mut self, enable_public_network: bool) -> Result<(), RadioError> {
         self.image_calibrated = false;
-        self.radio_kind.reset(delay).await?;
+        self.radio_kind.reset(&mut self.delay).await?;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         self.radio_kind.init_rf_switch().await?;
         self.radio_kind.set_standby().await?;
@@ -164,10 +163,10 @@ where
     }
 
     /// Place the LoRa physical layer in low power mode, using warm start if the Semtech chip supports it
-    pub async fn sleep(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
+    pub async fn sleep(&mut self) -> Result<(), RadioError> {
         if self.radio_mode != RadioMode::Sleep {
             self.radio_kind.ensure_ready(self.radio_mode).await?;
-            let warm_start_enabled = self.radio_kind.set_sleep(delay).await?;
+            let warm_start_enabled = self.radio_kind.set_sleep(&mut self.delay).await?;
             if !warm_start_enabled {
                 self.image_calibrated = false;
             }
@@ -223,7 +222,7 @@ where
         self.radio_kind.do_tx(timeout_in_ms).await?;
         match self
             .radio_kind
-            .process_irq(self.radio_mode, self.rx_continuous, None)
+            .process_irq(self.radio_mode, self.rx_continuous, &mut self.delay, None)
             .await
         {
             Ok(()) => Ok(()),
@@ -287,7 +286,7 @@ where
     ) -> Result<(u8, PacketStatus), RadioError> {
         match self
             .radio_kind
-            .process_irq(self.radio_mode, self.rx_continuous, None)
+            .process_irq(self.radio_mode, self.rx_continuous, &mut self.delay, None)
             .await
         {
             Ok(()) => {
@@ -336,7 +335,12 @@ where
         let mut cad_activity_detected = false;
         match self
             .radio_kind
-            .process_irq(self.radio_mode, self.rx_continuous, Some(&mut cad_activity_detected))
+            .process_irq(
+                self.radio_mode,
+                self.rx_continuous,
+                &mut self.delay,
+                Some(&mut cad_activity_detected),
+            )
             .await
         {
             Ok(()) => Ok(cad_activity_detected),
@@ -350,9 +354,10 @@ where
     }
 }
 
-impl<RK> AsyncRng for LoRa<RK>
+impl<RK, DLY> AsyncRng for LoRa<RK, DLY>
 where
     RK: RngRadio,
+    DLY: DelayUs,
 {
     async fn get_random_number(&mut self) -> Result<u32, RadioError> {
         self.rx_continuous = false;

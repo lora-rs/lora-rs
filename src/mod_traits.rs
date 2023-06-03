@@ -105,6 +105,7 @@ pub trait RadioKind {
         &mut self,
         radio_mode: RadioMode,
         rx_continuous: bool,
+        delay: &mut impl DelayUs,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<(), RadioError>;
 }
