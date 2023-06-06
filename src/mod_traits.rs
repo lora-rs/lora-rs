@@ -82,7 +82,6 @@ pub trait RadioKind {
         rx_continuous: bool,
         rx_boosted_if_supported: bool,
         symbol_timeout: u16,
-        rx_timeout_in_ms: u32,
     ) -> Result<(), RadioError>;
     /// Get an available packet made available as the result of a receive operation
     async fn get_rx_payload(
@@ -106,6 +105,7 @@ pub trait RadioKind {
         radio_mode: RadioMode,
         rx_continuous: bool,
         delay: &mut impl DelayUs,
+        polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<(), RadioError>;
 }

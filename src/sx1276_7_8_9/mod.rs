@@ -385,7 +385,6 @@ where
         rx_continuous: bool,
         rx_boosted_if_supported: bool,
         symbol_timeout: u16,
-        _rx_timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
         if let Some(&_duty_cycle) = duty_cycle_params {
             return Err(RadioError::DutyCycleUnsupported);
@@ -537,24 +536,30 @@ where
     async fn process_irq(
         &mut self,
         radio_mode: RadioMode,
-        rx_continuous: bool,
+        _rx_continuous: bool,
         delay: &mut impl DelayUs,
+        polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<(), RadioError> {
-        let mut i = 0;
+        let mut iteration_guard: u32 = 0;
+        if polling_timeout_in_ms.is_some() {
+            iteration_guard = polling_timeout_in_ms.unwrap();
+            iteration_guard /= 10; // poll for interrupts every 10 ms until polling timeout
+        }
+        let mut i: u32 = 0;
         loop {
-            debug!("process_irq loop entered");
-
-            if rx_continuous {
-                self.intf.iv.await_irq().await?;
-            } else {
-                delay.delay_ms(10).await;
-                i += 1;
+            if polling_timeout_in_ms.is_some() && (i >= iteration_guard) {
+                return Err(RadioError::PollingTimeout);
             }
 
-            // ???
-            if i >= 100 {
-                return Ok(());
+            debug!("process_irq loop entered");
+
+            // Await IRQ events unless event polling is used.
+            if polling_timeout_in_ms.is_some() {
+                delay.delay_ms(10).await;
+                i += 1;
+            } else {
+                self.intf.iv.await_irq().await?;
             }
 
             let irq_flags = self.read_register(Register::RegIrqFlags).await?;

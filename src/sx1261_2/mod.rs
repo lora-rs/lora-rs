@@ -577,10 +577,9 @@ where
         rx_continuous: bool,
         rx_boosted_if_supported: bool,
         symbol_timeout: u16,
-        rx_timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
         let mut symbol_timeout_final = symbol_timeout;
-        let mut rx_timeout_in_ms_final = rx_timeout_in_ms << 6;
+        let mut timeout_in_ms_final = 0x00000000u32; // No chip timeout for Rx single mode
 
         if let Some(&_duty_cycle) = duty_cycle_params {
             if rx_continuous {
@@ -592,9 +591,10 @@ where
 
         self.intf.iv.enable_rf_switch_rx().await?;
 
+        // Allow only a symbol timeout, and only for Rx single mode.  A polling timeout, if needed, is provided in process_irq().
         if rx_continuous {
             symbol_timeout_final = 0;
-            rx_timeout_in_ms_final = 0x00ffffffu32;
+            timeout_in_ms_final = 0x00ffffffu32; // No chip timeout for Rx continuous mode
         }
 
         let mut rx_gain_final = 0x94u8;
@@ -665,9 +665,9 @@ where
             None => {
                 let op_code_and_timeout = [
                     OpCode::SetRx.value(),
-                    Self::timeout_1(rx_timeout_in_ms_final),
-                    Self::timeout_2(rx_timeout_in_ms_final),
-                    Self::timeout_3(rx_timeout_in_ms_final),
+                    Self::timeout_1(timeout_in_ms_final),
+                    Self::timeout_2(timeout_in_ms_final),
+                    Self::timeout_3(timeout_in_ms_final),
                 ];
                 self.intf.write(&[&op_code_and_timeout], false).await
             }
@@ -827,22 +827,28 @@ where
         radio_mode: RadioMode,
         rx_continuous: bool,
         delay: &mut impl DelayUs,
+        polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<(), RadioError> {
-        let mut i = 0;
+        let mut iteration_guard: u32 = 0;
+        if polling_timeout_in_ms.is_some() {
+            iteration_guard = polling_timeout_in_ms.unwrap();
+            iteration_guard /= 10; // poll for interrupts every 10 ms until polling timeout
+        }
+        let mut i: u32 = 0;
         loop {
-            debug!("process_irq loop entered");
-
-            if rx_continuous {
-                self.intf.iv.await_irq().await?;
-            } else {
-                delay.delay_ms(10).await;
-                i += 1;
+            if polling_timeout_in_ms.is_some() && (i >= iteration_guard) {
+                return Err(RadioError::PollingTimeout);
             }
 
-            // ???
-            if i >= 100 {
-                return Ok(());
+            debug!("process_irq loop entered");
+
+            // Await IRQ events unless event polling is used.
+            if polling_timeout_in_ms.is_some() {
+                delay.delay_ms(10).await;
+                i += 1;
+            } else {
+                self.intf.iv.await_irq().await?;
             }
 
             let op_code = [OpCode::GetIrqStatus.value()];

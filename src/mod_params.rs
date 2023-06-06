@@ -32,6 +32,7 @@ pub enum RadioError {
     CRCErrorOnReceive,
     TransmitTimeout,
     ReceiveTimeout,
+    PollingTimeout,
     TimeoutUnexpected,
     TransmitDoneUnexpected,
     ReceiveDoneUnexpected,

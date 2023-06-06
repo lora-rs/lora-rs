@@ -21,7 +21,11 @@ use mod_params::*;
 use mod_traits::*;
 
 /// Provides the physical layer API to support LoRa chips
-pub struct LoRa<RK, DLY> {
+pub struct LoRa<RK, DLY>
+where
+    RK: RadioKind,
+    DLY: DelayUs,
+{
     radio_kind: RK,
     delay: DLY,
     radio_mode: RadioMode,
@@ -222,7 +226,7 @@ where
         self.radio_kind.do_tx(timeout_in_ms).await?;
         match self
             .radio_kind
-            .process_irq(self.radio_mode, self.rx_continuous, &mut self.delay, None)
+            .process_irq(self.radio_mode, self.rx_continuous, &mut self.delay, None, None)
             .await
         {
             Ok(()) => Ok(()),
@@ -245,7 +249,6 @@ where
         rx_continuous: bool,
         rx_boosted_if_supported: bool,
         symbol_timeout: u16,
-        rx_timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
         self.rx_continuous = rx_continuous;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
@@ -273,7 +276,6 @@ where
                 self.rx_continuous,
                 rx_boosted_if_supported,
                 symbol_timeout,
-                rx_timeout_in_ms,
             )
             .await
     }
@@ -281,12 +283,23 @@ where
     /// Obtain the results of a read operation
     pub async fn rx(
         &mut self,
+        single_mode_polling_timeout_in_ms: Option<u32>, // not pertinent for Rx continuous mode
         rx_pkt_params: &PacketParams,
         receiving_buffer: &mut [u8],
     ) -> Result<(u8, PacketStatus), RadioError> {
+        let mut polling_timeout_in_ms = single_mode_polling_timeout_in_ms;
+        if self.rx_continuous {
+            polling_timeout_in_ms = None;
+        }
         match self
             .radio_kind
-            .process_irq(self.radio_mode, self.rx_continuous, &mut self.delay, None)
+            .process_irq(
+                self.radio_mode,
+                self.rx_continuous,
+                &mut self.delay,
+                polling_timeout_in_ms,
+                None,
+            )
             .await
         {
             Ok(()) => {
@@ -339,6 +352,7 @@ where
                 self.radio_mode,
                 self.rx_continuous,
                 &mut self.delay,
+                None,
                 Some(&mut cad_activity_detected),
             )
             .await
