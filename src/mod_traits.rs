@@ -39,7 +39,7 @@ pub trait RadioKind {
     /// Place the LoRa chip in standby mode
     async fn set_standby(&mut self) -> Result<(), RadioError>;
     /// Place the LoRa chip in power-saving mode
-    async fn set_sleep(&mut self, delay: &mut impl DelayUs) -> Result<bool, RadioError>;
+    async fn set_sleep(&mut self, warm_start_if_possible: bool, delay: &mut impl DelayUs) -> Result<(), RadioError>;
     /// Perform operations to set a multi-protocol chip as a LoRa chip
     async fn set_lora_modem(&mut self, enable_public_network: bool) -> Result<(), RadioError>;
     /// Perform operations to set the LoRa chip oscillator

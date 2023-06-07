@@ -136,7 +136,7 @@ where
 
     async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
         self.intf.iv.reset(delay).await?;
-        self.set_sleep(delay).await?; // ensure sleep mode is entered so that the LoRa mode bit is set
+        self.set_sleep(false, delay).await?; // ensure sleep mode is entered so that the LoRa mode bit is set
         Ok(())
     }
 
@@ -155,11 +155,11 @@ where
         self.intf.iv.disable_rf_switch().await
     }
 
-    async fn set_sleep(&mut self, _delay: &mut impl DelayUs) -> Result<bool, RadioError> {
+    async fn set_sleep(&mut self, _warm_start_if_possible: bool, _delay: &mut impl DelayUs) -> Result<(), RadioError> {
         self.intf.iv.disable_rf_switch().await?;
         self.write_register(Register::RegOpMode, LoRaMode::Sleep.value(), true)
             .await?;
-        Ok(false) // warm start unavailable for sx127x
+        Ok(()) // warm start unavailable for sx127x
     }
 
     /// The sx127x LoRa mode is set when setting a mode while in sleep mode.

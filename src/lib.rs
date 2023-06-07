@@ -166,12 +166,14 @@ where
         self.radio_kind.update_retention_list().await
     }
 
-    /// Place the LoRa physical layer in low power mode, using warm start if the Semtech chip supports it
-    pub async fn sleep(&mut self) -> Result<(), RadioError> {
+    /// Place the LoRa physical layer in low power mode, specifying cold or warm start (if the Semtech chip supports it)
+    pub async fn sleep(&mut self, warm_start_if_possible: bool) -> Result<(), RadioError> {
         if self.radio_mode != RadioMode::Sleep {
             self.radio_kind.ensure_ready(self.radio_mode).await?;
-            let warm_start_enabled = self.radio_kind.set_sleep(&mut self.delay).await?;
-            if !warm_start_enabled {
+            self.radio_kind
+                .set_sleep(warm_start_if_possible, &mut self.delay)
+                .await?;
+            if !warm_start_if_possible {
                 self.image_calibrated = false;
             }
             self.radio_mode = RadioMode::Sleep;

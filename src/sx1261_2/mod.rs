@@ -251,18 +251,18 @@ where
         self.intf.iv.disable_rf_switch().await
     }
 
-    async fn set_sleep(&mut self, delay: &mut impl DelayUs) -> Result<bool, RadioError> {
+    async fn set_sleep(&mut self, warm_start_if_possible: bool, delay: &mut impl DelayUs) -> Result<(), RadioError> {
         self.intf.iv.disable_rf_switch().await?;
         let sleep_params = SleepParams {
             wakeup_rtc: false,
             reset: false,
-            warm_start: true,
+            warm_start: warm_start_if_possible,
         };
         let op_code_and_sleep_params = [OpCode::SetSleep.value(), sleep_params.value()];
         self.intf.write(&[&op_code_and_sleep_params], true).await?;
         delay.delay_ms(2).await;
 
-        Ok(sleep_params.warm_start) // indicate if warm start enabled
+        Ok(())
     }
 
     /// Configure the radio for LoRa and a public/private network.
