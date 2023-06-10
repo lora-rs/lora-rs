@@ -54,9 +54,17 @@ where
         Ok(read_buffer[0])
     }
 
-    // Set the number of symbols the radio will wait to validate a reception
-    async fn set_lora_symbol_num_timeout(&mut self, symbol_num: u8) -> Result<(), RadioError> {
-        self.write_register(Register::RegSymbTimeoutLsb, symbol_num, false)
+    // Set the number of symbols the radio will wait to detect a reception (maximum 1023 symbols)
+    async fn set_lora_symbol_num_timeout(&mut self, symbol_num: u16) -> Result<(), RadioError> {
+        if symbol_num > 0x03ffu16 {
+            return Err(RadioError::InvalidSymbolTimeout);
+        }
+        let symbol_num_msb = ((symbol_num & 0x0300u16) >> 8) as u8;
+        let symbol_num_lsb = (symbol_num & 0x00ffu16) as u8;
+        let mut config_2 = self.read_register(Register::RegModemConfig2).await?;
+        config_2 = (config_2 & 0xfcu8) | symbol_num_msb;
+        self.write_register(Register::RegModemConfig2, config_2, false).await?;
+        self.write_register(Register::RegSymbTimeoutLsb, symbol_num_lsb, false)
             .await
     }
 
@@ -392,10 +400,7 @@ where
         if rx_continuous {
             symbol_timeout_final = 0;
         }
-        if symbol_timeout_final > 0x00ffu16 {
-            return Err(RadioError::InvalidSymbolTimeout);
-        }
-        self.set_lora_symbol_num_timeout(symbol_timeout_final as u8).await?;
+        self.set_lora_symbol_num_timeout(symbol_timeout_final).await?;
 
         let mut lna_gain_final = LnaGain::G1.value();
         if rx_boosted_if_supported {

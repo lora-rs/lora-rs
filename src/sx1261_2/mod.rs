@@ -92,7 +92,7 @@ where
         }
     }
 
-    // Set the number of symbols the radio will wait to validate a reception
+    // Set the number of symbols the radio will wait to detect a reception
     async fn set_lora_symbol_num_timeout(&mut self, symbol_num: u16) -> Result<(), RadioError> {
         let mut exp = 0u8;
         let mut reg;
