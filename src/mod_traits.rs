@@ -30,6 +30,24 @@ pub trait InterfaceVariant {
 pub trait RadioKind {
     /// Get the specific type of the LoRa board (for example, Stm32wlSx1262)
     fn get_board_type(&self) -> BoardType;
+    /// Create modulation parameters specific to the LoRa chip kind and type
+    fn create_modulation_params(
+        &self,
+        spreading_factor: SpreadingFactor,
+        bandwidth: Bandwidth,
+        coding_rate: CodingRate,
+        frequency_in_hz: u32,
+    ) -> Result<ModulationParams, RadioError>;
+    /// Create packet parameters specific to the LoRa chip kind and type
+    fn create_packet_params(
+        &self,
+        preamble_length: u16,
+        implicit_header: bool,
+        payload_length: u8,
+        crc_on: bool,
+        iq_inverted: bool,
+        modulation_params: &ModulationParams,
+    ) -> Result<PacketParams, RadioError>;
     /// Reset the loRa chip
     async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError>;
     /// Ensure the LoRa chip is in the appropriate state to allow operation requests

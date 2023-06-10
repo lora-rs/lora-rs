@@ -18,65 +18,6 @@ const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
 // Frequency synthesizer step for frequency calculation (Hz)
 const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625; // FXOSC (32 MHz) * 1000000 (Hz/MHz) / 524288 (2^19)
 
-impl ModulationParams {
-    /// Create modulation parameters specific to the LoRa chip kind and type
-    pub fn new_for_sx1276_7_8_9(
-        spreading_factor: SpreadingFactor,
-        bandwidth: Bandwidth,
-        coding_rate: CodingRate,
-        frequency_in_hz: u32,
-    ) -> Result<Self, RadioError> {
-        // Parameter validation
-        spreading_factor_value(spreading_factor)?;
-        bandwidth_value(bandwidth)?;
-        coding_rate_value(coding_rate)?;
-        if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000) {
-            return Err(RadioError::InvalidBandwidthForFrequency);
-        }
-
-        // Section 4.1.1.5 and 4.1.1.6
-        let bw_in_hz = bandwidth.value_in_hz();
-        let symbol_duration = 1000 / (bw_in_hz / (0x01u32 << spreading_factor_value(spreading_factor)?));
-        let mut low_data_rate_optimize = 0x00u8;
-        if symbol_duration > 16 {
-            low_data_rate_optimize = 0x01u8
-        }
-
-        Ok(Self {
-            spreading_factor,
-            bandwidth,
-            coding_rate,
-            low_data_rate_optimize,
-            frequency_in_hz,
-        })
-    }
-}
-
-impl PacketParams {
-    /// Create packet parameters specific to the LoRa chip kind and type
-    pub fn new_for_sx1276_7_8_9(
-        preamble_length: u16,
-        implicit_header: bool,
-        payload_length: u8,
-        crc_on: bool,
-        iq_inverted: bool,
-        modulation_params: &ModulationParams,
-    ) -> Result<Self, RadioError> {
-        // Parameter validation
-        if (modulation_params.spreading_factor == SpreadingFactor::_6) && !implicit_header {
-            return Err(RadioError::InvalidSF6ExplicitHeaderRequest);
-        }
-
-        Ok(Self {
-            preamble_length,
-            implicit_header,
-            payload_length,
-            crc_on,
-            iq_inverted,
-        })
-    }
-}
-
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
 pub struct SX1276_7_8_9<SPI, IV> {
     board_type: BoardType,
@@ -132,6 +73,61 @@ where
 {
     fn get_board_type(&self) -> BoardType {
         self.board_type
+    }
+
+    fn create_modulation_params(
+        &self,
+        spreading_factor: SpreadingFactor,
+        bandwidth: Bandwidth,
+        coding_rate: CodingRate,
+        frequency_in_hz: u32,
+    ) -> Result<ModulationParams, RadioError> {
+        // Parameter validation
+        spreading_factor_value(spreading_factor)?;
+        bandwidth_value(bandwidth)?;
+        coding_rate_value(coding_rate)?;
+        if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000) {
+            return Err(RadioError::InvalidBandwidthForFrequency);
+        }
+
+        // Section 4.1.1.5 and 4.1.1.6
+        let bw_in_hz = bandwidth.value_in_hz();
+        let symbol_duration = 1000 / (bw_in_hz / (0x01u32 << spreading_factor_value(spreading_factor)?));
+        let mut low_data_rate_optimize = 0x00u8;
+        if symbol_duration > 16 {
+            low_data_rate_optimize = 0x01u8
+        }
+
+        Ok(ModulationParams {
+            spreading_factor,
+            bandwidth,
+            coding_rate,
+            low_data_rate_optimize,
+            frequency_in_hz,
+        })
+    }
+
+    fn create_packet_params(
+        &self,
+        preamble_length: u16,
+        implicit_header: bool,
+        payload_length: u8,
+        crc_on: bool,
+        iq_inverted: bool,
+        modulation_params: &ModulationParams,
+    ) -> Result<PacketParams, RadioError> {
+        // Parameter validation
+        if (modulation_params.spreading_factor == SpreadingFactor::_6) && !implicit_header {
+            return Err(RadioError::InvalidSF6ExplicitHeaderRequest);
+        }
+
+        Ok(PacketParams {
+            preamble_length,
+            implicit_header,
+            payload_length,
+            crc_on,
+            iq_inverted,
+        })
     }
 
     async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {

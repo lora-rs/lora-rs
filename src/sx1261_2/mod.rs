@@ -30,66 +30,6 @@ const SX126X_MAX_LORA_SYMB_NUM_TIMEOUT: u8 = 248;
 // Time required for the TCXO to wakeup [ms].
 const BRD_TCXO_WAKEUP_TIME: u32 = 10;
 
-impl ModulationParams {
-    /// Create modulation parameters specific to the LoRa chip kind and type
-    pub fn new_for_sx1261_2(
-        spreading_factor: SpreadingFactor,
-        bandwidth: Bandwidth,
-        coding_rate: CodingRate,
-        frequency_in_hz: u32,
-    ) -> Result<Self, RadioError> {
-        // Parameter validation
-        spreading_factor_value(spreading_factor)?;
-        bandwidth_value(bandwidth)?;
-        coding_rate_value(coding_rate)?;
-        if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000) {
-            return Err(RadioError::InvalidBandwidthForFrequency);
-        }
-
-        let mut low_data_rate_optimize = 0x00u8;
-        if (((spreading_factor == SpreadingFactor::_11) || (spreading_factor == SpreadingFactor::_12))
-            && (bandwidth == Bandwidth::_125KHz))
-            || ((spreading_factor == SpreadingFactor::_12) && (bandwidth == Bandwidth::_250KHz))
-        {
-            low_data_rate_optimize = 0x01u8;
-        }
-        Ok(Self {
-            spreading_factor,
-            bandwidth,
-            coding_rate,
-            low_data_rate_optimize,
-            frequency_in_hz,
-        })
-    }
-}
-
-impl PacketParams {
-    /// Create packet parameters specific to the LoRa chip kind and type
-    pub fn new_for_sx1261_2(
-        mut preamble_length: u16,
-        implicit_header: bool,
-        payload_length: u8,
-        crc_on: bool,
-        iq_inverted: bool,
-        modulation_params: &ModulationParams,
-    ) -> Result<Self, RadioError> {
-        if ((modulation_params.spreading_factor == SpreadingFactor::_5)
-            || (modulation_params.spreading_factor == SpreadingFactor::_6))
-            && (preamble_length < 12)
-        {
-            preamble_length = 12;
-        }
-
-        Ok(Self {
-            preamble_length,
-            implicit_header,
-            payload_length,
-            crc_on,
-            iq_inverted,
-        })
-    }
-}
-
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
 pub struct SX1261_2<SPI, IV> {
     board_type: BoardType,
@@ -220,6 +160,62 @@ where
         self.board_type
     }
 
+    fn create_modulation_params(
+        &self,
+        spreading_factor: SpreadingFactor,
+        bandwidth: Bandwidth,
+        coding_rate: CodingRate,
+        frequency_in_hz: u32,
+    ) -> Result<ModulationParams, RadioError> {
+        // Parameter validation
+        spreading_factor_value(spreading_factor)?;
+        bandwidth_value(bandwidth)?;
+        coding_rate_value(coding_rate)?;
+        if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000) {
+            return Err(RadioError::InvalidBandwidthForFrequency);
+        }
+
+        let mut low_data_rate_optimize = 0x00u8;
+        if (((spreading_factor == SpreadingFactor::_11) || (spreading_factor == SpreadingFactor::_12))
+            && (bandwidth == Bandwidth::_125KHz))
+            || ((spreading_factor == SpreadingFactor::_12) && (bandwidth == Bandwidth::_250KHz))
+        {
+            low_data_rate_optimize = 0x01u8;
+        }
+        Ok(ModulationParams {
+            spreading_factor,
+            bandwidth,
+            coding_rate,
+            low_data_rate_optimize,
+            frequency_in_hz,
+        })
+    }
+
+    fn create_packet_params(
+        &self,
+        mut preamble_length: u16,
+        implicit_header: bool,
+        payload_length: u8,
+        crc_on: bool,
+        iq_inverted: bool,
+        modulation_params: &ModulationParams,
+    ) -> Result<PacketParams, RadioError> {
+        if ((modulation_params.spreading_factor == SpreadingFactor::_5)
+            || (modulation_params.spreading_factor == SpreadingFactor::_6))
+            && (preamble_length < 12)
+        {
+            preamble_length = 12;
+        }
+
+        Ok(PacketParams {
+            preamble_length,
+            implicit_header,
+            payload_length,
+            crc_on,
+            iq_inverted,
+        })
+    }
+
     async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
         self.intf.iv.reset(delay).await
     }
@@ -295,7 +291,7 @@ where
     async fn set_oscillator(&mut self) -> Result<(), RadioError> {
         // voltage used to control the TCXO on/off from DIO3
         let voltage = match self.board_type {
-            BoardType::CustomSx1261_2 | BoardType::CustomSx1276_7_8_9 | BoardType::Stm32l0Sx1276 => {
+            BoardType::CustomBoard | BoardType::Stm32l0Sx1276 => {
                 return Err(RadioError::BoardTypeUnsupportedForRadioKind);
             }
             BoardType::Rak3172Sx1262 => {
@@ -604,8 +600,8 @@ where
         }
 
         // stop the Rx timer on preamble detection
-        let op_code_and_false_flag = [OpCode::SetStopRxTimerOnPreamble.value(), 0x01u8];
-        self.intf.write(&[&op_code_and_false_flag], false).await?;
+        let op_code_and_true_flag = [OpCode::SetStopRxTimerOnPreamble.value(), 0x01u8];
+        self.intf.write(&[&op_code_and_true_flag], false).await?;
 
         self.set_lora_symbol_num_timeout(symbol_timeout_final).await?;
 
