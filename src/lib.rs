@@ -29,8 +29,10 @@ where
     radio_kind: RK,
     delay: DLY,
     radio_mode: RadioMode,
+    enable_public_network: bool,
     rx_continuous: bool,
-    image_calibrated: bool,
+    cold_start: bool,
+    calibrate_image: bool,
 }
 
 impl<RK, DLY> LoRa<RK, DLY>
@@ -44,10 +46,12 @@ where
             radio_kind,
             delay,
             radio_mode: RadioMode::Sleep,
+            enable_public_network,
             rx_continuous: false,
-            image_calibrated: false,
+            cold_start: true,
+            calibrate_image: true,
         };
-        lora.init(enable_public_network).await?;
+        lora.init().await?;
 
         Ok(lora)
     }
@@ -109,15 +113,19 @@ where
     }
 
     /// Initialize a Semtech chip as the radio for LoRa physical layer communications
-    pub async fn init(&mut self, enable_public_network: bool) -> Result<(), RadioError> {
-        self.image_calibrated = false;
+    pub async fn init(&mut self) -> Result<(), RadioError> {
+        self.cold_start = true;
         self.radio_kind.reset(&mut self.delay).await?;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
-        self.radio_kind.init_rf_switch().await?;
         self.radio_kind.set_standby().await?;
         self.radio_mode = RadioMode::Standby;
         self.rx_continuous = false;
-        self.radio_kind.set_lora_modem(enable_public_network).await?;
+        self.do_cold_start().await
+    }
+
+    async fn do_cold_start(&mut self) -> Result<(), RadioError> {
+        self.radio_kind.init_rf_switch().await?;
+        self.radio_kind.set_lora_modem(self.enable_public_network).await?;
         self.radio_kind.set_oscillator().await?;
         self.radio_kind.set_regulator_mode().await?;
         self.radio_kind.set_tx_rx_buffer_base_address(0, 0).await?;
@@ -125,7 +133,10 @@ where
             .set_tx_power_and_ramp_time(0, None, false, false)
             .await?;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
-        self.radio_kind.update_retention_list().await
+        self.radio_kind.update_retention_list().await?;
+        self.cold_start = false;
+        self.calibrate_image = true;
+        Ok(())
     }
 
     /// Place the LoRa physical layer in low power mode, specifying cold or warm start (if the Semtech chip supports it)
@@ -136,7 +147,7 @@ where
                 .set_sleep(warm_start_if_possible, &mut self.delay)
                 .await?;
             if !warm_start_if_possible {
-                self.image_calibrated = false;
+                self.cold_start = true;
             }
             self.radio_mode = RadioMode::Sleep;
         }
@@ -155,6 +166,13 @@ where
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;
             self.radio_mode = RadioMode::Standby;
+        }
+        if self.cold_start {
+            self.do_cold_start().await?;
+        }
+        if self.calibrate_image {
+            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
+            self.calibrate_image = false;
         }
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind
@@ -179,10 +197,6 @@ where
 
         tx_pkt_params.set_payload_length(buffer.len())?;
         self.radio_kind.set_packet_params(tx_pkt_params).await?;
-        if !self.image_calibrated {
-            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
-            self.image_calibrated = true;
-        }
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_kind.set_payload(buffer).await?;
         self.radio_mode = RadioMode::Transmit;
@@ -220,13 +234,15 @@ where
             self.radio_kind.set_standby().await?;
             self.radio_mode = RadioMode::Standby;
         }
-
+        if self.cold_start {
+            self.do_cold_start().await?;
+        }
+        if self.calibrate_image {
+            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
+            self.calibrate_image = false;
+        }
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_packet_params(rx_pkt_params).await?;
-        if !self.image_calibrated {
-            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
-            self.image_calibrated = true;
-        }
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_mode = match duty_cycle_params {
             Some(&_duty_cycle) => RadioMode::ReceiveDutyCycle,
@@ -295,12 +311,14 @@ where
             self.radio_kind.set_standby().await?;
             self.radio_mode = RadioMode::Standby;
         }
-
-        self.radio_kind.set_modulation_params(mdltn_params).await?;
-        if !self.image_calibrated {
-            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
-            self.image_calibrated = true;
+        if self.cold_start {
+            self.do_cold_start().await?;
         }
+        if self.calibrate_image {
+            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
+            self.calibrate_image = false;
+        }
+        self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_mode = RadioMode::ChannelActivityDetection;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
@@ -343,6 +361,9 @@ where
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;
             self.radio_mode = RadioMode::Standby;
+        }
+        if self.cold_start {
+            self.do_cold_start().await?;
         }
 
         let random_number = self.radio_kind.get_random_number().await?;
