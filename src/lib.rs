@@ -20,6 +20,9 @@ use interface::*;
 use mod_params::*;
 use mod_traits::*;
 
+// Maximum value for symbol timeout across known LoRa chips
+const MAX_LORA_SYMB_NUM_TIMEOUT: u32 = 248;
+
 /// Provides the physical layer API to support LoRa chips
 pub struct LoRa<RK, DLY>
 where
@@ -31,6 +34,7 @@ where
     radio_mode: RadioMode,
     enable_public_network: bool,
     rx_continuous: bool,
+    polling_timeout_in_ms: Option<u32>,
     cold_start: bool,
     calibrate_image: bool,
 }
@@ -48,6 +52,7 @@ where
             radio_mode: RadioMode::Sleep,
             enable_public_network,
             rx_continuous: false,
+            polling_timeout_in_ms: None,
             cold_start: true,
             calibrate_image: true,
         };
@@ -223,12 +228,31 @@ where
         &mut self,
         mdltn_params: &ModulationParams,
         rx_pkt_params: &PacketParams,
+        window_in_secs: Option<u8>, // None for Rx continuous
         duty_cycle_params: Option<&DutyCycleParams>,
-        rx_continuous: bool,
         rx_boosted_if_supported: bool,
-        symbol_timeout: u16,
     ) -> Result<(), RadioError> {
-        self.rx_continuous = rx_continuous;
+        let mut symbol_timeout: u32 = 0;
+        match window_in_secs {
+            Some(window) => {
+                let sf = mdltn_params.spreading_factor.value();
+                let bw = mdltn_params.bandwidth.value_in_hz();
+                let symbols_per_sec = bw / (0x01u32 << sf); // symbol rate in symbols/sec = (BW in Hz) / (2 raised to the SF power)
+                let window_in_ms: u32 = (window as u32).checked_mul(1000).unwrap();
+                symbol_timeout = (window_in_ms - 200).checked_mul(symbols_per_sec).unwrap() / 1000; // leave a gap (subtract 200ms) to allow time to set up another window
+                if symbol_timeout > MAX_LORA_SYMB_NUM_TIMEOUT {
+                    symbol_timeout = MAX_LORA_SYMB_NUM_TIMEOUT;
+                }
+                self.rx_continuous = false;
+                // provide a safety net polling timeout while allowing reception of a packet which starts within the window but exceeds the window size
+                self.polling_timeout_in_ms = Some(window_in_ms.checked_mul(5).unwrap());
+            }
+            None => {
+                self.rx_continuous = true;
+                self.polling_timeout_in_ms = None;
+            }
+        }
+
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;
@@ -255,7 +279,7 @@ where
                 duty_cycle_params,
                 self.rx_continuous,
                 rx_boosted_if_supported,
-                symbol_timeout,
+                symbol_timeout as u16,
             )
             .await
     }
@@ -263,21 +287,16 @@ where
     /// Obtain the results of a read operation
     pub async fn rx(
         &mut self,
-        single_mode_polling_timeout_in_ms: Option<u32>, // not pertinent for Rx continuous mode
         rx_pkt_params: &PacketParams,
         receiving_buffer: &mut [u8],
     ) -> Result<(u8, PacketStatus), RadioError> {
-        let mut polling_timeout_in_ms = single_mode_polling_timeout_in_ms;
-        if self.rx_continuous {
-            polling_timeout_in_ms = None;
-        }
         match self
             .radio_kind
             .process_irq(
                 self.radio_mode,
                 self.rx_continuous,
                 &mut self.delay,
-                polling_timeout_in_ms,
+                self.polling_timeout_in_ms,
                 None,
             )
             .await

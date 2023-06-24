@@ -841,7 +841,7 @@ where
 
             // Await IRQ events unless event polling is used.
             if polling_timeout_in_ms.is_some() {
-                delay.delay_ms(10).await;
+                delay.delay_ms(50).await;
                 i += 1;
             } else {
                 self.intf.iv.await_irq().await?;

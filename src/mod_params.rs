@@ -124,6 +124,22 @@ pub enum SpreadingFactor {
     _12,
 }
 
+impl SpreadingFactor {
+    /// Convert to numeric value
+    pub fn value(self) -> u32 {
+        match self {
+            SpreadingFactor::_5 => 5,
+            SpreadingFactor::_6 => 6,
+            SpreadingFactor::_7 => 7,
+            SpreadingFactor::_8 => 8,
+            SpreadingFactor::_9 => 9,
+            SpreadingFactor::_10 => 10,
+            SpreadingFactor::_11 => 11,
+            SpreadingFactor::_12 => 12,
+        }
+    }
+}
+
 /// Valid bandwidths for one or more LoRa chips supported by this crate
 #[derive(Clone, Copy, PartialEq)]
 #[allow(missing_docs)]
