@@ -52,7 +52,7 @@ pub enum DR {
     _15 = 15,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Region {
     AS923_1,
