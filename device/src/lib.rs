@@ -125,6 +125,8 @@ pub trait Timings {
     fn get_rx_window_duration_ms(&self) -> u32;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum JoinMode {
     OTAA { deveui: [u8; 8], appeui: [u8; 8], appkey: [u8; 16] },
     ABP { newskey: AES128, appskey: AES128, devaddr: DevAddr<[u8; 4]> },
