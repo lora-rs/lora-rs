@@ -20,31 +20,43 @@ use interface::*;
 use mod_params::*;
 use mod_traits::*;
 
-/// Provides the physical layer API to support LoRa chips
-pub struct LoRa<RK> {
-    radio_kind: RK,
-    radio_mode: RadioMode,
-    rx_continuous: bool,
-    image_calibrated: bool,
-}
+// Maximum value for symbol timeout across known LoRa chips
+const MAX_LORA_SYMB_NUM_TIMEOUT: u32 = 248;
 
-impl<RK> LoRa<RK>
+/// Provides the physical layer API to support LoRa chips
+pub struct LoRa<RK, DLY>
 where
     RK: RadioKind,
+    DLY: DelayUs,
+{
+    radio_kind: RK,
+    delay: DLY,
+    radio_mode: RadioMode,
+    enable_public_network: bool,
+    rx_continuous: bool,
+    polling_timeout_in_ms: Option<u32>,
+    cold_start: bool,
+    calibrate_image: bool,
+}
+
+impl<RK, DLY> LoRa<RK, DLY>
+where
+    RK: RadioKind,
+    DLY: DelayUs,
 {
     /// Build and return a new instance of the LoRa physical layer API to control an initialized LoRa radio
-    pub async fn new(
-        radio_kind: RK,
-        enable_public_network: bool,
-        delay: &mut impl DelayUs,
-    ) -> Result<Self, RadioError> {
+    pub async fn new(radio_kind: RK, enable_public_network: bool, delay: DLY) -> Result<Self, RadioError> {
         let mut lora = Self {
             radio_kind,
+            delay,
             radio_mode: RadioMode::Sleep,
+            enable_public_network,
             rx_continuous: false,
-            image_calibrated: false,
+            polling_timeout_in_ms: None,
+            cold_start: true,
+            calibrate_image: true,
         };
-        lora.init(enable_public_network, delay).await?;
+        lora.init().await?;
 
         Ok(lora)
     }
@@ -62,18 +74,8 @@ where
         coding_rate: CodingRate,
         frequency_in_hz: u32,
     ) -> Result<ModulationParams, RadioError> {
-        match self.radio_kind.get_board_type().into() {
-            ChipType::Sx1261 | ChipType::Sx1262 | ChipType::CustomSx1261_2 => {
-                ModulationParams::new_for_sx1261_2(spreading_factor, bandwidth, coding_rate, frequency_in_hz)
-            }
-            ChipType::Sx1276
-            | ChipType::Sx1277
-            | ChipType::Sx1278
-            | ChipType::Sx1279
-            | ChipType::CustomSx1276_7_8_9 => {
-                ModulationParams::new_for_sx1276_7_8_9(spreading_factor, bandwidth, coding_rate, frequency_in_hz)
-            }
-        }
+        self.radio_kind
+            .create_modulation_params(spreading_factor, bandwidth, coding_rate, frequency_in_hz)
     }
 
     /// Create packet parameters for a send operation on a communication channel
@@ -85,28 +87,14 @@ where
         iq_inverted: bool,
         modulation_params: &ModulationParams,
     ) -> Result<PacketParams, RadioError> {
-        match self.radio_kind.get_board_type().into() {
-            ChipType::Sx1261 | ChipType::Sx1262 | ChipType::CustomSx1261_2 => PacketParams::new_for_sx1261_2(
-                preamble_length,
-                implicit_header,
-                0,
-                crc_on,
-                iq_inverted,
-                modulation_params,
-            ),
-            ChipType::Sx1276
-            | ChipType::Sx1277
-            | ChipType::Sx1278
-            | ChipType::Sx1279
-            | ChipType::CustomSx1276_7_8_9 => PacketParams::new_for_sx1276_7_8_9(
-                preamble_length,
-                implicit_header,
-                0,
-                crc_on,
-                iq_inverted,
-                modulation_params,
-            ),
-        }
+        self.radio_kind.create_packet_params(
+            preamble_length,
+            implicit_header,
+            0,
+            crc_on,
+            iq_inverted,
+            modulation_params,
+        )
     }
 
     /// Create packet parameters for a receive operation on a communication channel
@@ -119,40 +107,30 @@ where
         iq_inverted: bool,
         modulation_params: &ModulationParams,
     ) -> Result<PacketParams, RadioError> {
-        match self.radio_kind.get_board_type().into() {
-            ChipType::Sx1261 | ChipType::Sx1262 | ChipType::CustomSx1261_2 => PacketParams::new_for_sx1261_2(
-                preamble_length,
-                implicit_header,
-                max_payload_length,
-                crc_on,
-                iq_inverted,
-                modulation_params,
-            ),
-            ChipType::Sx1276
-            | ChipType::Sx1277
-            | ChipType::Sx1278
-            | ChipType::Sx1279
-            | ChipType::CustomSx1276_7_8_9 => PacketParams::new_for_sx1276_7_8_9(
-                preamble_length,
-                implicit_header,
-                max_payload_length,
-                crc_on,
-                iq_inverted,
-                modulation_params,
-            ),
-        }
+        self.radio_kind.create_packet_params(
+            preamble_length,
+            implicit_header,
+            max_payload_length,
+            crc_on,
+            iq_inverted,
+            modulation_params,
+        )
     }
 
     /// Initialize a Semtech chip as the radio for LoRa physical layer communications
-    pub async fn init(&mut self, enable_public_network: bool, delay: &mut impl DelayUs) -> Result<(), RadioError> {
-        self.image_calibrated = false;
-        self.radio_kind.reset(delay).await?;
+    pub async fn init(&mut self) -> Result<(), RadioError> {
+        self.cold_start = true;
+        self.radio_kind.reset(&mut self.delay).await?;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
-        self.radio_kind.init_rf_switch().await?;
         self.radio_kind.set_standby().await?;
         self.radio_mode = RadioMode::Standby;
         self.rx_continuous = false;
-        self.radio_kind.set_lora_modem(enable_public_network).await?;
+        self.do_cold_start().await
+    }
+
+    async fn do_cold_start(&mut self) -> Result<(), RadioError> {
+        self.radio_kind.init_rf_switch().await?;
+        self.radio_kind.set_lora_modem(self.enable_public_network).await?;
         self.radio_kind.set_oscillator().await?;
         self.radio_kind.set_regulator_mode().await?;
         self.radio_kind.set_tx_rx_buffer_base_address(0, 0).await?;
@@ -160,16 +138,21 @@ where
             .set_tx_power_and_ramp_time(0, None, false, false)
             .await?;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
-        self.radio_kind.update_retention_list().await
+        self.radio_kind.update_retention_list().await?;
+        self.cold_start = false;
+        self.calibrate_image = true;
+        Ok(())
     }
 
-    /// Place the LoRa physical layer in low power mode, using warm start if the Semtech chip supports it
-    pub async fn sleep(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
+    /// Place the LoRa physical layer in low power mode, specifying cold or warm start (if the Semtech chip supports it)
+    pub async fn sleep(&mut self, warm_start_if_possible: bool) -> Result<(), RadioError> {
         if self.radio_mode != RadioMode::Sleep {
             self.radio_kind.ensure_ready(self.radio_mode).await?;
-            let warm_start_enabled = self.radio_kind.set_sleep(delay).await?;
-            if !warm_start_enabled {
-                self.image_calibrated = false;
+            self.radio_kind
+                .set_sleep(warm_start_if_possible, &mut self.delay)
+                .await?;
+            if !warm_start_if_possible {
+                self.cold_start = true;
             }
             self.radio_mode = RadioMode::Sleep;
         }
@@ -188,6 +171,13 @@ where
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;
             self.radio_mode = RadioMode::Standby;
+        }
+        if self.cold_start {
+            self.do_cold_start().await?;
+        }
+        if self.calibrate_image {
+            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
+            self.calibrate_image = false;
         }
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind
@@ -212,10 +202,6 @@ where
 
         tx_pkt_params.set_payload_length(buffer.len())?;
         self.radio_kind.set_packet_params(tx_pkt_params).await?;
-        if !self.image_calibrated {
-            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
-            self.image_calibrated = true;
-        }
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_kind.set_payload(buffer).await?;
         self.radio_mode = RadioMode::Transmit;
@@ -223,7 +209,7 @@ where
         self.radio_kind.do_tx(timeout_in_ms).await?;
         match self
             .radio_kind
-            .process_irq(self.radio_mode, self.rx_continuous, None)
+            .process_irq(self.radio_mode, self.rx_continuous, &mut self.delay, None, None)
             .await
         {
             Ok(()) => Ok(()),
@@ -242,25 +228,45 @@ where
         &mut self,
         mdltn_params: &ModulationParams,
         rx_pkt_params: &PacketParams,
+        window_in_secs: Option<u8>, // None for Rx continuous
         duty_cycle_params: Option<&DutyCycleParams>,
-        rx_continuous: bool,
         rx_boosted_if_supported: bool,
-        symbol_timeout: u16,
-        rx_timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
-        self.rx_continuous = rx_continuous;
+        let mut symbol_timeout: u32 = 0;
+        match window_in_secs {
+            Some(window) => {
+                let sf = mdltn_params.spreading_factor.value();
+                let bw = mdltn_params.bandwidth.value_in_hz();
+                let symbols_per_sec = bw / (0x01u32 << sf); // symbol rate in symbols/sec = (BW in Hz) / (2 raised to the SF power)
+                let window_in_ms: u32 = (window as u32).checked_mul(1000).unwrap();
+                symbol_timeout = (window_in_ms - 200).checked_mul(symbols_per_sec).unwrap() / 1000; // leave a gap (subtract 200ms) to allow time to set up another window
+                if symbol_timeout > MAX_LORA_SYMB_NUM_TIMEOUT {
+                    symbol_timeout = MAX_LORA_SYMB_NUM_TIMEOUT;
+                }
+                self.rx_continuous = false;
+                // provide a safety net polling timeout while allowing reception of a packet which starts within the window but exceeds the window size
+                self.polling_timeout_in_ms = Some(window_in_ms.checked_mul(5).unwrap());
+            }
+            None => {
+                self.rx_continuous = true;
+                self.polling_timeout_in_ms = None;
+            }
+        }
+
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;
             self.radio_mode = RadioMode::Standby;
         }
-
+        if self.cold_start {
+            self.do_cold_start().await?;
+        }
+        if self.calibrate_image {
+            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
+            self.calibrate_image = false;
+        }
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_packet_params(rx_pkt_params).await?;
-        if !self.image_calibrated {
-            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
-            self.image_calibrated = true;
-        }
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_mode = match duty_cycle_params {
             Some(&_duty_cycle) => RadioMode::ReceiveDutyCycle,
@@ -273,8 +279,7 @@ where
                 duty_cycle_params,
                 self.rx_continuous,
                 rx_boosted_if_supported,
-                symbol_timeout,
-                rx_timeout_in_ms,
+                symbol_timeout as u16,
             )
             .await
     }
@@ -287,7 +292,13 @@ where
     ) -> Result<(u8, PacketStatus), RadioError> {
         match self
             .radio_kind
-            .process_irq(self.radio_mode, self.rx_continuous, None)
+            .process_irq(
+                self.radio_mode,
+                self.rx_continuous,
+                &mut self.delay,
+                self.polling_timeout_in_ms,
+                None,
+            )
             .await
         {
             Ok(()) => {
@@ -319,12 +330,14 @@ where
             self.radio_kind.set_standby().await?;
             self.radio_mode = RadioMode::Standby;
         }
-
-        self.radio_kind.set_modulation_params(mdltn_params).await?;
-        if !self.image_calibrated {
-            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
-            self.image_calibrated = true;
+        if self.cold_start {
+            self.do_cold_start().await?;
         }
+        if self.calibrate_image {
+            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
+            self.calibrate_image = false;
+        }
+        self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_mode = RadioMode::ChannelActivityDetection;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
@@ -336,7 +349,13 @@ where
         let mut cad_activity_detected = false;
         match self
             .radio_kind
-            .process_irq(self.radio_mode, self.rx_continuous, Some(&mut cad_activity_detected))
+            .process_irq(
+                self.radio_mode,
+                self.rx_continuous,
+                &mut self.delay,
+                None,
+                Some(&mut cad_activity_detected),
+            )
             .await
         {
             Ok(()) => Ok(cad_activity_detected),
@@ -350,9 +369,10 @@ where
     }
 }
 
-impl<RK> AsyncRng for LoRa<RK>
+impl<RK, DLY> AsyncRng for LoRa<RK, DLY>
 where
     RK: RngRadio,
+    DLY: DelayUs,
 {
     async fn get_random_number(&mut self) -> Result<u32, RadioError> {
         self.rx_continuous = false;
@@ -360,6 +380,9 @@ where
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;
             self.radio_mode = RadioMode::Standby;
+        }
+        if self.cold_start {
+            self.do_cold_start().await?;
         }
 
         let random_number = self.radio_kind.get_random_number().await?;

@@ -11,5 +11,6 @@ description = "A LoRa physical layer implementation enabling utilization of a ra
 [dependencies]
 defmt = { version = "0.3" }
 log = { version = "0.4.14" }
+num-traits = { version = "0.2.14", default-features = false }
 
 embedded-hal-async = { version = "=0.2.0-alpha.1"}

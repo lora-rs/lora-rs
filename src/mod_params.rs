@@ -32,6 +32,7 @@ pub enum RadioError {
     CRCErrorOnReceive,
     TransmitTimeout,
     ReceiveTimeout,
+    PollingTimeout,
     TimeoutUnexpected,
     TransmitDoneUnexpected,
     ReceiveDoneUnexpected,
@@ -54,12 +55,11 @@ pub struct PacketStatus {
 /// In addition, custom boards (possibly proprietary) can be supported by using the custom board and chip types and
 /// external implementations of the RadioKind and (in some cases) InterfaceVariant traits.  For instance:
 /// let iv = ExternalInterfaceVariantImpl::new(..params...)
-/// LoRa::new(ExternalRadioKindImpl::new(BoardType::CustomSx1261_2, spi, iv), ...other_params...)
+/// LoRa::new(ExternalRadioKindImpl::new(BoardType::CustomBoard, spi, iv), ...other_params...)
 #[derive(Clone, Copy, PartialEq)]
 #[allow(missing_docs)]
 pub enum BoardType {
-    CustomSx1261_2,
-    CustomSx1276_7_8_9,
+    CustomBoard,
     GenericSx1261, // placeholder for Sx1261-specific features
     HeltecWifiLoraV31262,
     RpPicoWaveshareSx1262,
@@ -73,8 +73,7 @@ pub enum BoardType {
 #[derive(Clone, Copy, PartialEq)]
 #[allow(missing_docs)]
 pub enum ChipType {
-    CustomSx1261_2,
-    CustomSx1276_7_8_9,
+    CustomChip,
     Sx1261,
     Sx1262,
     Sx1276,
@@ -86,8 +85,7 @@ pub enum ChipType {
 impl From<BoardType> for ChipType {
     fn from(board_type: BoardType) -> Self {
         match board_type {
-            BoardType::CustomSx1261_2 => ChipType::CustomSx1261_2,
-            BoardType::CustomSx1276_7_8_9 => ChipType::CustomSx1276_7_8_9,
+            BoardType::CustomBoard => ChipType::CustomChip,
             BoardType::GenericSx1261 => ChipType::Sx1261,
             BoardType::HeltecWifiLoraV31262 => ChipType::Sx1262,
             BoardType::RpPicoWaveshareSx1262 => ChipType::Sx1262,
@@ -124,6 +122,22 @@ pub enum SpreadingFactor {
     _10,
     _11,
     _12,
+}
+
+impl SpreadingFactor {
+    /// Convert to numeric value
+    pub fn value(self) -> u32 {
+        match self {
+            SpreadingFactor::_5 => 5,
+            SpreadingFactor::_6 => 6,
+            SpreadingFactor::_7 => 7,
+            SpreadingFactor::_8 => 8,
+            SpreadingFactor::_9 => 9,
+            SpreadingFactor::_10 => 10,
+            SpreadingFactor::_11 => 11,
+            SpreadingFactor::_12 => 12,
+        }
+    }
 }
 
 /// Valid bandwidths for one or more LoRa chips supported by this crate

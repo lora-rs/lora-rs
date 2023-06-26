@@ -30,6 +30,24 @@ pub trait InterfaceVariant {
 pub trait RadioKind {
     /// Get the specific type of the LoRa board (for example, Stm32wlSx1262)
     fn get_board_type(&self) -> BoardType;
+    /// Create modulation parameters specific to the LoRa chip kind and type
+    fn create_modulation_params(
+        &self,
+        spreading_factor: SpreadingFactor,
+        bandwidth: Bandwidth,
+        coding_rate: CodingRate,
+        frequency_in_hz: u32,
+    ) -> Result<ModulationParams, RadioError>;
+    /// Create packet parameters specific to the LoRa chip kind and type
+    fn create_packet_params(
+        &self,
+        preamble_length: u16,
+        implicit_header: bool,
+        payload_length: u8,
+        crc_on: bool,
+        iq_inverted: bool,
+        modulation_params: &ModulationParams,
+    ) -> Result<PacketParams, RadioError>;
     /// Reset the loRa chip
     async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError>;
     /// Ensure the LoRa chip is in the appropriate state to allow operation requests
@@ -39,7 +57,7 @@ pub trait RadioKind {
     /// Place the LoRa chip in standby mode
     async fn set_standby(&mut self) -> Result<(), RadioError>;
     /// Place the LoRa chip in power-saving mode
-    async fn set_sleep(&mut self, delay: &mut impl DelayUs) -> Result<bool, RadioError>;
+    async fn set_sleep(&mut self, warm_start_if_possible: bool, delay: &mut impl DelayUs) -> Result<(), RadioError>;
     /// Perform operations to set a multi-protocol chip as a LoRa chip
     async fn set_lora_modem(&mut self, enable_public_network: bool) -> Result<(), RadioError>;
     /// Perform operations to set the LoRa chip oscillator
@@ -82,7 +100,6 @@ pub trait RadioKind {
         rx_continuous: bool,
         rx_boosted_if_supported: bool,
         symbol_timeout: u16,
-        rx_timeout_in_ms: u32,
     ) -> Result<(), RadioError>;
     /// Get an available packet made available as the result of a receive operation
     async fn get_rx_payload(
@@ -105,6 +122,8 @@ pub trait RadioKind {
         &mut self,
         radio_mode: RadioMode,
         rx_continuous: bool,
+        delay: &mut impl DelayUs,
+        polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<(), RadioError>;
 }

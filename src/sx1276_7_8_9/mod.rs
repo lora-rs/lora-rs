@@ -18,65 +18,6 @@ const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
 // Frequency synthesizer step for frequency calculation (Hz)
 const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625; // FXOSC (32 MHz) * 1000000 (Hz/MHz) / 524288 (2^19)
 
-impl ModulationParams {
-    /// Create modulation parameters specific to the LoRa chip kind and type
-    pub fn new_for_sx1276_7_8_9(
-        spreading_factor: SpreadingFactor,
-        bandwidth: Bandwidth,
-        coding_rate: CodingRate,
-        frequency_in_hz: u32,
-    ) -> Result<Self, RadioError> {
-        // Parameter validation
-        spreading_factor_value(spreading_factor)?;
-        bandwidth_value(bandwidth)?;
-        coding_rate_value(coding_rate)?;
-        if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000) {
-            return Err(RadioError::InvalidBandwidthForFrequency);
-        }
-
-        // Section 4.1.1.5 and 4.1.1.6
-        let bw_in_hz = bandwidth.value_in_hz();
-        let symbol_duration = 1000 / (bw_in_hz / (0x01u32 << spreading_factor_value(spreading_factor)?));
-        let mut low_data_rate_optimize = 0x00u8;
-        if symbol_duration > 16 {
-            low_data_rate_optimize = 0x01u8
-        }
-
-        Ok(Self {
-            spreading_factor,
-            bandwidth,
-            coding_rate,
-            low_data_rate_optimize,
-            frequency_in_hz,
-        })
-    }
-}
-
-impl PacketParams {
-    /// Create packet parameters specific to the LoRa chip kind and type
-    pub fn new_for_sx1276_7_8_9(
-        preamble_length: u16,
-        implicit_header: bool,
-        payload_length: u8,
-        crc_on: bool,
-        iq_inverted: bool,
-        modulation_params: &ModulationParams,
-    ) -> Result<Self, RadioError> {
-        // Parameter validation
-        if (modulation_params.spreading_factor == SpreadingFactor::_6) && !implicit_header {
-            return Err(RadioError::InvalidSF6ExplicitHeaderRequest);
-        }
-
-        Ok(Self {
-            preamble_length,
-            implicit_header,
-            payload_length,
-            crc_on,
-            iq_inverted,
-        })
-    }
-}
-
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
 pub struct SX1276_7_8_9<SPI, IV> {
     board_type: BoardType,
@@ -113,9 +54,17 @@ where
         Ok(read_buffer[0])
     }
 
-    // Set the number of symbols the radio will wait to validate a reception
-    async fn set_lora_symbol_num_timeout(&mut self, symbol_num: u8) -> Result<(), RadioError> {
-        self.write_register(Register::RegSymbTimeoutLsb, symbol_num, false)
+    // Set the number of symbols the radio will wait to detect a reception (maximum 1023 symbols)
+    async fn set_lora_symbol_num_timeout(&mut self, symbol_num: u16) -> Result<(), RadioError> {
+        if symbol_num > 0x03ffu16 {
+            return Err(RadioError::InvalidSymbolTimeout);
+        }
+        let symbol_num_msb = ((symbol_num & 0x0300u16) >> 8) as u8;
+        let symbol_num_lsb = (symbol_num & 0x00ffu16) as u8;
+        let mut config_2 = self.read_register(Register::RegModemConfig2).await?;
+        config_2 = (config_2 & 0xfcu8) | symbol_num_msb;
+        self.write_register(Register::RegModemConfig2, config_2, false).await?;
+        self.write_register(Register::RegSymbTimeoutLsb, symbol_num_lsb, false)
             .await
     }
 
@@ -134,9 +83,64 @@ where
         self.board_type
     }
 
+    fn create_modulation_params(
+        &self,
+        spreading_factor: SpreadingFactor,
+        bandwidth: Bandwidth,
+        coding_rate: CodingRate,
+        frequency_in_hz: u32,
+    ) -> Result<ModulationParams, RadioError> {
+        // Parameter validation
+        spreading_factor_value(spreading_factor)?;
+        bandwidth_value(bandwidth)?;
+        coding_rate_value(coding_rate)?;
+        if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000) {
+            return Err(RadioError::InvalidBandwidthForFrequency);
+        }
+
+        // Section 4.1.1.5 and 4.1.1.6
+        let bw_in_hz = bandwidth.value_in_hz();
+        let symbol_duration = 1000 / (bw_in_hz / (0x01u32 << spreading_factor_value(spreading_factor)?));
+        let mut low_data_rate_optimize = 0x00u8;
+        if symbol_duration > 16 {
+            low_data_rate_optimize = 0x01u8
+        }
+
+        Ok(ModulationParams {
+            spreading_factor,
+            bandwidth,
+            coding_rate,
+            low_data_rate_optimize,
+            frequency_in_hz,
+        })
+    }
+
+    fn create_packet_params(
+        &self,
+        preamble_length: u16,
+        implicit_header: bool,
+        payload_length: u8,
+        crc_on: bool,
+        iq_inverted: bool,
+        modulation_params: &ModulationParams,
+    ) -> Result<PacketParams, RadioError> {
+        // Parameter validation
+        if (modulation_params.spreading_factor == SpreadingFactor::_6) && !implicit_header {
+            return Err(RadioError::InvalidSF6ExplicitHeaderRequest);
+        }
+
+        Ok(PacketParams {
+            preamble_length,
+            implicit_header,
+            payload_length,
+            crc_on,
+            iq_inverted,
+        })
+    }
+
     async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
         self.intf.iv.reset(delay).await?;
-        self.set_sleep(delay).await?; // ensure sleep mode is entered so that the LoRa mode bit is set
+        self.set_sleep(false, delay).await?; // ensure sleep mode is entered so that the LoRa mode bit is set
         Ok(())
     }
 
@@ -155,11 +159,11 @@ where
         self.intf.iv.disable_rf_switch().await
     }
 
-    async fn set_sleep(&mut self, _delay: &mut impl DelayUs) -> Result<bool, RadioError> {
+    async fn set_sleep(&mut self, _warm_start_if_possible: bool, _delay: &mut impl DelayUs) -> Result<(), RadioError> {
         self.intf.iv.disable_rf_switch().await?;
         self.write_register(Register::RegOpMode, LoRaMode::Sleep.value(), true)
             .await?;
-        Ok(false) // warm start unavailable for sx127x
+        Ok(()) // warm start unavailable for sx127x
     }
 
     /// The sx127x LoRa mode is set when setting a mode while in sleep mode.
@@ -385,7 +389,6 @@ where
         rx_continuous: bool,
         rx_boosted_if_supported: bool,
         symbol_timeout: u16,
-        _rx_timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
         if let Some(&_duty_cycle) = duty_cycle_params {
             return Err(RadioError::DutyCycleUnsupported);
@@ -397,10 +400,7 @@ where
         if rx_continuous {
             symbol_timeout_final = 0;
         }
-        if symbol_timeout_final > 0x00ffu16 {
-            return Err(RadioError::InvalidSymbolTimeout);
-        }
-        self.set_lora_symbol_num_timeout(symbol_timeout_final as u8).await?;
+        self.set_lora_symbol_num_timeout(symbol_timeout_final).await?;
 
         let mut lna_gain_final = LnaGain::G1.value();
         if rx_boosted_if_supported {
@@ -538,12 +538,30 @@ where
         &mut self,
         radio_mode: RadioMode,
         _rx_continuous: bool,
+        delay: &mut impl DelayUs,
+        polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<(), RadioError> {
+        let mut iteration_guard: u32 = 0;
+        if polling_timeout_in_ms.is_some() {
+            iteration_guard = polling_timeout_in_ms.unwrap();
+            iteration_guard /= 50; // poll for interrupts every 50 ms until polling timeout
+        }
+        let mut i: u32 = 0;
         loop {
+            if polling_timeout_in_ms.is_some() && (i >= iteration_guard) {
+                return Err(RadioError::PollingTimeout);
+            }
+
             debug!("process_irq loop entered");
 
-            self.intf.iv.await_irq().await?;
+            // Await IRQ events unless event polling is used.
+            if polling_timeout_in_ms.is_some() {
+                delay.delay_ms(50).await;
+                i += 1;
+            } else {
+                self.intf.iv.await_irq().await?;
+            }
 
             let irq_flags = self.read_register(Register::RegIrqFlags).await?;
             self.write_register(Register::RegIrqFlags, 0xffu8, false).await?; // clear all interrupts
