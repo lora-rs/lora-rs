@@ -829,7 +829,7 @@ where
         let mut iteration_guard: u32 = 0;
         if polling_timeout_in_ms.is_some() {
             iteration_guard = polling_timeout_in_ms.unwrap();
-            iteration_guard /= 10; // poll for interrupts every 10 ms until polling timeout
+            iteration_guard /= 50; // poll for interrupts every 50 ms until polling timeout
         }
         let mut i: u32 = 0;
         loop {
