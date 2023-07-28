@@ -8,15 +8,71 @@ mod us915;
 pub(crate) use au915::AU915;
 pub(crate) use us915::US915;
 
+#[derive(Clone)]
+struct PreferredJoinChannels {
+    channel_list: heapless::Vec<u8, 16>,
+    // Decrementing number representing how many tries we have left with the specified list before
+    // reverting to the default channel selection behavior.
+    num_retries: usize,
+}
+
+#[derive(Default, Clone)]
+struct JoinChannels {
+    preferred_channels: Option<PreferredJoinChannels>,
+    // List of subbands that haven't already been tried.
+    available_subbands: heapless::Vec<u8, 9>,
+}
+
+impl JoinChannels {
+    fn select_channel(&mut self, rng: &mut impl RngCore) -> u8 {
+        let random = rng.next_u32();
+
+        if let Some(fav) = &mut self.preferred_channels {
+            if fav.num_retries > 0 {
+                fav.num_retries -= 1;
+                let len = fav.channel_list.len();
+                // TODO non-compliant because the channel might be the same as the previously
+                // used channel?
+                return fav.channel_list[random as usize % len];
+            }
+        }
+
+        if self.available_subbands.is_empty() {
+            for i in (0..=8).rev() {
+                self.available_subbands.push(i).unwrap();
+            }
+        }
+
+        let subband = self.available_subbands.pop().unwrap();
+        8 * subband + (rng.next_u32() % 8) as u8
+    }
+
+    fn set_preferred(&mut self, preferred: heapless::Vec<u8, 16>, num_retries: usize) -> Self {
+        Self {
+            preferred_channels: Some(PreferredJoinChannels {
+                channel_list: preferred,
+                num_retries,
+            }),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct FixedChannelPlan<const D: usize, F: FixedChannelRegion<D>> {
     last_tx_channel: u8,
     channel_mask: ChannelMask<9>,
     _fixed_channel_region: PhantomData<F>,
+    join_channels: JoinChannels,
 }
 
 impl<const D: usize, F: FixedChannelRegion<D>> FixedChannelPlan<D, F> {
+    pub fn set_preferred_join_channels(&mut self, preferred_channels: &[u8], num_retries: usize) {
+        self.join_channels
+            .set_preferred(heapless::Vec::from_slice(preferred_channels).unwrap(), num_retries);
+    }
+
     pub fn set_125k_channels(&mut self, enabled: bool) {
         let mask = if enabled {
             0xFF
@@ -93,34 +149,57 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         &mut self,
         rng: &mut RNG,
         datarate: DR,
-        _frame: &Frame,
+        frame: &Frame,
     ) -> (Datarate, u32) {
-        // There is no distinction between join and data frames in the TX frequency selection process.
-        //
-        // Either all channels are enabled when creating a new `Configuration`, or they are selectively
-        // enabled using `Configuration::with_join_channels`. In either case, we just need to select from
-        // the enabled channels.
-        //
-        // For the data frame, the datarate impacts which channel sets we can choose from.
-        // If the datarate bandwidth is 500 kHz, we must use channels 64-71
-        // else, we must use 0-63
-        let datarate = F::datarates()[datarate as usize].clone().unwrap();
-        if datarate.bandwidth == Bandwidth::_500KHz {
-            let mut channel = (rng.next_u32() & 0b111) as u8;
-            // keep selecting a random channel until we find one that is enabled
-            while !self.channel_mask.is_enabled(channel.into()).unwrap() {
-                channel = (rng.next_u32() & 0b111) as u8;
+        match frame {
+            Frame::Join => {
+                // For the join frame, the channel is selected using the following logic:
+                //
+                // * If favorite channels are specified, a channel from these will be selected
+                //   at random until the
+                // number of retries runs out (1 by default).
+                // * Otherwise, a random channel will be selected from each group of 8 channels
+                //   (including 500 kHz
+                // channels) until every group of 8 has been tried, at which point every group
+                // will be attempted again.
+                //
+                // As per RP002-1.0.4, all join attempts are made using DR0 for 125 kHz
+                // channels, and DR4 for 500 kHz channels.
+                // TODO: contradicting data rates for US915 vs AU915?
+                let channel = self.join_channels.select_channel(rng);
+                let dr = if channel < 64 {
+                    DR::_0
+                } else {
+                    DR::_4
+                };
+                let datarate = F::datarates()[dr as usize].clone().unwrap();
+
+                (datarate, channel as u32)
             }
-            self.last_tx_channel = channel;
-            (datarate, F::uplink_channels()[(64 + channel) as usize])
-        } else {
-            let mut channel = (rng.next_u32() & 0b111111) as u8;
-            // keep selecting a random channel until we find one that is enabled
-            while !self.channel_mask.is_enabled(channel.into()).unwrap() {
-                channel = (rng.next_u32() & 0b111111) as u8;
+
+            Frame::Data => {
+                // For the data frame, the datarate impacts which channel sets we can choose
+                // from. If the datarate bandwidth is 500 kHz, we must use
+                // channels 64-71 Else, we must use 0-63
+                let datarate = F::datarates()[datarate as usize].clone().unwrap();
+                if datarate.bandwidth == Bandwidth::_500KHz {
+                    let mut channel = (rng.next_u32() & 0b111) as u8;
+                    // keep selecting a random channel until we find one that is enabled
+                    while !self.channel_mask.is_enabled(channel.into()).unwrap() {
+                        channel = (rng.next_u32() & 0b111) as u8;
+                    }
+                    self.last_tx_channel = channel;
+                    (datarate, F::uplink_channels()[(64 + channel) as usize])
+                } else {
+                    let mut channel = (rng.next_u32() & 0b111111) as u8;
+                    // keep selecting a random channel until we find one that is enabled
+                    while !self.channel_mask.is_enabled(channel.into()).unwrap() {
+                        channel = (rng.next_u32() & 0b111111) as u8;
+                    }
+                    self.last_tx_channel = channel;
+                    (datarate, F::uplink_channels()[channel as usize])
+                }
             }
-            self.last_tx_channel = channel;
-            (datarate, F::uplink_channels()[channel as usize])
         }
     }
 

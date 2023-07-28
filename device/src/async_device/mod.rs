@@ -17,7 +17,7 @@ use lorawan::{
     self,
     creator::DataPayloadCreator,
     keys::CryptoFactory,
-    maccommands::{ChannelMask, SerializableMacCommand},
+    maccommands::SerializableMacCommand,
     parser::DevAddr,
     parser::{parse_with_factory as lorawan_parse, *},
 };
@@ -204,25 +204,6 @@ where
     /// Set the data rate being used by this device. This overrides the region default.
     pub fn set_datarate(&mut self, datarate: region::DR) {
         self.datarate = datarate;
-    }
-
-    /// Enable all available channels for the frequency plan.
-    ///
-    /// This method should only be called before a join request has been succesfully accepted. It is useful if the
-    /// [`Device`]'s [`Configuration`](region::Configuration) has been created with
-    /// [`with_join_channels`](region::Configuration::with_join_channels), and no join request has been accepted after
-    /// after several attempts.
-    ///
-    /// This method will return `Err(region::Error)` if is called for a [`Device`] with a region configured as a dynamic
-    /// channel plan (ie, NOT US915 or AU915).
-    pub fn reset_channels(&mut self) -> Result<(), region::Error> {
-        match self.region.get_current_region() {
-            Region::US915 | Region::AU915 => {
-                self.region.set_channel_mask(6, ChannelMask::default());
-                Ok(())
-            }
-            _ => Err(region::Error::UnsupportedRegion),
-        }
     }
 
     /// Join the LoRaWAN network asynchronusly. The returned future completes

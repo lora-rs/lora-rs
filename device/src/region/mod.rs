@@ -1,5 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
-// generally, we allow upper_case_acronyms to make it match the LoRaWAN naming conventions better
+// generally, we allow upper_case_acronyms to make it match the LoRaWAN naming
+// conventions better
 use lorawan::{maccommands::ChannelMask, parser::CfList};
 
 use super::RngCore;
@@ -198,78 +199,94 @@ impl Configuration {
         Configuration::with_state(State::new(region))
     }
 
-    /// Create a new [`Configuration`] with a specific set of channels enabled for joining the network.
+    /// Create a new [`Configuration`] with a specific set of channels enabled
+    /// for joining the network. You can specify up to 16 preferred channels.
     ///
     /// When `join` is called on a [`Configuration`] created using this
     /// method, the network will be attempted to be joined only on the provided
-    /// channel subset.
+    /// channel subset. This set of channels will be retried the number of times
+    /// specified; after which we will revert to trying to join with all
+    /// channels enabled using a preset sequence.
     ///
-    /// This method only makes sense for fixed channel plans (AU915, US915). Trying to call
-    /// this constructor with a dynamic channel region will return `Err(())`.
+    /// This method only makes sense for fixed channel plans (AU915, US915).
+    /// Trying to call this constructor with a dynamic channel region will
+    /// return `Err`.
     ///
     /// # About supported channels (fixed channel plans only)
     ///
     /// Supported channels:
     ///
     /// * 64 125 kHz channels (0-63)
+    /// * 8 500 kHz channels (64-71)
     ///
     /// If a channel out of this range is specified, `Err(())` will be returned.
     ///
+    /// # ⚠️Warning⚠️
     ///
-    /// # Note
-    ///
-    /// It is recommended to try to join the network with a channel bias only a few
-    /// times. If joining is unsuccessful, use
-    /// [`Device::reset_channels`](crate::async_device::Device) to re-enable all the.
-    /// regional plan's channels. The reason for this is if you *only* try to join with,
-    /// a channel bias, and the network is configured to use a strictly different set of
-    /// channels than the ones you provide, the network can NEVER be joined.
+    /// It is recommended to set a low number (ie, < 10) of join retries using the
+    /// preferred channels. The reason for this is if you *only* try to join
+    /// with a channel bias, and the network is configured to use a
+    /// strictly different set of channels than the ones you provide, the
+    /// network will NEVER be joined.
     ///
     /// # Returns
     ///
-    /// * `Ok(Configuration) if the provided channel set is correct and the region is a fixed channel plan
-    /// * The length of `channel_list` must be <= 72, otherwise `Err(())` will be returned.
-    /// * If a channel out of the specified channel range is specified, `Err(())` will be returned (ie, >= 64).
-    pub fn with_join_channels(
+    /// * `Ok(Configuration)` if the provided channel set is correct and the
+    ///   region is a fixed channel plan
+    /// * The length of `channel_list` must be <= 16, otherwise `Err` will
+    ///   be returned.
+    /// * If a channel out of the specified channel range is specified,
+    ///   `Err` will be returned (ie, >= 72).
+    pub fn new_with_preferred_channels(
         region: Region,
-        join_channels: &[u8],
+        preferred_channels: &[u8],
+        num_retries: usize,
     ) -> Result<Configuration, Error> {
         use Region::*;
         match region {
             US915 | AU915 => {
-                if join_channels.len() > 64 {
+                if preferred_channels.len() > 16 {
                     return Err(Error::ChannelListTooLong);
                 }
 
+                if preferred_channels.iter().any(|c| *c >= 72) {
+                    return Err(Error::UnsupportedChannel);
+                }
+
                 let mut config = Configuration::with_state(State::new(region));
-                let empty_mask = ChannelMask::<2>::new_from_raw(&[0x00, 0x00]);
-                let mut masks = [
-                    empty_mask.clone(),
-                    empty_mask.clone(),
-                    empty_mask.clone(),
-                    empty_mask,
-                ];
-
-                // Construct the channel masks from the provided channel list
-                for channel in join_channels {
-                    if *channel >= 64 {
-                        return Err(Error::UnsupportedChannel);
+                match &mut config.state {
+                    State::US915(s) => {
+                        s.set_preferred_join_channels(preferred_channels, num_retries)
                     }
-
-                    let mask_idx = (channel / 16) as usize;
-                    let mask = &mut masks[mask_idx];
-
-                    let bank = (*channel as usize - mask_idx * 16) / 8;
-                    let old = mask.get_index(bank);
-                    let bit_pos = channel % 8;
-
-                    mask.set_bank(bank, (1 << bit_pos) | old);
+                    State::AU915(s) => {
+                        s.set_preferred_join_channels(preferred_channels, num_retries)
+                    }
+                    _ => (),
                 }
+                // let empty_mask = ChannelMask::<2>::new_from_raw(&[0x00, 0x00]);
+                // let mut masks =
+                //     [empty_mask.clone(), empty_mask.clone(), empty_mask.clone(), empty_mask];
 
-                // Set the enabled channels in config
-                for (cm_ctrl, mask) in masks.iter().enumerate() {
-                    config.set_channel_mask(cm_ctrl as u8, mask.clone());
-                }
+                // // Construct the channel masks from the provided channel list
+                // for channel in join_channels {
+                //     if *channel >= 72 {
+                //         return Err(Error::UnsupportedChannel);
+                //     }
+
+                //     let mask_idx = (channel / 16) as usize;
+                //     let mask = &mut masks[mask_idx];
+
+                //     let bank = (*channel as usize - mask_idx * 16) / 8;
+                //     let old = mask.get_index(bank);
+                //     let bit_pos = channel % 8;
+
+                //     mask.set_bank(bank, (1 << bit_pos) | old);
+                // }
+
+                // // Set the enabled channels in config
+                // for (cm_ctrl, mask) in masks.iter().enumerate() {
+                //     config.set_channel_mask(cm_ctrl as u8, mask.clone());
+                // }
 
                 Ok(config)
             }
@@ -287,8 +304,8 @@ impl Configuration {
         }
     }
 
-    // RECEIVE_DELAY2 is not configurable. LoRaWAN 1.0.3 Section 5.7: "The second reception slot
-    // opens one second after the first reception slot."
+    // RECEIVE_DELAY2 is not configurable. LoRaWAN 1.0.3 Section 5.7: "The second
+    // reception slot opens one second after the first reception slot."
     pub fn set_receive_delay1(&mut self, delay: u32) {
         self.receive_delay1 = delay;
         self.receive_delay2 = self.receive_delay1 + 1000;
