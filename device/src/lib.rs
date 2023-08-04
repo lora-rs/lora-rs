@@ -162,7 +162,7 @@ where
             ),
         };
 
-        Device { crypto: PhantomData::default(), shared, state: Some(state) }
+        Device { crypto: PhantomData, shared, state: Some(state) }
     }
 
     pub fn get_radio(&mut self) -> &mut R {
