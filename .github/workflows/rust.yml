@@ -5,7 +5,7 @@ on:
     branches: [ master ]
   pull_request:
     branches: [ master ]
-    
+
 permissions:
   checks: write
   contents: read
@@ -15,6 +15,9 @@ env:
 
 jobs:
   build:
+    env:
+      # the async device stack and external-lora-phy requires nightly
+      STABLE_FEATURES: defmt,serde
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -37,10 +40,10 @@ jobs:
         uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: -- -Dclippy::all
+          args: --features ${{ env.STABLE_FEATURES }} -- -Dclippy::all
 
       - name: Build
-        run: cargo build --all --verbose
+        run: cargo build --features ${{ env.STABLE_FEATURES }} --all --verbose
 
       - name: Run tests
         run: cargo test --verbose
