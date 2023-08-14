@@ -158,7 +158,7 @@ fn test_tx_param_setup_req_creator() {
     let mut creator = TXParamSetupReqCreator::new();
     creator.set_downlink_dwell_time();
     creator.set_uplink_dwell_time().set_uplink_dwell_time();
-    creator.set_max_eirp(3);
+    creator.set_max_eirp(3).unwrap();
     let res = creator.build();
     assert_eq!(res, [TXParamSetupReqPayload::cid(), 0b110011]);
 }
@@ -189,7 +189,7 @@ fn test_device_time_req_creator() {
 fn test_device_time_ans_creator() {
     let mut creator = DeviceTimeAnsCreator::new();
     creator.set_seconds(123456);
-    creator.set_nano_seconds(123456789);
+    creator.set_nano_seconds(123456789).unwrap();
     let res = creator.build();
     assert_eq!(res, [DeviceTimeAnsPayload::cid(), 64, 226, 1, 0, 31]);
 }
