@@ -329,6 +329,19 @@ fn test_channel_mask() {
 }
 
 #[test]
+fn test_channel_mask_enable_and_disable_channel() {
+    let data = vec![0x00, 0x00];
+    let mut expected = vec![false; 16];
+    let mut chan_mask = ChannelMask::<2>::new(&data[..]).unwrap();
+    chan_mask.set_channel(15, true);
+    expected[15] = true;
+    assert_eq!(&chan_mask.statuses::<16>()[..], &expected[..]);
+    chan_mask.set_channel(15, false);
+    expected[15] = false;
+    assert_eq!(&chan_mask.statuses::<16>()[..], &expected[..]);
+}
+
+#[test]
 fn test_redundancy_channel_mask_control() {
     let redundancy = Redundancy::new(0x7f);
     assert_eq!(redundancy.channel_mask_control(), 0x07);
