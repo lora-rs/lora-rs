@@ -521,6 +521,21 @@ impl<const N: usize> ChannelMask<N> {
         self.0[index] = value;
     }
 
+    /// Enable or disable a specific channel. Recall that LoRaWAN channel numbers start indexing
+    /// at zero.
+    ///
+    /// Improper use of this method could lead to out of bounds panic during runtime!
+    pub fn set_channel(&mut self, channel: usize, set: bool) {
+        let index = channel >> 3;
+        let mut flag = 0b1 << (channel & 0x07);
+        if set {
+            self.0[index] |= flag;
+        } else {
+            flag = !flag;
+            self.0[index] &= flag;
+        }
+    }
+
     pub fn get_index(&self, index: usize) -> u8 {
         self.0[index]
     }

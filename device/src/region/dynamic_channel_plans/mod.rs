@@ -110,7 +110,7 @@ impl<
         channel_mask: ChannelMask<2>,
     ) {
         match channel_mask_control {
-            0 | 1 | 2 | 3 | 4 => {
+            0..=4 => {
                 let base_index = channel_mask_control as usize * 2;
                 self.channel_mask.set_bank(base_index, channel_mask.get_index(0));
                 self.channel_mask.set_bank(base_index + 1, channel_mask.get_index(1));

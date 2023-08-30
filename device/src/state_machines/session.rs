@@ -558,7 +558,7 @@ fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: us
     state: Session,
     confirmed: bool,
     timestamp_ms: TimestampMs,
-    shared: &mut Shared<R, RNG, N>,
+    shared: &Shared<R, RNG, N>,
 ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
     let (new_state, first_window) = match state {
         Session::Idle(state) => {
