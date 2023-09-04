@@ -16,7 +16,7 @@ env:
 jobs:
   build:
     env:
-      STABLE_FEATURES: defmt,serde,async,external-lora-phy
+      STABLE_FEATURES: defmt,serde,async
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
