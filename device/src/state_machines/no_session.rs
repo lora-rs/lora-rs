@@ -7,9 +7,8 @@ use super::{
 };
 use lorawan::{
     self,
-    keys::AES128,
     parser::parse_with_factory as lorawan_parse,
-    parser::{DecryptedJoinAcceptPayload, DevAddr, JoinAcceptPayload, PhyPayload},
+    parser::{JoinAcceptPayload, PhyPayload},
 };
 
 pub enum NoSession {
@@ -89,9 +88,9 @@ pub enum Error {
     NewSessionWhileWaitingForJoinResponse,
 }
 
-impl<R> From<Error> for super::super::Error<R> {
-    fn from(error: Error) -> super::super::Error<R> {
-        super::super::Error::NoSession(error)
+impl<R> From<Error> for super::Error<R> {
+    fn from(error: Error) -> super::Error<R> {
+        super::Error::NoSession(error)
     }
 }
 
@@ -349,13 +348,13 @@ impl WaitingForJoinResponse {
                                         shared.region.process_join_accept(&decrypt);
                                         shared.downlink = Some(super::Downlink::Join);
                                         if decrypt.validate_mic(credentials.appkey()) {
-                                            let session = SessionData::derive_new(
+                                            let session = SessionKeys::derive_new(
                                                 &decrypt,
                                                 self.devnonce,
                                                 credentials,
                                             );
                                             return (
-                                                Session::new(session).into(),
+                                                Session::new(session, shared.region.clone()).into(),
                                                 Ok(Response::JoinSuccess),
                                             );
                                         }
@@ -416,57 +415,5 @@ impl WaitingForJoinResponse {
 impl From<WaitingForJoinResponse> for Idle {
     fn from(val: WaitingForJoinResponse) -> Idle {
         Idle { join_attempts: val.join_attempts }
-    }
-}
-
-pub struct SessionData {
-    newskey: AES128,
-    appskey: AES128,
-    devaddr: DevAddr<[u8; 4]>,
-    fcnt_up: u32,
-    pub fcnt_down: u32,
-}
-
-impl SessionData {
-    pub fn derive_new<T: core::convert::AsRef<[u8]>, F: lorawan::keys::CryptoFactory>(
-        decrypt: &DecryptedJoinAcceptPayload<T, F>,
-        devnonce: DevNonce,
-        credentials: &Credentials,
-    ) -> SessionData {
-        Self::new(
-            decrypt.derive_newskey(&devnonce, credentials.appkey()),
-            decrypt.derive_appskey(&devnonce, credentials.appkey()),
-            DevAddr::new([
-                decrypt.dev_addr().as_ref()[0],
-                decrypt.dev_addr().as_ref()[1],
-                decrypt.dev_addr().as_ref()[2],
-                decrypt.dev_addr().as_ref()[3],
-            ])
-            .unwrap(),
-        )
-    }
-
-    pub fn new(newskey: AES128, appskey: AES128, devaddr: DevAddr<[u8; 4]>) -> SessionData {
-        SessionData { newskey, appskey, devaddr, fcnt_up: 0, fcnt_down: 0 }
-    }
-
-    pub fn newskey(&self) -> &AES128 {
-        &self.newskey
-    }
-
-    pub fn appskey(&self) -> &AES128 {
-        &self.appskey
-    }
-
-    pub fn devaddr(&self) -> &DevAddr<[u8; 4]> {
-        &self.devaddr
-    }
-
-    pub fn fcnt_up(&self) -> u32 {
-        self.fcnt_up
-    }
-
-    pub fn fcnt_up_increment(&mut self) {
-        self.fcnt_up += 1;
     }
 }

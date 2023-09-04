@@ -924,6 +924,7 @@ fixed_len_struct! {
 
 fixed_len_struct! {
     /// DevAddr represents a 32 bit device address.
+    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     struct DevAddr[4];
 }
 
@@ -934,6 +935,16 @@ impl<T: AsRef<[u8]>> DevAddr<T> {
     }
     pub fn as_ref(&self) -> &[u8] {
         self.0.as_ref()
+    }
+}
+
+impl From<DevAddr<[u8; 4]>> for u32 {
+    fn from(v: DevAddr<[u8; 4]>) -> Self {
+        let bytes = v.as_ref();
+        u32::from(bytes[0]) << 24
+            | u32::from(bytes[1]) << 16
+            | u32::from(bytes[2]) << 8
+            | u32::from(bytes[3])
     }
 }
 

@@ -41,18 +41,11 @@ O
 else(Ready)║ ╚═════════════╝   ║               ║                    ║
            ╚═══════════════════╝               ╚════════════════════╝
  */
-
-use super::super::no_session::{NoSession, SessionData};
+use super::super::no_session::NoSession;
 use super::super::State as SuperState;
 use super::super::*;
 use super::region::{Frame, Window};
-use generic_array::{typenum::U256, GenericArray};
-use lorawan::{
-    self,
-    creator::DataPayloadCreator,
-    maccommands::SerializableMacCommand,
-    parser::{parse_with_factory as lorawan_parse, *},
-};
+
 pub enum Session {
     Idle(Idle),
     SendingData(SendingData),
@@ -66,7 +59,8 @@ enum RxWindow {
 }
 
 trait SessionState {
-    fn get_session(&self) -> &SessionData;
+    fn get_mac(&self) -> &Mac;
+    fn get_session_keys(&self) -> &SessionKeys;
 }
 
 macro_rules! into_state {
@@ -80,8 +74,11 @@ macro_rules! into_state {
         }
 
         impl SessionState for $from {
-            fn get_session(&self) -> &SessionData {
+            fn get_session_keys(&self) -> &SessionKeys {
                 &self.session
+            }
+            fn get_mac(&self) -> &Mac {
+                &self.mac
             }
         }
     )*};
@@ -105,23 +102,32 @@ pub enum Error {
     SendDataWhileWaitingForRx,
 }
 
-impl<R> From<Error> for super::super::Error<R> {
-    fn from(error: Error) -> super::super::Error<R> {
-        super::super::Error::Session(error)
+impl<R> From<Error> for super::Error<R> {
+    fn from(error: Error) -> super::Error<R> {
+        super::Error::Session(error)
     }
 }
 
 impl Session {
-    pub fn new(session: SessionData) -> Session {
-        Session::Idle(Idle { session })
+    pub fn new(session: SessionKeys, region: region::Configuration) -> Session {
+        Session::Idle(Idle { mac: Mac::default(), session, region })
     }
 
-    pub fn get_session_data(&self) -> &SessionData {
+    pub fn get_mac(&self) -> &Mac {
         match self {
-            Session::Idle(state) => state.get_session(),
-            Session::SendingData(state) => state.get_session(),
-            Session::WaitingForRxWindow(state) => state.get_session(),
-            Session::WaitingForRx(state) => state.get_session(),
+            Session::Idle(state) => state.get_mac(),
+            Session::SendingData(state) => state.get_mac(),
+            Session::WaitingForRxWindow(state) => state.get_mac(),
+            Session::WaitingForRx(state) => state.get_mac(),
+        }
+    }
+
+    pub fn get_session_keys(&self) -> &SessionKeys {
+        match self {
+            Session::Idle(state) => state.get_session_keys(),
+            Session::SendingData(state) => state.get_session_keys(),
+            Session::WaitingForRxWindow(state) => state.get_session_keys(),
+            Session::WaitingForRx(state) => state.get_session_keys(),
         }
     }
 
@@ -145,56 +151,6 @@ impl Session {
 }
 
 impl Idle {
-    #[allow(clippy::match_wild_err_arm)]
-    fn prepare_buffer<
-        R: radio::PhyRxTx + Timings,
-        C: CryptoFactory + Default,
-        RNG: RngCore,
-        const N: usize,
-    >(
-        &mut self,
-        data: &SendData,
-        shared: &mut Shared<R, RNG, N>,
-    ) -> FcntUp {
-        let fcnt = self.session.fcnt_up();
-        let mut phy: DataPayloadCreator<GenericArray<u8, U256>, C> = DataPayloadCreator::default();
-
-        let mut fctrl = FCtrl(0x0, true);
-        if shared.mac.is_confirmed() {
-            fctrl.set_ack();
-            shared.mac.clear_confirmed();
-        }
-
-        phy.set_confirmed(data.confirmed)
-            .set_fctrl(&fctrl)
-            .set_f_port(data.fport)
-            .set_dev_addr(*self.session.devaddr())
-            .set_fcnt(fcnt);
-
-        let mut cmds = Vec::new();
-        shared.mac.get_cmds(&mut cmds);
-        let mut dyn_cmds: Vec<&dyn SerializableMacCommand, 8> = Vec::new();
-
-        for cmd in &cmds {
-            if let Err(_e) = dyn_cmds.push(cmd) {
-                panic!("dyn_cmds too small compared to cmds")
-            }
-        }
-
-        match phy.build(
-            data.data,
-            dyn_cmds.as_slice(),
-            self.session.newskey(),
-            self.session.appskey(),
-        ) {
-            Ok(packet) => {
-                shared.tx_buffer.clear();
-                shared.tx_buffer.extend_from_slice(packet).unwrap();
-            }
-            Err(e) => panic!("Error assembling packet! {} ", e),
-        }
-        fcnt
-    }
     pub fn handle_event<
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
@@ -204,11 +160,15 @@ impl Idle {
         mut self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
+    ) -> (SuperState, Result<Response, super::Error<R::PhyError>>) {
         match event {
             Event::SendDataRequest(send_data) => {
                 // encodes the packet and places it in send buffer
-                let fcnt = self.prepare_buffer::<R, C, RNG, N>(&send_data, shared);
+                let fcnt = self.mac.prepare_buffer::<C, N>(
+                    &self.session,
+                    &send_data,
+                    &mut shared.tx_buffer,
+                );
                 let event: radio::Event<R> = radio::Event::TxRequest(
                     shared.region.create_tx_config(&mut shared.rng, shared.datarate, &Frame::Data),
                     shared.tx_buffer.as_ref(),
@@ -255,20 +215,30 @@ impl Idle {
     }
 
     fn into_sending_data(self, confirmed: bool) -> SendingData {
-        SendingData { session: self.session, confirmed }
+        SendingData { mac: self.mac, confirmed, session: self.session, region: self.region }
     }
 
     fn into_waiting_for_rxwindow(self, confirmed: bool, time: u32) -> WaitingForRxWindow {
-        WaitingForRxWindow { session: self.session, rx_window: RxWindow::_1(time), confirmed }
+        WaitingForRxWindow {
+            rx_window: RxWindow::_1(time),
+            confirmed,
+            mac: self.mac,
+            session: self.session,
+            region: self.region,
+        }
     }
 }
 
 pub struct Idle {
-    session: SessionData,
+    mac: Mac,
+    session: SessionKeys,
+    region: region::Configuration,
 }
 
 pub struct SendingData {
-    session: SessionData,
+    mac: Mac,
+    session: SessionKeys,
+    region: region::Configuration,
     confirmed: bool,
 }
 
@@ -319,12 +289,20 @@ impl SendingData {
     }
 
     fn into_waiting_for_rxwindow(self, confirmed: bool, time: u32) -> WaitingForRxWindow {
-        WaitingForRxWindow { session: self.session, rx_window: RxWindow::_1(time), confirmed }
+        WaitingForRxWindow {
+            rx_window: RxWindow::_1(time),
+            confirmed,
+            mac: self.mac,
+            session: self.session,
+            region: self.region,
+        }
     }
 }
 
 pub struct WaitingForRxWindow {
-    session: SessionData,
+    mac: Mac,
+    session: SessionKeys,
+    region: region::Configuration,
     confirmed: bool,
     rx_window: RxWindow,
 }
@@ -390,12 +368,20 @@ impl WaitingForRxWindow {
 
 impl From<WaitingForRxWindow> for WaitingForRx {
     fn from(val: WaitingForRxWindow) -> WaitingForRx {
-        WaitingForRx { session: val.session, confirmed: val.confirmed, rx_window: val.rx_window }
+        WaitingForRx {
+            confirmed: val.confirmed,
+            rx_window: val.rx_window,
+            mac: val.mac,
+            session: val.session,
+            region: val.region,
+        }
     }
 }
 
 pub struct WaitingForRx {
-    session: SessionData,
+    mac: Mac,
+    session: SessionKeys,
+    region: region::Configuration,
     confirmed: bool,
     rx_window: RxWindow,
 }
@@ -410,7 +396,7 @@ impl WaitingForRx {
         mut self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
+    ) -> (SuperState, Result<Response, super::Error<R::PhyError>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -418,75 +404,12 @@ impl WaitingForRx {
                 match shared.radio.handle_event(radio_event) {
                     Ok(response) => match response {
                         radio::Response::RxDone(_quality) => {
-                            if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
-                                lorawan_parse(shared.radio.get_received_packet(), C::default())
-                            {
-                                let session = &mut self.session;
-                                if session.devaddr() == &encrypted_data.fhdr().dev_addr() {
-                                    let fcnt = encrypted_data.fhdr().fcnt() as u32;
-                                    let confirmed = encrypted_data.is_confirmed();
-                                    if encrypted_data.validate_mic(session.newskey(), fcnt)
-                                        && (fcnt > session.fcnt_down || fcnt == 0)
-                                    {
-                                        session.fcnt_down = fcnt;
-                                        // increment the FcntUp since we have received
-                                        // downlink - only reason to not increment
-                                        // is if confirmed frame is sent and no
-                                        // confirmation (ie: downlink) occurs
-                                        session.fcnt_up_increment();
-
-                                        let mut copy = Vec::new();
-                                        copy.extend_from_slice(encrypted_data.as_bytes()).unwrap();
-
-                                        // there two unwraps that are sane in their own right
-                                        // * making a new EncryptedDataPayload with owned bytes will
-                                        //   always work when copy bytes from another
-                                        //   EncryptedPayload
-                                        // * the decrypt will always work when we have verified MIC
-                                        //   previously
-                                        let decrypted = EncryptedDataPayload::new_with_factory(
-                                            copy,
-                                            C::default(),
-                                        )
-                                        .unwrap()
-                                        .decrypt(
-                                            Some(session.newskey()),
-                                            Some(session.appskey()),
-                                            session.fcnt_down,
-                                        )
-                                        .unwrap();
-
-                                        shared.mac.handle_downlink_macs(
-                                            &mut shared.region,
-                                            &mut decrypted.fhdr().fopts(),
-                                        );
-                                        if confirmed {
-                                            shared.mac.set_confirmed();
-                                        }
-
-                                        if let Ok(FRMPayload::MACCommands(mac_cmds)) =
-                                            decrypted.frm_payload()
-                                        {
-                                            shared.mac.handle_downlink_macs(
-                                                &mut shared.region,
-                                                &mut mac_cmds.mac_commands(),
-                                            );
-                                        }
-
-                                        shared.downlink = Some(super::Downlink::Data(decrypted));
-
-                                        // check if FCnt is used up
-                                        let response = if self.session.fcnt_up() == (0xFFFF + 1) {
-                                            // signal that the session is expired
-                                            // client must know to check for potential data
-                                            // (FCnt may be extracted when client checks)
-                                            Ok(Response::SessionExpired)
-                                        } else {
-                                            Ok(Response::DownlinkReceived(fcnt))
-                                        };
-                                        return (self.into_idle().into(), response);
-                                    }
-                                }
+                            if let Some(response) = self.mac.handle_rx::<C>(
+                                &self.session,
+                                &mut self.region,
+                                shared.radio.get_received_packet(),
+                            ) {
+                                return (self.into(), Ok(response.into()));
                             }
                             (self.into(), Ok(Response::NoUpdate))
                         }
@@ -510,9 +433,11 @@ impl WaitingForRx {
                         // TODO: jump to RxWindow2 if t2 == now
                         (
                             WaitingForRxWindow {
-                                session: self.session,
                                 confirmed: self.confirmed,
                                 rx_window: RxWindow::_2(t2),
+                                mac: self.mac,
+                                region: self.region,
+                                session: self.session,
                             }
                             .into(),
                             Ok(Response::TimeoutRequest(t2)),
@@ -520,23 +445,8 @@ impl WaitingForRx {
                     }
                     // Timeout during second RxWindow leads to giving up
                     RxWindow::_2(_) => {
-                        if !self.confirmed {
-                            // if this was not a confirmed frame, we can still
-                            // increment the FCnt Up
-                            self.session.fcnt_up_increment();
-                        }
-
-                        let response = if self.confirmed {
-                            // check if FCnt is used up
-                            Ok(Response::NoAck)
-                        } else if self.session.fcnt_up() == (0xFFFF + 1) {
-                            // signal that the session is expired
-                            // client must know to check for potential data
-                            Ok(Response::SessionExpired)
-                        } else {
-                            Ok(Response::ReadyToSend)
-                        };
-                        (self.into_idle().into(), response)
+                        let response = self.mac.rx2_elapsed();
+                        (self.into_idle().into(), Ok(response.into()))
                     }
                 }
             }
@@ -550,7 +460,7 @@ impl WaitingForRx {
     }
 
     fn into_idle(self) -> Idle {
-        Idle { session: self.session }
+        Idle { mac: self.mac, session: self.session, region: self.region }
     }
 }
 

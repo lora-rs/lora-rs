@@ -2,15 +2,15 @@
 #![cfg_attr(feature = "async", feature(async_fn_in_trait))]
 #![allow(incomplete_features)]
 
+extern crate alloc;
+
 use heapless::Vec;
 
 pub mod radio;
 
 mod mac;
+pub use mac::types::*;
 use mac::Mac;
-
-mod types;
-pub use types::*;
 
 pub mod region;
 pub use region::Region;
@@ -22,7 +22,7 @@ use lorawan::{
     parser::{DecryptedDataPayload, DevAddr},
 };
 use state_machines::Shared;
-pub use state_machines::{no_session, no_session::SessionData, session};
+pub use state_machines::{no_session, session};
 
 pub use rand_core::RngCore;
 
@@ -103,20 +103,27 @@ pub struct SendData<'a> {
     confirmed: bool,
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum State {
     NoSession(no_session::NoSession),
     Session(session::Session),
 }
 
 use core::default::Default;
+
 impl State {
     fn new() -> Self {
         State::NoSession(no_session::NoSession::new())
     }
 
-    fn new_abp(newskey: AES128, appskey: AES128, devaddr: DevAddr<[u8; 4]>) -> Self {
-        let session_data = SessionData::new(newskey, appskey, devaddr);
-        State::Session(session::Session::new(session_data))
+    fn new_abp(
+        newskey: AES128,
+        appskey: AES128,
+        devaddr: DevAddr<[u8; 4]>,
+        region: region::Configuration,
+    ) -> Self {
+        let session_keys = SessionKeys::new(newskey, appskey, devaddr);
+        State::Session(session::Session::new(session_keys, region))
     }
 }
 
@@ -157,8 +164,8 @@ where
                 State::new(),
             ),
             JoinMode::ABP { newskey, appskey, devaddr } => (
-                Shared::new(radio, None, region, Mac::default(), rng),
-                State::new_abp(newskey, appskey, devaddr),
+                Shared::new(radio, None, region.clone(), Mac::default(), rng),
+                State::new_abp(newskey, appskey, devaddr, region),
             ),
         };
 
@@ -202,15 +209,15 @@ where
 
     pub fn get_fcnt_up(&self) -> Option<u32> {
         if let State::Session(session) = &self.state.as_ref().unwrap() {
-            Some(session.get_session_data().fcnt_up())
+            Some(session.get_mac().fcnt_up())
         } else {
             None
         }
     }
 
-    pub fn get_session_keys(&self) -> Option<SessionKeys> {
+    pub fn get_session_keys(&self) -> Option<&SessionKeys> {
         if let State::Session(session) = &self.state.as_ref().unwrap() {
-            Some(SessionKeys::copy_from_session_data(session.get_session_data()))
+            Some(session.get_session_keys())
         } else {
             None
         }
