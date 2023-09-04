@@ -485,7 +485,8 @@ where
             let window_duration = min(rx1_end_delay, rx2_start_delay);
 
             // Pass the full radio buffer slice to RX
-            let rx_fut = self.phy.radio.rx(rx_config, self.radio_buffer.as_raw_slice());
+            self.phy.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+            let rx_fut = self.phy.radio.rx(self.radio_buffer.as_raw_slice());
             let timeout_fut = self.timer.at(window_duration.into());
 
             pin_mut!(rx_fut);
@@ -498,7 +499,10 @@ where
                         return Ok(sz);
                     }
                     // Ignore errors or timeouts and wait until the RX2 window is ready.
-                    _ => timeout_fut.await,
+                    // Setting timeout to 0 ensures that `window_duration != rx2_start_delay`
+                    _ => {
+                        timeout_fut.await;
+                    }
                 },
                 // Timeout! Jumpt to next window.
                 Either::Right(_) => (),
@@ -515,7 +519,8 @@ where
             let window_duration = self.phy.radio.get_rx_window_duration_ms();
 
             // Pass the full radio buffer slice to RX
-            let rx_fut = self.phy.radio.rx(rx_config, self.radio_buffer.as_raw_slice());
+            self.phy.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+            let rx_fut = self.phy.radio.rx(self.radio_buffer.as_raw_slice());
             let timeout_fut = self.timer.delay_ms(window_duration.into());
 
             pin_mut!(rx_fut);

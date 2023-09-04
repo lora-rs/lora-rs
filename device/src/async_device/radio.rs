@@ -29,15 +29,16 @@ pub trait PhyRxTx: Sized {
     #[cfg(not(feature = "defmt"))]
     type PhyError;
 
-    /// Transmit data buffer with the given tranciever configuration. The returned future
+    /// Transmit data buffer with the given transceiver configuration. The returned future
     /// should only complete once data have been transmitted.
     async fn tx(&mut self, config: TxConfig, buf: &[u8]) -> Result<u32, Self::PhyError>;
 
-    /// Receive data into the provided buffer with the given tranciever configuration. The returned
-    /// future should only complete when RX data have been received.
-    async fn rx(
-        &mut self,
-        config: RfConfig,
-        rx_buf: &mut [u8],
-    ) -> Result<(usize, RxQuality), Self::PhyError>;
+    /// Configures the radio to receive data. This future should not actually await the data itself.
+    async fn setup_rx(&mut self, config: RfConfig) -> Result<(), Self::PhyError>;
+
+
+    /// Receive data into the provided buffer with the given transceiver configuration. The returned
+    /// future should only complete when RX data have been received. Furthermore, it should be
+    /// possible to await the future again without settings up the receive config again.
+    async fn rx(&mut self, rx_buf: &mut [u8]) -> Result<(usize, RxQuality), Self::PhyError>;
 }

@@ -1,6 +1,6 @@
 use super::*;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RfConfig {
     pub frequency: u32,
     pub bandwidth: Bandwidth,
@@ -9,14 +9,14 @@ pub struct RfConfig {
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TxConfig {
     pub pw: i8,
     pub rf: RfConfig,
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Copy, Clone, Debug)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RxQuality {
     rssi: i16,
     snr: i8,

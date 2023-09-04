@@ -11,11 +11,12 @@ impl TestRadio {
     pub fn new() -> (RadioChannel, Self) {
         let (tx, rx) = mpsc::channel(1);
         let last_uplink = Arc::new(Mutex::new(None));
-        (RadioChannel { tx, last_uplink: last_uplink.clone() }, Self { rx, last_uplink })
+        (RadioChannel { tx, last_uplink: last_uplink.clone() }, Self { rx, last_uplink, current_config: None })
     }
 }
 
 pub struct TestRadio {
+    current_config: Option<RfConfig>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
     rx: mpsc::Receiver<RxTxHandler>,
 }
@@ -56,17 +57,25 @@ impl PhyRxTx for TestRadio {
         Ok(length as u32)
     }
 
+    async fn setup_rx(&mut self, config: RfConfig) -> Result<(), Self::PhyError> {
+        self.current_config = Some(config);
+        Ok(())
+    }
+
     async fn rx(
         &mut self,
-        config: RfConfig,
         receiving_buffer: &mut [u8],
     ) -> Result<(usize, RxQuality), Self::PhyError> {
         let handler = self.rx.recv().await.unwrap();
         let mut last_uplink = self.last_uplink.lock().await;
         // a quick yield to let timer arm
         time::sleep(time::Duration::from_millis(50)).await;
-        let size = handler(last_uplink.take(), config, receiving_buffer);
-        Ok((size, RxQuality::new(0, 0)))
+        if let Some(config) = &self.current_config {
+            let size = handler(last_uplink.take(), *config, receiving_buffer);
+            Ok((size, RxQuality::new(0, 0)))
+        } else {
+            panic!("Trying to rx before settings config!")
+        }
     }
 }
 
