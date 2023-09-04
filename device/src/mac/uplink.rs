@@ -3,13 +3,13 @@ This a temporary design where flags will be left about desired MAC uplinks by th
 During Uplink assembly, this struct will be inquired to drive construction
  */
 
+use super::del_to_delay_ms;
+use crate::region;
 use heapless::Vec;
-
-use super::region;
 use lorawan::maccommands::{LinkADRAnsPayload, MacCommand, RXTimingSetupAnsPayload};
 
 #[derive(Default, Debug)]
-pub struct Mac {
+pub struct Uplink {
     adr_ans: AdrAns,
     rx_delay_ans: RxDelayAns,
     confirmed: bool,
@@ -57,22 +57,15 @@ impl MacAnsTrait for RxDelayAns {
     }
 }
 
-pub fn del_to_delay_ms(del: u8) -> u32 {
-    match del {
-        2..=15 => del as u32 * 1000,
-        _ => region::constants::RECEIVE_DELAY1,
-    }
-}
-
-impl Mac {
-    pub fn set_confirmed(&mut self) {
+impl Uplink {
+    pub fn set_downlink_confirmation(&mut self) {
         self.confirmed = true;
     }
 
-    pub fn clear_confirmed(&mut self) {
+    pub fn clear_downlink_confirmation(&mut self) {
         self.confirmed = false;
     }
-    pub fn is_confirmed(&self) -> bool {
+    pub fn confirms_downlink(&self) -> bool {
         self.confirmed
     }
 

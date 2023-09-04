@@ -2,7 +2,11 @@ use crate::radio::{RadioBuffer, TxConfig};
 use crate::region::{Configuration, Frame, DR};
 use crate::RngCore;
 use lorawan::keys::CryptoFactory;
-use lorawan::{creator::JoinRequestCreator, keys::AES128, parser::EUI64};
+use lorawan::{
+    creator::JoinRequestCreator,
+    keys::AES128,
+    parser::{DecryptedJoinAcceptPayload, DevAddr, EUI64},
+};
 
 pub type AppEui = [u8; 8];
 pub type DevEui = [u8; 8];
@@ -68,28 +72,51 @@ impl Credentials {
 pub struct SessionKeys {
     newskey: AES128,
     appskey: AES128,
-    devaddr: u32,
+    devaddr: DevAddr<[u8; 4]>,
 }
-
-use super::state_machines::no_session::SessionData;
 
 impl SessionKeys {
-    pub fn copy_from_session_data(session_data: &SessionData) -> SessionKeys {
-        let session_devaddr = session_data.devaddr().as_ref();
-        let devaddr = (session_devaddr[3] as u32)
-            | (session_devaddr[2] as u32) << 8
-            | (session_devaddr[1] as u32) << 16
-            | (session_devaddr[0] as u32) << 24;
-        SessionKeys { newskey: *session_data.newskey(), appskey: *session_data.appskey(), devaddr }
+    pub fn derive_new<T: AsRef<[u8]>, F: CryptoFactory>(
+        decrypt: &DecryptedJoinAcceptPayload<T, F>,
+        devnonce: DevNonce,
+        credentials: &Credentials,
+    ) -> Self {
+        Self::new(
+            decrypt.derive_newskey(&devnonce, credentials.appkey()),
+            decrypt.derive_appskey(&devnonce, credentials.appkey()),
+            DevAddr::new([
+                decrypt.dev_addr().as_ref()[0],
+                decrypt.dev_addr().as_ref()[1],
+                decrypt.dev_addr().as_ref()[2],
+                decrypt.dev_addr().as_ref()[3],
+            ])
+            .unwrap(),
+        )
+    }
+
+    pub fn new(newskey: AES128, appskey: AES128, devaddr: DevAddr<[u8; 4]>) -> Self {
+        Self { newskey, appskey, devaddr }
+    }
+
+    pub fn devaddr(&self) -> &DevAddr<[u8; 4]> {
+        &self.devaddr
+    }
+    pub fn appskey(&self) -> &AES128 {
+        &self.appskey
+    }
+    pub fn newskey(&self) -> &AES128 {
+        &self.newskey
     }
 }
+
 use core::fmt;
-impl core::fmt::Debug for SessionKeys {
+impl fmt::Debug for SessionKeys {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let devaddr = u32::from(*self.devaddr());
         write!(
             f,
             "SessionKeys {{ NewSKey: {:?}, AppsSKey: {:?}, DevAddr {:x}}}",
-            self.newskey, self.appskey, self.devaddr
+            self.newskey, self.appskey, devaddr
         )
     }
 }

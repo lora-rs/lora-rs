@@ -1,9 +1,12 @@
 //! Asynchronous Device using Rust async-await for driving the state machine,
 //! and allowing asynchronous radio implementations.
-use super::mac::Mac;
+use super::mac::uplink::Uplink;
 
-use super::region::{Frame, Window};
-pub use super::{region, region::Region, types::*, JoinMode, SendData, Timings};
+pub use super::{region, region::Region, JoinMode, SendData, Timings};
+use super::{
+    region::{Frame, Window},
+    Credentials,
+};
 use core::marker::PhantomData;
 use futures::{future::select, future::Either, pin_mut};
 use generic_array::{typenum::U256, GenericArray};
@@ -98,7 +101,7 @@ where
     phy: Phy<R, G>,
     timer: T,
     session: Option<SessionData>,
-    mac: Mac,
+    mac: Uplink,
     radio_buffer: RadioBuffer<N>,
     datarate: DR,
 }
@@ -167,7 +170,7 @@ where
             crypto: PhantomData,
             phy: Phy { radio, rng },
             session,
-            mac: Mac::default(),
+            mac: Uplink::default(),
             radio_buffer: RadioBuffer::new(),
             timer,
             datarate: region.get_default_datarate(),
@@ -347,7 +350,7 @@ where
                             );
 
                             if confirmed {
-                                self.mac.set_confirmed();
+                                self.mac.set_downlink_confirmation();
                             }
 
                             match decrypted.frm_payload() {
@@ -404,9 +407,9 @@ where
                     DataPayloadCreator::default();
 
                 let mut fctrl = FCtrl(0x0, true);
-                if self.mac.is_confirmed() {
+                if self.mac.confirms_downlink() {
                     fctrl.set_ack();
-                    self.mac.clear_confirmed();
+                    self.mac.clear_downlink_confirmation();
                 }
 
                 phy.set_confirmed(confirmed)
