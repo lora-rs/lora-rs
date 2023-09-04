@@ -2,7 +2,7 @@
 members = [
     "device",
     "encoding",
-    "lora",
+    "lora-modulation",
 ]
 
 [profile.dev]

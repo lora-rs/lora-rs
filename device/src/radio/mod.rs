@@ -3,7 +3,7 @@ pub use types::*;
 
 use super::TimestampMs;
 
-pub use ::lora::{Bandwidth, CodingRate, SpreadingFactor};
+pub use ::lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 
 #[derive(Debug)]
 pub enum Event<'a, R>

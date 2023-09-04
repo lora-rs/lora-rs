@@ -1,5 +1,5 @@
 [package]
-name = "lora"
+name = "lora-modulation"
 version = "0.1.0"
 edition = "2021"
 authors = ["Louis Thiery <thiery.louis@gmail.com>"]
