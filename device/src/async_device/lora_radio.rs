@@ -13,6 +13,7 @@ where
     DLY: DelayUs,
 {
     pub(crate) lora: LoRa<RK, DLY>,
+    rx_pkt_params: Option<lora_phy::mod_params::PacketParams>,
 }
 impl<RK, DLY> LoRaRadio<RK, DLY>
 where
@@ -20,7 +21,7 @@ where
     DLY: DelayUs,
 {
     pub fn new(lora: LoRa<RK, DLY>) -> Self {
-        Self { lora }
+        Self { lora, rx_pkt_params: None,}
     }
 }
 
@@ -48,6 +49,18 @@ where
     }
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Error {
+    Radio(RadioError),
+    NoRxParams,
+}
+
+impl From<RadioError> for Error {
+    fn from(err: RadioError) -> Self {
+        Error::Radio(err)
+    }
+}
+
 /// Provide the LoRa physical layer rx/tx interface for boards supported by the external lora-phy
 /// crate
 impl<RK, DLY> PhyRxTx for LoRaRadio<RK, DLY>
@@ -55,7 +68,7 @@ where
     RK: RadioKind,
     DLY: DelayUs,
 {
-    type PhyError = RadioError;
+    type PhyError = Error;
 
     async fn tx(&mut self, config: TxConfig, buffer: &[u8]) -> Result<u32, Self::PhyError> {
         let mdltn_params = self.lora.create_modulation_params(
@@ -81,34 +94,36 @@ where
         Ok(0)
     }
 
-    async fn rx(
-        &mut self,
-        config: RfConfig,
-        receiving_buffer: &mut [u8],
-    ) -> Result<(usize, RxQuality), Self::PhyError> {
+    async fn setup_rx(&mut self, config: RfConfig) -> Result<(), Self::PhyError> {
         let mdltn_params = self.lora.create_modulation_params(
             config.spreading_factor,
             config.bandwidth,
             config.coding_rate,
             config.frequency,
         )?;
-        // ensure that max_payload_len does not overflow u8 due to the usize receiving_buffer.len()
-        let max_payload_len = core::cmp::min(255, receiving_buffer.len());
-        let rx_pkt_params = self.lora.create_rx_packet_params(
-            8,
-            false,
-            max_payload_len as u8,
-            true,
-            true,
-            &mdltn_params,
-        )?;
-
+        let rx_pkt_params =
+            self.lora.create_rx_packet_params(8, false, 255, true, true, &mdltn_params)?;
         self.lora.prepare_for_rx(&mdltn_params, &rx_pkt_params, None, None, false).await?;
+        self.rx_pkt_params = Some(rx_pkt_params);
+        Ok(())
+    }
 
-        let (received_len, status) = self.lora.rx(&rx_pkt_params, receiving_buffer).await?;
-        Ok((
-            received_len as usize,
-            RxQuality::new(status.rssi, status.snr as i8), // downcast snr
-        ))
+    async fn rx(
+        &mut self,
+        receiving_buffer: &mut [u8],
+    ) -> Result<(usize, RxQuality), Self::PhyError> {
+        if let Some(rx_params) = &self.rx_pkt_params {
+            match self.lora.rx(rx_params, receiving_buffer).await {
+                Ok((received_len, rx_pkt_status)) => {
+                    Ok((
+                        received_len as usize,
+                        RxQuality::new(rx_pkt_status.rssi, rx_pkt_status.snr as i8), // downcast snr
+                    ))
+                }
+                Err(err) => Err(err.into()),
+            }
+        } else {
+            Err(Error::NoRxParams)
+        }
     }
 }
