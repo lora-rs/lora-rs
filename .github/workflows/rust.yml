@@ -16,8 +16,7 @@ env:
 jobs:
   build:
     env:
-      # the async device stack and external-lora-phy requires nightly
-      STABLE_FEATURES: defmt,serde
+      STABLE_FEATURES: defmt,serde,async,external-lora-phy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -47,6 +46,7 @@ jobs:
 
       - name: Run tests
         run: cargo test --verbose
+
   build-nightly:
     runs-on: ubuntu-latest
     steps:
