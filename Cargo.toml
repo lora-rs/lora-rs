@@ -1,7 +1,8 @@
 [workspace]
 members = [
-    "encoding",
     "device",
+    "encoding",
+    "lora",
 ]
 
 [profile.dev]

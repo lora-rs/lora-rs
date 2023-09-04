@@ -1,31 +1,4 @@
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Clone, PartialEq)]
-pub enum Bandwidth {
-    _125KHz,
-    _250KHz,
-    _500KHz,
-}
-
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Clone, PartialEq)]
-pub enum SpreadingFactor {
-    _7,
-    _8,
-    _9,
-    _10,
-    _11,
-    _12,
-}
-
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Clone, PartialEq)]
-pub enum CodingRate {
-    _4_5,
-    _4_6,
-    _4_7,
-    _4_8,
-}
-
+use super::*;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug)]
 pub struct RfConfig {
