@@ -2,6 +2,13 @@
 #[derive(Debug, Clone, PartialEq)]
 /// Channel width.
 pub enum Bandwidth {
+    _7KHz,
+    _10KHz,
+    _15KHz,
+    _20KHz,
+    _31KHz,
+    _41KHz,
+    _62KHz,
     _125KHz,
     _250KHz,
     _500KHz,
