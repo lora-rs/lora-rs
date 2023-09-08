@@ -1,5 +1,5 @@
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 /// Channel width.
 pub enum Bandwidth {
     _7KHz,
@@ -32,7 +32,7 @@ impl From<Bandwidth> for u32 {
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 /// Controls the chirp rate. Lower values are slower bandwidth, but more robust.
 pub enum SpreadingFactor {
     _5,
@@ -61,7 +61,7 @@ impl From<SpreadingFactor> for u32 {
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 /// Controls the forward error correction. Higher values are more robust, but reduces the ratio
 /// of actual data in transmissions.
 pub enum CodingRate {
