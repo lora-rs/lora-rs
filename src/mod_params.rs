@@ -1,5 +1,7 @@
 use core::fmt::Debug;
 
+pub use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
+
 /// Errors types reported during LoRa physical layer processing
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, defmt::Format, PartialEq)]
@@ -108,80 +110,6 @@ pub enum RadioMode {
     Receive,                  // receive mode
     ReceiveDutyCycle,         // receive duty cycle mode
     ChannelActivityDetection, // channel activity detection mode
-}
-
-/// Valid spreading factors for one or more LoRa chips supported by this crate
-#[derive(Clone, Copy, PartialEq)]
-#[allow(missing_docs)]
-pub enum SpreadingFactor {
-    _5,
-    _6,
-    _7,
-    _8,
-    _9,
-    _10,
-    _11,
-    _12,
-}
-
-impl SpreadingFactor {
-    /// Convert to numeric value
-    pub fn value(self) -> u32 {
-        match self {
-            SpreadingFactor::_5 => 5,
-            SpreadingFactor::_6 => 6,
-            SpreadingFactor::_7 => 7,
-            SpreadingFactor::_8 => 8,
-            SpreadingFactor::_9 => 9,
-            SpreadingFactor::_10 => 10,
-            SpreadingFactor::_11 => 11,
-            SpreadingFactor::_12 => 12,
-        }
-    }
-}
-
-/// Valid bandwidths for one or more LoRa chips supported by this crate
-#[derive(Clone, Copy, PartialEq)]
-#[allow(missing_docs)]
-pub enum Bandwidth {
-    _7KHz,
-    _10KHz,
-    _15KHz,
-    _20KHz,
-    _31KHz,
-    _41KHz,
-    _62KHz,
-    _125KHz,
-    _250KHz,
-    _500KHz,
-}
-
-impl Bandwidth {
-    /// Convert to Hertz
-    pub fn value_in_hz(self) -> u32 {
-        match self {
-            Bandwidth::_7KHz => 7810u32,
-            Bandwidth::_10KHz => 10420u32,
-            Bandwidth::_15KHz => 15630u32,
-            Bandwidth::_20KHz => 20830u32,
-            Bandwidth::_31KHz => 31250u32,
-            Bandwidth::_41KHz => 41670u32,
-            Bandwidth::_62KHz => 62500u32,
-            Bandwidth::_125KHz => 125000u32,
-            Bandwidth::_250KHz => 250000u32,
-            Bandwidth::_500KHz => 500000u32,
-        }
-    }
-}
-
-/// Valid coding rates for one or more LoRa chips supported by this crate
-#[derive(Clone, Copy)]
-#[allow(missing_docs)]
-pub enum CodingRate {
-    _4_5,
-    _4_6,
-    _4_7,
-    _4_8,
 }
 
 /// Modulation parameters for a send and/or receive communication channel
