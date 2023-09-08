@@ -13,7 +13,7 @@ readme = "README.md"
 description = "A Rust LoRaWAN device stack implementation"
 
 [dependencies]
-lora-modulation = { version = "0.1.0", path = "../lora-modulation", default-features = false }
+lora-modulation = { version = "0.1.0", path = "../modulation", default-features = false }
 lorawan = { version = "0.7.3", path = "../encoding", default-features = false }
 heapless = "0.7"
 generic-array = "0.14.2"
