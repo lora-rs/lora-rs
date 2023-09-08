@@ -1,0 +1,19 @@
+[package]
+name = "lora-modulation"
+version = "0.1.0"
+edition = "2021"
+authors = ["Louis Thiery <thiery.louis@gmail.com>"]
+license = "Apache-2.0"
+readme = "README.md"
+description = "A definition of LoRa modulation characteristics with minimal external dependencies."
+
+[dependencies]
+defmt = { version = "0", optional = true }
+# this is only temporary in hopes that lora-phy adopts this crate as a dependency
+lora-phy = { version = "1", optional = true }
+
+
+[features]
+defmt = ["dep:defmt"]
+external-lora-phy = ["dep:lora-phy"]
+

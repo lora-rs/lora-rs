@@ -1,4 +1,4 @@
-pub use crate::radio::{types::*, RfConfig, RxQuality, TxConfig};
+pub use crate::radio::{Bandwidth, CodingRate, RfConfig, RxQuality, SpreadingFactor, TxConfig};
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Error<E>(pub E);
