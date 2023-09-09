@@ -24,8 +24,8 @@ serde = { version = "1", default-features = false, features = ["derive"], option
 lora-phy = { version = "1", optional = true }
 
 [features]
-defmt = ["dep:defmt", "lorawan/defmt"]
+defmt = ["dep:defmt", "lorawan/defmt", "lora-modulation/defmt"]
 default = []
 async = ["futures"]
-serde = ["dep:serde"]
+serde = ["dep:serde", "lorawan/serde"]
 external-lora-phy = ["dep:lora-phy", "lora-modulation/external-lora-phy"]
