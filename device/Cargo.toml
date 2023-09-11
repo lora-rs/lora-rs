@@ -23,6 +23,11 @@ rand_core = { version = "0.6", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true}
 lora-phy = { version = ">=2.1.1", optional = true }
 
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}
+rand = { version = "0", features = ["getrandom"] }
+lorawan = { version = "0.7.3", path = "../encoding", features = ["default-crypto"] }
+
 [features]
 defmt = ["dep:defmt", "lorawan/defmt", "lora-modulation/defmt"]
 default = []

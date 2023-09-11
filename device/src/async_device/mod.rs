@@ -26,6 +26,9 @@ use crate::{private::Sealed, radio::types::RadioBuffer, GetRng};
 pub mod lora_radio;
 pub mod radio;
 
+#[cfg(test)]
+mod test;
+
 use core::cmp::min;
 
 /// Type-level version of the [`None`] variant
@@ -101,6 +104,7 @@ where
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug)]
 pub enum Error<R> {
     Radio(R),
     NetworkNotJoined,
@@ -177,6 +181,14 @@ where
 
     pub fn get_region(&mut self) -> &region::Configuration {
         &self.region
+    }
+
+    pub fn get_radio(&mut self) -> &R {
+        &self.phy.radio
+    }
+
+    pub fn get_mut_radio(&mut self) -> &mut R {
+        &mut self.phy.radio
     }
 
     /// Retrieve the current data rate being used by this device.
