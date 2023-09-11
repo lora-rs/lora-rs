@@ -2,8 +2,6 @@
 #![cfg_attr(feature = "async", feature(async_fn_in_trait))]
 #![allow(incomplete_features)]
 
-extern crate alloc;
-
 use heapless::Vec;
 
 pub mod radio;
