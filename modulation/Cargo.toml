@@ -6,6 +6,8 @@ authors = ["Louis Thiery <thiery.louis@gmail.com>"]
 license = "Apache-2.0"
 readme = "README.md"
 description = "A definition of LoRa modulation characteristics with minimal external dependencies."
+repository = "https://github.com/ivajloip/rust-lorawan"
+keywords = ["lora", "iot", "lpwan"]
 
 [dependencies]
 defmt = { version = "0", optional = true }
