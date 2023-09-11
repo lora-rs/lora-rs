@@ -48,12 +48,10 @@ pub struct JoinAcceptCreator<D, F> {
 impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     /// Creates a well initialized JoinAcceptCreator with specific data and crypto functions.
     ///
-    /// TODO: Add more detials & and example
+    /// TODO: Add more details & and example
     pub fn with_options<'a>(mut data: D, factory: F) -> Result<Self, &'a str> {
+        // length verification will occur during building
         let d = data.as_mut();
-        if d.len() < 33 {
-            return Err("data slice is too short");
-        }
         d[0] = 0x20;
         Ok(Self { data, with_c_f_list: false, encrypted: false, factory })
     }
@@ -139,7 +137,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     ) -> Result<&mut Self, &str> {
         let ch_list = list.as_ref();
         if ch_list.len() > 5 {
-            return Err("too many frequences");
+            return Err("too many frequencies");
         }
         let d = self.data.as_mut();
         ch_list.iter().enumerate().for_each(|(i, fr)| {
@@ -159,6 +157,14 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     ///
     /// * key - the key to be used for encryption and setting the MIC.
     pub fn build(&mut self, key: &keys::AES128) -> Result<&[u8], &str> {
+        let required_len = if self.with_c_f_list {
+            33
+        } else {
+            17
+        };
+        if self.data.as_mut().len() < required_len {
+            return Err("data slice is too short");
+        }
         if !self.encrypted {
             self.encrypt_payload(key);
         }

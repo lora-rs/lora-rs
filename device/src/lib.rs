@@ -1,4 +1,4 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 #![cfg_attr(feature = "async", feature(async_fn_in_trait))]
 #![allow(incomplete_features)]
 
