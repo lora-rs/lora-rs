@@ -16,7 +16,6 @@ pub mod sx1261_2;
 pub mod sx1276_7_8_9;
 
 pub use embedded_hal_async::delay::DelayUs;
-
 use interface::*;
 use mod_params::*;
 use mod_traits::*;
@@ -236,8 +235,8 @@ where
         let mut symbol_timeout: u32 = 0;
         match window_in_secs {
             Some(window) => {
-                let sf = mdltn_params.spreading_factor.value();
-                let bw = mdltn_params.bandwidth.value_in_hz();
+                let sf = u32::from(mdltn_params.spreading_factor);
+                let bw = u32::from(mdltn_params.bandwidth);
                 let symbols_per_sec = bw / (0x01u32 << sf); // symbol rate in symbols/sec = (BW in Hz) / (2 raised to the SF power)
                 let window_in_ms: u32 = (window as u32).checked_mul(1000).unwrap();
                 symbol_timeout = (window_in_ms - 200).checked_mul(symbols_per_sec).unwrap() / 1000; // leave a gap (subtract 200ms) to allow time to set up another window

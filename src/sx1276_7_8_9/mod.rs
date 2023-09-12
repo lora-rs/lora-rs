@@ -99,7 +99,7 @@ where
         }
 
         // Section 4.1.1.5 and 4.1.1.6
-        let bw_in_hz = bandwidth.value_in_hz();
+        let bw_in_hz = u32::from(bandwidth);
         let symbol_duration = 1000 / (bw_in_hz / (0x01u32 << spreading_factor_value(spreading_factor)?));
         let mut low_data_rate_optimize = 0x00u8;
         if symbol_duration > 16 {
