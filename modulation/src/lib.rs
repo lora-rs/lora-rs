@@ -1,3 +1,5 @@
+#![no_std]
+
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 /// Channel width.
