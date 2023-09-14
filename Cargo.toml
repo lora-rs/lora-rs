@@ -1,6 +1,6 @@
 [package]
 name = "lora-phy"
-version = "2.1.0"
+version = "2.1.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/embassy-rs/lora-phy"
@@ -14,4 +14,4 @@ log = { version = "0.4" }
 lora-modulation = { version = ">=0.1.2" }
 num-traits = { version = "0.2", default-features = false }
 
-embedded-hal-async = { version = "=0.2.0-alpha.2"}
+embedded-hal-async = { version = "=1.0.0-rc.1"}
