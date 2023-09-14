@@ -4,26 +4,31 @@ use super::Timings;
 
 use lora_phy::mod_params::{BoardType, ChipType, RadioError};
 use lora_phy::mod_traits::RadioKind;
-use lora_phy::LoRa;
+use lora_phy::{DelayUs, LoRa};
 
 /// LoRa radio using the physical layer API in the external lora-phy crate
-pub struct LoRaRadio<RK> {
-    pub(crate) lora: LoRa<RK>,
-}
-
-impl<RK> LoRaRadio<RK>
+pub struct LoRaRadio<RK, DLY>
 where
-    RK: RadioKind + 'static,
+    RK: RadioKind,
+    DLY: DelayUs,
 {
-    pub fn new(lora: LoRa<RK>) -> Self {
+    pub(crate) lora: LoRa<RK, DLY>,
+}
+impl<RK, DLY> LoRaRadio<RK, DLY>
+where
+    RK: RadioKind,
+    DLY: DelayUs,
+{
+    pub fn new(lora: LoRa<RK, DLY>) -> Self {
         Self { lora }
     }
 }
 
 /// Provide the timing values for boards supported by the external lora-phy crate
-impl<RK> Timings for LoRaRadio<RK>
+impl<RK, DLY> Timings for LoRaRadio<RK, DLY>
 where
-    RK: RadioKind + 'static,
+    RK: RadioKind,
+    DLY: DelayUs,
 {
     fn get_rx_window_offset_ms(&self) -> i32 {
         match self.lora.get_board_type() {
@@ -45,17 +50,18 @@ where
 
 /// Provide the LoRa physical layer rx/tx interface for boards supported by the external lora-phy
 /// crate
-impl<RK> PhyRxTx for LoRaRadio<RK>
+impl<RK, DLY> PhyRxTx for LoRaRadio<RK, DLY>
 where
-    RK: RadioKind + 'static,
+    RK: RadioKind,
+    DLY: DelayUs,
 {
     type PhyError = RadioError;
 
     async fn tx(&mut self, config: TxConfig, buffer: &[u8]) -> Result<u32, Self::PhyError> {
         let mdltn_params = self.lora.create_modulation_params(
-            config.rf.spreading_factor.into(),
-            config.rf.bandwidth.into(),
-            config.rf.coding_rate.into(),
+            config.rf.spreading_factor,
+            config.rf.bandwidth,
+            config.rf.coding_rate,
             config.rf.frequency,
         )?;
         let mut tx_pkt_params =
@@ -81,38 +87,28 @@ where
         receiving_buffer: &mut [u8],
     ) -> Result<(usize, RxQuality), Self::PhyError> {
         let mdltn_params = self.lora.create_modulation_params(
-            config.spreading_factor.into(),
-            config.bandwidth.into(),
-            config.coding_rate.into(),
+            config.spreading_factor,
+            config.bandwidth,
+            config.coding_rate,
             config.frequency,
         )?;
+        // ensure that max_payload_len does not overflow u8 due to the usize receiving_buffer.len()
+        let max_payload_len = core::cmp::min(255, receiving_buffer.len());
         let rx_pkt_params = self.lora.create_rx_packet_params(
             8,
             false,
-            receiving_buffer.len() as u8,
+            max_payload_len as u8,
             true,
             true,
             &mdltn_params,
         )?;
-        self.lora
-            .prepare_for_rx(
-                &mdltn_params,
-                &rx_pkt_params,
-                None,
-                true, // RX continuous
-                false,
-                4,
-                0x00ffffffu32,
-            )
-            .await?;
-        match self.lora.rx(&rx_pkt_params, receiving_buffer).await {
-            Ok((received_len, rx_pkt_status)) => {
-                Ok((
-                    received_len as usize,
-                    RxQuality::new(rx_pkt_status.rssi, rx_pkt_status.snr as i8), // downcast snr
-                ))
-            }
-            Err(err) => Err(err),
-        }
+
+        self.lora.prepare_for_rx(&mdltn_params, &rx_pkt_params, None, None, false).await?;
+
+        let (received_len, status) = self.lora.rx(&rx_pkt_params, receiving_buffer).await?;
+        Ok((
+            received_len as usize,
+            RxQuality::new(status.rssi, status.snr as i8), // downcast snr
+        ))
     }
 }

@@ -2,11 +2,8 @@
 //! and allowing asynchronous radio implementations.
 use super::mac::Mac;
 
+use super::region::{Frame, Window};
 pub use super::{region, region::Region, types::*, JoinMode, SendData, Timings};
-use super::{
-    region::{Frame, Window},
-    Credentials,
-};
 use core::marker::PhantomData;
 use futures::{future::select, future::Either, pin_mut};
 use generic_array::{typenum::U256, GenericArray};
@@ -163,7 +160,7 @@ where
         session: Option<SessionData>,
     ) -> Self {
         Self {
-            crypto: PhantomData::default(),
+            crypto: PhantomData,
             phy: Phy { radio, rng },
             session,
             mac: Mac::default(),
