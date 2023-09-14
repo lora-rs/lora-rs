@@ -72,6 +72,3 @@ pub enum CodingRate {
     _4_7,
     _4_8,
 }
-
-#[cfg(feature = "external-lora-phy")]
-mod lora_phy;

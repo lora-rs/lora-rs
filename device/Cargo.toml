@@ -13,7 +13,7 @@ readme = "README.md"
 description = "A Rust LoRaWAN device stack implementation"
 
 [dependencies]
-lora-modulation = { version = "0.1.0", path = "../modulation", default-features = false }
+lora-modulation = { version = ">=0.1.2", default-features = false }
 lorawan = { version = "0.7.3", path = "../encoding", default-features = false }
 heapless = "0.7"
 generic-array = "0.14.2"
@@ -21,11 +21,11 @@ defmt = { version = "0.3", optional = true }
 futures = { version = "0.3", default-features = false, optional = true }
 rand_core = { version = "0.6", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true}
-lora-phy = { version = "1", optional = true }
+lora-phy = { version = ">=2.1.1", optional = true }
 
 [features]
 defmt = ["dep:defmt", "lorawan/defmt", "lora-modulation/defmt"]
 default = []
 async = ["futures"]
 serde = ["dep:serde", "lorawan/serde"]
-external-lora-phy = ["dep:lora-phy", "lora-modulation/external-lora-phy"]
+external-lora-phy = ["dep:lora-phy"]
