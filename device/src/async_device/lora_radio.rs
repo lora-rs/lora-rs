@@ -21,7 +21,7 @@ where
     DLY: DelayUs,
 {
     pub fn new(lora: LoRa<RK, DLY>) -> Self {
-        Self { lora, rx_pkt_params: None,}
+        Self { lora, rx_pkt_params: None }
     }
 }
 

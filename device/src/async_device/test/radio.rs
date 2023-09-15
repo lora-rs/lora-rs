@@ -11,7 +11,10 @@ impl TestRadio {
     pub fn new() -> (RadioChannel, Self) {
         let (tx, rx) = mpsc::channel(1);
         let last_uplink = Arc::new(Mutex::new(None));
-        (RadioChannel { tx, last_uplink: last_uplink.clone() }, Self { rx, last_uplink, current_config: None })
+        (
+            RadioChannel { tx, last_uplink: last_uplink.clone() },
+            Self { rx, last_uplink, current_config: None },
+        )
     }
 }
 
