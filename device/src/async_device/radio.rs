@@ -36,9 +36,13 @@ pub trait PhyRxTx: Sized {
     /// Configures the radio to receive data. This future should not actually await the data itself.
     async fn setup_rx(&mut self, config: RfConfig) -> Result<(), Self::PhyError>;
 
-
     /// Receive data into the provided buffer with the given transceiver configuration. The returned
     /// future should only complete when RX data have been received. Furthermore, it should be
     /// possible to await the future again without settings up the receive config again.
     async fn rx(&mut self, rx_buf: &mut [u8]) -> Result<(usize, RxQuality), Self::PhyError>;
+
+    /// Puts the radio into a low-power mode
+    async fn low_power(&mut self) -> Result<(), Self::PhyError> {
+        Ok(())
+    }
 }

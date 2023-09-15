@@ -478,7 +478,11 @@ where
         self.timer.at(rx1_start_delay.into()).await;
 
         // RX1
-        {
+        enum Rx1 {
+            Rx(usize),
+            Timeout(u32),
+        }
+        let response = {
             // Prepare for RX using correct configuration
             let rx_config = self.region.get_rx_config(self.datarate, frame, &Window::_1);
             // Cap window duration so RX2 can start on time
@@ -495,25 +499,36 @@ where
             match select(rx_fut, timeout_fut).await {
                 // RX is complete!
                 Either::Left((r, timeout_fut)) => match r {
-                    Ok((sz, _q)) => {
-                        return Ok(sz);
-                    }
+                    Ok((sz, _q)) => Rx1::Rx(sz),
                     // Ignore errors or timeouts and wait until the RX2 window is ready.
                     // Setting timeout to 0 ensures that `window_duration != rx2_start_delay`
                     _ => {
                         timeout_fut.await;
+                        Rx1::Timeout(0)
                     }
                 },
-                // Timeout! Jumpt to next window.
-                Either::Right(_) => (),
+                // Timeout! Prepare for the next window.
+                Either::Right(_) => Rx1::Timeout(window_duration),
+            }
+        };
+
+        match response {
+            Rx1::Rx(sz) => {
+                self.phy.radio.low_power().await.map_err(Error::Radio)?;
+                return Ok(sz);
+            }
+            Rx1::Timeout(window_duration) => {
+                // If the window duration was the same as the RX2 start delay, we can skip settings the
+                // radio to lower power and arming the the timer
+                if window_duration != rx2_start_delay {
+                    self.phy.radio.low_power().await.map_err(Error::Radio)?;
+                    self.timer.at(rx2_start_delay.into()).await;
+                }
             }
         }
 
-        // Wait until RX2 window opens
-        self.timer.at(rx2_start_delay.into()).await;
-
         // RX2
-        {
+        let response = {
             // Prepare for RX using correct configuration
             let rx_config = self.region.get_rx_config(self.datarate, frame, &Window::_2);
             let window_duration = self.phy.radio.get_rx_window_duration_ms();
@@ -532,7 +547,9 @@ where
                 // Timeout or other RX error.
                 _ => Err(Error::RxTimeout),
             }
-        }
+        };
+        self.phy.radio.low_power().await.map_err(Error::Radio)?;
+        response
     }
 }
 
