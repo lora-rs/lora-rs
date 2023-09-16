@@ -7,6 +7,7 @@ use tokio::{
     time,
 };
 type RxTxHandler = fn(Option<Uplink>, RfConfig, &mut [u8]) -> usize;
+
 impl TestRadio {
     pub fn new() -> (RadioChannel, Self) {
         let (tx, rx) = mpsc::channel(1);

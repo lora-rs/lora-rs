@@ -70,7 +70,7 @@ async fn test_join_rx2() {
     radio.handle_rxtx(handle_join_request);
 
     // Await the device to return and verify state
-    if let Ok(()) = async_device.await.unwrap() {
+    if async_device.await.unwrap().is_ok() {
         assert_eq!(4, timer.get_armed_count().await);
     } else {
         assert!(false);
