@@ -103,6 +103,7 @@ impl Mac {
         }
         None
     }
+
     pub(crate) fn rx2_elapsed(&mut self) -> Response {
         if !self.confirmed {
             // if this was not a confirmed frame, we can still
