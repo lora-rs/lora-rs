@@ -1,6 +1,7 @@
 use crate::async_device::radio::Timer;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
+
 impl TestTimer {
     pub fn new() -> (TimerChannel, Self) {
         let (tx, rx) = mpsc::channel(5);
