@@ -1,23 +1,19 @@
 use super::*;
-use crate::radio::{RfConfig, RxQuality, TxConfig};
-use crate::region;
+use crate::{
+    radio::{RfConfig, RxQuality, TxConfig},
+    region,
+    test_util::*,
+};
 use lorawan::default_crypto::DefaultFactory;
 
 mod timer;
 use timer::{TestTimer, TimerChannel};
 
 mod radio;
-use radio::{RadioChannel, TestRadio, Uplink};
+use radio::{RadioChannel, TestRadio};
 
 type Device =
     crate::async_device::Device<TestRadio, DefaultFactory, TestTimer, rand_core::OsRng, 512>;
-
-pub fn get_key() -> [u8; 16] {
-    [0; 16]
-}
-pub fn get_credentials() -> JoinMode {
-    JoinMode::OTAA { deveui: [0; 8], appeui: [0; 8], appkey: get_key() }
-}
 
 fn setup() -> (RadioChannel, TimerChannel, Device) {
     let (radio_channel, mock_radio) = TestRadio::new();
@@ -37,7 +33,8 @@ fn setup() -> (RadioChannel, TimerChannel, Device) {
 async fn test_join_rx1() {
     let (radio, timer, mut async_device) = setup();
     // Run the device
-    let async_device = tokio::spawn(async move { async_device.join(&get_credentials()).await });
+    let async_device =
+        tokio::spawn(async move { async_device.join(&get_otaa_credentials()).await });
 
     // Trigger beginning of RX1
     timer.fire().await;
@@ -58,7 +55,8 @@ async fn test_join_rx1() {
 async fn test_join_rx2() {
     let (radio, timer, mut async_device) = setup();
     // Run the device
-    let async_device = tokio::spawn(async move { async_device.join(&get_credentials()).await });
+    let async_device =
+        tokio::spawn(async move { async_device.join(&get_otaa_credentials()).await });
 
     // Trigger beginning of RX1
     timer.fire().await;
@@ -81,7 +79,8 @@ async fn test_join_rx2() {
 async fn test_no_join_accept() {
     let (_radio, timer, mut async_device) = setup();
     // Run the device
-    let async_device = tokio::spawn(async move { async_device.join(&get_credentials()).await });
+    let async_device =
+        tokio::spawn(async move { async_device.join(&get_otaa_credentials()).await });
 
     // Trigger beginning of RX1
     timer.fire().await;
@@ -104,7 +103,8 @@ async fn test_no_join_accept() {
 async fn test_noise() {
     let (radio, timer, mut async_device) = setup();
     // Run the device
-    let async_device = tokio::spawn(async move { async_device.join(&get_credentials()).await });
+    let async_device =
+        tokio::spawn(async move { async_device.join(&get_otaa_credentials()).await });
     // Trigger beginning of RX1
     timer.fire().await;
     // Send an invalid lorawan frame. 0 length is enough to confuse it
@@ -116,27 +116,4 @@ async fn test_noise() {
     } else {
         assert!(false);
     }
-}
-
-/// Handle join request and pack a JoinAccept into RxBuffer
-fn handle_join_request(uplink: Option<Uplink>, _config: RfConfig, rx_buffer: &mut [u8]) -> usize {
-    //TODO: Verify the JoinRequest is ok
-    if let Some(mut uplink) = uplink {
-        if let PhyPayload::JoinRequest(_) = uplink.get_payload() {
-            let mut buffer: [u8; 17] = [0; 17];
-            let mut phy = lorawan::creator::JoinAcceptCreator::with_options(
-                &mut buffer,
-                DefaultFactory::default(),
-            )
-            .unwrap();
-            let app_nonce_bytes = [1; 3];
-            phy.set_app_nonce(&app_nonce_bytes);
-            phy.set_net_id(&[1; 3]);
-            phy.set_dev_addr(&[1; 4]);
-            phy.build(&AES128(get_key())).unwrap();
-            buffer.iter().zip(rx_buffer).for_each(|(a, b)| *b = *a);
-            return 17;
-        }
-    }
-    0
 }

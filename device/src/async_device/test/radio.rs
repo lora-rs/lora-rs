@@ -1,13 +1,10 @@
 use super::*;
 use crate::async_device::radio::PhyRxTx;
 use std::sync::Arc;
-use std::vec::Vec;
 use tokio::{
     sync::{mpsc, Mutex},
     time,
 };
-type RxTxHandler = fn(Option<Uplink>, RfConfig, &mut [u8]) -> usize;
-
 impl TestRadio {
     pub fn new() -> (RadioChannel, Self) {
         let (tx, rx) = mpsc::channel(1);
@@ -23,27 +20,6 @@ pub struct TestRadio {
     current_config: Option<RfConfig>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
     rx: mpsc::Receiver<RxTxHandler>,
-}
-
-pub struct Uplink {
-    data: Vec<u8>,
-    #[allow(unused)]
-    tx_config: TxConfig,
-}
-
-impl Uplink {
-    /// Creates a copy from a reference and ensures the packet is at least parseable.
-    fn new(data_in: &[u8], tx_config: TxConfig) -> Result<Self, &'static str> {
-        let mut data: Vec<u8> = Vec::new();
-        data.extend_from_slice(data_in);
-        let _parse = parse(data.as_mut_slice())?;
-        Ok(Self { data, tx_config: tx_config })
-    }
-
-    pub fn get_payload(&mut self) -> PhyPayload<&mut [u8], DefaultFactory> {
-        // unwrap since we verified parse in new
-        parse(self.data.as_mut_slice()).unwrap()
-    }
 }
 
 impl PhyRxTx for TestRadio {

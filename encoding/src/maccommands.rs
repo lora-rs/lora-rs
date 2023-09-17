@@ -444,6 +444,12 @@ impl<'a> LinkADRReqPayload<'a> {
     }
 }
 
+impl<'a> From<&'a [u8; 4]> for LinkADRReqPayload<'a> {
+    fn from(v: &'a [u8; 4]) -> Self {
+        LinkADRReqPayload(v)
+    }
+}
+
 /// ChannelMask represents the ChannelMask from LoRaWAN.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChannelMask<const N: usize>([u8; N]);

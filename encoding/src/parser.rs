@@ -948,6 +948,12 @@ impl From<DevAddr<[u8; 4]>> for u32 {
     }
 }
 
+impl From<u32> for DevAddr<[u8; 4]> {
+    fn from(v: u32) -> Self {
+        DevAddr([(v >> 24) as u8, (v >> 16) as u8, (v >> 8) as u8, v as u8])
+    }
+}
+
 fixed_len_struct! {
     /// NwkAddr represents a 24 bit network address.
     struct NwkAddr[3];
@@ -991,7 +997,9 @@ impl<'a> FHDR<'a> {
     /// Gives the piggy-backed MAC ommands associated with the given payload.
     pub fn fopts(&self) -> MacCommandIterator {
         let f_opts_len = FCtrl(self.0[4], self.1).f_opts_len();
-        parse_mac_commands(&self.0[7_usize..(7 + f_opts_len) as usize], self.1)
+        let start = 7;
+        let end = 7 + f_opts_len as usize;
+        parse_mac_commands(&self.0[start..end], self.1)
     }
 }
 

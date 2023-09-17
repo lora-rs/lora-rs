@@ -140,7 +140,7 @@ impl Session {
         self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
+    ) -> (SuperState, Result<Response, super::Error<R::PhyError>>) {
         match self {
             Session::Idle(state) => state.handle_event::<R, C, RNG, N>(event, shared),
             Session::SendingData(state) => state.handle_event::<R, C, RNG, N>(event, shared),
@@ -409,7 +409,7 @@ impl WaitingForRx {
                                 &mut self.region,
                                 shared.radio.get_received_packet(),
                             ) {
-                                return (self.into(), Ok(response.into()));
+                                return (self.into_idle().into(), Ok(response.into()));
                             }
                             (self.into(), Ok(Response::NoUpdate))
                         }

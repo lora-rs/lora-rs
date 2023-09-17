@@ -479,6 +479,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
 
         // Set FPort
         let mut payload_len = payload.len();
+
         if has_fport_zero && payload_len > 0 {
             return Err("mac commands in payload can not be send together with payload");
         }
@@ -495,6 +496,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
             .unwrap();
             last_filled += mac_cmds_len;
         }
+
         if has_fport {
             d[last_filled] = self.data_f_port.unwrap();
             last_filled += 1;

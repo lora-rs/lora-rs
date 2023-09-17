@@ -7,6 +7,9 @@ pub mod session;
 
 pub use region::DR;
 
+#[cfg(test)]
+mod test;
+
 pub struct Shared<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize> {
     radio: R,
     credentials: Option<Credentials>,
