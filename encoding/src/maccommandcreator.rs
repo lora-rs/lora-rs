@@ -720,10 +720,12 @@ pub fn build_mac_commands<'a, T: AsMut<[u8]>>(
     }
     let mut i = 0;
     for mc in cmds {
+        // prefix the CID
         res[i] = mc.cid();
-        let l = mc.payload_len();
-        res[i + 1..i + l + 1].copy_from_slice(mc.payload_bytes());
-        i += l + 1;
+        let start = i + 1;
+        let end = start + mc.payload_len();
+        res[start..end].copy_from_slice(mc.payload_bytes());
+        i = end;
     }
     Ok(i)
 }

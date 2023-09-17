@@ -35,7 +35,7 @@ impl From<Response> for crate::Response {
         match r {
             Response::SessionExpired => crate::Response::SessionExpired,
             Response::DownlinkReceived(fcnt) => crate::Response::DownlinkReceived(fcnt),
-            Response::NoAck => crate::Response::NoUpdate,
+            Response::NoAck => crate::Response::NoAck,
             Response::ReadyToSend => crate::Response::ReadyToSend,
         }
     }

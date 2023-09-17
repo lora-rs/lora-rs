@@ -256,7 +256,7 @@ impl WaitingForRxWindow {
         self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
+    ) -> (SuperState, Result<Response, super::Error<R::PhyError>>) {
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
@@ -330,7 +330,7 @@ impl WaitingForJoinResponse {
         self,
         event: Event<R>,
         shared: &mut Shared<R, RNG, N>,
-    ) -> (SuperState, Result<Response, super::super::Error<R::PhyError>>) {
+    ) -> (SuperState, Result<Response, super::Error<R::PhyError>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {

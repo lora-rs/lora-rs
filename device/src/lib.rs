@@ -13,6 +13,9 @@ use mac::Mac;
 pub mod region;
 pub use region::Region;
 
+#[cfg(test)]
+mod test_util;
+
 mod state_machines;
 use core::marker::PhantomData;
 use lorawan::{
