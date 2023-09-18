@@ -54,7 +54,7 @@ impl Mac {
             if session.devaddr() == &encrypted_data.fhdr().dev_addr() {
                 let fcnt = encrypted_data.fhdr().fcnt() as u32;
                 let confirmed = encrypted_data.is_confirmed();
-                if encrypted_data.validate_mic(session.newskey(), fcnt)
+                if encrypted_data.validate_mic(&session.newskey().0, fcnt)
                     && (fcnt > self.fcnt_down || fcnt == 0)
                 {
                     self.fcnt_down = fcnt;
@@ -75,7 +75,11 @@ impl Mac {
                     //   previously
                     let decrypted = EncryptedDataPayload::new_with_factory(copy, C::default())
                         .unwrap()
-                        .decrypt(Some(session.newskey()), Some(session.appskey()), self.fcnt_down)
+                        .decrypt(
+                            Some(&session.newskey().0),
+                            Some(&session.appskey().0),
+                            self.fcnt_down,
+                        )
                         .unwrap();
 
                     self.uplink.handle_downlink_macs(region, &mut decrypted.fhdr().fopts());
@@ -156,7 +160,8 @@ impl Mac {
             }
         }
 
-        match phy.build(data.data, dyn_cmds.as_slice(), session.newskey(), session.appskey()) {
+        match phy.build(data.data, dyn_cmds.as_slice(), &session.newskey().0, &session.appskey().0)
+        {
             Ok(packet) => {
                 tx_buffer.clear();
                 tx_buffer.extend_from_slice(packet).unwrap();
