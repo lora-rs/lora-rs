@@ -344,10 +344,10 @@ impl WaitingForJoinResponse {
                             {
                                 match &shared.credentials {
                                     Some(credentials) => {
-                                        let decrypt = encrypted.decrypt(credentials.appkey());
+                                        let decrypt = encrypted.decrypt(&credentials.appkey().0);
                                         shared.region.process_join_accept(&decrypt);
                                         shared.downlink = Some(super::Downlink::Join);
-                                        if decrypt.validate_mic(credentials.appkey()) {
+                                        if decrypt.validate_mic(&credentials.appkey().0) {
                                             let session = SessionKeys::derive_new(
                                                 &decrypt,
                                                 self.devnonce,

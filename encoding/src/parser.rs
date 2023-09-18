@@ -46,6 +46,7 @@ macro_rules! fixed_len_struct {
         $(#[$outer])*
         #[derive(Debug, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
         pub struct $type<T: AsRef<[u8]>>(T);
 
         impl<T: AsRef<[u8]>> $type<T> {
@@ -80,6 +81,12 @@ macro_rules! fixed_len_struct {
 
         impl<'a> From<&'a [u8; $size]> for $type<&'a [u8; $size]> {
             fn from(v: &'a [u8; $size]) -> Self {
+                $type(v)
+            }
+        }
+
+        impl From<[u8; $size]> for $type<[u8; $size]> {
+            fn from(v: [u8; $size]) -> Self {
                 $type(v)
             }
         }
@@ -924,7 +931,6 @@ fixed_len_struct! {
 
 fixed_len_struct! {
     /// DevAddr represents a 32 bit device address.
-    #[cfg_attr(feature = "defmt", derive(defmt::Format))]
     struct DevAddr[4];
 }
 

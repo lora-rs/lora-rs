@@ -14,7 +14,7 @@ use heapless::Vec;
 use lorawan::{
     self,
     creator::DataPayloadCreator,
-    keys::{CryptoFactory, AES128},
+    keys::CryptoFactory,
     maccommands::SerializableMacCommand,
     parser::DevAddr,
     parser::{parse_with_factory as lorawan_parse, *},
@@ -23,7 +23,7 @@ use rand_core::RngCore;
 
 type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 pub use crate::region::DR;
-use crate::{private::Sealed, radio::types::RadioBuffer, GetRng};
+use crate::{private::Sealed, radio::types::RadioBuffer, AppSKey, GetRng, NewSKey};
 #[cfg(feature = "external-lora-phy")]
 /// provide the radio through the external lora-phy crate
 pub mod lora_radio;
@@ -237,9 +237,9 @@ where
                 // Parse join response
                 match lorawan_parse(self.radio_buffer.as_mut(), C::default()) {
                     Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(encrypted))) => {
-                        let decrypt = encrypted.decrypt(credentials.appkey());
+                        let decrypt = encrypted.decrypt(&credentials.appkey().0);
                         self.region.process_join_accept(&decrypt);
-                        if decrypt.validate_mic(credentials.appkey()) {
+                        if decrypt.validate_mic(&credentials.appkey().0) {
                             let data = SessionData::derive_new(&decrypt, devnonce, &credentials);
                             self.session.replace(data);
                             Ok(())
@@ -325,7 +325,7 @@ where
                     if session_data.devaddr() == &encrypted_data.fhdr().dev_addr() {
                         let fcnt = encrypted_data.fhdr().fcnt() as u32;
                         let confirmed = encrypted_data.is_confirmed();
-                        if encrypted_data.validate_mic(session_data.newskey(), fcnt)
+                        if encrypted_data.validate_mic(&session_data.newskey().0, fcnt)
                             && (fcnt > session_data.fcnt_down || fcnt == 0)
                         {
                             session_data.fcnt_down = fcnt;
@@ -338,8 +338,8 @@ where
                             // * the decrypt will always work when we have verified MIC previously
                             let decrypted = encrypted_data
                                 .decrypt(
-                                    Some(session_data.newskey()),
-                                    Some(session_data.appskey()),
+                                    Some(&session_data.newskey().0),
+                                    Some(&session_data.appskey().0),
                                     session_data.fcnt_down,
                                 )
                                 .unwrap();
@@ -432,8 +432,8 @@ where
                 match phy.build(
                     data,
                     dyn_cmds.as_slice(),
-                    session_data.newskey(),
-                    session_data.appskey(),
+                    &session_data.newskey().0,
+                    &session_data.appskey().0,
                 ) {
                     Ok(packet) => {
                         self.radio_buffer.clear();
@@ -560,8 +560,8 @@ where
 #[derive(Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct SessionData {
-    newskey: AES128,
-    appskey: AES128,
+    newskey: NewSKey,
+    appskey: AppSKey,
     devaddr: DevAddr<[u8; 4]>,
     fcnt_up: u32,
     fcnt_down: u32,
@@ -574,27 +574,21 @@ impl SessionData {
         credentials: &Credentials,
     ) -> SessionData {
         Self::new(
-            decrypt.derive_newskey(&devnonce, credentials.appkey()),
-            decrypt.derive_appskey(&devnonce, credentials.appkey()),
-            DevAddr::new([
-                decrypt.dev_addr().as_ref()[0],
-                decrypt.dev_addr().as_ref()[1],
-                decrypt.dev_addr().as_ref()[2],
-                decrypt.dev_addr().as_ref()[3],
-            ])
-            .unwrap(),
+            NewSKey(decrypt.derive_newskey(&devnonce, &credentials.appkey().0)),
+            AppSKey(decrypt.derive_appskey(&devnonce, &credentials.appkey().0)),
+            decrypt.dev_addr().to_owned(),
         )
     }
 
-    pub fn new(newskey: AES128, appskey: AES128, devaddr: DevAddr<[u8; 4]>) -> SessionData {
+    pub fn new(newskey: NewSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]>) -> SessionData {
         SessionData { newskey, appskey, devaddr, fcnt_up: 0, fcnt_down: 0 }
     }
 
-    pub fn newskey(&self) -> &AES128 {
+    pub fn newskey(&self) -> &NewSKey {
         &self.newskey
     }
 
-    pub fn appskey(&self) -> &AES128 {
+    pub fn appskey(&self) -> &AppSKey {
         &self.appskey
     }
 

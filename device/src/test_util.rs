@@ -44,14 +44,18 @@ pub fn get_dev_addr() -> DevAddr<[u8; 4]> {
     DevAddr::from(0)
 }
 pub fn get_otaa_credentials() -> JoinMode {
-    JoinMode::OTAA { deveui: [0; 8], appeui: [0; 8], appkey: get_key() }
+    JoinMode::OTAA {
+        deveui: DevEui::from([0; 8]),
+        appeui: AppEui::from([0; 8]),
+        appkey: AppKey::from(get_key()),
+    }
 }
 
 pub fn get_abp_credentials() -> JoinMode {
     JoinMode::ABP {
         devaddr: get_dev_addr(),
-        appskey: AES128(get_key()),
-        newskey: AES128(get_key()),
+        appskey: AppSKey::from(get_key()),
+        newskey: NewSKey::from(get_key()),
     }
 }
 
