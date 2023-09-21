@@ -49,7 +49,7 @@ impl PhyRxTx for TestRadio {
         let handler = self.rx.recv().await.unwrap();
         let mut last_uplink = self.last_uplink.lock().await;
         // a quick yield to let timer arm
-        time::sleep(time::Duration::from_millis(50)).await;
+        time::sleep(time::Duration::from_millis(5)).await;
         if let Some(config) = &self.current_config {
             let size = handler(last_uplink.take(), *config, receiving_buffer);
             Ok((size, RxQuality::new(0, 0)))
