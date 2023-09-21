@@ -16,14 +16,14 @@ pub use region::Region;
 #[cfg(test)]
 mod test_util;
 
-mod state_machines;
+mod nb_device;
 use core::marker::PhantomData;
 use lorawan::{
     keys::{CryptoFactory, AES128},
     parser::{DecryptedDataPayload, DevAddr, EUI64},
 };
-use state_machines::Shared;
-pub use state_machines::{no_session, session};
+use nb_device::Shared;
+pub use nb_device::{no_session, session};
 
 pub use rand_core::RngCore;
 
