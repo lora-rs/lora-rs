@@ -1,5 +1,5 @@
 use crate::{
-    radio::RadioBuffer, region, state_machines::Downlink, FcntDown, FcntUp, SendData, SessionKeys,
+    nb_device::Downlink, radio::RadioBuffer, region, FcntDown, FcntUp, SendData, SessionKeys,
 };
 use generic_array::{typenum::U256, GenericArray};
 use heapless::Vec;
