@@ -1,7 +1,7 @@
 [package]
 name = "lorawan"
 version = "0.7.3"
-edition = "2018"
+edition = "2021"
 authors = ["Ivaylo Petrov <ivajloip@gmail.com>"]
 description = "Crate lorawan provides structures and tools for reading and writing LoRaWAN messages from and to a slice of bytes."
 repository = "https://github.com/ivajloip/rust-lorawan"
