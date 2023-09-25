@@ -20,8 +20,7 @@
 
 ## LoRa physical layer API
 
-For users wishing to implement a LoRaWAN or P2P solution, the following implementation files provide the necessary context for lora-phy version 1.
-lora-phy version 2 includes minor API updates, as outlined in the change log, which have not been applied to Embassy yet.
+For users wishing to implement a LoRaWAN or P2P solution, the following implementation files provide the necessary context for lora-phy version 2.
 
 - <a href="https://github.com/embassy-rs/lora-phy/blob/main/src/lib.rs">the API itself</a>;
 - <a href="https://github.com/embassy-rs/lora-phy/blob/main/src/mod_params.rs">pertinent ancillary information</a>.
