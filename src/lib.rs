@@ -373,7 +373,32 @@ where
     /// SemTech app note AN1200.26 “Semtech LoRa FCC 15.247 Guidance” covers usage.
     ///
     /// Presumes that init() and prepare_for_tx() are called before this function
-    pub async fn continuous_wave(&mut self) -> Result<(), RadioError> {
+    pub async fn continuous_wave(
+        &mut self,
+        mdltn_params: &ModulationParams,
+        output_power: i32,
+        tx_boosted_if_possible: bool,
+    ) -> Result<(), RadioError> {
+        self.rx_continuous = false;
+        self.radio_kind.ensure_ready(self.radio_mode).await?;
+        if self.radio_mode != RadioMode::Standby {
+            self.radio_kind.set_standby().await?;
+            self.radio_mode = RadioMode::Standby;
+        }
+        if self.cold_start {
+            self.do_cold_start().await?;
+        }
+        if self.calibrate_image {
+            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
+            self.calibrate_image = false;
+        }
+        self.radio_kind.set_modulation_params(mdltn_params).await?;
+        self.radio_kind
+            .set_tx_power_and_ramp_time(output_power, Some(mdltn_params), tx_boosted_if_possible, true)
+            .await?;
+        self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
+        // self.radio_mode = RadioMode::Transmit;
+        // self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.radio_kind.set_tx_continuous_wave_mode().await
     }
 }
