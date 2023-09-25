@@ -1,6 +1,6 @@
 [package]
 name = "lorawan-device"
-version = "0.10.0"
+version = "0.11.0"
 authors = ["Louis Thiery <thiery.louis@gmail.com>", "Ulf Lilleengen <lulf@redhat.com>"]
 edition = "2021"
 categories = [
@@ -11,10 +11,11 @@ categories = [
 license = "Apache-2.0"
 readme = "README.md"
 description = "A Rust LoRaWAN device stack implementation"
+repository = "https://github.com/ivajloip/rust-lorawan"
 
 [dependencies]
 lora-modulation = { version = ">=0.1.2", default-features = false }
-lorawan = { version = "0.7.3", path = "../encoding", default-features = false }
+lorawan = { version = "0.7.4", path = "../encoding", default-features = false }
 heapless = "0.7"
 generic-array = "0.14.2"
 defmt = { version = "0.3", optional = true }
