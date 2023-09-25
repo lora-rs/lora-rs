@@ -947,6 +947,11 @@ where
             // if an interrupt occurred for other than an error or operation completion, loop to wait again
         }
     }
+
+    async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError> {
+        let op_code = [OpCode::SetTxContinuousWave.value()];
+        self.intf.write(&[&op_code], false).await
+    }
 }
 
 impl<SPI, IV> crate::RngRadio for SX1261_2<SPI, IV>

@@ -367,6 +367,15 @@ where
             }
         }
     }
+
+    /// Place radio in continuous wave mode, generally for regulatory testing
+    ///
+    /// SemTech app note AN1200.26 “Semtech LoRa FCC 15.247 Guidance” covers usage.
+    ///
+    /// Presumes that init() and prepare_for_tx() are called before this function
+    pub async fn continuous_wave(&mut self) -> Result<(), RadioError> {
+        self.radio_kind.set_tx_continuous_wave_mode().await
+    }
 }
 
 impl<RK, DLY> AsyncRng for LoRa<RK, DLY>
