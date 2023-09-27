@@ -396,9 +396,16 @@ where
         self.radio_kind
             .set_tx_power_and_ramp_time(output_power, Some(mdltn_params), tx_boosted_if_possible, true)
             .await?;
+
+        self.rx_continuous = false;
+        self.radio_kind.ensure_ready(self.radio_mode).await?;
+        if self.radio_mode != RadioMode::Standby {
+            self.radio_kind.set_standby().await?;
+            self.radio_mode = RadioMode::Standby;
+        }
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
-        // self.radio_mode = RadioMode::Transmit;
-        // self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
+        self.radio_mode = RadioMode::Transmit;
+        self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.radio_kind.set_tx_continuous_wave_mode().await
     }
 }
