@@ -372,7 +372,7 @@ where
     ///
     /// SemTech app note AN1200.26 “Semtech LoRa FCC 15.247 Guidance” covers usage.
     ///
-    /// Presumes that init() and prepare_for_tx() are called before this function
+    /// Presumes that init() is called before this function
     pub async fn continuous_wave(
         &mut self,
         mdltn_params: &ModulationParams,
