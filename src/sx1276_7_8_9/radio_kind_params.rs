@@ -1,4 +1,5 @@
 use crate::mod_params::*;
+use crate::sx1276_7_8_9::Sx127xVariant;
 
 /// Internal sx127x LoRa modes (signified by most significant bit flag)
 #[derive(Clone, Copy)]
@@ -239,8 +240,27 @@ pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, R
     }
 }
 
-pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError> {
-    match bandwidth {
+impl Sx127xVariant {
+    /// Convert bandwidth to chip-specific register value
+    pub fn bandwidth_value(self, bw: Bandwidth) -> Result<u8, RadioError> {
+        match self {
+            Sx127xVariant::Sx1272 => bw_sx1272(bw),
+            Sx127xVariant::Sx1276 => bw_sx1276(bw),
+        }
+    }
+}
+
+fn bw_sx1272(bw: Bandwidth) -> Result<u8, RadioError> {
+    match bw {
+        Bandwidth::_125KHz => Ok(0x00),
+        Bandwidth::_250KHz => Ok(0x01),
+        Bandwidth::_500KHz => Ok(0x02),
+        _ => Err(RadioError::UnavailableBandwidth),
+    }
+}
+
+fn bw_sx1276(bw: Bandwidth) -> Result<u8, RadioError> {
+    match bw {
         Bandwidth::_7KHz => Ok(0x00),
         Bandwidth::_10KHz => Ok(0x01),
         Bandwidth::_15KHz => Ok(0x02),

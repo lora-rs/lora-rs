@@ -38,7 +38,7 @@ pub struct Config {
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
 pub struct SX1276_7_8_9<SPI, IV> {
     intf: SpiInterface<SPI, IV>,
-    _config: Config,
+    config: Config,
 }
 
 impl<SPI, IV> SX1276_7_8_9<SPI, IV>
@@ -47,9 +47,9 @@ where
     IV: InterfaceVariant,
 {
     /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
-    pub fn new(spi: SPI, iv: IV, _config: Config) -> Self {
+    pub fn new(spi: SPI, iv: IV, config: Config) -> Self {
         let intf = SpiInterface::new(spi, iv);
-        Self { intf, _config }
+        Self { intf, config }
     }
 
     // Utility functions
@@ -104,8 +104,8 @@ where
     ) -> Result<ModulationParams, RadioError> {
         // Parameter validation
         spreading_factor_value(spreading_factor)?;
-        bandwidth_value(bandwidth)?;
         coding_rate_value(coding_rate)?;
+        self.config.chip.bandwidth_value(bandwidth)?;
         if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000) {
             return Err(RadioError::InvalidBandwidthForFrequency);
         }
@@ -279,7 +279,7 @@ where
 
     async fn set_modulation_params(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         let spreading_factor_val = spreading_factor_value(mdltn_params.spreading_factor)?;
-        let bandwidth_val = bandwidth_value(mdltn_params.bandwidth)?;
+        let bandwidth_val = self.config.chip.bandwidth_value(mdltn_params.bandwidth)?;
         let coding_rate_denominator_val = coding_rate_denominator_value(mdltn_params.coding_rate)?;
         debug!(
             "sf = {}, bw = {}, cr_denom = {}",
