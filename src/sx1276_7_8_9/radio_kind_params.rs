@@ -102,7 +102,8 @@ pub enum Register {
     RegDioMapping1 = 0x40,
     RegVersion = 0x42,
     RegTcxo = 0x4b,
-    RegPaDac = 0x4d,
+    RegPaDacSX1272 = 0x5a,
+    RegPaDacSX1276 = 0x4d,
 }
 
 impl Register {
@@ -161,6 +162,7 @@ impl LnaGain {
     }
 }
 
+/// PA DAC configuration - sx1276+
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub enum PaDac {
@@ -174,6 +176,7 @@ impl PaDac {
     }
 }
 
+/// PA configuration - sx1276+
 #[derive(Clone, Copy)]
 #[allow(dead_code)]
 pub enum PaConfig {

@@ -88,6 +88,94 @@ where
     async fn set_ocp(&mut self, ocp_trim: OcpTrim) -> Result<(), RadioError> {
         self.write_register(Register::RegOcp, ocp_trim.value(), false).await
     }
+
+    /// TODO: tx_boost depends on following:
+    /// a) board configuration
+    /// b) channel selection
+    /// c) other?
+    async fn set_tx_power_sx1272(&mut self, p_out: i32, tx_boost: bool) -> Result<(), RadioError> {
+        // SX1272 has two output pins:
+        // 1) RFO: (-1 to +14 dBm)
+        // 2) PA_BOOST: (+2 to +17 dBm and +5 to 20 +dBm)
+
+        // RegPaConfig - 0x32
+        // [7] - PaSelect (0: RFO, 1: PA_BOOST)
+        // [6:4] - Unused: 0
+        // [3:0] - Output power in dB steps
+
+        // RegPaDac - 0x5a (SX1272)
+        // [7:3] - Reserved (0x10 as default)
+        // [2:0] - PaDac: 0x04 default, 0x07 - enable +20 dBm on PA_BOOST
+
+        // TODO: Shall we also touch OCP settings?
+        if tx_boost {
+            // Deal with two ranges, +17dBm enables extra boost
+            if p_out > 17 {
+                // PA_BOOST out: +5 .. +20 dBm
+                let val = (p_out.min(20).max(5) - 5) as u8 & 0x0f;
+                self.write_register(Register::RegPaConfig, (1 << 7) | val, false)
+                    .await?;
+                self.write_register(Register::RegPaDacSX1272, 0x87, false).await?;
+            } else {
+                // PA_BOOST out: +2 .. +17 dBm
+                let val = (p_out.min(17).max(2) - 2) as u8 & 0x0f;
+                self.write_register(Register::RegPaConfig, (1 << 7) | val, false)
+                    .await?;
+                self.write_register(Register::RegPaDacSX1272, 0x84, false).await?;
+            }
+        } else {
+            // RFO out: -1 to +14 dBm
+            let val = (p_out.min(14).max(-1) + 1) as u8 & 0x0f;
+            self.write_register(Register::RegPaConfig, val, false).await?;
+            self.write_register(Register::RegPaDacSX1272, 0x84, false).await?;
+        }
+
+        Ok(())
+    }
+
+    async fn set_tx_power_sx1276(&mut self, p_out: i32, tx_boost: bool) -> Result<(), RadioError> {
+        let pa_reg = Register::RegPaDacSX1276;
+        if tx_boost {
+            if !(2..=20).contains(&p_out) {
+                return Err(RadioError::InvalidOutputPower);
+            }
+
+            // Pout=17-(15-OutputPower)
+            let output_power: i32 = p_out - 2;
+
+            if p_out > 17 {
+                self.write_register(pa_reg, PaDac::_20DbmOn.value(), false).await?;
+                self.set_ocp(OcpTrim::_240Ma).await?;
+            } else {
+                self.write_register(pa_reg, PaDac::_20DbmOff.value(), false).await?;
+                self.set_ocp(OcpTrim::_100Ma).await?;
+            }
+            self.write_register(
+                Register::RegPaConfig,
+                PaConfig::PaBoost.value() | (output_power as u8),
+                false,
+            )
+            .await?;
+        } else {
+            if !(-4..=14).contains(&p_out) {
+                return Err(RadioError::InvalidOutputPower);
+            }
+
+            // Pmax=10.8+0.6*MaxPower, where MaxPower is set below as 7 and therefore Pmax is 15
+            // Pout=Pmax-(15-OutputPower)
+            let output_power: i32 = p_out;
+
+            self.write_register(pa_reg, PaDac::_20DbmOff.value(), false).await?;
+            self.set_ocp(OcpTrim::_100Ma).await?;
+            self.write_register(
+                Register::RegPaConfig,
+                PaConfig::MaxPower7NoPaBoost.value() | (output_power as u8),
+                false,
+            )
+            .await?;
+        }
+        Ok(())
+    }
 }
 
 impl<SPI, IV> RadioKind for SX1276_7_8_9<SPI, IV>
@@ -221,56 +309,31 @@ where
         tx_boosted_if_possible: bool,
         is_tx_prep: bool,
     ) -> Result<(), RadioError> {
-        if tx_boosted_if_possible {
-            if !(2..=20).contains(&p_out) {
-                return Err(RadioError::InvalidOutputPower);
-            }
+        debug!("tx power = {}", p_out);
 
-            // Pout=17-(15-OutputPower)
-            let output_power: i32 = p_out - 2;
-            debug!("tx power = {}", output_power);
-
-            if p_out > 17 {
-                self.write_register(Register::RegPaDac, PaDac::_20DbmOn.value(), false)
-                    .await?;
-                self.set_ocp(OcpTrim::_240Ma).await?;
-            } else {
-                self.write_register(Register::RegPaDac, PaDac::_20DbmOff.value(), false)
-                    .await?;
-                self.set_ocp(OcpTrim::_100Ma).await?;
-            }
-            self.write_register(
-                Register::RegPaConfig,
-                PaConfig::PaBoost.value() | (output_power as u8),
-                false,
-            )
-            .await?;
-        } else {
-            if !(-4..=14).contains(&p_out) {
-                return Err(RadioError::InvalidOutputPower);
-            }
-
-            // Pmax=10.8+0.6*MaxPower, where MaxPower is set below as 7 and therefore Pmax is 15
-            // Pout=Pmax-(15-OutputPower)
-            let output_power: i32 = p_out;
-            debug!("tx power = {}", output_power);
-
-            self.write_register(Register::RegPaDac, PaDac::_20DbmOff.value(), false)
-                .await?;
-            self.set_ocp(OcpTrim::_100Ma).await?;
-            self.write_register(
-                Register::RegPaConfig,
-                PaConfig::MaxPower7NoPaBoost.value() | (output_power as u8),
-                false,
-            )
-            .await?;
-        }
+        // Configure tx power and boost
+        match self.config.chip {
+            Sx127xVariant::Sx1272 => self.set_tx_power_sx1272(p_out, tx_boosted_if_possible).await,
+            Sx127xVariant::Sx1276 => self.set_tx_power_sx1276(p_out, tx_boosted_if_possible).await,
+        }?;
 
         let ramp_time = match is_tx_prep {
             true => RampTime::Ramp40Us,   // for instance, prior to TX or CAD
             false => RampTime::Ramp250Us, // for instance, on initialization
         };
-        self.write_register(Register::RegPaRamp, ramp_time.value(), false).await
+        // Handle chip-specific differences for RegPaRamp 0x0a:
+        // Sx1272 - default: 0x19
+        // [4]: LowPnTxPllOff - use higher power, lower phase noise PLL
+        //      only when the transmitter is used (default: 1)
+        //      0 - Standard PLL used in Rx mode, Lower PN PLL in Tx
+        //      1 - Standard PLL used in both Tx and Rx modes
+        // Sx1276 - default: 0x09
+        // [4]: reserved (0x00)
+        let val = match self.config.chip {
+            Sx127xVariant::Sx1272 => Ok(ramp_time.value() | (1 << 4)),
+            Sx127xVariant::Sx1276 => Ok(ramp_time.value()),
+        }?;
+        self.write_register(Register::RegPaRamp, val, false).await
     }
 
     async fn update_retention_list(&mut self) -> Result<(), RadioError> {
