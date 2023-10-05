@@ -101,9 +101,10 @@ pub enum Register {
     RegInvertiq2 = 0x3b,
     RegDioMapping1 = 0x40,
     RegVersion = 0x42,
-    RegTcxo = 0x4b,
     RegPaDacSX1272 = 0x5a,
     RegPaDacSX1276 = 0x4d,
+    RegTcxoSX1276 = 0x4b,
+    RegTcxoSX1272 = 0x58,
 }
 
 impl Register {

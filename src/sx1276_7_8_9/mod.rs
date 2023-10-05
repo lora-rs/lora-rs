@@ -33,6 +33,8 @@ pub enum Sx127xVariant {
 pub struct Config {
     /// LoRa chip used on specific board
     pub chip: Sx127xVariant,
+    /// Whether board is using crystal oscillator or external clock
+    pub tcxo_used: bool,
 }
 
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
@@ -278,7 +280,16 @@ where
     }
 
     async fn set_oscillator(&mut self) -> Result<(), RadioError> {
-        self.write_register(Register::RegTcxo, TCXO_FOR_OSCILLATOR, false).await
+        if !self.config.tcxo_used {
+            return Ok(());
+        }
+
+        // Configure Tcxo as input
+        let reg = match self.config.chip {
+            Sx127xVariant::Sx1272 => Register::RegTcxoSX1272,
+            Sx127xVariant::Sx1276 => Register::RegTcxoSX1276,
+        };
+        self.write_register(reg, TCXO_FOR_OSCILLATOR, false).await
     }
 
     async fn set_regulator_mode(&mut self) -> Result<(), RadioError> {
