@@ -9,7 +9,7 @@ use super::{
 };
 use core::marker::PhantomData;
 #[cfg(feature = "defmt")]
-use defmt::warn;
+use defmt::{debug, trace, warn};
 use futures::{future::select, future::Either, pin_mut};
 use generic_array::{typenum::U256, GenericArray};
 use heapless::Vec;
@@ -25,7 +25,12 @@ use rand_core::RngCore;
 
 type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 pub use crate::region::DR;
-use crate::{private::Sealed, radio::types::RadioBuffer, AppSKey, GetRng, NewSKey};
+use crate::{
+    async_device::radio::{RxState, TargetRxState},
+    private::Sealed,
+    radio::types::RadioBuffer,
+    AppSKey, GetRng, NewSKey,
+};
 #[cfg(feature = "external-lora-phy")]
 /// provide the radio through the external lora-phy crate
 pub mod lora_radio;
@@ -234,7 +239,9 @@ where
 
                 // Receive join response within RX window
                 self.timer.reset();
-                self.rx_with_timeout(&Frame::Join, ms).await?;
+                // 13 + 28 for LoraWAN 1.0
+                // 13 + 26 for LoraWAN 1.1
+                self.rx_with_timeout(&Frame::Join, ms, 13 + 28).await?;
 
                 // Parse join response
                 match lorawan_parse(self.radio_buffer.as_mut(), C::default()) {
@@ -321,7 +328,8 @@ where
 
         // Wait for received data within window
         self.timer.reset();
-        self.rx_with_timeout(&Frame::Data, ms).await?;
+        // TODO: expose the expected payload length in the API
+        self.rx_with_timeout(&Frame::Data, ms, 230).await?;
 
         // Handle received data
         if let Some(ref mut session_data) = self.session {
@@ -460,105 +468,136 @@ where
         &mut self,
         frame: &Frame,
         window_delay: u32,
+        max_expected_payload_length: usize,
     ) -> Result<(), Error<R::PhyError>> {
-        let num_read = self.rx_with_timeout_inner(frame, window_delay).await?;
+        let num_read =
+            self.rx_with_timeout_inner(frame, window_delay, max_expected_payload_length).await?;
         self.radio_buffer.inc(num_read);
         Ok(())
+    }
+
+    /// Attempt to receive a packet, waiting at most until `preamble_deadline` to get past a reception of
+    /// a preamble. Then wait at most `message_timeout_ms` to receive the rest of the packet.
+    async fn rx_with_preamble_deadline(
+        &mut self,
+        rx_config: region::RfConfig,
+        preamble_deadline: u32,
+        message_timeout_ms: u32,
+    ) -> Result<(u8, RxQuality), Error<R::PhyError>> {
+        // Pass the full radio buffer slice to RX
+        self.phy.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+        let state = {
+            let rx_preamble_fut = self
+                .phy
+                .radio
+                .rx_until_state(self.radio_buffer.as_raw_slice(), TargetRxState::PreambleReceived);
+            let timeout_to_preamble_fut = self.timer.at(preamble_deadline as u64);
+
+            pin_mut!(rx_preamble_fut);
+            pin_mut!(timeout_to_preamble_fut);
+
+            match select(rx_preamble_fut, timeout_to_preamble_fut).await {
+                Either::Left((r, _)) => match r {
+                    Ok(state) => state,
+                    Err(err) => {
+                        return Err(Error::Radio(err));
+                    }
+                },
+                Either::Right(_) => return Err(Error::RxTimeout),
+            }
+        };
+
+        match state {
+            RxState::PreambleReceived => {
+                // continue with reception
+            }
+            RxState::Done { length, lq } => return Ok((length, lq)),
+        }
+
+        #[cfg(feature = "defmt")]
+        debug!("preamble received, waiting for payload");
+
+        let rx_full_fut =
+            self.phy.radio.rx_until_state(self.radio_buffer.as_raw_slice(), TargetRxState::Done);
+        let timeout_fut = self.timer.delay_ms(message_timeout_ms as u64);
+
+        pin_mut!(rx_full_fut);
+        pin_mut!(timeout_fut);
+
+        match select(rx_full_fut, timeout_fut).await {
+            Either::Left((Ok(RxState::Done { length, lq }), _)) => Ok((length, lq)),
+            Either::Left((Err(err), _)) => Err(Error::Radio(err)),
+            _ => Err(Error::RxTimeout),
+        }
     }
 
     async fn rx_with_timeout_inner(
         &mut self,
         frame: &Frame,
         window_delay: u32,
+        max_expected_payload_length: usize,
     ) -> Result<usize, Error<R::PhyError>> {
         // The initial window configuration uses window 1 adjusted by window_delay and radio offset
         let rx1_start_delay = (self.region.get_rx_delay(frame, &Window::_1) as i32
             + window_delay as i32
             + self.phy.radio.get_rx_window_offset_ms()) as u32;
 
-        let rx1_end_delay = rx1_start_delay + self.phy.radio.get_rx_window_duration_ms();
-
         let rx2_start_delay = (self.region.get_rx_delay(frame, &Window::_2) as i32
             + window_delay as i32
             + self.phy.radio.get_rx_window_offset_ms()) as u32;
+
+        let rx1_end_delay: u32 =
+            min(rx1_start_delay + self.phy.radio.get_rx_window_duration_ms(), rx2_start_delay);
+
+        let rx2_end_delay = rx2_start_delay + self.phy.radio.get_rx_window_duration_ms();
 
         self.radio_buffer.clear();
         // Wait until RX1 window opens
         self.timer.at(rx1_start_delay.into()).await;
 
-        // RX1
-        enum Rx1 {
-            Rx(usize),
-            Timeout(u32),
-        }
-        let response = {
-            // Prepare for RX using correct configuration
-            let rx_config = self.region.get_rx_config(self.datarate, frame, &Window::_1);
-            // Cap window duration so RX2 can start on time
-            let window_duration = min(rx1_end_delay, rx2_start_delay);
-
-            // Pass the full radio buffer slice to RX
-            self.phy.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
-            let rx_fut = self.phy.radio.rx(self.radio_buffer.as_raw_slice());
-            let timeout_fut = self.timer.at(window_duration.into());
-
-            pin_mut!(rx_fut);
-            pin_mut!(timeout_fut);
-            // Wait until either RX is complete or if we've reached window close
-            match select(rx_fut, timeout_fut).await {
-                // RX is complete!
-                Either::Left((r, timeout_fut)) => match r {
-                    Ok((sz, _q)) => Rx1::Rx(sz),
-                    // Ignore errors or timeouts and wait until the RX2 window is ready.
-                    // Setting timeout to 0 ensures that `window_duration != rx2_start_delay`
-                    _ => {
-                        timeout_fut.await;
-                        Rx1::Timeout(0)
-                    }
-                },
-                // Timeout! Prepare for the next window.
-                Either::Right(_) => Rx1::Timeout(window_duration),
-            }
-        };
-
-        match response {
-            Rx1::Rx(sz) => {
+        let rx_config = self.region.get_rx_config(self.datarate, frame, &Window::_1);
+        #[cfg(feature = "defmt")]
+        trace!("RX1 with config: {}", &rx_config);
+        let expected_payload_air_time_us =
+            rx_config.payload_time_on_air_us(max_expected_payload_length as u8) + 50_000;
+        #[cfg(feature = "defmt")]
+        trace!("expected payload air time: {}ms", expected_payload_air_time_us / 1_000);
+        match self
+            .rx_with_preamble_deadline(
+                rx_config,
+                rx1_end_delay,
+                expected_payload_air_time_us / 1_000,
+            )
+            .await
+        {
+            Ok((length, _status)) => {
                 self.phy.radio.low_power().await.map_err(Error::Radio)?;
-                return Ok(sz);
+                return Ok(length as usize);
             }
-            Rx1::Timeout(window_duration) => {
-                // If the window duration was the same as the RX2 start delay, we can skip settings the
-                // radio to lower power and arming the the timer
-                if window_duration != rx2_start_delay {
-                    self.phy.radio.low_power().await.map_err(Error::Radio)?;
-                    self.timer.at(rx2_start_delay.into()).await;
-                }
+            Err(err) => {
+                #[cfg(feature = "defmt")]
+                debug!("failed receiving an RX1 response: {}", err);
+                self.phy.radio.low_power().await.map_err(Error::Radio)?;
+                self.timer.at(rx2_start_delay.into()).await; // TODO: what if it's already expired?
             }
         }
 
-        // RX2
-        let response = {
-            // Prepare for RX using correct configuration
-            let rx_config = self.region.get_rx_config(self.datarate, frame, &Window::_2);
-            let window_duration = self.phy.radio.get_rx_window_duration_ms();
-
-            // Pass the full radio buffer slice to RX
-            self.phy.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
-            let rx_fut = self.phy.radio.rx(self.radio_buffer.as_raw_slice());
-            let timeout_fut = self.timer.delay_ms(window_duration.into());
-
-            pin_mut!(rx_fut);
-            pin_mut!(timeout_fut);
-            // Wait until either RX is complete or if we've reached window close
-            match select(rx_fut, timeout_fut).await {
-                // RX is complete!
-                Either::Left((Ok((sz, _q)), _)) => Ok(sz),
-                // Timeout or other RX error.
-                _ => Err(Error::RxTimeout),
-            }
-        };
+        let rx_config = self.region.get_rx_config(self.datarate, frame, &Window::_2);
+        #[cfg(feature = "defmt")]
+        trace!("RX2 with config: {}", &rx_config);
+        let expected_payload_air_time_us =
+            rx_config.payload_time_on_air_us(max_expected_payload_length as u8) + 50_000;
+        #[cfg(feature = "defmt")]
+        trace!("expected payload air time: {}ms", expected_payload_air_time_us / 1_000);
+        let rxd = self
+            .rx_with_preamble_deadline(
+                rx_config,
+                rx2_end_delay,
+                expected_payload_air_time_us / 1_000,
+            )
+            .await;
         self.phy.radio.low_power().await.map_err(Error::Radio)?;
-        response
+        Ok(rxd?.0 as usize)
     }
 }
 

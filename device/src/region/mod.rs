@@ -1,4 +1,5 @@
 #![allow(clippy::upper_case_acronyms)]
+use lora_modulation::BaseBandModulationParams;
 // generally, we allow upper_case_acronyms to make it match the LoRaWAN naming conventions better
 use lorawan::{maccommands::ChannelMask, parser::CfList};
 
@@ -211,9 +212,11 @@ impl Configuration {
             pw: self.get_dbm(),
             rf: RfConfig {
                 frequency,
-                bandwidth: dr.bandwidth,
-                spreading_factor: dr.spreading_factor,
-                coding_rate: self.get_coding_rate(),
+                bb: BaseBandModulationParams::new(
+                    dr.spreading_factor,
+                    dr.bandwidth,
+                    self.get_coding_rate(),
+                ),
             },
         }
     }
@@ -236,9 +239,11 @@ impl Configuration {
         let dr = self.get_rx_datarate(datarate, frame, window);
         RfConfig {
             frequency: self.get_rx_frequency(frame, window),
-            bandwidth: dr.bandwidth,
-            spreading_factor: dr.spreading_factor,
-            coding_rate: self.get_coding_rate(),
+            bb: BaseBandModulationParams::new(
+                dr.spreading_factor,
+                dr.bandwidth,
+                self.get_coding_rate(),
+            ),
         }
     }
 

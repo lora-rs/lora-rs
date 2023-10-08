@@ -1,10 +1,30 @@
-use super::radio::{PhyRxTx, RfConfig, RxQuality, TxConfig};
+use super::radio::{PhyRxTx, RfConfig, RxQuality, RxState, TargetRxState, TxConfig};
 use super::region::constants::DEFAULT_DBM;
 use super::Timings;
 
 use lora_phy::mod_params::{BoardType, ChipType, RadioError};
-use lora_phy::mod_traits::RadioKind;
+use lora_phy::mod_traits::{IrqState, RadioKind, TargetIrqState};
 use lora_phy::{DelayUs, LoRa};
+
+impl From<TargetRxState> for TargetIrqState {
+    fn from(value: TargetRxState) -> Self {
+        match value {
+            TargetRxState::PreambleReceived => TargetIrqState::PreambleReceived,
+            TargetRxState::Done => TargetIrqState::Done,
+        }
+    }
+}
+
+impl From<IrqState> for RxState {
+    fn from(value: IrqState) -> Self {
+        match value {
+            IrqState::PreambleReceived => Self::PreambleReceived,
+            IrqState::RxDone(length, status) => {
+                Self::Done { length, lq: RxQuality::new(status.rssi, status.snr as i8) }
+            }
+        }
+    }
+}
 
 /// LoRa radio using the physical layer API in the external lora-phy crate
 pub struct LoRaRadio<RK, DLY>
@@ -72,9 +92,9 @@ where
 
     async fn tx(&mut self, config: TxConfig, buffer: &[u8]) -> Result<u32, Self::PhyError> {
         let mdltn_params = self.lora.create_modulation_params(
-            config.rf.spreading_factor,
-            config.rf.bandwidth,
-            config.rf.coding_rate,
+            config.rf.bb.sf,
+            config.rf.bb.bw,
+            config.rf.bb.cr,
             config.rf.frequency,
         )?;
         let mut tx_pkt_params =
@@ -96,9 +116,9 @@ where
 
     async fn setup_rx(&mut self, config: RfConfig) -> Result<(), Self::PhyError> {
         let mdltn_params = self.lora.create_modulation_params(
-            config.spreading_factor,
-            config.bandwidth,
-            config.coding_rate,
+            config.bb.sf,
+            config.bb.bw,
+            config.bb.cr,
             config.frequency,
         )?;
         let rx_pkt_params =
@@ -120,6 +140,21 @@ where
                         RxQuality::new(rx_pkt_status.rssi, rx_pkt_status.snr as i8), // downcast snr
                     ))
                 }
+                Err(err) => Err(err.into()),
+            }
+        } else {
+            Err(Error::NoRxParams)
+        }
+    }
+
+    async fn rx_until_state(
+        &mut self,
+        receiving_buffer: &mut [u8],
+        target_state: TargetRxState,
+    ) -> Result<RxState, Self::PhyError> {
+        if let Some(rx_params) = &self.rx_pkt_params {
+            match self.lora.rx_until_state(rx_params, receiving_buffer, target_state.into()).await {
+                Ok(state) => Ok(state.into()),
                 Err(err) => Err(err.into()),
             }
         } else {

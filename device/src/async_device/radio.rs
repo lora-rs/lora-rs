@@ -21,6 +21,18 @@ pub trait Timer {
     async fn delay_ms(&mut self, millis: u64);
 }
 
+/// A state that PhyRxTx should achieve
+pub enum TargetRxState {
+    PreambleReceived,
+    Done,
+}
+
+/// An actual reception state
+pub enum RxState {
+    PreambleReceived,
+    Done { length: u8, lq: RxQuality },
+}
+
 /// An asynchronous radio implementation that can transmit and receive data.
 pub trait PhyRxTx: Sized {
     #[cfg(feature = "defmt")]
@@ -39,7 +51,27 @@ pub trait PhyRxTx: Sized {
     /// Receive data into the provided buffer with the given transceiver configuration. The returned
     /// future should only complete when RX data have been received. Furthermore, it should be
     /// possible to await the future again without settings up the receive config again.
-    async fn rx(&mut self, rx_buf: &mut [u8]) -> Result<(usize, RxQuality), Self::PhyError>;
+    async fn rx(&mut self, rx_buf: &mut [u8]) -> Result<(usize, RxQuality), Self::PhyError> {
+        loop {
+            if let RxState::Done { length, lq: status } =
+                self.rx_until_state(rx_buf, TargetRxState::Done).await?
+            {
+                return Ok((length as usize, status));
+            }
+        }
+    }
+
+    /// Receive data into the provided buffer with the given transceiver configuration. The returned
+    /// future should only complete when the target RX state has been reached. Furthermore, it should be
+    /// possible to await the future again without settings up the receive config again.
+    async fn rx_until_state(
+        &mut self,
+        rx_buf: &mut [u8],
+        _target_state: TargetRxState,
+    ) -> Result<RxState, Self::PhyError> {
+        let (length, lq) = self.rx(rx_buf).await?;
+        Ok(RxState::Done { length: length as u8, lq })
+    }
 
     /// Puts the radio into a low-power mode
     async fn low_power(&mut self) -> Result<(), Self::PhyError> {

@@ -1,11 +1,16 @@
-use super::*;
+use lora_modulation::BaseBandModulationParams;
+
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RfConfig {
     pub frequency: u32,
-    pub bandwidth: Bandwidth,
-    pub spreading_factor: SpreadingFactor,
-    pub coding_rate: CodingRate,
+    pub bb: BaseBandModulationParams,
+}
+
+impl RfConfig {
+    pub fn payload_time_on_air_us(&self, length: u8) -> u32 {
+        self.bb.time_on_air_us(None, true, length)
+    }
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
