@@ -25,6 +25,19 @@ pub trait InterfaceVariant {
     async fn disable_rf_switch(&mut self) -> Result<(), RadioError>;
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum DesiredIrqState {
+    PreambleReceived,
+    Done,
+}
+
+#[derive(Clone, Copy)]
+pub enum IrqState {
+    Waiting,
+    PreambleReceived,
+    Done(u8, PacketStatus),
+}
+
 /// Functions implemented for a specific kind of LoRa chip, called internally by the outward facing
 /// LoRa physical layer API
 pub trait RadioKind {
@@ -122,6 +135,7 @@ pub trait RadioKind {
         &mut self,
         radio_mode: RadioMode,
         rx_continuous: bool,
+        desired_rx_state: DesiredIrqState,
         delay: &mut impl DelayUs,
         polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,

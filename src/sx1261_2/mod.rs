@@ -6,6 +6,7 @@ use embedded_hal_async::spi::*;
 use radio_kind_params::*;
 
 use crate::mod_params::*;
+use crate::mod_traits::DesiredIrqState;
 use crate::{InterfaceVariant, RadioKind, SpiInterface};
 
 // Syncwords for public and private networks
@@ -822,6 +823,7 @@ where
         &mut self,
         radio_mode: RadioMode,
         rx_continuous: bool,
+        desired_rx_state: DesiredIrqState,
         delay: &mut impl DelayUs,
         polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
@@ -927,6 +929,11 @@ where
                         ];
                         self.intf.write(&[&register_and_evt_clear], false).await?;
                     }
+                    return Ok(());
+                }
+                if desired_rx_state == DesiredIrqState::PreambleReceived
+                    && (IrqMask::PreambleDetected.is_set_in(irq_flags) || IrqMask::HeaderValid.is_set_in(irq_flags))
+                {
                     return Ok(());
                 }
                 if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
