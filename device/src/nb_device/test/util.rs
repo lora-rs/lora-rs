@@ -5,15 +5,8 @@ use crate::{radio::PhyRxTx, Device, Timings};
 use lorawan::default_crypto;
 use region::{Configuration, Region};
 
-pub fn test_device(
-    join_mode: JoinMode,
-) -> Device<TestRadio, default_crypto::DefaultFactory, rand_core::OsRng, 255> {
-    Device::new(
-        Configuration::new(Region::US915),
-        join_mode,
-        TestRadio::default(),
-        rand::rngs::OsRng,
-    )
+pub fn test_device() -> Device<TestRadio, default_crypto::DefaultFactory, rand_core::OsRng, 255> {
+    Device::new(Configuration::new(Region::US915), TestRadio::default(), rand::rngs::OsRng)
 }
 
 pub struct TestRadio {
