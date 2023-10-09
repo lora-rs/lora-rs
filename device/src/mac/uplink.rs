@@ -2,17 +2,14 @@
 This a temporary design where flags will be left about desired MAC uplinks by the stack
 During Uplink assembly, this struct will be inquired to drive construction
  */
-
-use super::del_to_delay_ms;
-use crate::region;
 use heapless::Vec;
 use lorawan::maccommands::{LinkADRAnsPayload, MacCommand, RXTimingSetupAnsPayload};
 
 #[derive(Default, Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Uplink {
-    adr_ans: AdrAns,
-    rx_delay_ans: RxDelayAns,
+    pub adr_ans: AdrAns,
+    pub rx_delay_ans: RxDelayAns,
     confirmed: bool,
 }
 
@@ -24,7 +21,7 @@ type AdrAns = u8;
 type RxDelayAns = bool;
 
 //work around for E0390
-trait MacAnsTrait {
+pub(crate) trait MacAnsTrait {
     fn add(&mut self);
     fn clear(&mut self);
     // we use a uint instead of bool because some ADR responses
@@ -70,29 +67,6 @@ impl Uplink {
         self.confirmed
     }
 
-    pub fn handle_downlink_macs(
-        &mut self,
-        region: &mut region::Configuration,
-        cmds: &mut lorawan::maccommands::MacCommandIterator,
-    ) {
-        for cmd in cmds {
-            match cmd {
-                MacCommand::LinkADRReq(payload) => {
-                    // we ignore DR and TxPwr
-                    region.set_channel_mask(
-                        payload.redundancy().channel_mask_control(),
-                        payload.channel_mask(),
-                    );
-                    self.adr_ans.add();
-                }
-                MacCommand::RXTimingSetupReq(payload) => {
-                    region.set_receive_delay1(del_to_delay_ms(payload.delay()));
-                    self.ack_rx_delay();
-                }
-                _ => (),
-            }
-        }
-    }
 
     pub fn ack_rx_delay(&mut self) {
         self.rx_delay_ans.add();
