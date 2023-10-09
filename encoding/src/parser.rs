@@ -126,6 +126,33 @@ pub enum PhyPayload<T, F> {
     Data(DataPayload<T, F>),
 }
 
+#[cfg(feature = "defmt")]
+impl<T: defmt::Format, F> defmt::Format for PhyPayload<T, F> {
+    fn format(&self, f: defmt::Formatter) {
+        match self {
+            PhyPayload::JoinRequest(r) => {
+                defmt::write!(f, "JoinRequestPayload({})", r.0);
+            }
+            PhyPayload::JoinAccept(a) => match a {
+                JoinAcceptPayload::Encrypted(data) => {
+                    defmt::write!(f, "JoinAcceptPayload::Encrypted({})", data.0);
+                }
+                JoinAcceptPayload::Decrypted(data) => {
+                    defmt::write!(f, "JoinAcceptPayload::Decrypted({})", data.0);
+                }
+            },
+            PhyPayload::Data(d) => match d {
+                DataPayload::Encrypted(data) => {
+                    defmt::write!(f, "DataPayload::Encrypted({})", data.0);
+                }
+                DataPayload::Decrypted(data) => {
+                    defmt::write!(f, "DataPayload::Decrypted({})", data.0);
+                }
+            },
+        };
+    }
+}
+
 impl<T: AsRef<[u8]>, F> AsRef<[u8]> for PhyPayload<T, F> {
     fn as_ref(&self) -> &[u8] {
         match self {
