@@ -778,6 +778,19 @@ fn compute_fcnt(old_fcnt: u32, fcnt: u16) -> u32 {
 #[derive(Debug, PartialEq, Eq)]
 pub struct DecryptedDataPayload<T>(T);
 
+impl<T> DecryptedDataPayload<T> {
+    pub fn to_inner(self) -> T {
+        self.0
+    }
+}
+
+#[cfg(feature = "defmt")]
+impl<T: AsRef<[u8]>> defmt::Format for DecryptedDataPayload<T> {
+    fn format(&self, fmt: defmt::Formatter) {
+        defmt::write!(fmt, "DecryptedDataPayload {{ {:?} }}", self.0.as_ref())
+    }
+}
+
 impl<T: AsRef<[u8]>> DataHeader for DecryptedDataPayload<T> {
     fn as_data_bytes(&self) -> &[u8] {
         self.0.as_ref()
@@ -951,6 +964,18 @@ fixed_len_struct! {
     struct DevNonce[2];
 }
 
+impl From<DevNonce<[u8; 2]>> for u16 {
+    fn from(v: DevNonce<[u8; 2]>) -> Self {
+        u16::from_be_bytes(v.0)
+    }
+}
+
+impl From<u16> for DevNonce<[u8; 2]> {
+    fn from(v: u16) -> Self {
+        Self::from(v.to_be_bytes())
+    }
+}
+
 fixed_len_struct! {
     /// AppNonce represents a 24 bit network server nonce.
     struct AppNonce[3];
@@ -973,17 +998,13 @@ impl<T: AsRef<[u8]>> DevAddr<T> {
 
 impl From<DevAddr<[u8; 4]>> for u32 {
     fn from(v: DevAddr<[u8; 4]>) -> Self {
-        let bytes = v.as_ref();
-        u32::from(bytes[0]) << 24
-            | u32::from(bytes[1]) << 16
-            | u32::from(bytes[2]) << 8
-            | u32::from(bytes[3])
+        u32::from_be_bytes(v.0)
     }
 }
 
 impl From<u32> for DevAddr<[u8; 4]> {
     fn from(v: u32) -> Self {
-        DevAddr([(v >> 24) as u8, (v >> 16) as u8, (v >> 8) as u8, v as u8])
+        Self::from(v.to_be_bytes())
     }
 }
 

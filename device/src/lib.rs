@@ -7,8 +7,6 @@ use heapless::Vec;
 pub mod radio;
 
 mod mac;
-pub use mac::types::*;
-use mac::Mac;
 
 pub mod region;
 pub use region::Region;
@@ -20,10 +18,9 @@ mod nb_device;
 use core::marker::PhantomData;
 use lorawan::{
     keys::{CryptoFactory, AES128},
-    parser::{DecryptedDataPayload, DevAddr, EUI64},
+    parser::{DevAddr, EUI64},
 };
 use nb_device::Shared;
-pub use nb_device::{no_session, session};
 
 pub use rand_core::RngCore;
 
@@ -38,13 +35,28 @@ where
     C: CryptoFactory + Default,
     RNG: RngCore,
 {
-    state: Option<State>,
+    state: State,
     shared: Shared<R, RNG, N>,
     crypto: PhantomData<C>,
 }
 
-type FcntDown = u32;
-type FcntUp = u32;
+#[derive(Debug)]
+pub struct Downlink {
+    data: Vec<u8, 256>,
+    fport: u8,
+}
+
+#[cfg(feature = "defmt")]
+impl defmt::Format for Downlink {
+    fn format(&self, f: defmt::Formatter) {
+        defmt::write!(f, "Downlink {{ fport: {}, data: ", self.fport,);
+
+        for byte in self.data.iter() {
+            defmt::write!(f, "{:02x}", byte);
+        }
+        defmt::write!(f, " }}")
+    }
+}
 
 #[derive(Debug)]
 pub enum Response {
@@ -53,8 +65,8 @@ pub enum Response {
     JoinRequestSending,
     JoinSuccess,
     NoJoinAccept,
-    UplinkSending(FcntUp),
-    DownlinkReceived(FcntDown),
+    UplinkSending(mac::FcntUp),
+    DownlinkReceived(mac::FcntDown),
     NoAck,
     ReadyToSend,
     SessionExpired,
@@ -63,8 +75,20 @@ pub enum Response {
 #[derive(Debug)]
 pub enum Error<R> {
     Radio(radio::Error<R>),
-    Session(session::Error),
-    NoSession(no_session::Error),
+    Session(nb_device::state::Error),
+    Mac(mac::Error),
+}
+
+impl<R> From<nb_device::state::Error> for Error<R> {
+    fn from(error: nb_device::state::Error) -> Error<R> {
+        Error::Session(error)
+    }
+}
+
+impl<R> From<mac::Error> for Error<R> {
+    fn from(mac_error: mac::Error) -> Error<R> {
+        Error::Mac(mac_error)
+    }
 }
 
 impl<R> From<radio::Error<R>> for Error<R> {
@@ -77,7 +101,7 @@ pub enum Event<'a, R>
 where
     R: radio::PhyRxTx,
 {
-    NewSessionRequest,
+    Join(NetworkCredentials),
     SendDataRequest(SendData<'a>),
     RadioEvent(radio::Event<'a, R>),
     TimeoutFired,
@@ -89,9 +113,9 @@ where
 {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let event = match self {
-            Event::NewSessionRequest => "NewSessionRequest",
+            Event::Join(_) => "Join",
             Event::SendDataRequest(_) => "SendDataRequest",
-            Event::RadioEvent(_) => "RadioEvent(?)",
+            Event::RadioEvent(_) => "RadioEvent",
             Event::TimeoutFired => "TimeoutFired",
         };
         write!(f, "lorawan_device::Event::{event}")
@@ -104,29 +128,10 @@ pub struct SendData<'a> {
     confirmed: bool,
 }
 
-#[allow(clippy::large_enum_variant)]
-pub enum State {
-    NoSession(no_session::NoSession),
-    Session(session::Session),
-}
-
+use crate::mac::NetworkCredentials;
+use crate::nb_device::state::State;
+use crate::radio::RadioBuffer;
 use core::default::Default;
-
-impl State {
-    fn new() -> Self {
-        State::NoSession(no_session::NoSession::new())
-    }
-
-    fn new_abp(
-        newskey: NewSKey,
-        appskey: AppSKey,
-        devaddr: DevAddr<[u8; 4]>,
-        region: region::Configuration,
-    ) -> Self {
-        let session_keys = SessionKeys::new(newskey, appskey, devaddr);
-        State::Session(session::Session::new(session_keys, region))
-    }
-}
 
 pub trait Timings {
     fn get_rx_window_offset_ms(&self) -> i32;
@@ -200,56 +205,46 @@ where
     C: CryptoFactory + Default,
     RNG: RngCore,
 {
-    pub fn new(
-        region: region::Configuration,
-        join_mode: JoinMode,
-        radio: R,
-        rng: RNG,
-    ) -> Device<R, C, RNG, N> {
-        let (shared, state) = match join_mode {
-            JoinMode::OTAA { deveui, appeui, appkey } => (
-                Shared::new(
-                    radio,
-                    Some(Credentials::new(appeui, deveui, appkey)),
-                    region,
-                    Mac::default(),
-                    rng,
-                ),
-                State::new(),
-            ),
-            JoinMode::ABP { newskey, appskey, devaddr } => (
-                Shared::new(radio, None, region.clone(), Mac::default(), rng),
-                State::new_abp(newskey, appskey, devaddr, region),
-            ),
-        };
+    pub fn new(region: region::Configuration, radio: R, rng: RNG) -> Device<R, C, RNG, N> {
+        Device {
+            crypto: PhantomData,
+            state: State::default(),
+            shared: Shared {
+                radio,
+                rng,
+                tx_buffer: RadioBuffer::new(),
+                mac: mac::Mac::new(region),
+                downlink: None,
+            },
+        }
+    }
 
-        Device { crypto: PhantomData, shared, state: Some(state) }
+    pub fn join(&mut self, join_mode: JoinMode) -> Result<Response, Error<R::PhyError>> {
+        match join_mode {
+            JoinMode::OTAA { deveui, appeui, appkey } => {
+                self.handle_event(Event::Join(NetworkCredentials::new(appeui, deveui, appkey)))
+            }
+            JoinMode::ABP { devaddr, appskey, newskey } => {
+                self.shared.mac.join_abp(newskey, appskey, devaddr);
+                Ok(Response::JoinSuccess)
+            }
+        }
     }
 
     pub fn get_radio(&mut self) -> &mut R {
-        let shared = self.get_shared();
-        shared.get_mut_radio()
-    }
-
-    pub fn get_credentials(&mut self) -> &mut Option<Credentials> {
-        let shared = self.get_shared();
-        shared.get_mut_credentials()
-    }
-
-    fn get_shared(&mut self) -> &mut Shared<R, RNG, N> {
-        &mut self.shared
+        self.shared.get_mut_radio()
     }
 
     pub fn get_datarate(&mut self) -> region::DR {
-        self.get_shared().get_datarate()
+        self.shared.get_datarate()
     }
 
     pub fn set_datarate(&mut self, datarate: region::DR) {
-        self.get_shared().set_datarate(datarate);
+        self.shared.set_datarate(datarate);
     }
 
     pub fn ready_to_send_data(&self) -> bool {
-        matches!(&self.state.as_ref().unwrap(), State::Session(session::Session::Idle(_)))
+        matches!(&self.state, State::Idle(_)) && self.shared.mac.is_joined()
     }
 
     pub fn send(
@@ -262,36 +257,32 @@ where
     }
 
     pub fn get_fcnt_up(&self) -> Option<u32> {
-        if let State::Session(session) = &self.state.as_ref().unwrap() {
-            Some(session.get_mac().fcnt_up())
-        } else {
-            None
-        }
+        self.shared.mac.get_fcnt_up()
     }
 
-    pub fn get_session_keys(&self) -> Option<&SessionKeys> {
-        if let State::Session(session) = &self.state.as_ref().unwrap() {
-            Some(session.get_session_keys())
-        } else {
-            None
-        }
+    pub fn get_session_keys(&self) -> Option<mac::SessionKeys> {
+        self.shared.mac.get_session_keys()
     }
 
-    pub fn take_data_downlink(&mut self) -> Option<DecryptedDataPayload<Vec<u8, 256>>> {
-        self.get_shared().take_data_downlink()
+    pub fn take_downlink(&mut self) -> Option<Downlink> {
+        self.shared.downlink.take()
     }
 
     pub fn handle_event(&mut self, event: Event<R>) -> Result<Response, Error<R::PhyError>> {
-        let (new_state, result) = match self.state.take().unwrap() {
-            State::NoSession(state) => state.handle_event::<R, C, RNG, N>(event, &mut self.shared),
-            State::Session(state) => state.handle_event::<R, C, RNG, N>(event, &mut self.shared),
-        };
-        self.state.replace(new_state);
+        let (new_state, result) = self.state.handle_event::<R, C, RNG, N>(
+            &mut self.shared.mac,
+            &mut self.shared.radio,
+            &mut self.shared.rng,
+            &mut self.shared.tx_buffer,
+            &mut self.shared.downlink,
+            event,
+        );
+        self.state = new_state;
         result
     }
 }
 
-/// Trait used to mark types which can give out an exclusice reference to [`RngCore`].
+/// Trait used to mark types which can give out an exclusive reference to [`RngCore`].
 /// This trait is an implementation detail and should not be implemented outside this crate.
 #[doc(hidden)]
 pub trait GetRng: private::Sealed {

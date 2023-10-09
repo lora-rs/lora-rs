@@ -2,11 +2,11 @@
 //! and allowing asynchronous radio implementations. Requires the `async` feature and `nightly`.
 use super::mac::uplink::Uplink;
 
-pub use super::{region, region::Region, JoinMode, SendData, Timings};
 use super::{
+    mac::NetworkCredentials,
     region::{Frame, Window},
-    Credentials,
 };
+pub use super::{region, region::Region, JoinMode, SendData, Timings};
 use core::marker::PhantomData;
 #[cfg(feature = "defmt")]
 use defmt::warn;
@@ -206,15 +206,14 @@ where
         self.datarate = datarate;
     }
 
-    /// Join the LoRaWAN network asynchronusly. The returned future completes
-    /// when the LoRaWAN network has been joined successfully, or an error
-    /// has occured.
+    /// Join the LoRaWAN network asynchronously. The returned future completes when
+    /// the LoRaWAN network has been joined successfully, or an error has occurred.
     ///
     /// Repeatedly calling join using OTAA will result in a new LoRaWAN session to be created.
     pub async fn join(&mut self, join_mode: &JoinMode) -> Result<(), Error<R::PhyError>> {
         match join_mode {
             JoinMode::OTAA { deveui, appeui, appkey } => {
-                let credentials = Credentials::new(*appeui, *deveui, *appkey);
+                let credentials = NetworkCredentials::new(*appeui, *deveui, *appkey);
 
                 // Prepare the buffer with the join payload
                 let (devnonce, tx_config) = credentials
@@ -281,7 +280,7 @@ where
     /// data is copied into the provided byte slice.
     ///
     /// The returned future completes when the data have been sent successfully and downlink data
-    /// have been copied into the provided buffer, or an error has occured.
+    /// have been copied into the provided buffer, or an error has occurred.
     pub async fn send_recv(
         &mut self,
         data: &[u8],
@@ -578,7 +577,7 @@ impl SessionData {
     pub fn derive_new<T: core::convert::AsRef<[u8]>, F: lorawan::keys::CryptoFactory>(
         decrypt: &DecryptedJoinAcceptPayload<T, F>,
         devnonce: DevNonce,
-        credentials: &Credentials,
+        credentials: &NetworkCredentials,
     ) -> SessionData {
         Self::new(
             NewSKey(decrypt.derive_newskey(&devnonce, &credentials.appkey().0)),

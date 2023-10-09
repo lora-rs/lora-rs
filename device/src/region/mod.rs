@@ -34,6 +34,7 @@ pub struct Configuration {
 seq_macro::seq!(
     N in 0..=15 {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
         #[repr(u8)]
         /// A restricted data rate type that exposes the number of variants to only what _may_ be
         /// potentially be possible. Note that not all data rates are valid in all regions.
@@ -44,7 +45,6 @@ seq_macro::seq!(
         }
     }
 );
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Region {
@@ -110,11 +110,13 @@ pub struct Datarate {
     spreading_factor: SpreadingFactor,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum Frame {
     Join,
     Data,
 }
 
+#[derive(Copy, Clone, Debug)]
 pub(crate) enum Window {
     _1,
     _2,
@@ -196,14 +198,17 @@ impl Configuration {
     // RECEIVE_DELAY2 is not configurable. LoRaWAN 1.0.3 Section 5.7: "The second
     // reception slot opens one second after the first reception slot."
     pub fn set_receive_delay1(&mut self, delay: u32) {
+        // TODO: remove this handling from region
         self.receive_delay1 = delay;
         self.receive_delay2 = self.receive_delay1 + 1000;
     }
 
+    // TODO: remove this handling from region
     pub fn set_join_accept_delay1(&mut self, delay: u32) {
         self.join_accept_delay1 = delay;
     }
 
+    // TODO: remove this handling from region
     pub fn set_join_accept_delay2(&mut self, delay: u32) {
         self.join_accept_delay2 = delay;
     }
@@ -235,12 +240,7 @@ impl Configuration {
         mut_region_dispatch!(self, get_tx_dr_and_frequency, rng, datarate, frame)
     }
 
-    pub(crate) fn get_rx_config(
-        &mut self,
-        datarate: DR,
-        frame: &Frame,
-        window: &Window,
-    ) -> RfConfig {
+    pub(crate) fn get_rx_config(&self, datarate: DR, frame: &Frame, window: &Window) -> RfConfig {
         let dr = self.get_rx_datarate(datarate, frame, window);
         RfConfig {
             frequency: self.get_rx_frequency(frame, window),
