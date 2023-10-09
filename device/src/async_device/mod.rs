@@ -8,6 +8,8 @@ use super::{
     Credentials,
 };
 use core::marker::PhantomData;
+#[cfg(feature = "defmt")]
+use defmt::warn;
 use futures::{future::select, future::Either, pin_mut};
 use generic_array::{typenum::U256, GenericArray};
 use heapless::Vec;
@@ -248,7 +250,11 @@ where
                         }
                     }
                     Err(err) => Err(Error::UnableToDecodePayload(err)),
-                    _ => Err(Error::UnableToDecodePayload("")),
+                    Ok(r) => {
+                        #[cfg(feature = "defmt")]
+                        warn!("can't parse payload {}", r);
+                        Err(Error::UnableToDecodePayload(""))
+                    }
                 }
             }
             JoinMode::ABP { newskey, appskey, devaddr } => {
