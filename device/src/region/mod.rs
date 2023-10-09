@@ -5,7 +5,6 @@ use lorawan::{maccommands::ChannelMask, parser::CfList};
 
 use super::RngCore;
 pub mod constants;
-use crate::mac;
 pub(crate) use crate::radio::*;
 use constants::*;
 
@@ -25,10 +24,6 @@ pub use fixed_channel_plans::{Subband, AU915, US915};
 #[derive(Clone)]
 pub struct Configuration {
     state: State,
-    join_accept_delay1: u32,
-    join_accept_delay2: u32,
-    receive_delay1: u32,
-    receive_delay2: u32,
 }
 
 seq_macro::seq!(
@@ -188,29 +183,7 @@ impl Configuration {
     fn with_state(state: State) -> Configuration {
         Configuration {
             state,
-            receive_delay1: RECEIVE_DELAY1,
-            receive_delay2: RECEIVE_DELAY2,
-            join_accept_delay1: JOIN_ACCEPT_DELAY1,
-            join_accept_delay2: JOIN_ACCEPT_DELAY2,
         }
-    }
-
-    // RECEIVE_DELAY2 is not configurable. LoRaWAN 1.0.3 Section 5.7: "The second
-    // reception slot opens one second after the first reception slot."
-    pub fn set_receive_delay1(&mut self, delay: u32) {
-        // TODO: remove this handling from region
-        self.receive_delay1 = delay;
-        self.receive_delay2 = self.receive_delay1 + 1000;
-    }
-
-    // TODO: remove this handling from region
-    pub fn set_join_accept_delay1(&mut self, delay: u32) {
-        self.join_accept_delay1 = delay;
-    }
-
-    // TODO: remove this handling from region
-    pub fn set_join_accept_delay2(&mut self, delay: u32) {
-        self.join_accept_delay2 = delay;
     }
 
     pub(crate) fn create_tx_config<RNG: RngCore>(
@@ -254,7 +227,6 @@ impl Configuration {
         &mut self,
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     ) {
-        self.set_receive_delay1(mac::del_to_delay_ms(join_accept.rx_delay()));
         mut_region_dispatch!(self, process_join_accept, join_accept)
     }
 
@@ -266,24 +238,14 @@ impl Configuration {
         mut_region_dispatch!(self, handle_link_adr_channel_mask, channel_mask_control, channel_mask)
     }
 
-    pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
-        match frame {
-            Frame::Join => match window {
-                Window::_1 => self.join_accept_delay1,
-                Window::_2 => self.join_accept_delay2,
-            },
-            Frame::Data => match window {
-                Window::_1 => self.receive_delay1,
-                Window::_2 => self.receive_delay2,
-            },
-        }
-    }
     pub(crate) fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32 {
         region_dispatch!(self, get_rx_frequency, frame, window)
     }
+
     pub(crate) fn get_default_datarate(&self) -> DR {
         region_dispatch!(self, get_default_datarate)
     }
+
     pub(crate) fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate {
         region_dispatch!(self, get_rx_datarate, datarate, frame, window)
     }

@@ -92,6 +92,7 @@ impl Session {
     pub(crate) fn handle_rx<C: CryptoFactory + Default>(
         &mut self,
         region: &mut region::Configuration,
+        configuration: &mut super::Configuration,
         rx: &mut [u8],
         dl: &mut Option<Downlink>,
     ) -> Option<Response> {
@@ -111,14 +112,17 @@ impl Session {
                         .decrypt(Some(&self.newskey().0), Some(&self.appskey().0), self.fcnt_down)
                         .unwrap();
 
-                    self.uplink.handle_downlink_macs(region, &mut decrypted.fhdr().fopts());
+                    // MAC commands may be in the FHDR or the FRMPayload
+                    configuration.handle_downlink_macs(region, &mut self.uplink, &mut decrypted.fhdr().fopts());
+                    if let Ok(FRMPayload::MACCommands(mac_cmds)) = decrypted.frm_payload() {
+                        configuration.handle_downlink_macs(region, &mut self.uplink,&mut mac_cmds.mac_commands());
+                    }
+
                     if confirmed {
                         self.uplink.set_downlink_confirmation();
                     }
 
-                    if let Ok(FRMPayload::MACCommands(mac_cmds)) = decrypted.frm_payload() {
-                        self.uplink.handle_downlink_macs(region, &mut mac_cmds.mac_commands());
-                    }
+
 
                     return if self.fcnt_up == 0xFFFF_FFFF {
                         // if the FCnt is used up, the session has expired

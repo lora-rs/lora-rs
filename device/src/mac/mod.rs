@@ -3,7 +3,7 @@ use crate::{
     region, AppSKey, Downlink, NewSKey, RngCore, SendData,
 };
 use lorawan::parser::DevAddr;
-use lorawan::{self, keys::CryptoFactory};
+use lorawan::{self, maccommands::MacCommand, keys::CryptoFactory};
 
 pub type FcntDown = u32;
 pub type FcntUp = u32;
@@ -19,17 +19,42 @@ pub(crate) mod uplink;
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Configuration {
-    pub(crate) max_duty_cycle: f32,
-    pub(crate) tx_power: Option<u8>,
-    pub(crate) tx_data_rate: region::DR,
-    pub(crate) rx1_data_rate_offset: Option<u8>,
-    pub(crate) rx1_delay: u32,
-    pub(crate) rx2_data_rate: Option<region::DR>,
-    pub(crate) rx2_frequency: Option<u32>,
-    pub(crate) number_of_transmissions: u8,
-    pub(crate) join_accept_delay1: u32,
-    pub(crate) join_accept_delay2: u32,
+    pub(crate) data_rate: region::DR,
+    rx1_delay: u32,
+    join_accept_delay1: u32,
+    join_accept_delay2: u32,
 }
+
+impl Configuration {
+    fn handle_downlink_macs(
+        &mut self,
+        region: &mut region::Configuration,
+        uplink: &mut uplink::Uplink,
+        cmds: &mut lorawan::maccommands::MacCommandIterator,
+    ) {
+        use uplink::MacAnsTrait;
+        for cmd in cmds {
+            match cmd {
+                MacCommand::LinkADRReq(payload) => {
+                    // we ignore DR and TxPwr
+                    region.set_channel_mask(
+                        payload.redundancy().channel_mask_control(),
+                        payload.channel_mask(),
+                    );
+                    uplink.adr_ans.add();
+                }
+                MacCommand::RXTimingSetupReq(payload) => {
+                    self.rx1_delay = del_to_delay_ms(payload.delay());
+                    uplink.ack_rx_delay();
+                }
+                _ => (),
+            }
+        }
+
+    }
+}
+
+
 
 pub(crate) struct Mac {
     region: region::Configuration,
@@ -54,18 +79,13 @@ pub(crate) type Result<T = ()> = core::result::Result<T, Error>;
 
 impl Mac {
     pub(crate) fn new(region: region::Configuration) -> Self {
+        let data_rate = region.get_default_datarate();
         Self {
             region,
             state: State::Unjoined,
             configuration: Configuration {
-                max_duty_cycle: 1.0,
-                tx_power: None,
-                tx_data_rate: region::DR::_0,
-                rx1_data_rate_offset: None,
+                data_rate,
                 rx1_delay: region::constants::RECEIVE_DELAY1,
-                rx2_data_rate: None,
-                rx2_frequency: None,
-                number_of_transmissions: 1,
                 join_accept_delay1: region::constants::JOIN_ACCEPT_DELAY1,
                 join_accept_delay2: region::constants::JOIN_ACCEPT_DELAY2,
             },
@@ -83,7 +103,7 @@ impl Mac {
         let mut otaa = otaa::Otaa::new(credentials);
         otaa.prepare_buffer::<C, RNG, N>(rng, buf);
         self.state = State::Otaa(otaa);
-        self.region.create_tx_config(rng, self.configuration.tx_data_rate, &region::Frame::Join)
+        self.region.create_tx_config(rng, self.configuration.data_rate, &region::Frame::Join)
     }
 
     /// Join via ABP. This does not transmit a join request frame, but instead sets the session.
@@ -109,7 +129,7 @@ impl Mac {
             State::Otaa(_) => Err(Error::NotJoined),
             State::Unjoined => Err(Error::NotJoined),
         }?;
-        Ok(self.region.create_tx_config(rng, self.configuration.tx_data_rate, &region::Frame::Data))
+        Ok(self.region.create_tx_config(rng, self.configuration.data_rate, &region::Frame::Data))
     }
 
     pub(crate) fn get_rx_delay(&self, frame: &region::Frame, window: &region::Window) -> u32 {
@@ -120,7 +140,8 @@ impl Mac {
             },
             region::Frame::Data => match window {
                 region::Window::_1 => self.configuration.rx1_delay,
-                // RX2 window SHALL be RECEIVE_DELAY1 + 1s
+                // RECEIVE_DELAY2 is not configurable. LoRaWAN 1.0.3 Section 5.7:
+                // "The second reception slot opens one second after the first reception slot."
                 region::Window::_2 => self.configuration.rx1_delay + 1000,
             },
         }
@@ -133,7 +154,7 @@ impl Mac {
         window: &region::Window,
     ) -> (RfConfig, u32) {
         (
-            self.region.get_rx_config(self.configuration.tx_data_rate, frame, window),
+            self.region.get_rx_config(self.configuration.data_rate, frame, window),
             self.get_rx_delay(frame, window),
         )
     }
@@ -148,9 +169,9 @@ impl Mac {
         dl: &mut Option<Downlink>,
     ) -> Option<Response> {
         match &mut self.state {
-            State::Joined(ref mut session) => session.handle_rx::<C>(&mut self.region, rx, dl),
+            State::Joined(ref mut session) => session.handle_rx::<C>(&mut self.region, &mut self.configuration, rx, dl),
             State::Otaa(ref mut otaa) => {
-                if let Some(session) = otaa.handle_rx::<C>(&mut self.region, rx) {
+                if let Some(session) = otaa.handle_rx::<C>(&mut self.region, &mut self.configuration, rx) {
                     self.state = State::Joined(session);
                     Some(Response::JoinSuccess)
                 } else {

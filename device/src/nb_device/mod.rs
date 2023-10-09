@@ -23,9 +23,9 @@ impl<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize> Shared<R, RNG, N
     }
 
     pub fn get_datarate(&mut self) -> DR {
-        self.mac.configuration.tx_data_rate
+        self.mac.configuration.data_rate
     }
     pub fn set_datarate(&mut self, datarate: DR) {
-        self.mac.configuration.tx_data_rate = datarate;
+        self.mac.configuration.data_rate = datarate;
     }
 }

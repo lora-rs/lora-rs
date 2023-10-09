@@ -1,6 +1,9 @@
-use super::session::Session;
-use crate::radio::{RadioBuffer, TxConfig};
-use crate::region::{Configuration, Frame, DR};
+use super::{
+    del_to_delay_ms,
+    session::Session
+};
+use crate::radio::RadioBuffer;
+use crate::region::Configuration;
 use crate::RngCore;
 use crate::{AppEui, AppKey, DevEui};
 use lorawan::keys::CryptoFactory;
@@ -50,6 +53,7 @@ impl Otaa {
     pub(crate) fn handle_rx<C: CryptoFactory + Default>(
         &mut self,
         region: &mut Configuration,
+        configuration: &mut super::Configuration,
         rx: &mut [u8],
     ) -> Option<Session> {
         if let Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(encrypted))) =
@@ -57,6 +61,7 @@ impl Otaa {
         {
             let decrypt = encrypted.decrypt(&self.network_credentials.appkey.0);
             region.process_join_accept(&decrypt);
+            configuration.rx1_delay = del_to_delay_ms(decrypt.rx_delay());
             if decrypt.validate_mic(&self.network_credentials.appkey.0) {
                 return Some(Session::derive_new(
                     &decrypt,
@@ -69,8 +74,6 @@ impl Otaa {
     }
 }
 
-/// TODO: remove
-/// We maintain this impl for now until async_device is ready to use the complete mac struct
 impl NetworkCredentials {
     pub fn new(appeui: AppEui, deveui: DevEui, appkey: AppKey) -> Self {
         Self { deveui, appeui, appkey }
@@ -85,32 +88,5 @@ impl NetworkCredentials {
 
     pub fn appkey(&self) -> &AppKey {
         &self.appkey
-    }
-
-    /// Prepare a join request to be sent. This populates the radio buffer with the request to be
-    /// sent, and returns the radio config to use for transmitting.
-    pub(crate) fn create_join_request<C: CryptoFactory + Default, RNG: RngCore, const N: usize>(
-        &self,
-        region: &mut Configuration,
-        rng: &mut RNG,
-        datarate: DR,
-        buf: &mut RadioBuffer<N>,
-    ) -> (DevNonce, TxConfig) {
-        // use lowest 16 bits for devnonce
-        let devnonce_bytes = rng.next_u32() as u16;
-
-        buf.clear();
-
-        let mut phy: JoinRequestCreator<[u8; 23], C> = JoinRequestCreator::default();
-
-        let devnonce = [devnonce_bytes as u8, (devnonce_bytes >> 8) as u8];
-
-        phy.set_app_eui(self.appeui().0).set_dev_eui(self.deveui().0).set_dev_nonce(&devnonce);
-        let vec = phy.build(&self.appkey().0).unwrap();
-
-        let devnonce_copy = DevNonce::new(devnonce).unwrap();
-
-        buf.extend_from_slice(vec).unwrap();
-        (devnonce_copy, region.create_tx_config(rng, datarate, &Frame::Join))
     }
 }
