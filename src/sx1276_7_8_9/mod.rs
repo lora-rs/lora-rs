@@ -412,14 +412,22 @@ where
         }
         self.write_register(Register::RegModemConfig2, config_2, false).await?;
 
-        let mut invert_iq = 0x27u8;
-        let mut invert_iq2 = 0x1du8;
-        if pkt_params.iq_inverted {
-            invert_iq = 0x66u8;
-            invert_iq2 = 0x19u8;
-        }
-        self.write_register(Register::RegInvertiq, invert_iq, false).await?;
-        self.write_register(Register::RegInvertiq2, invert_iq2, false).await
+        // IQ inversion:
+        // RegInvertiq - [0x33]
+        // [6] - InvertIQRX
+        // [5:1] - Reserved: 0x13
+        // [0] - InvertIQTX
+        // RegInvertiq2 - [0x3b]
+        // Set to 0x19 when RX, otherwise set 0x1d
+        let (iq1, iq2) = match pkt_params.iq_inverted {
+            true => (1 << 6, 0x19),
+            false => (1 << 0, 0x1d),
+        };
+        // Keep reserved value for InvertIq as well
+        self.write_register(Register::RegInvertiq, (0x13 << 1) | iq1, false)
+            .await?;
+        self.write_register(Register::RegInvertiq2, iq2, false).await?;
+        Ok(())
     }
 
     // Calibrate the image rejection based on the given frequency
