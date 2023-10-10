@@ -392,6 +392,10 @@ where
             self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
             self.calibrate_image = false;
         }
+        let tx_pkt_params = self
+            .radio_kind
+            .create_packet_params(0, false, 16, false, false, mdltn_params)?;
+        self.radio_kind.set_packet_params(&tx_pkt_params).await?;
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind
             .set_tx_power_and_ramp_time(output_power, Some(mdltn_params), tx_boosted_if_possible, true)
