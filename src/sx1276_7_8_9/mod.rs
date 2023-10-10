@@ -358,27 +358,45 @@ where
         let val = (reg_val & 0b0111_1000) | opt;
         self.write_register(Register::RegDetectionOptimize, val, false).await?;
         self.write_register(Register::RegDetectionThreshold, thr, false).await?;
+        // Spreading Factor, Bandwidth, codingrate, ldro
 
-        let mut config_2 = self.read_register(Register::RegModemConfig2).await?;
-        config_2 = (config_2 & 0x0fu8) | ((sf_val << 4) & 0xf0u8);
-        self.write_register(Register::RegModemConfig2, config_2, false).await?;
+        match self.config.chip {
+            Sx127xVariant::Sx1272 => {
+                let cfg1 = self.read_register(Register::RegModemConfig1).await?;
+                let ldro = mdltn_params.low_data_rate_optimize;
+                let cr_val = coding_rate_value(mdltn_params.coding_rate)?;
+                let val = (cfg1 & 0b110) | (bw_val << 6) | (cr_val << 3) | ldro;
+                self.write_register(Register::RegModemConfig1, val, false).await?;
+                let cfg2 = self.read_register(Register::RegModemConfig2).await?;
+                let val = (cfg2 & 0b1111) | (sf_val << 4);
+                self.write_register(Register::RegModemConfig2, val, false).await?;
+                Ok(())
+            }
+            Sx127xVariant::Sx1276 => {
+                let mut config_2 = self.read_register(Register::RegModemConfig2).await?;
+                config_2 = (config_2 & 0x0fu8) | ((sf_val << 4) & 0xf0u8);
+                self.write_register(Register::RegModemConfig2, config_2, false).await?;
 
-        let mut config_1 = self.read_register(Register::RegModemConfig1).await?;
-        config_1 = (config_1 & 0x0fu8) | (bw_val << 4);
-        self.write_register(Register::RegModemConfig1, config_1, false).await?;
+                let mut config_1 = self.read_register(Register::RegModemConfig1).await?;
+                config_1 = (config_1 & 0x0fu8) | (bw_val << 4);
+                self.write_register(Register::RegModemConfig1, config_1, false).await?;
 
-        let cr = coding_rate_denominator_val - 4;
-        config_1 = self.read_register(Register::RegModemConfig1).await?;
-        config_1 = (config_1 & 0xf1u8) | (cr << 1);
-        self.write_register(Register::RegModemConfig1, config_1, false).await?;
+                let cr = coding_rate_denominator_val - 4;
+                config_1 = self.read_register(Register::RegModemConfig1).await?;
+                config_1 = (config_1 & 0xf1u8) | (cr << 1);
+                self.write_register(Register::RegModemConfig1, config_1, false).await?;
 
-        let mut ldro_agc_auto_flags = 0x00u8; // LDRO and AGC Auto both off
-        if mdltn_params.low_data_rate_optimize != 0 {
-            ldro_agc_auto_flags = 0x08u8; // LDRO on and AGC Auto off
-        }
-        let mut config_3 = self.read_register(Register::RegModemConfig3).await?;
-        config_3 = (config_3 & 0xf3u8) | ldro_agc_auto_flags;
-        self.write_register(Register::RegModemConfig3, config_3, false).await
+                let mut ldro_agc_auto_flags = 0x00u8; // LDRO and AGC Auto both off
+                if mdltn_params.low_data_rate_optimize != 0 {
+                    ldro_agc_auto_flags = 0x08u8; // LDRO on and AGC Auto off
+                }
+                let mut config_3 = self.read_register(Register::RegModemConfig3).await?;
+                config_3 = (config_3 & 0xf3u8) | ldro_agc_auto_flags;
+                self.write_register(Register::RegModemConfig3, config_3, false).await
+            }
+        }?;
+
+        Ok(())
     }
 
     async fn set_packet_params(&mut self, pkt_params: &PacketParams) -> Result<(), RadioError> {
