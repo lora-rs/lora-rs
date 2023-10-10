@@ -382,7 +382,6 @@ where
     }
 
     async fn set_packet_params(&mut self, pkt_params: &PacketParams) -> Result<(), RadioError> {
-        // handle payload_length ???
         self.write_register(
             Register::RegPreambleMsb,
             ((pkt_params.preamble_length >> 8) & 0x00ff) as u8,
@@ -396,21 +395,38 @@ where
         )
         .await?;
 
-        let mut config_1 = self.read_register(Register::RegModemConfig1).await?;
-        if pkt_params.implicit_header {
-            config_1 |= 0x01u8;
-        } else {
-            config_1 &= 0xfeu8;
-        }
-        self.write_register(Register::RegModemConfig1, config_1, false).await?;
+        // TODO: Payload length? (Set when pkt_params.implicit_header == true)?
 
-        let mut config_2 = self.read_register(Register::RegModemConfig2).await?;
-        if pkt_params.crc_on {
-            config_2 |= 0x04u8;
-        } else {
-            config_2 &= 0xfbu8;
-        }
-        self.write_register(Register::RegModemConfig2, config_2, false).await?;
+        let modemcfg1 = self.read_register(Register::RegModemConfig1).await?;
+
+        match self.config.chip {
+            Sx127xVariant::Sx1272 => {
+                let hdr = (pkt_params.implicit_header == true) as u8;
+                let crc = (pkt_params.crc_on == true) as u8;
+
+                let cfg1 = (modemcfg1 & 0b1111_1001) | (hdr << 2) | (crc << 1);
+                self.write_register(Register::RegModemConfig1, cfg1, false).await?;
+                Ok(())
+            }
+            Sx127xVariant::Sx1276 => {
+                let mut config_1 = modemcfg1;
+                if pkt_params.implicit_header {
+                    config_1 |= 0x01u8;
+                } else {
+                    config_1 &= 0xfeu8;
+                }
+                self.write_register(Register::RegModemConfig1, config_1, false).await?;
+
+                let mut config_2 = self.read_register(Register::RegModemConfig2).await?;
+                if pkt_params.crc_on {
+                    config_2 |= 0x04u8;
+                } else {
+                    config_2 &= 0xfbu8;
+                }
+                self.write_register(Register::RegModemConfig2, config_2, false).await?;
+                Ok(())
+            }
+        }?;
 
         // IQ inversion:
         // RegInvertiq - [0x33]
