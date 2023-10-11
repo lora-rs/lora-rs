@@ -167,18 +167,18 @@ impl Mac {
         &mut self,
         rx: &mut [u8],
         dl: &mut Option<Downlink>,
-    ) -> Option<Response> {
+    ) -> Response {
         match &mut self.state {
             State::Joined(ref mut session) => session.handle_rx::<C>(&mut self.region, &mut self.configuration, rx, dl),
             State::Otaa(ref mut otaa) => {
                 if let Some(session) = otaa.handle_rx::<C>(&mut self.region, &mut self.configuration, rx) {
                     self.state = State::Joined(session);
-                    Some(Response::JoinSuccess)
+                   Response::JoinSuccess
                 } else {
-                    None
+                   Response::NoUpdate
                 }
             }
-            State::Unjoined => None,
+            State::Unjoined =>  Response::NoUpdate,
         }
     }
 

@@ -1,12 +1,14 @@
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(feature = "async", feature(async_fn_in_trait))]
 #![allow(incomplete_features)]
-
+use core::default::Default;
 use heapless::Vec;
 
 pub mod radio;
+use radio::RadioBuffer;
 
 mod mac;
+use mac::NetworkCredentials;
 
 pub mod region;
 pub use region::Region;
@@ -15,6 +17,8 @@ pub use region::Region;
 mod test_util;
 
 mod nb_device;
+use nb_device::state::State;
+
 use core::marker::PhantomData;
 use lorawan::{
     keys::{CryptoFactory, AES128},
@@ -127,11 +131,6 @@ pub struct SendData<'a> {
     fport: u8,
     confirmed: bool,
 }
-
-use crate::mac::NetworkCredentials;
-use crate::nb_device::state::State;
-use crate::radio::RadioBuffer;
-use core::default::Default;
 
 pub trait Timings {
     fn get_rx_window_offset_ms(&self) -> i32;

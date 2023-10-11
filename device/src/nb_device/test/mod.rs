@@ -29,7 +29,6 @@ fn test_join_rx2() {
     assert!(matches!(response, Response::TimeoutRequest(5100)));
     // send a timeout for end of rx2
     let response = device.handle_event(Event::TimeoutFired).unwrap();
-    println!("{:?}", response);
     assert!(matches!(response, Response::TimeoutRequest(6000)));
     // send a timeout for beginning of rx2
     let response = device.handle_event(Event::TimeoutFired).unwrap();
