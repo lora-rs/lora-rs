@@ -125,7 +125,12 @@ impl BaseBandModulationParams {
 
     /// Calculates time on air for a given payload and modulation parameters.
     /// If `preamble` is None, the whole preamble including syncword is excluded from calculation.
-    pub const fn time_on_air_us(&self, preamble: Option<u8>, explicit_header: bool, len: u8) -> u32 {
+    pub const fn time_on_air_us(
+        &self,
+        preamble: Option<u8>,
+        explicit_header: bool,
+        len: u8,
+    ) -> u32 {
         let sf = self.sf.factor() as i32;
         let t_sym_us = self.t_sym_us;
 
@@ -151,7 +156,7 @@ impl BaseBandModulationParams {
         } else {
             0
         };
-        let payload_symb_nb =  (8 + big_ratio * cr) as u32;
+        let payload_symb_nb = (8 + big_ratio * cr) as u32;
 
         match preamble {
             None => t_sym_us * payload_symb_nb,
@@ -168,7 +173,6 @@ mod tests {
     // the shortest t_sym
     const SF5BW500: BaseBandModulationParams =
         BaseBandModulationParams::new(SpreadingFactor::_5, Bandwidth::_500KHz, CodingRate::_4_5);
-
 
     // EU868 DR6
     const SF7BW250: BaseBandModulationParams =
