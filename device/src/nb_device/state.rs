@@ -1,7 +1,7 @@
 /*
 
-This is state machine creates a non-blocking and no-async structure for coordinating radio events
-with the mac state.
+This state machine creates a non-blocking and no-async structure for coordinating radio events with
+the mac state.
 
 In this implementation, each state (eg: "Idle", "Txing") is a struct. When an event is handled
 (eg: "SendData", "TxComplete"), a transition may or may not occur. Regardless, a response is always
@@ -330,10 +330,13 @@ impl WaitingForRx {
                                     Err(Error::BufferTooSmall.into()),
                                 );
                             }
-                            if let Some(response) = mac.handle_rx::<C>(buf.as_mut(), dl) {
-                                return (State::Idle(Idle), Ok(response.into()));
+                            match mac.handle_rx::<C>(buf.as_mut(), dl) {
+                                // NoUpdate can occur when a stray radio packet is received. Maintain state
+                                mac::Response::NoUpdate => (State::WaitingForRx(self), Ok(Response::NoUpdate)),
+                                // Any other type of update indicates we are done receiving. Change to Idle
+                                r => (State::Idle(Idle), Ok(r.into()))
                             }
-                            (State::WaitingForRx(self), Ok(Response::NoUpdate))
+
                         }
                         _ => (State::WaitingForRx(self), Ok(Response::NoUpdate)),
                     },

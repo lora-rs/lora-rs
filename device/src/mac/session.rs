@@ -95,7 +95,7 @@ impl Session {
         configuration: &mut super::Configuration,
         rx: &mut [u8],
         dl: &mut Option<Downlink>,
-    ) -> Option<Response> {
+    ) -> Response {
         if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
             lorawan_parse(rx, C::default())
         {
@@ -122,11 +122,9 @@ impl Session {
                         self.uplink.set_downlink_confirmation();
                     }
 
-
-
                     return if self.fcnt_up == 0xFFFF_FFFF {
                         // if the FCnt is used up, the session has expired
-                        Some(Response::SessionExpired)
+                        Response::SessionExpired
                     } else {
                         // we can always increment fcnt_up when we receive a downlink
                         self.fcnt_up += 1;
@@ -138,12 +136,12 @@ impl Session {
                             let data = Vec::from_slice(data).unwrap();
                             *dl = Some(Downlink { data, fport });
                         }
-                        Some(Response::DownlinkReceived(fcnt))
+                        Response::DownlinkReceived(fcnt)
                     };
                 }
             }
         }
-        None
+        Response::NoUpdate
     }
 
     pub(crate) fn rx2_complete(&mut self) -> Response {
