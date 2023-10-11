@@ -25,17 +25,22 @@ pub trait InterfaceVariant {
     async fn disable_rf_switch(&mut self) -> Result<(), RadioError>;
 }
 
+/// Specifies an IRQ processing state to run the loop to
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum DesiredIrqState {
+pub enum TargetIrqState {
+    /// Runs the loop until after the preamble has been received
     PreambleReceived,
+    /// Runs the loop until the operation is fully complete
     Done,
 }
 
+/// An actual operation state, including some details where necessary
 #[derive(Clone, Copy)]
 pub enum IrqState {
-    Waiting,
+    /// Preamble has been received
     PreambleReceived,
-    Done(u8, PacketStatus),
+    /// The RX operation is complete
+    RxDone(u8, PacketStatus),
 }
 
 /// Functions implemented for a specific kind of LoRa chip, called internally by the outward facing
@@ -135,11 +140,11 @@ pub trait RadioKind {
         &mut self,
         radio_mode: RadioMode,
         rx_continuous: bool,
-        desired_rx_state: DesiredIrqState,
+        target_rx_state: TargetIrqState,
         delay: &mut impl DelayUs,
         polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
-    ) -> Result<(), RadioError>;
+    ) -> Result<TargetIrqState, RadioError>;
 }
 
 /// Internal trait for specifying that a [`RadioKind`] object has RNG capability.
