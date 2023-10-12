@@ -64,11 +64,16 @@ impl<
         };
         (rng.next_u32() as usize) & cm
     }
+
+    pub fn get_max_payload_length(datarate: DR, repeater_compatible: bool, dwell_time: bool) -> u8 {
+        R::get_max_payload_length(datarate, repeater_compatible, dwell_time)
+    }
 }
 
-pub(crate) trait DynamicChannelRegion<const NUM_JOIN_CHANNELS: usize, const NUM_DATARATES: usize> {
+pub(crate) trait DynamicChannelRegion<const NUM_JOIN_CHANNELS: usize, const NUM_DATARATES: usize>:
+    ChannelRegion<NUM_DATARATES>
+{
     fn join_channels() -> [u32; NUM_JOIN_CHANNELS];
-    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES];
     fn get_default_rx2() -> u32;
 }
 

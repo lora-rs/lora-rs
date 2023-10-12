@@ -14,10 +14,13 @@ pub(crate) type AU915 = FixedChannelPlan<16, AU915Region>;
 #[derive(Default, Clone)]
 pub(crate) struct AU915Region;
 
-impl FixedChannelRegion<16> for AU915Region {
+impl ChannelRegion<16> for AU915Region {
     fn datarates() -> &'static [Option<Datarate>; 16] {
         &DATARATES
     }
+}
+
+impl FixedChannelRegion<16> for AU915Region {
     fn uplink_channels() -> &'static [u32; 72] {
         &UPLINK_CHANNEL_MAP
     }

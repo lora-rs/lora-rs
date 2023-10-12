@@ -23,6 +23,26 @@ pub(crate) use fixed_channel_plans::US915;
 mod dynamic_channel_plans;
 mod fixed_channel_plans;
 
+pub(crate) trait ChannelRegion<const D: usize> {
+    fn datarates() -> &'static [Option<Datarate>; D];
+
+    fn get_max_payload_length(datarate: DR, repeater_compatible: bool, dwell_time: bool) -> u8 {
+        let Some(Some(dr)) = Self::datarates().get(datarate as usize) else {
+            return 0;
+        };
+        let max_size = if dwell_time {
+            dr.max_mac_payload_size_with_dwell_time
+        } else {
+            dr.max_mac_payload_size
+        };
+        if repeater_compatible && max_size > 230 {
+            230
+        } else {
+            max_size
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Configuration {
     state: State,
@@ -101,6 +121,8 @@ impl State {
 pub struct Datarate {
     bandwidth: Bandwidth,
     spreading_factor: SpreadingFactor,
+    max_mac_payload_size: u8,
+    max_mac_payload_size_with_dwell_time: u8,
 }
 
 pub(crate) enum Frame {
@@ -171,6 +193,35 @@ macro_rules! region_dispatch {
   };
 }
 
+macro_rules! region_static_dispatch {
+  ($s:expr, $t:tt) => {
+      match &$s.state {
+        State::AS923_1(_) => dynamic_channel_plans::AS923_1::$t(),
+        State::AS923_2(_) => dynamic_channel_plans::AS923_2::$t(),
+        State::AS923_3(_) => dynamic_channel_plans::AS923_3::$t(),
+        State::AS923_4(_) => dynamic_channel_plans::AS923_4::$t(),
+        State::AU915(_) => fixed_channel_plans::AU915::$t(),
+        State::EU868(_) => dynamic_channel_plans::EU868::$t(),
+        State::EU433(_) => dynamic_channel_plans::EU433::$t(),
+        State::IN865(_) => dynamic_channel_plans::IN865::$t(),
+        State::US915(_) => fixed_channel_plans::US915::$t(),
+    }
+  };
+  ($s:expr, $t:tt, $($arg:tt)*) => {
+      match &$s.state {
+        State::AS923_1(_) => dynamic_channel_plans::AS923_1::$t($($arg)*),
+        State::AS923_2(_) => dynamic_channel_plans::AS923_2::$t($($arg)*),
+        State::AS923_3(_) => dynamic_channel_plans::AS923_3::$t($($arg)*),
+        State::AS923_4(_) => dynamic_channel_plans::AS923_4::$t($($arg)*),
+        State::AU915(_) => fixed_channel_plans::AU915::$t($($arg)*),
+        State::EU868(_) => dynamic_channel_plans::EU868::$t($($arg)*),
+        State::EU433(_) => dynamic_channel_plans::EU433::$t($($arg)*),
+        State::IN865(_) => dynamic_channel_plans::IN865::$t($($arg)*),
+        State::US915(_) => fixed_channel_plans::US915::$t($($arg)*),
+    }
+  };
+}
+
 impl Configuration {
     pub fn new(region: Region) -> Configuration {
         Configuration::with_state(State::new(region))
@@ -199,6 +250,21 @@ impl Configuration {
 
     pub fn set_join_accept_delay2(&mut self, delay: u32) {
         self.join_accept_delay2 = delay;
+    }
+
+    pub fn get_max_payload_length(
+        &self,
+        datarate: DR,
+        repeater_compatible: bool,
+        dwell_time: bool,
+    ) -> u8 {
+        region_static_dispatch!(
+            self,
+            get_max_payload_length,
+            datarate,
+            repeater_compatible,
+            dwell_time
+        )
     }
 
     pub(crate) fn create_tx_config<RNG: RngCore>(

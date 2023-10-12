@@ -14,10 +14,13 @@ pub(crate) type US915 = FixedChannelPlan<14, US915Region>;
 #[derive(Default, Clone)]
 pub(crate) struct US915Region;
 
-impl FixedChannelRegion<14> for US915Region {
+impl ChannelRegion<14> for US915Region {
     fn datarates() -> &'static [Option<Datarate>; 14] {
         &DATARATES
     }
+}
+
+impl FixedChannelRegion<14> for US915Region {
     fn uplink_channels() -> &'static [u32; 72] {
         &UPLINK_CHANNEL_MAP
     }

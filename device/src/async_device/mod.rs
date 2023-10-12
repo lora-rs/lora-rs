@@ -329,7 +329,8 @@ where
         // Wait for received data within window
         self.timer.reset();
         // TODO: expose the expected payload length in the API
-        self.rx_with_timeout(&Frame::Data, ms, 230).await?;
+        let max_payload_length = self.region.get_max_payload_length(self.datarate, false, false);
+        self.rx_with_timeout(&Frame::Data, ms, max_payload_length).await?;
 
         // Handle received data
         if let Some(ref mut session_data) = self.session {
@@ -468,11 +469,11 @@ where
         &mut self,
         frame: &Frame,
         window_delay: u32,
-        max_expected_payload_length: usize,
+        max_expected_payload_length: u8,
     ) -> Result<(), Error<R::PhyError>> {
         let num_read =
             self.rx_with_timeout_inner(frame, window_delay, max_expected_payload_length).await?;
-        self.radio_buffer.inc(num_read);
+        self.radio_buffer.inc(num_read as usize);
         Ok(())
     }
 
@@ -535,8 +536,8 @@ where
         &mut self,
         frame: &Frame,
         window_delay: u32,
-        max_expected_payload_length: usize,
-    ) -> Result<usize, Error<R::PhyError>> {
+        max_expected_payload_length: u8,
+    ) -> Result<u8, Error<R::PhyError>> {
         // The initial window configuration uses window 1 adjusted by window_delay and radio offset
         let rx1_start_delay = (self.region.get_rx_delay(frame, &Window::_1) as i32
             + window_delay as i32
@@ -572,7 +573,7 @@ where
         {
             Ok((length, _status)) => {
                 self.phy.radio.low_power().await.map_err(Error::Radio)?;
-                return Ok(length as usize);
+                return Ok(length);
             }
             Err(err) => {
                 #[cfg(feature = "defmt")]
@@ -597,7 +598,7 @@ where
             )
             .await;
         self.phy.radio.low_power().await.map_err(Error::Radio)?;
-        Ok(rxd?.0 as usize)
+        Ok(rxd?.0)
     }
 }
 

@@ -32,10 +32,13 @@ impl<const D: usize, F: FixedChannelRegion<D>> FixedChannelPlan<D, F> {
         self.channel_mask.set_bank(6, mask);
         self.channel_mask.set_bank(7, mask);
     }
+
+    pub fn get_max_payload_length(datarate: DR, repeater_compatible: bool, dwell_time: bool) -> u8 {
+        F::get_max_payload_length(datarate, repeater_compatible, dwell_time)
+    }
 }
 
-pub(crate) trait FixedChannelRegion<const D: usize> {
-    fn datarates() -> &'static [Option<Datarate>; D];
+pub(crate) trait FixedChannelRegion<const D: usize>: ChannelRegion<D> {
     fn uplink_channels() -> &'static [u32; 72];
     fn downlink_channels() -> &'static [u32; 8];
     fn get_default_rx2() -> u32;
