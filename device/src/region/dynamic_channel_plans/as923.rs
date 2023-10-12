@@ -11,15 +11,19 @@ pub(crate) type AS923_4 = DynamicChannelPlan<2, 7, AS923Region<917_300_000, 5900
 #[allow(clippy::upper_case_acronyms)]
 pub struct AS923Region<const DEFAULT_RX2: u32, const O: u32>;
 
+impl<const DEFAULT_RX2: u32, const OFFSET: u32> ChannelRegion<7>
+    for AS923Region<DEFAULT_RX2, OFFSET>
+{
+    fn datarates() -> &'static [Option<Datarate>; 7] {
+        &DATARATES
+    }
+}
+
 impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion<2, 7>
-    for AS923Region<OFFSET, DEFAULT_RX2>
+    for AS923Region<DEFAULT_RX2, OFFSET>
 {
     fn join_channels() -> [u32; 2] {
         [JOIN_CHANNELS[0] + OFFSET, JOIN_CHANNELS[1] + OFFSET]
-    }
-
-    fn datarates() -> &'static [Option<Datarate>; 7] {
-        &DATARATES
     }
 
     fn get_default_rx2() -> u32 {
@@ -30,12 +34,47 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion<2, 7>
 use super::{Bandwidth, Datarate, SpreadingFactor};
 
 pub(crate) const DATARATES: [Option<Datarate>; 7] = [
-    Some(Datarate { spreading_factor: SpreadingFactor::_12, bandwidth: Bandwidth::_125KHz }),
-    Some(Datarate { spreading_factor: SpreadingFactor::_11, bandwidth: Bandwidth::_125KHz }),
-    Some(Datarate { spreading_factor: SpreadingFactor::_10, bandwidth: Bandwidth::_125KHz }),
-    Some(Datarate { spreading_factor: SpreadingFactor::_9, bandwidth: Bandwidth::_125KHz }),
-    Some(Datarate { spreading_factor: SpreadingFactor::_8, bandwidth: Bandwidth::_125KHz }),
-    Some(Datarate { spreading_factor: SpreadingFactor::_7, bandwidth: Bandwidth::_125KHz }),
-    Some(Datarate { spreading_factor: SpreadingFactor::_7, bandwidth: Bandwidth::_250KHz }),
-    //ignore FSK data rate for now
+    Some(Datarate {
+        spreading_factor: SpreadingFactor::_12,
+        bandwidth: Bandwidth::_125KHz,
+        max_mac_payload_size: 59,
+        max_mac_payload_size_with_dwell_time: 0,
+    }),
+    Some(Datarate {
+        spreading_factor: SpreadingFactor::_11,
+        bandwidth: Bandwidth::_125KHz,
+        max_mac_payload_size: 59,
+        max_mac_payload_size_with_dwell_time: 0,
+    }),
+    Some(Datarate {
+        spreading_factor: SpreadingFactor::_10,
+        bandwidth: Bandwidth::_125KHz,
+        max_mac_payload_size: 123,
+        max_mac_payload_size_with_dwell_time: 19,
+    }),
+    Some(Datarate {
+        spreading_factor: SpreadingFactor::_9,
+        bandwidth: Bandwidth::_125KHz,
+        max_mac_payload_size: 123,
+        max_mac_payload_size_with_dwell_time: 61,
+    }),
+    Some(Datarate {
+        spreading_factor: SpreadingFactor::_8,
+        bandwidth: Bandwidth::_125KHz,
+        max_mac_payload_size: 250,
+        max_mac_payload_size_with_dwell_time: 133,
+    }),
+    Some(Datarate {
+        spreading_factor: SpreadingFactor::_7,
+        bandwidth: Bandwidth::_125KHz,
+        max_mac_payload_size: 250,
+        max_mac_payload_size_with_dwell_time: 250,
+    }),
+    Some(Datarate {
+        spreading_factor: SpreadingFactor::_7,
+        bandwidth: Bandwidth::_250KHz,
+        max_mac_payload_size: 250,
+        max_mac_payload_size_with_dwell_time: 250,
+    }),
+    // TODO: ignore FSK data rate for now
 ];
