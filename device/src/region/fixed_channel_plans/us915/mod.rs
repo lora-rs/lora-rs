@@ -33,13 +33,22 @@ const DEFAULT_RX2: u32 = 923_300_000;
 #[derive(Default, Clone)]
 pub struct US915(pub(crate) FixedChannelPlan<14, US915Region>);
 
+impl US915 {
+    pub fn get_max_payload_length(datarate: DR, repeater_compatible: bool, dwell_time: bool) -> u8 {
+        US915Region::get_max_payload_length(datarate, repeater_compatible, dwell_time)
+    }
+}
+
 #[derive(Default, Clone)]
 pub(crate) struct US915Region;
 
-impl FixedChannelRegion<14> for US915Region {
+impl ChannelRegion<14> for US915Region {
     fn datarates() -> &'static [Option<Datarate>; 14] {
         &DATARATES
     }
+}
+
+impl FixedChannelRegion<14> for US915Region {
     fn uplink_channels() -> &'static [u32; 72] {
         &UPLINK_CHANNEL_MAP
     }
