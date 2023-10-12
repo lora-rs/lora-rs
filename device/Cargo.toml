@@ -13,6 +13,10 @@ readme = "README.md"
 description = "A Rust LoRaWAN device stack implementation"
 repository = "https://github.com/ivajloip/rust-lorawan"
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "async"]
+
 [dependencies]
 lora-modulation = { version = ">=0.1.2", default-features = false }
 lorawan = { version = "0.7.4", path = "../encoding", default-features = false }

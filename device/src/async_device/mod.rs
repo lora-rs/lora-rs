@@ -1,5 +1,5 @@
 //! Asynchronous Device using Rust async-await for driving the state machine,
-//! and allowing asynchronous radio implementations.
+//! and allowing asynchronous radio implementations. Requires the `async` feature and `nightly`.
 use super::mac::uplink::Uplink;
 
 pub use super::{region, region::Region, JoinMode, SendData, Timings};
