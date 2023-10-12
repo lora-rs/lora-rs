@@ -1,5 +1,5 @@
 use defmt::trace;
-use embedded_hal_async::spi::SpiBus;
+use embedded_hal_async::spi::SpiDevice;
 
 use crate::mod_params::RadioError;
 use crate::mod_params::RadioError::*;
@@ -12,7 +12,7 @@ pub(crate) struct SpiInterface<SPI, IV> {
 
 impl<SPI, IV> SpiInterface<SPI, IV>
 where
-    SPI: SpiBus<u8>,
+    SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
     pub fn new(spi: SPI, iv: IV) -> Self {
@@ -21,19 +21,12 @@ where
 
     // Write one or more buffers to the radio.
     pub async fn write(&mut self, write_buffers: &[&[u8]], is_sleep_command: bool) -> Result<(), RadioError> {
-        self.iv.set_nss_low().await?;
         for buffer in write_buffers {
             let write_result = self.spi.write(buffer).await.map_err(|_| SPI);
-            let flush_result = self.spi.flush().await.map_err(|_| SPI);
             if write_result != Ok(()) {
-                let _err = self.iv.set_nss_high().await;
                 write_result?;
-            } else if flush_result != Ok(()) {
-                let _err = self.iv.set_nss_high().await;
-                flush_result?;
             }
         }
-        self.iv.set_nss_high().await?;
 
         if !is_sleep_command {
             self.iv.wait_on_busy().await?;
@@ -63,16 +56,10 @@ where
     ) -> Result<(), RadioError> {
         let mut input = [0u8];
 
-        self.iv.set_nss_low().await?;
         for buffer in write_buffers {
             let write_result = self.spi.write(buffer).await.map_err(|_| SPI);
-            let flush_result = self.spi.flush().await.map_err(|_| SPI);
             if write_result != Ok(()) {
-                let _err = self.iv.set_nss_high().await;
                 write_result?;
-            } else if flush_result != Ok(()) {
-                let _err = self.iv.set_nss_high().await;
-                flush_result?;
             }
         }
 
@@ -84,17 +71,11 @@ where
         #[allow(clippy::needless_range_loop)]
         for i in 0..number_to_read {
             let transfer_result = self.spi.transfer(&mut input, &[0x00]).await.map_err(|_| SPI);
-            let flush_result = self.spi.flush().await.map_err(|_| SPI);
             if transfer_result != Ok(()) {
-                let _err = self.iv.set_nss_high().await;
                 transfer_result?;
-            } else if flush_result != Ok(()) {
-                let _err = self.iv.set_nss_high().await;
-                flush_result?;
             }
             read_buffer[i] = input[0];
         }
-        self.iv.set_nss_high().await?;
 
         self.iv.wait_on_busy().await?;
 
@@ -123,43 +104,26 @@ where
         let mut status = [0u8];
         let mut input = [0u8];
 
-        self.iv.set_nss_low().await?;
         for buffer in write_buffers {
             let write_result = self.spi.write(buffer).await.map_err(|_| SPI);
-            let flush_result = self.spi.flush().await.map_err(|_| SPI);
             if write_result != Ok(()) {
-                let _err = self.iv.set_nss_high().await;
                 write_result?;
-            } else if flush_result != Ok(()) {
-                let _err = self.iv.set_nss_high().await;
-                flush_result?;
             }
         }
 
         let transfer_result = self.spi.transfer(&mut status, &[0x00]).await.map_err(|_| SPI);
-        let flush_result = self.spi.flush().await.map_err(|_| SPI);
         if transfer_result != Ok(()) {
-            let _err = self.iv.set_nss_high().await;
             transfer_result?;
-        } else if flush_result != Ok(()) {
-            let _err = self.iv.set_nss_high().await;
-            flush_result?;
         }
 
         #[allow(clippy::needless_range_loop)]
         for i in 0..read_buffer.len() {
             let transfer_result = self.spi.transfer(&mut input, &[0x00]).await.map_err(|_| SPI);
-            let flush_result = self.spi.flush().await.map_err(|_| SPI);
             if transfer_result != Ok(()) {
-                let _err = self.iv.set_nss_high().await;
                 transfer_result?;
-            } else if flush_result != Ok(()) {
-                let _err = self.iv.set_nss_high().await;
-                flush_result?;
             }
             read_buffer[i] = input[0];
         }
-        self.iv.set_nss_high().await?;
 
         self.iv.wait_on_busy().await?;
 

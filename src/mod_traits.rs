@@ -7,10 +7,6 @@ use crate::mod_params::*;
 pub trait InterfaceVariant {
     /// Set the LoRa board type
     fn set_board_type(&mut self, board_type: BoardType);
-    /// Select the LoRa chip for an operation
-    async fn set_nss_low(&mut self) -> Result<(), RadioError>;
-    /// De-select the LoRa chip after an operation
-    async fn set_nss_high(&mut self) -> Result<(), RadioError>;
     /// Reset the LoRa chip
     async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError>;
     /// Wait for the LoRa chip to become available for an operation

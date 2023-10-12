@@ -39,7 +39,7 @@ pub struct SX1261_2<SPI, IV> {
 
 impl<SPI, IV> SX1261_2<SPI, IV>
 where
-    SPI: SpiBus<u8>,
+    SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
     /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
@@ -154,7 +154,7 @@ where
 
 impl<SPI, IV> RadioKind for SX1261_2<SPI, IV>
 where
-    SPI: SpiBus<u8>,
+    SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
     fn get_board_type(&self) -> BoardType {
@@ -965,7 +965,7 @@ where
 
 impl<SPI, IV> crate::RngRadio for SX1261_2<SPI, IV>
 where
-    SPI: SpiBus<u8>,
+    SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
     /// Generate a 32 bit random value based on the RSSI readings, after disabling all interrupts.
