@@ -117,7 +117,7 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         }
     }
 
-    fn get_tx_dr_and_frequency<RNG: RngCore>(
+    fn get_tx_dr_and_frequency<RNG: GetRng>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
@@ -125,7 +125,7 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
     ) -> (Datarate, u32) {
         match frame {
             Frame::Join => {
-                let channel = self.join_channels.get_next_channel(rng);
+                let channel = self.join_channels.get_next_channel(rng.get_rng());
                 let dr = if channel < 64 {
                     DR::_0
                 } else {
@@ -140,18 +140,18 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
                 // channels 64-71. Else, we must use 0-63
                 let datarate = F::datarates()[datarate as usize].clone().unwrap();
                 if datarate.bandwidth == Bandwidth::_500KHz {
-                    let mut channel = (rng.next_u32() & 0b111) as u8;
+                    let mut channel = (rng.get_rng().next_u32() & 0b111) as u8;
                     // keep selecting a random channel until we find one that is enabled
                     while !self.channel_mask.is_enabled(channel.into()).unwrap() {
-                        channel = (rng.next_u32() & 0b111) as u8;
+                        channel = (rng.get_rng().next_u32() & 0b111) as u8;
                     }
                     self.last_tx_channel = channel;
                     (datarate, F::uplink_channels()[(64 + channel) as usize])
                 } else {
-                    let mut channel = (rng.next_u32() & 0b111111) as u8;
+                    let mut channel = (rng.get_rng().next_u32() & 0b111111) as u8;
                     // keep selecting a random channel until we find one that is enabled
                     while !self.channel_mask.is_enabled(channel.into()).unwrap() {
-                        channel = (rng.next_u32() & 0b111111) as u8;
+                        channel = (rng.get_rng().next_u32() & 0b111111) as u8;
                     }
                     self.last_tx_channel = channel;
                     (datarate, F::uplink_channels()[channel as usize])

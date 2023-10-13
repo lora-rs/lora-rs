@@ -3,7 +3,7 @@
 // conventions better
 use lorawan::{maccommands::ChannelMask, parser::CfList};
 
-use super::RngCore;
+use crate::rng::{GetRng, RngCore};
 pub mod constants;
 pub(crate) use crate::radio::*;
 use constants::*;
@@ -181,12 +181,10 @@ impl Configuration {
     }
 
     fn with_state(state: State) -> Configuration {
-        Configuration {
-            state,
-        }
+        Configuration { state }
     }
 
-    pub(crate) fn create_tx_config<RNG: RngCore>(
+    pub(crate) fn create_tx_config<RNG: GetRng>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
@@ -204,7 +202,7 @@ impl Configuration {
         }
     }
 
-    fn get_tx_dr_and_frequency<RNG: RngCore>(
+    fn get_tx_dr_and_frequency<RNG: GetRng>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
@@ -300,7 +298,7 @@ pub(crate) trait RegionHandler {
     fn get_default_datarate(&self) -> DR {
         DR::_0
     }
-    fn get_tx_dr_and_frequency<RNG: RngCore>(
+    fn get_tx_dr_and_frequency<RNG: GetRng>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,

@@ -113,9 +113,17 @@ impl Session {
                         .unwrap();
 
                     // MAC commands may be in the FHDR or the FRMPayload
-                    configuration.handle_downlink_macs(region, &mut self.uplink, &mut decrypted.fhdr().fopts());
+                    configuration.handle_downlink_macs(
+                        region,
+                        &mut self.uplink,
+                        &mut decrypted.fhdr().fopts(),
+                    );
                     if let Ok(FRMPayload::MACCommands(mac_cmds)) = decrypted.frm_payload() {
-                        configuration.handle_downlink_macs(region, &mut self.uplink,&mut mac_cmds.mac_commands());
+                        configuration.handle_downlink_macs(
+                            region,
+                            &mut self.uplink,
+                            &mut mac_cmds.mac_commands(),
+                        );
                     }
 
                     if confirmed {

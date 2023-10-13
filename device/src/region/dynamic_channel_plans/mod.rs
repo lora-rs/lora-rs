@@ -53,7 +53,7 @@ impl<
         index_plus_one
     }
 
-    fn get_random_in_range<RNG: RngCore>(&self, rng: &mut RNG) -> usize {
+    fn get_random_in_range<RNG: GetRng>(&self, rng: &mut RNG) -> usize {
         let range = self.highest_additional_channel_index_plus_one() + NUM_JOIN_CHANNELS;
         let cm = if range > 16 {
             0b11111
@@ -62,7 +62,7 @@ impl<
         } else {
             0b111
         };
-        (rng.next_u32() as usize) & cm
+        (rng.get_rng().next_u32() as usize) & cm
     }
 }
 
@@ -140,7 +140,7 @@ impl<
         }
     }
 
-    fn get_tx_dr_and_frequency<RNG: RngCore>(
+    fn get_tx_dr_and_frequency<RNG: GetRng>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
@@ -149,11 +149,11 @@ impl<
         match frame {
             Frame::Join => {
                 // there are at most 8 join channels
-                let mut channel = (rng.next_u32() & 0b111) as u8;
+                let mut channel = (rng.get_rng().next_u32() & 0b111) as u8;
                 // keep sampling until we select a join channel depending
                 // on the frequency plan
                 while channel as usize >= NUM_JOIN_CHANNELS {
-                    channel = (rng.next_u32() & 0b111) as u8;
+                    channel = (rng.get_rng().next_u32() & 0b111) as u8;
                 }
                 self.last_tx_channel = channel;
                 (
