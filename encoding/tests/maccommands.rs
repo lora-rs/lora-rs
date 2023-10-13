@@ -28,7 +28,7 @@ macro_rules! test_helper {
 
     ( $name:ident, $type:ident ) => {{
         {
-            let data = vec![];
+            let data = [];
             let mc = $type::new_as_mac_cmd(&data[..]);
             assert!(mc.is_ok());
             if let (MacCommand::$name(_), size) = mc.unwrap() {
@@ -47,13 +47,13 @@ fn test_link_check_req_new() {
 
 #[test]
 fn test_link_check_ans_new() {
-    let data = vec![0xa, 0x0f];
+    let data = [0xa, 0x0f];
     test_helper!(data, LinkCheckAns, LinkCheckAnsPayload, 2, (margin, 10), (gateway_count, 15),);
 }
 
 #[test]
 fn test_link_adr_req_new() {
-    let data = vec![0x12, 0x04, 0x00, 0x45];
+    let data = [0x12, 0x04, 0x00, 0x45];
     let expected_channel_mask = ChannelMask::new(&[0x04, 0x00]).unwrap();
     test_helper!(
         data,
@@ -95,7 +95,7 @@ fn test_link_adr_ans_new() {
 #[test]
 fn test_duty_cycle_req_new() {
     #![allow(clippy::float_cmp)]
-    let data = vec![0x02];
+    let data = [0x02];
     test_helper!(
         data,
         DutyCycleReq,
@@ -113,7 +113,7 @@ fn test_duty_cycle_ans_new() {
 
 #[test]
 fn test_rx_param_setup_req_new() {
-    let data = vec![0x3b, 0x01, 0x02, 0x04];
+    let data = [0x3b, 0x01, 0x02, 0x04];
     test_helper!(
         data,
         RXParamSetupReq,
@@ -156,13 +156,13 @@ fn test_dev_status_req() {
 
 #[test]
 fn test_dev_status_ans() {
-    let data = vec![0xfe, 0x3f];
+    let data = [0xfe, 0x3f];
     test_helper!(data, DevStatusAns, DevStatusAnsPayload, 2, (battery, 254), (margin, -1),);
 }
 
 #[test]
 fn test_new_channel_req() {
-    let data = vec![0x03, 0x01, 0x02, 0x04, 0xa5];
+    let data = [0x03, 0x01, 0x02, 0x04, 0xa5];
     test_helper!(
         data,
         NewChannelReq,
@@ -199,7 +199,7 @@ fn test_new_channel_ans() {
 
 #[test]
 fn test_rx_timing_setup_req() {
-    let data = vec![0x02];
+    let data = [0x02];
     test_helper!(data, RXTimingSetupReq, RXTimingSetupReqPayload, 1, (delay, 2),);
 }
 
@@ -210,7 +210,7 @@ fn test_rx_timing_setup_ans() {
 
 #[test]
 fn test_tx_param_setup_req() {
-    let data = vec![0b011110];
+    let data = [0b011110];
     test_helper!(
         data,
         TXParamSetupReq,
@@ -229,7 +229,7 @@ fn test_tx_param_setup_ans() {
 
 #[test]
 fn test_dl_channel_req() {
-    let data = vec![1, 2, 3, 4];
+    let data = [1, 2, 3, 4];
     test_helper!(
         data,
         DlChannelReq,
@@ -242,7 +242,7 @@ fn test_dl_channel_req() {
 
 #[test]
 fn test_dl_channel_ans() {
-    let data = vec![0x3];
+    let data = [0x3];
     test_helper!(
         data,
         DlChannelAns,
@@ -264,7 +264,7 @@ fn test_device_time_req() {
 }
 #[test]
 fn test_device_time_ans() {
-    let data = vec![0x1, 0x2, 0x3, 0x4, 0x5];
+    let data = [0x1, 0x2, 0x3, 0x4, 0x5];
     test_helper!(
         data,
         DeviceTimeAns,
@@ -291,7 +291,7 @@ fn test_parse_mac_commands_with_multiple_cmds() {
 
 #[test]
 fn test_parse_mac_commands_with_multiple_cmds_with_payloads() {
-    let data = vec![3, 0, 0, 0, 112, 3, 0, 0, 255, 0];
+    let data = [3, 0, 0, 0, 112, 3, 0, 0, 255, 0];
     let mut commands = parse_mac_commands(&data, false);
 
     assert_eq!(
@@ -318,8 +318,8 @@ fn test_dl_settings() {
 
 #[test]
 fn test_channel_mask() {
-    let data = vec![0x03, 0x10];
-    let mut expected = vec![false; 16];
+    let data = [0x03, 0x10];
+    let mut expected = [false; 16];
     expected[0] = true;
     expected[1] = true;
     expected[12] = true;
@@ -330,8 +330,8 @@ fn test_channel_mask() {
 
 #[test]
 fn test_channel_mask_enable_and_disable_channel() {
-    let data = vec![0x00, 0x00];
-    let mut expected = vec![false; 16];
+    let data = [0x00, 0x00];
+    let mut expected = [false; 16];
     let mut chan_mask = ChannelMask::<2>::new(&data[..]).unwrap();
     chan_mask.set_channel(15, true);
     expected[15] = true;
@@ -366,8 +366,8 @@ fn test_frequency_value() {
     assert_eq!(freq.unwrap().value(), 26_265_700);
 }
 
-fn frequency_payload() -> Vec<u8> {
-    vec![0x01, 0x02, 0x04]
+fn frequency_payload() -> [u8; 3] {
+    [0x01, 0x02, 0x04]
 }
 
 #[test]
