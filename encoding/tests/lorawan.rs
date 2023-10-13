@@ -144,14 +144,14 @@ fn test_mhdr_major() {
 
 #[test]
 fn test_parse_phy_payload_with_too_few_bytes_is_err() {
-    let bytes = vec![0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04];
+    let bytes = [0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04];
     let phy = parse(bytes);
     assert!(phy.is_err());
 }
 
 #[test]
 fn test_parse_phy_payload_with_unsupported_major_versoin() {
-    let bytes = vec![0x81, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05];
+    let bytes = [0x81, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05];
     let phy = parse(bytes);
 
     // this is now part of the API.
@@ -192,14 +192,14 @@ fn test_parse_data_payload() {
 #[test]
 fn test_parse_data_payload_no_panic_when_bad_packet() {
     // This reproduces a panic from https://github.com/ivajloip/rust-lorawan/issues/94.
-    let data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x85, 0x01, 0x00, 0xd6, 0xc3, 0xb5, 0x82];
+    let data = [0x40, 0x04, 0x03, 0x02, 0x01, 0x85, 0x01, 0x00, 0xd6, 0xc3, 0xb5, 0x82];
     let phy = parse(data);
     assert_eq!(phy.err(), Some("can not build EncryptedDataPayload from the provided data"));
 }
 
 #[test]
 fn test_parse_data_payload_no_panic_when_too_short_packet() {
-    let data = vec![0x40, 0x04, 0x03, 0x02, 0x01];
+    let data = [0x40, 0x04, 0x03, 0x02, 0x01];
     let phy = EncryptedDataPayload::new(data);
     assert_eq!(phy.err(), Some("can not build EncryptedDataPayload from the provided data"));
 }
@@ -235,7 +235,7 @@ fn test_new_join_accept_c_f_list_empty() {
 #[test]
 fn test_join_accept_app_nonce_extraction() {
     let decrypted_phy = new_decrypted_join_accept();
-    let expected = vec![3, 2, 1];
+    let expected = [3, 2, 1];
     assert_eq!(decrypted_phy.app_nonce(), AppNonce::new(&expected[..]).unwrap());
 }
 
@@ -321,7 +321,7 @@ fn test_f_port_could_be_absent_in_data_payload() {
 fn test_complete_data_payload_fhdr() {
     let app_skey = AES128([1; 16]);
     let nwk_skey = AES128([2; 16]);
-    let phys: std::vec::Vec<Box<dyn DataHeader>> = vec![
+    let phys: [Box<dyn DataHeader>; 2] = [
         Box::new(EncryptedDataPayload::new(phy_dataup_payload()).unwrap()),
         Box::new(
             DecryptedDataPayload::new(phy_dataup_payload(), &nwk_skey, Some(&app_skey), 1).unwrap(),
