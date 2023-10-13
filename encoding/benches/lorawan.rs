@@ -75,7 +75,7 @@ fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
             let phy = parse_with_factory(&mut data, &factory).unwrap();
 
             if let PhyPayload::Data(DataPayload::Encrypted(data_payload)) = phy {
-                assert_eq!(data_payload.validate_mic(&mic_key, 1), true);
+                assert!(data_payload.validate_mic(&mic_key, 1));
             } else {
                 panic!("failed to parse DataPayload");
             }

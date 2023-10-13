@@ -250,9 +250,9 @@ where
                         }
                     }
                     Err(err) => Err(Error::UnableToDecodePayload(err)),
-                    Ok(r) => {
+                    Ok(_r) => {
                         #[cfg(feature = "defmt")]
-                        warn!("can't parse payload {}", r);
+                        warn!("can't parse payload {}", _r);
                         Err(Error::UnableToDecodePayload(""))
                     }
                 }

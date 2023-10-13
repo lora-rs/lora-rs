@@ -38,7 +38,7 @@ async fn test_join_rx1() {
         // because RX1 end is armed when packet is received
         assert_eq!(2, timer.get_armed_count().await);
     } else {
-        assert!(false);
+        panic!();
     }
 }
 
@@ -62,7 +62,7 @@ async fn test_join_rx2() {
     if async_device.await.unwrap().is_ok() {
         assert_eq!(4, timer.get_armed_count().await);
     } else {
-        assert!(false);
+        panic!();
     }
 }
 
@@ -86,7 +86,7 @@ async fn test_no_join_accept() {
     if let Err(Error::RxTimeout) = async_device.await.unwrap() {
         assert_eq!(4, timer.get_armed_count().await);
     } else {
-        assert!(false);
+        panic!();
     }
 }
 
@@ -102,11 +102,9 @@ async fn test_noise() {
     radio.handle_rxtx(|_, _, _| 0);
 
     // Await the device to return and verify state
-    if let Err(Error::UnableToDecodePayload(_)) = async_device.await.unwrap() {
-        assert!(true);
-    } else {
-        assert!(false);
-    }
+    let Err(Error::UnableToDecodePayload(_)) = async_device.await.unwrap() else {
+        panic!();
+    };
 }
 
 #[tokio::test]
@@ -137,7 +135,7 @@ async fn test_unconfirmed_uplink_no_downlink() {
 
     match async_device.await.unwrap() {
         Err(Error::RxTimeout) => (),
-        _ => assert!(false),
+        _ => panic!(),
     }
     assert!(*send_await_complete.lock().await);
 }
@@ -172,7 +170,7 @@ async fn test_confirmed_uplink_no_ack() {
         // TODO: implement some ACK failure notification. This response is
         // currently identical to taht of an unconfirmed uplink.
         Err(Error::RxTimeout) => (),
-        _ => assert!(false),
+        _ => panic!(),
     }
     assert!(*send_await_complete.lock().await);
 }
@@ -200,7 +198,7 @@ async fn test_confirmed_uplink_with_ack_rx1() {
     match async_device.await.unwrap() {
         Ok(()) => (),
         _ => {
-            assert!(false)
+            panic!()
         }
     }
 }
@@ -234,7 +232,7 @@ async fn test_confirmed_uplink_with_ack_rx2() {
     match async_device.await.unwrap() {
         Ok(()) => (),
         _ => {
-            assert!(false)
+            panic!()
         }
     }
 }
@@ -268,7 +266,7 @@ async fn test_link_adr_ans() {
     match async_device.await.unwrap() {
         Ok(()) => (),
         _ => {
-            assert!(false)
+            panic!()
         }
     }
 }

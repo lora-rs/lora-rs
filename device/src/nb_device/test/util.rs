@@ -64,7 +64,7 @@ impl PhyRxTx for TestRadio {
                 if self.last_uplink.is_some() {
                     return Err(Error::PhyError("Radio already has an uplink"));
                 }
-                self.last_uplink = Some(Uplink::new(&buf, config).map_err(|e| Error::PhyError(e))?);
+                self.last_uplink = Some(Uplink::new(buf, config).map_err(Error::PhyError)?);
                 return Ok(Response::TxDone(0));
             }
             Event::RxRequest(rf_config) => {
