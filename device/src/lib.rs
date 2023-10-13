@@ -27,6 +27,7 @@ use lorawan::{
 use nb_device::Shared;
 
 pub use rand_core::RngCore;
+mod rng;
 
 #[cfg(feature = "async")]
 pub mod async_device;
@@ -279,18 +280,4 @@ where
         self.state = new_state;
         result
     }
-}
-
-/// Trait used to mark types which can give out an exclusive reference to [`RngCore`].
-/// This trait is an implementation detail and should not be implemented outside this crate.
-#[doc(hidden)]
-pub trait GetRng: private::Sealed {
-    type RNG: RngCore;
-    fn get_rng(&mut self) -> &mut Self::RNG;
-}
-
-mod private {
-    /// Super trait used to mark traits with an exhaustive set of
-    /// implementations
-    pub trait Sealed {}
 }

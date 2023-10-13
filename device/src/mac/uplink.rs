@@ -67,7 +67,6 @@ impl Uplink {
         self.confirmed
     }
 
-
     pub fn ack_rx_delay(&mut self) {
         self.rx_delay_ans.add();
     }

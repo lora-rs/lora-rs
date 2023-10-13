@@ -332,11 +332,12 @@ impl WaitingForRx {
                             }
                             match mac.handle_rx::<C>(buf.as_mut(), dl) {
                                 // NoUpdate can occur when a stray radio packet is received. Maintain state
-                                mac::Response::NoUpdate => (State::WaitingForRx(self), Ok(Response::NoUpdate)),
+                                mac::Response::NoUpdate => {
+                                    (State::WaitingForRx(self), Ok(Response::NoUpdate))
+                                }
                                 // Any other type of update indicates we are done receiving. Change to Idle
-                                r => (State::Idle(Idle), Ok(r.into()))
+                                r => (State::Idle(Idle), Ok(r.into())),
                             }
-
                         }
                         _ => (State::WaitingForRx(self), Ok(Response::NoUpdate)),
                     },

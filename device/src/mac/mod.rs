@@ -1,9 +1,11 @@
 use crate::{
     radio::{self, RadioBuffer},
-    region, AppSKey, Downlink, NewSKey, RngCore, SendData,
+    region,
+    rng::GetRng,
+    AppSKey, Downlink, NewSKey, SendData,
 };
 use lorawan::parser::DevAddr;
-use lorawan::{self, maccommands::MacCommand, keys::CryptoFactory};
+use lorawan::{self, keys::CryptoFactory, maccommands::MacCommand};
 
 pub type FcntDown = u32;
 pub type FcntUp = u32;
@@ -50,16 +52,13 @@ impl Configuration {
                 _ => (),
             }
         }
-
     }
 }
 
-
-
 pub(crate) struct Mac {
-    region: region::Configuration,
-    state: State,
     pub configuration: Configuration,
+    pub region: region::Configuration,
+    state: State,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -94,7 +93,7 @@ impl Mac {
 
     /// Prepare the radio buffer with transmitting a join request frame and provides the radio
     /// configuration for the transmission.
-    pub(crate) fn join_otaa<C: CryptoFactory + Default, RNG: RngCore, const N: usize>(
+    pub(crate) fn join_otaa<C: CryptoFactory + Default, RNG: GetRng, const N: usize>(
         &mut self,
         rng: &mut RNG,
         credentials: NetworkCredentials,
@@ -118,7 +117,7 @@ impl Mac {
 
     /// Prepare the radio buffer for transmitting a data frame and provide the radio configuration
     /// for the transmission. Returns an error if the device is not joined.
-    pub(crate) fn send<C: CryptoFactory + Default, RNG: RngCore, const N: usize>(
+    pub(crate) fn send<C: CryptoFactory + Default, RNG: GetRng, const N: usize>(
         &mut self,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
@@ -169,16 +168,20 @@ impl Mac {
         dl: &mut Option<Downlink>,
     ) -> Response {
         match &mut self.state {
-            State::Joined(ref mut session) => session.handle_rx::<C>(&mut self.region, &mut self.configuration, rx, dl),
+            State::Joined(ref mut session) => {
+                session.handle_rx::<C>(&mut self.region, &mut self.configuration, rx, dl)
+            }
             State::Otaa(ref mut otaa) => {
-                if let Some(session) = otaa.handle_rx::<C>(&mut self.region, &mut self.configuration, rx) {
+                if let Some(session) =
+                    otaa.handle_rx::<C>(&mut self.region, &mut self.configuration, rx)
+                {
                     self.state = State::Joined(session);
-                   Response::JoinSuccess
+                    Response::JoinSuccess
                 } else {
-                   Response::NoUpdate
+                    Response::NoUpdate
                 }
             }
-            State::Unjoined =>  Response::NoUpdate,
+            State::Unjoined => Response::NoUpdate,
         }
     }
 
