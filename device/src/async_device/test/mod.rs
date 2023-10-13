@@ -34,9 +34,11 @@ async fn test_join_rx1() {
 
     // Await the device to return and verify state
     if let Ok(()) = async_device.await.unwrap() {
-        // NB: timer is armed twice (even if not fired twice)
-        // because RX1 end is armed when packet is received
-        assert_eq!(2, timer.get_armed_count().await);
+        // NB: timer is armed thrice (even if not fired thrice)
+        // 1. start of rx1
+        // 2. end of rx1
+        // 3. timeout after preamble
+        assert_eq!(3, timer.get_armed_count().await);
     } else {
         panic!();
     }
@@ -60,7 +62,8 @@ async fn test_join_rx2() {
 
     // Await the device to return and verify state
     if async_device.await.unwrap().is_ok() {
-        assert_eq!(4, timer.get_armed_count().await);
+        // NB: the 5th time arming is from the preamble timeout
+        assert_eq!(5, timer.get_armed_count().await);
     } else {
         panic!();
     }

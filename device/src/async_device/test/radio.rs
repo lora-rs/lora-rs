@@ -7,7 +7,7 @@ use tokio::{
 };
 impl TestRadio {
     pub fn new() -> (RadioChannel, Self) {
-        let (tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::channel(2);
         let last_uplink = Arc::new(Mutex::new(None));
         (
             RadioChannel { tx, last_uplink: last_uplink.clone() },
@@ -16,10 +16,15 @@ impl TestRadio {
     }
 }
 
+enum Msg {
+    RxTx(RxTxHandler),
+    Preamble,
+}
+
 pub struct TestRadio {
     current_config: Option<RfConfig>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
-    rx: mpsc::Receiver<RxTxHandler>,
+    rx: mpsc::Receiver<Msg>,
 }
 
 impl PhyRxTx for TestRadio {
@@ -42,19 +47,33 @@ impl PhyRxTx for TestRadio {
         Ok(())
     }
 
-    async fn rx(
+    async fn rx_until_state(
         &mut self,
-        receiving_buffer: &mut [u8],
-    ) -> Result<(usize, RxQuality), Self::PhyError> {
-        let handler = self.rx.recv().await.unwrap();
-        let mut last_uplink = self.last_uplink.lock().await;
-        // a quick yield to let timer arm
-        time::sleep(time::Duration::from_millis(5)).await;
-        if let Some(config) = &self.current_config {
-            let size = handler(last_uplink.take(), *config, receiving_buffer);
-            Ok((size, RxQuality::new(0, 0)))
-        } else {
-            panic!("Trying to rx before settings config!")
+        rx_buf: &mut [u8],
+        target_state: TargetRxState,
+    ) -> Result<RxState, Self::PhyError> {
+        let msg = self.rx.recv().await.unwrap();
+        match (msg, target_state) {
+            (Msg::Preamble, TargetRxState::PreambleReceived) => {
+                Ok(RxState::PreambleReceived)
+            }
+            (Msg::Preamble, TargetRxState::Done) => {
+                panic!("Received preamble when TargetRxState::Done")
+            }
+            (Msg::RxTx(handler), TargetRxState::Done) => {
+                let mut last_uplink = self.last_uplink.lock().await;
+                // a quick yield to let timer arm
+                time::sleep(time::Duration::from_millis(5)).await;
+                if let Some(config) = &self.current_config {
+                    let length = handler(last_uplink.take(), *config, rx_buf);
+                    Ok(RxState::Done { length: length as u8, lq: RxQuality::new(-80, 0) })
+                } else {
+                    panic!("Trying to rx before settings config!")
+                }
+            }
+            (Msg::RxTx(_), TargetRxState::PreambleReceived) => {
+                panic!("Sent handler before sending preamble")
+            }
         }
     }
 }
@@ -72,14 +91,22 @@ impl Timings for TestRadio {
 pub struct RadioChannel {
     #[allow(unused)]
     last_uplink: Arc<Mutex<Option<Uplink>>>,
-    tx: mpsc::Sender<RxTxHandler>,
+    tx: mpsc::Sender<Msg>,
 }
 
 impl RadioChannel {
     pub fn handle_rxtx(&self, handler: RxTxHandler) {
+        self.fire_preamble();
         let tx = self.tx.clone();
         tokio::spawn(async move {
-            tx.send(handler).await.unwrap();
+            tx.send(Msg::RxTx(handler)).await.unwrap();
+        });
+    }
+
+    pub fn fire_preamble(&self) {
+        let tx = self.tx.clone();
+        tokio::spawn(async move {
+            tx.send(Msg::Preamble).await.unwrap();
         });
     }
 }
