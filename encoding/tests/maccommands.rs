@@ -77,7 +77,7 @@ fn test_link_adr_ans_new() {
         ([0x07], true, true, true, true),
     ];
     assert!(LinkADRReqPayload::new_as_mac_cmd(&[]).is_err());
-    for &(ref v, ref e_power, ref e_dr, ref e_cm, ref e_ack) in &examples {
+    for (v, e_power, e_dr, e_cm, e_ack) in &examples {
         let mc = LinkADRAnsPayload::new_as_mac_cmd(&v[..]);
         assert!(mc.is_ok());
         if let (MacCommand::LinkADRAns(laa), size) = mc.unwrap() {
@@ -134,7 +134,7 @@ fn test_rx_param_setup_ans_new() {
         ([0x07], true, true, true, true),
     ];
     assert!(RXParamSetupAnsPayload::new_as_mac_cmd(&[]).is_err());
-    for &(ref v, ref e_ch, ref e_rx2_dr, ref e_rx1_dr_offset, ref e_ack) in &examples {
+    for (v, e_ch, e_rx2_dr, e_rx1_dr_offset, e_ack) in &examples {
         let mc = RXParamSetupAnsPayload::new_as_mac_cmd(&v[..]);
         assert!(mc.is_ok());
         if let (MacCommand::RXParamSetupAns(psa), size) = mc.unwrap() {
@@ -183,7 +183,7 @@ fn test_new_channel_ans() {
         ([0x03], true, true, true),
     ];
     assert!(NewChannelAnsPayload::new_as_mac_cmd(&[]).is_err());
-    for &(ref v, ref e_ch_freq, ref e_drr, ref e_ack) in &examples {
+    for (v, e_ch_freq, e_drr, e_ack) in &examples {
         let mc = NewChannelAnsPayload::new_as_mac_cmd(&v[..]);
         assert!(mc.is_ok());
         if let (MacCommand::NewChannelAns(nca), size) = mc.unwrap() {

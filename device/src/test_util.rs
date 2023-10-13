@@ -26,7 +26,7 @@ impl Uplink {
         let mut data: Vec<u8> = Vec::new();
         data.extend_from_slice(data_in);
         let _parse = parse(data.as_mut_slice())?;
-        Ok(Self { data, tx_config: tx_config })
+        Ok(Self { data, tx_config })
     }
 
     pub fn get_payload(&mut self) -> PhyPayload<&mut [u8], DefaultFactory> {
@@ -71,17 +71,15 @@ pub fn handle_join_request(
         if let PhyPayload::JoinRequest(join_request) = uplink.get_payload() {
             assert!(join_request.validate_mic(&AES128(get_key())));
             let mut buffer: [u8; 17] = [0; 17];
-            let mut phy = lorawan::creator::JoinAcceptCreator::with_options(
-                &mut buffer,
-                DefaultFactory::default(),
-            )
-            .unwrap();
+            let mut phy =
+                lorawan::creator::JoinAcceptCreator::with_options(&mut buffer, DefaultFactory)
+                    .unwrap();
             let app_nonce_bytes = [1; 3];
             phy.set_app_nonce(&app_nonce_bytes);
             phy.set_net_id(&[1; 3]);
             phy.set_dev_addr(get_dev_addr());
             let finished = phy.build(&AES128(get_key())).unwrap();
-            rx_buffer[..finished.len()].copy_from_slice(&finished);
+            rx_buffer[..finished.len()].copy_from_slice(finished);
             return finished.len();
         }
     }
@@ -109,11 +107,9 @@ pub fn handle_data_uplink_with_link_adr_req(
             ];
             let cmd: Vec<&dyn SerializableMacCommand> = vec![&mac_cmds[0], &mac_cmds[1]];
 
-            let mut phy = lorawan::creator::DataPayloadCreator::with_options(
-                rx_buffer,
-                DefaultFactory::default(),
-            )
-            .unwrap();
+            let mut phy =
+                lorawan::creator::DataPayloadCreator::with_options(rx_buffer, DefaultFactory)
+                    .unwrap();
             phy.set_confirmed(uplink.is_confirmed());
             phy.set_dev_addr(&[0; 4]);
             phy.set_uplink(false);
@@ -132,8 +128,8 @@ fn link_adr_req_with_bank_ctrl(cm: u16) -> LinkADRReqCreator {
     // this should give us a chmask ctrl value of 5 which allows us to turn banks on and off
     adr_req.set_redundancy(0x50);
     // the second bit is the only high bit, so only bank 2 should be enabled
-    let mut tmp = [cm as u8, (cm >> 8) as u8];
-    let cm = ChannelMask::new(&mut tmp).unwrap();
+    let tmp = [cm as u8, (cm >> 8) as u8];
+    let cm = ChannelMask::new(&tmp).unwrap();
     adr_req.set_channel_mask(cm);
     adr_req
 }
@@ -159,11 +155,9 @@ pub fn handle_data_uplink_with_link_adr_ans(
 
             // Build the actual data payload with FPort 0 which allows MAC Commands in payload
             rx_buffer.iter_mut().for_each(|x| *x = 0);
-            let mut phy = lorawan::creator::DataPayloadCreator::with_options(
-                rx_buffer,
-                DefaultFactory::default(),
-            )
-            .unwrap();
+            let mut phy =
+                lorawan::creator::DataPayloadCreator::with_options(rx_buffer, DefaultFactory)
+                    .unwrap();
             phy.set_confirmed(uplink.is_confirmed());
             phy.set_dev_addr(&[0; 4]);
             phy.set_uplink(false);

@@ -33,7 +33,7 @@ impl PhyRxTx for TestRadio {
         if last_uplink.is_some() {
             return Err("Radio already has an uplink");
         }
-        *last_uplink = Some(Uplink::new(&buffer, config)?);
+        *last_uplink = Some(Uplink::new(buffer, config)?);
         Ok(length as u32)
     }
 
