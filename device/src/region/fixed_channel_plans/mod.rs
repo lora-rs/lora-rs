@@ -11,47 +11,98 @@ pub(crate) use us915::US915;
 #[derive(Clone)]
 struct PreferredJoinChannels {
     channel_list: heapless::Vec<u8, 16>,
+    // Number representing the maximum number of retries allowed using the preferred channels list,
+    max_retries: usize,
     // Decrementing number representing how many tries we have left with the specified list before
     // reverting to the default channel selection behavior.
     num_retries: usize,
+}
+
+impl PreferredJoinChannels {
+    fn try_get_channel(&mut self, rng: &mut impl RngCore) -> Option<u8> {
+        if self.num_retries > 0 {
+            let random = rng.next_u32();
+            self.num_retries -= 1;
+            let len = self.channel_list.len();
+            // TODO non-compliant because the channel might be the same as the previously
+            // used channel?
+            Some(self.channel_list[random as usize % len])
+        } else {
+            None
+        }
+    }
+}
+
+/// Bitflags containing subbands that haven't yet been tried for a join attempt this round.
+#[derive(Clone)]
+struct AvailableSubbands(u16);
+
+impl AvailableSubbands {
+    const ALL_ENABLED: u16 = 0b111111111;
+
+    fn new() -> Self {
+        Self(Self::ALL_ENABLED)
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0 == 0
+    }
+
+    fn pop_next(&mut self) -> Option<u8> {
+        for bit in 0..=8 {
+            if (self.0 >> bit) & 1 == 1 {
+                self.0 &= !(1 << bit);
+                return Some(bit);
+            }
+        }
+        None
+    }
+
+    fn reset(&mut self) {
+        self.0 = Self::ALL_ENABLED;
+    }
+}
+
+impl Default for AvailableSubbands {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Default, Clone)]
 struct JoinChannels {
     preferred_channels: Option<PreferredJoinChannels>,
     // List of subbands that haven't already been tried.
-    available_subbands: heapless::Vec<u8, 9>,
+    available_subbands: AvailableSubbands,
 }
 
 impl JoinChannels {
+    /// Select a channel for a join attempt.
+    ///
+    /// ## RNG note:
+    ///
+    /// Uses 1 random number from the RNG.
     fn select_channel(&mut self, rng: &mut impl RngCore) -> u8 {
-        let random = rng.next_u32();
-
-        if let Some(fav) = &mut self.preferred_channels {
-            if fav.num_retries > 0 {
-                fav.num_retries -= 1;
-                let len = fav.channel_list.len();
-                // TODO non-compliant because the channel might be the same as the previously
-                // used channel?
-                return fav.channel_list[random as usize % len];
-            }
+        // Early-return preferred channel if possible
+        if let Some(p) = self.preferred_channels.as_mut().and_then(|p| p.try_get_channel(rng)) {
+            return p;
         }
 
         if self.available_subbands.is_empty() {
-            for i in (0..=8).rev() {
-                self.available_subbands.push(i).unwrap();
-            }
+            self.available_subbands.reset();
         }
 
-        let subband = self.available_subbands.pop().unwrap();
+        // Unwrapping is ok because it should never be empty by this point
+        let subband = self.available_subbands.pop_next().unwrap();
         8 * subband + (rng.next_u32() % 8) as u8
     }
 
-    fn set_preferred(&mut self, preferred: heapless::Vec<u8, 16>, num_retries: usize) -> Self {
+    fn set_preferred(&mut self, preferred: heapless::Vec<u8, 16>, max_retries: usize) -> Self {
         Self {
             preferred_channels: Some(PreferredJoinChannels {
                 channel_list: preferred,
-                num_retries,
+                max_retries,
+                num_retries: max_retries,
             }),
             ..Default::default()
         }
@@ -71,6 +122,10 @@ impl<const D: usize, F: FixedChannelRegion<D>> FixedChannelPlan<D, F> {
     pub fn set_preferred_join_channels(&mut self, preferred_channels: &[u8], num_retries: usize) {
         self.join_channels
             .set_preferred(heapless::Vec::from_slice(preferred_channels).unwrap(), num_retries);
+    }
+
+    pub fn remove_preferred_join_channels(&mut self) {
+        self.join_channels.preferred_channels = None;
     }
 
     pub fn set_125k_channels(&mut self, enabled: bool) {
@@ -104,6 +159,12 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         &mut self,
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     ) {
+        // Reset the number of retries on the preferred channel list after a successful join, in preparation for the
+        // next potential join attempt.
+        if let Some(preferred) = &mut self.join_channels.preferred_channels {
+            preferred.num_retries = preferred.max_retries;
+        }
+
         if let Some(CfList::FixedChannel(channel_mask)) = join_accept.c_f_list() {
             self.channel_mask = channel_mask;
         }

@@ -263,30 +263,6 @@ impl Configuration {
                     }
                     _ => (),
                 }
-                // let empty_mask = ChannelMask::<2>::new_from_raw(&[0x00, 0x00]);
-                // let mut masks =
-                //     [empty_mask.clone(), empty_mask.clone(), empty_mask.clone(), empty_mask];
-
-                // // Construct the channel masks from the provided channel list
-                // for channel in join_channels {
-                //     if *channel >= 72 {
-                //         return Err(Error::UnsupportedChannel);
-                //     }
-
-                //     let mask_idx = (channel / 16) as usize;
-                //     let mask = &mut masks[mask_idx];
-
-                //     let bank = (*channel as usize - mask_idx * 16) / 8;
-                //     let old = mask.get_index(bank);
-                //     let bit_pos = channel % 8;
-
-                //     mask.set_bank(bank, (1 << bit_pos) | old);
-                // }
-
-                // // Set the enabled channels in config
-                // for (cm_ctrl, mask) in masks.iter().enumerate() {
-                //     config.set_channel_mask(cm_ctrl as u8, mask.clone());
-                // }
 
                 Ok(config)
             }
