@@ -40,7 +40,7 @@ jobs:
         uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --features ${{ env.STABLE_FEATURES }} -- -Dclippy::all
+          args: --tests --features ${{ env.STABLE_FEATURES }} -- -Dclippy::all
 
       - name: Build
         run: cargo build --features ${{ env.STABLE_FEATURES }} --all --verbose
