@@ -8,8 +8,11 @@ pub struct RfConfig {
 }
 
 impl RfConfig {
-    pub fn payload_time_on_air_us(&self, length: u8) -> u32 {
-        self.bb.time_on_air_us(None, true, length)
+    /// For the purpose of settings a deadline on reception,
+    /// total time should be used as we don't know when exactly will the radio
+    /// report the detection of a preamble
+    pub fn total_time_on_air_us(&self, length: u8) -> u32 {
+        self.bb.time_on_air_us(Some(8), true, length)
     }
 }
 

@@ -18,6 +18,7 @@ use lorawan::{
     creator::DataPayloadCreator,
     keys::CryptoFactory,
     maccommands::SerializableMacCommand,
+    packet_length::phy::mac::JOIN_ACCEPT_MAX,
     parser::DevAddr,
     parser::{parse_with_factory as lorawan_parse, *},
 };
@@ -40,6 +41,8 @@ pub mod radio;
 mod test;
 
 use core::cmp::min;
+
+const DEFAULT_RX_TIMEOUT_OVERHEAD_US: u32 = 10_000;
 
 /// Type-level version of the [`None`] variant
 pub struct NoneT;
@@ -111,6 +114,7 @@ where
     mac: Uplink,
     radio_buffer: RadioBuffer<N>,
     datarate: DR,
+    rx_timeout_overhead_us: u32,
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -182,6 +186,7 @@ where
             timer,
             datarate: region.get_default_datarate(),
             region,
+            rx_timeout_overhead_us: DEFAULT_RX_TIMEOUT_OVERHEAD_US,
         }
     }
 
@@ -209,6 +214,10 @@ where
     /// Set the data rate being used by this device. This overrides the region default.
     pub fn set_datarate(&mut self, datarate: region::DR) {
         self.datarate = datarate;
+    }
+
+    pub fn set_rx_timeout_overhead_us(&mut self, rx_timeout_overhead_us: u32) {
+        self.rx_timeout_overhead_us = rx_timeout_overhead_us;
     }
 
     /// Join the LoRaWAN network asynchronusly. The returned future completes when
@@ -239,9 +248,7 @@ where
 
                 // Receive join response within RX window
                 self.timer.reset();
-                // 13 + 28 for LoraWAN 1.0
-                // 13 + 26 for LoraWAN 1.1
-                self.rx_with_timeout(&Frame::Join, ms, 13 + 28).await?;
+                self.rx_with_timeout(&Frame::Join, ms, JOIN_ACCEPT_MAX).await?;
 
                 // Parse join response
                 match lorawan_parse(self.radio_buffer.as_mut(), C::default()) {
@@ -559,8 +566,9 @@ where
         let rx_config = self.region.get_rx_config(self.datarate, frame, &Window::_1);
         #[cfg(feature = "defmt")]
         trace!("RX1 with config: {}", &rx_config);
-        let expected_payload_air_time_us =
-            rx_config.payload_time_on_air_us(max_expected_payload_length as u8) + 50_000;
+        let expected_payload_air_time_us = rx_config
+            .total_time_on_air_us(max_expected_payload_length)
+            + self.rx_timeout_overhead_us;
         #[cfg(feature = "defmt")]
         trace!("expected payload air time: {}ms", expected_payload_air_time_us / 1_000);
         match self
@@ -586,8 +594,9 @@ where
         let rx_config = self.region.get_rx_config(self.datarate, frame, &Window::_2);
         #[cfg(feature = "defmt")]
         trace!("RX2 with config: {}", &rx_config);
-        let expected_payload_air_time_us =
-            rx_config.payload_time_on_air_us(max_expected_payload_length as u8) + 50_000;
+        let expected_payload_air_time_us = rx_config
+            .total_time_on_air_us(max_expected_payload_length)
+            + self.rx_timeout_overhead_us;
         #[cfg(feature = "defmt")]
         trace!("expected payload air time: {}ms", expected_payload_air_time_us / 1_000);
         let rxd = self
