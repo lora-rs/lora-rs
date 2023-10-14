@@ -1,5 +1,7 @@
 //! Asynchronous Device using Rust async-await for driving the state machine,
 //! and allowing asynchronous radio implementations. Requires the `async` feature and `nightly`.
+use self::region::RxQuality;
+
 use super::mac::uplink::Uplink;
 
 pub use super::{region, region::Region, JoinMode, SendData, Timings};
@@ -503,7 +505,6 @@ where
 
             pin_mut!(rx_preamble_fut);
             pin_mut!(timeout_to_preamble_fut);
-
             match select(rx_preamble_fut, timeout_to_preamble_fut).await {
                 Either::Left((r, _)) => match r {
                     Ok(state) => state,
@@ -515,16 +516,13 @@ where
             }
         };
 
-        match state {
-            RxState::PreambleReceived => {
-                // continue with reception
-            }
-            RxState::Done { length, lq } => return Ok((length, lq)),
+        // if Rx completed immediately, return the data
+        if let RxState::Done { length, lq } = state {
+            return Ok((length, lq));
         }
 
         #[cfg(feature = "defmt")]
         debug!("preamble received, waiting for payload");
-
         let rx_full_fut =
             self.phy.radio.rx_until_state(self.radio_buffer.as_raw_slice(), TargetRxState::Done);
         let timeout_fut = self.timer.delay_ms(message_timeout_ms as u64);
@@ -583,6 +581,7 @@ where
                 self.phy.radio.low_power().await.map_err(Error::Radio)?;
                 return Ok(length);
             }
+            #[allow(unused_variables)]
             Err(err) => {
                 #[cfg(feature = "defmt")]
                 debug!("failed receiving an RX1 response: {}", err);

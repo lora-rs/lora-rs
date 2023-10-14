@@ -22,6 +22,7 @@ pub trait Timer {
 }
 
 /// A state that PhyRxTx should achieve
+#[derive(Debug)]
 pub enum TargetRxState {
     PreambleReceived,
     Done,

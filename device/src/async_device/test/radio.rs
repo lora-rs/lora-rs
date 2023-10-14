@@ -16,6 +16,7 @@ impl TestRadio {
     }
 }
 
+#[derive(Debug)]
 enum Msg {
     RxTx(RxTxHandler),
     Preamble,
@@ -53,10 +54,9 @@ impl PhyRxTx for TestRadio {
         target_state: TargetRxState,
     ) -> Result<RxState, Self::PhyError> {
         let msg = self.rx.recv().await.unwrap();
+        println!("{msg:?}, {target_state:?}");
         match (msg, target_state) {
-            (Msg::Preamble, TargetRxState::PreambleReceived) => {
-                Ok(RxState::PreambleReceived)
-            }
+            (Msg::Preamble, TargetRxState::PreambleReceived) => Ok(RxState::PreambleReceived),
             (Msg::Preamble, TargetRxState::Done) => {
                 panic!("Received preamble when TargetRxState::Done")
             }
@@ -95,18 +95,20 @@ pub struct RadioChannel {
 }
 
 impl RadioChannel {
-    pub fn handle_rxtx(&self, handler: RxTxHandler) {
-        self.fire_preamble();
-        let tx = self.tx.clone();
-        tokio::spawn(async move {
-            tx.send(Msg::RxTx(handler)).await.unwrap();
-        });
+    pub async fn handle_rxtx(&self, handler: RxTxHandler) {
+        self.fire_preamble().await;
+        self.handle_rxtx_no_preamble(handler).await;
     }
 
-    pub fn fire_preamble(&self) {
+    pub async fn handle_rxtx_no_preamble(&self, handler: RxTxHandler) {
+        tokio::time::sleep(time::Duration::from_millis(5)).await;
         let tx = self.tx.clone();
-        tokio::spawn(async move {
-            tx.send(Msg::Preamble).await.unwrap();
-        });
+        tx.send(Msg::RxTx(handler)).await.unwrap();
+    }
+
+    pub async fn fire_preamble(&self) {
+        tokio::time::sleep(time::Duration::from_millis(5)).await;
+        let tx = self.tx.clone();
+        tx.send(Msg::Preamble).await.unwrap();
     }
 }
