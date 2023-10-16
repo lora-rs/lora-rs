@@ -126,6 +126,8 @@ pub trait RadioKind {
         polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<(), RadioError>;
+    /// Set the LoRa chip into the TxContinuousWave mode
+    async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError>;
 }
 
 /// Internal trait for specifying that a [`RadioKind`] object has RNG capability.
