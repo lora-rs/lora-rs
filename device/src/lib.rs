@@ -75,6 +75,7 @@ pub enum Response {
     NoAck,
     ReadyToSend,
     SessionExpired,
+    RxComplete,
 }
 
 #[derive(Debug)]

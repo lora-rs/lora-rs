@@ -3,31 +3,19 @@
 use super::mac::Mac;
 
 use super::{
-    mac::NetworkCredentials,
+    mac::{self, NetworkCredentials, Session},
     region::{Frame, Window},
+    Downlink,
 };
 pub use super::{region, region::Region, JoinMode, SendData, Timings};
 use core::marker::PhantomData;
-#[cfg(feature = "defmt")]
-use defmt::warn;
 use futures::{future::select, future::Either, pin_mut};
-use generic_array::{typenum::U256, GenericArray};
-use heapless::Vec;
-use lorawan::{
-    self,
-    creator::DataPayloadCreator,
-    keys::CryptoFactory,
-    maccommands::SerializableMacCommand,
-    parser::DevAddr,
-    parser::{parse_with_factory as lorawan_parse, *},
-};
+use lorawan::{self, keys::CryptoFactory};
 
-type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 pub use crate::region::DR;
 use crate::{
     radio::types::RadioBuffer,
     rng::{GetRng, NoneT, OptionalRng, Phy, RngCore},
-    AppSKey, NewSKey,
 };
 #[cfg(feature = "external-lora-phy")]
 /// provide the radio through the external lora-phy crate
@@ -37,6 +25,7 @@ pub mod radio;
 #[cfg(test)]
 mod test;
 
+use crate::radio::RxQuality;
 use core::cmp::min;
 
 /// Type representing a LoRaWAN cabable device. A device is bound to the following types:
@@ -57,22 +46,39 @@ where
     crypto: PhantomData<C>,
     phy: Phy<R, G>,
     timer: T,
-    session: Option<SessionData>,
     mac: Mac,
     radio_buffer: RadioBuffer<N>,
+    downlink: Option<Downlink>,
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug)]
 pub enum Error<R> {
     Radio(R),
-    NetworkNotJoined,
-    UnableToPreparePayload(&'static str),
-    InvalidDevAddr,
-    RxTimeout,
+    Mac(mac::Error),
+}
+
+#[derive(Debug)]
+pub enum Response {
+    JoinSuccess,
+    NoUpdate,
+    NoJoinAccept,
+    DownlinkReceived(mac::FcntDown),
     SessionExpired,
-    InvalidMic,
-    UnableToDecodePayload(&'static str),
+    NoAck,
+    RxComplete,
+}
+
+impl<R> From<mac::Error> for Error<R> {
+    fn from(e: mac::Error) -> Self {
+        Error::Mac(e)
+    }
+}
+
+// RX1
+enum RxWindowResponse<F: futures::Future<Output = ()> + Sized + Unpin> {
+    Rx(usize, RxQuality, F),
+    Timeout(u32),
 }
 
 impl<R, C, T, const N: usize> Device<R, C, T, NoneT, N>
@@ -120,20 +126,24 @@ where
         radio: R,
         timer: T,
         rng: G,
-        session: Option<SessionData>,
+        session: Option<Session>,
     ) -> Self {
+        let mut mac = Mac::new(region);
+        if let Some(session) = session {
+            mac.set_session(session);
+        }
         Self {
             crypto: PhantomData,
             phy: Phy::new(radio, rng),
-            session,
-            mac: Mac::new(region),
+            mac,
             radio_buffer: RadioBuffer::new(),
             timer,
+            downlink: None,
         }
     }
 
-    pub fn get_session(&mut self) -> &Option<SessionData> {
-        &self.session
+    pub fn get_session(&mut self) -> Option<&Session> {
+        self.mac.get_session()
     }
 
     pub fn get_region(&mut self) -> &region::Configuration {
@@ -162,7 +172,7 @@ where
     /// the LoRaWAN network has been joined successfully, or an error has occurred.
     ///
     /// Repeatedly calling join using OTAA will result in a new LoRaWAN session to be created.
-    pub async fn join(&mut self, join_mode: &JoinMode) -> Result<(), Error<R::PhyError>> {
+    pub async fn join(&mut self, join_mode: &JoinMode) -> Result<Response, Error<R::PhyError>> {
         match join_mode {
             JoinMode::OTAA { deveui, appeui, appkey } => {
                 let tx_config = self.mac.join_otaa::<C, Phy<R, G>, N>(
@@ -175,212 +185,51 @@ where
                 let ms = self
                     .phy
                     .radio
-                    .tx(tx_config, self.radio_buffer.as_ref())
+                    .tx(tx_config, self.radio_buffer.as_ref_for_read())
                     .await
                     .map_err(Error::Radio)?;
 
                 // Receive join response within RX window
                 self.timer.reset();
 
-                self.rx_with_timeout(&Frame::Join, ms).await?;
-                Ok(())
+                self.rx_with_timeout(&Frame::Join, ms).await
             }
             JoinMode::ABP { newskey, appskey, devaddr } => {
-                self.session.replace(SessionData::new(*newskey, *appskey, *devaddr));
-                Ok(())
+                self.mac.join_abp(*newskey, *appskey, *devaddr);
+                Ok(Response::JoinSuccess)
             }
         }
-    }
-
-    /// Send data on a given port with the expected confirmation. The returned future completes
-    /// when the data have been sent successfully, or an error has occured.
-    pub async fn send(
-        &mut self,
-        data: &[u8],
-        fport: u8,
-        confirmed: bool,
-    ) -> Result<(), Error<R::PhyError>> {
-        self.send_recv_internal(data, fport, confirmed, None).await?;
-        Ok(())
     }
 
     /// Send data on a given port with the expected confirmation. If downlink data is provided, the
     /// data is copied into the provided byte slice.
     ///
-    /// The returned future completes when the data have been sent successfully and downlink data
-    /// have been copied into the provided buffer, or an error has occurred.
-    pub async fn send_recv(
+    /// The returned future completes when the data have been sent successfully and downlink data,
+    /// if any, is available by calling take_downlink. Response::DownlinkReceived indicates a
+    /// downlink is available.
+    async fn send(
         &mut self,
         data: &[u8],
-        rx: &mut [u8],
         fport: u8,
         confirmed: bool,
-    ) -> Result<usize, Error<R::PhyError>> {
-        self.send_recv_internal(data, fport, confirmed, Some(rx)).await
-    }
+    ) -> Result<Response, Error<R::PhyError>> {
+        // Prepare transmission buffer
+        let tx_config = self.mac.send::<C, Phy<R, G>, N>(
+            &mut self.phy,
+            &mut self.radio_buffer,
+            &SendData { data, fport, confirmed },
+        )?;
+        // Transmit our data packet
+        let ms = self
+            .phy
+            .radio
+            .tx(tx_config, self.radio_buffer.as_ref_for_read())
+            .await
+            .map_err(Error::Radio)?;
 
-    /// Send data and fill rx buffer if provided
-    async fn send_recv_internal(
-        &mut self,
-        data: &[u8],
-        fport: u8,
-        confirmed: bool,
-        rx: Option<&mut [u8]>,
-    ) -> Result<usize, Error<R::PhyError>> {
-        // if self.session.is_none() {
-        //     return Err(Error::NetworkNotJoined);
-        // }
-        //
-        // // Prepare transmission buffer
-        // let _ = self.prepare_buffer(data, fport, confirmed)?;
-        //
-        // // Send data
-        // let tx_config =
-        //     self.region.create_tx_config(self.phy.get_rng(), self.datarate, &Frame::Data);
-        //
-        // // Unless the same frame is to be retransmitted (see NbTrans parameter of LinkADRReq
-        // // command, LoRaWAN spec 1.0.2 section 5.2 for retransmissions), FCnt must be
-        // // incremented on each transmission.
-        // self.session.as_mut().ok_or(Error::NetworkNotJoined)?.fcnt_up_increment();
-        //
-        // // Transmit our data packet
-        // let ms =
-        //     self.phy.radio.tx(tx_config, self.radio_buffer.as_ref()).await.map_err(Error::Radio)?;
-        //
-        // // Wait for received data within window
-        // self.timer.reset();
-        // self.rx_with_timeout(&Frame::Data, ms).await?;
-        //
-        // // Handle received data
-        // if let Some(ref mut session_data) = self.session {
-        //     // Parse payload and copy into user bufer is provided
-        //     match lorawan_parse(self.radio_buffer.as_mut(), C::default()) {
-        //         Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) => {
-        //             if session_data.devaddr() == &encrypted_data.fhdr().dev_addr() {
-        //                 let fcnt = encrypted_data.fhdr().fcnt() as u32;
-        //                 let confirmed = encrypted_data.is_confirmed();
-        //                 if encrypted_data.validate_mic(&session_data.newskey().0, fcnt)
-        //                     && (fcnt > session_data.fcnt_down || fcnt == 0)
-        //                 {
-        //                     session_data.fcnt_down = fcnt;
-        //                     // increment the FcntUp since we have received
-        //                     // downlink - only reason to not increment
-        //                     // is if confirmed frame is sent and no
-        //                     // confirmation (ie: downlink) occurs
-        //                     session_data.fcnt_up_increment();
-        //
-        //                     // * the decrypt will always work when we have verified MIC previously
-        //                     let decrypted = encrypted_data
-        //                         .decrypt(
-        //                             Some(&session_data.newskey().0),
-        //                             Some(&session_data.appskey().0),
-        //                             session_data.fcnt_down,
-        //                         )
-        //                         .unwrap();
-        //
-        //                     self.mac.handle_downlink_macs(
-        //                         &mut self.region,
-        //                         &mut decrypted.fhdr().fopts(),
-        //                     );
-        //
-        //                     if confirmed {
-        //                         self.mac.set_downlink_confirmation();
-        //                     }
-        //
-        //                     match decrypted.frm_payload() {
-        //                         Ok(FRMPayload::MACCommands(mac_cmds)) => {
-        //                             self.mac.handle_downlink_macs(
-        //                                 &mut self.region,
-        //                                 &mut mac_cmds.mac_commands(),
-        //                             );
-        //                             Ok(0)
-        //                         }
-        //                         Ok(FRMPayload::Data(rx_data)) => {
-        //                             if let Some(rx) = rx {
-        //                                 let to_copy = core::cmp::min(rx.len(), rx_data.len());
-        //                                 rx[0..to_copy].copy_from_slice(&rx_data[0..to_copy]);
-        //                                 Ok(to_copy)
-        //                             } else {
-        //                                 Ok(0)
-        //                             }
-        //                         }
-        //                         Ok(FRMPayload::None) => Ok(0),
-        //                         Err(_) => Err(Error::UnableToDecodePayload("")),
-        //                     }
-        //                 } else {
-        //                     Err(Error::InvalidMic)
-        //                 }
-        //             } else {
-        //                 Err(Error::InvalidDevAddr)
-        //             }
-        //         }
-        //         Ok(_) => Err(Error::UnableToDecodePayload("")),
-        //         Err(e) => Err(Error::UnableToDecodePayload(e)),
-        //     }
-        // } else {
-        //     Err(Error::NetworkNotJoined)
-        // }
-        Err(Error::NetworkNotJoined)
-    }
-
-    // Prepare radio buffer with data using session state
-    fn prepare_buffer(
-        &mut self,
-        data: &[u8],
-        fport: u8,
-        confirmed: bool,
-    ) -> Result<u32, Error<R::PhyError>> {
-        // match self.session {
-        //     Some(ref session_data) => {
-        //         // check if FCnt is used up
-        //         if session_data.fcnt_up() == (0xFFFF + 1) {
-        //             // signal that the session is expired
-        //             return Err(Error::SessionExpired);
-        //         }
-        //         let fcnt = session_data.fcnt_up();
-        //         let mut phy: DataPayloadCreator<GenericArray<u8, U256>, C> =
-        //             DataPayloadCreator::default();
-        //
-        //         let mut fctrl = FCtrl(0x0, true);
-        //         if self.mac.confirms_downlink() {
-        //             fctrl.set_ack();
-        //             self.mac.clear_downlink_confirmation();
-        //         }
-        //
-        //         phy.set_confirmed(confirmed)
-        //             .set_fctrl(&fctrl)
-        //             .set_f_port(fport)
-        //             .set_dev_addr(*session_data.devaddr())
-        //             .set_fcnt(fcnt);
-        //
-        //         let mut cmds = Vec::new();
-        //         self.mac.get_cmds(&mut cmds);
-        //
-        //         let mut dyn_cmds: Vec<&dyn SerializableMacCommand, 8> = Vec::new();
-        //
-        //         for cmd in &cmds {
-        //             if let Err(_e) = dyn_cmds.push(cmd) {
-        //                 panic!("dyn_cmds too small compared to cmds")
-        //             }
-        //         }
-        //
-        //         match phy.build(
-        //             data,
-        //             dyn_cmds.as_slice(),
-        //             &session_data.newskey().0,
-        //             &session_data.appskey().0,
-        //         ) {
-        //             Ok(packet) => {
-        //                 self.radio_buffer.clear();
-        //                 self.radio_buffer.extend_from_slice(packet).unwrap();
-        //                 Ok(fcnt)
-        //             }
-        //             Err(e) => Err(Error::UnableToPreparePayload(e)),
-        //         }
-        //     }
-        //     None => Err(Error::NetworkNotJoined),
-        // }
-        Err(Error::NetworkNotJoined)
+        // Wait for received data within window
+        self.timer.reset();
+        self.rx_with_timeout(&Frame::Data, ms).await
     }
 
     /// Attempt to receive data within RX1 and RX2 windows. This function will populate the
@@ -390,154 +239,139 @@ where
         &mut self,
         frame: &Frame,
         window_delay: u32,
-    ) -> Result<(), Error<R::PhyError>> {
-        let num_read = self.rx_with_timeout_inner(frame, window_delay).await?;
-        self.radio_buffer.inc(num_read);
-        Ok(())
+    ) -> Result<Response, Error<R::PhyError>> {
+        // The initial window configuration uses window 1 adjusted by window_delay and radio offset
+        let rx1_start_delay = (self.mac.get_rx_delay(frame, &Window::_1) as i32
+            + window_delay as i32
+            + self.phy.radio.get_rx_window_offset_ms()) as u32;
+
+        let rx1_end_delay = rx1_start_delay + self.phy.radio.get_rx_window_duration_ms();
+
+        let rx2_start_delay = (self.mac.get_rx_delay(frame, &Window::_2) as i32
+            + window_delay as i32
+            + self.phy.radio.get_rx_window_offset_ms()) as u32;
+
+        self.radio_buffer.clear();
+        // Wait until RX1 window opens
+        self.timer.at(rx1_start_delay.into()).await;
+
+        let window_duration = {
+            // Prepare for RX using correct configuration
+            let rx_config =
+                self.mac.region.get_rx_config(self.mac.configuration.data_rate, frame, &Window::_1);
+            // Cap window duration so RX2 can start on time
+            let mut window_duration = min(rx1_end_delay, rx2_start_delay);
+
+            // Pass the full radio buffer slice to RX
+            self.phy.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+            let timeout_fut = self.timer.at(window_duration.into());
+            pin_mut!(timeout_fut);
+
+            let mut maybe_timeout_fut = Some(timeout_fut);
+            while let Some(timeout_fut) = maybe_timeout_fut.take() {
+                match Self::rx_window(
+                    &mut self.phy.radio,
+                    &mut self.radio_buffer,
+                    window_duration,
+                    timeout_fut,
+                )
+                .await
+                {
+                    RxWindowResponse::Rx(sz, _, timeout_fut) => {
+                        self.radio_buffer.set_pos(sz);
+                        match self.mac.handle_rx::<C, N>(&mut self.radio_buffer, &mut self.downlink)
+                        {
+                            mac::Response::NoUpdate => {
+                                self.radio_buffer.clear();
+                                maybe_timeout_fut = Some(timeout_fut);
+                            }
+                            r => {
+                                self.phy.radio.low_power().await.map_err(Error::Radio)?;
+                                return Ok(r.into());
+                            }
+                        }
+                    }
+                    RxWindowResponse::Timeout(w) => {
+                        window_duration = w;
+                    }
+                };
+            }
+            window_duration
+        };
+
+        if window_duration != rx2_start_delay {
+            self.phy.radio.low_power().await.map_err(Error::Radio)?;
+            self.timer.at(rx2_start_delay.into()).await;
+        }
+
+        // RX2
+        // Prepare for RX using correct configuration
+        let rx_config =
+            self.mac.region.get_rx_config(self.mac.configuration.data_rate, frame, &Window::_2);
+        let window_duration = self.phy.radio.get_rx_window_duration_ms();
+
+        // Pass the full radio buffer slice to RX
+        self.phy.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+        let timeout_fut = self.timer.delay_ms(window_duration.into());
+        pin_mut!(timeout_fut);
+
+        let mut maybe_timeout_fut = Some(timeout_fut);
+        while let Some(timeout_fut) = maybe_timeout_fut.take() {
+            match Self::rx_window(
+                &mut self.phy.radio,
+                &mut self.radio_buffer,
+                window_duration,
+                timeout_fut,
+            )
+            .await
+            {
+                RxWindowResponse::Rx(sz, _, timeout_fut) => {
+                    self.radio_buffer.set_pos(sz);
+                    match self.mac.handle_rx::<C, N>(&mut self.radio_buffer, &mut self.downlink) {
+                        mac::Response::NoUpdate => {
+                            self.radio_buffer.clear();
+                            maybe_timeout_fut = Some(timeout_fut);
+                        }
+                        r => {
+                            self.phy.radio.low_power().await.map_err(Error::Radio)?;
+                            return Ok(r.into());
+                        }
+                    }
+                }
+                RxWindowResponse::Timeout(_) => {
+                    self.phy.radio.low_power().await.map_err(Error::Radio)?;
+                    return Ok(self.mac.rx2_complete().into());
+                }
+            };
+        }
+        panic!("Code should be unreachable.")
     }
 
-    async fn rx_with_timeout_inner(
-        &mut self,
-        frame: &Frame,
-        window_delay: u32,
-    ) -> Result<usize, Error<R::PhyError>> {
-        Ok(0)
-        // // The initial window configuration uses window 1 adjusted by window_delay and radio offset
-        // let rx1_start_delay = (self.region.get_rx_delay(frame, &Window::_1) as i32
-        //     + window_delay as i32
-        //     + self.phy.radio.get_rx_window_offset_ms()) as u32;
-        //
-        // let rx1_end_delay = rx1_start_delay + self.phy.radio.get_rx_window_duration_ms();
-        //
-        // let rx2_start_delay = (self.region.get_rx_delay(frame, &Window::_2) as i32
-        //     + window_delay as i32
-        //     + self.phy.radio.get_rx_window_offset_ms()) as u32;
-        //
-        // self.radio_buffer.clear();
-        // // Wait until RX1 window opens
-        // self.timer.at(rx1_start_delay.into()).await;
-        //
-        // // RX1
-        // enum Rx1 {
-        //     Rx(usize),
-        //     Timeout(u32),
-        // }
-        // let response = {
-        //     // Prepare for RX using correct configuration
-        //     let rx_config = self.region.get_rx_config(self.datarate, frame, &Window::_1);
-        //     // Cap window duration so RX2 can start on time
-        //     let window_duration = min(rx1_end_delay, rx2_start_delay);
-        //
-        //     // Pass the full radio buffer slice to RX
-        //     self.phy.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
-        //     let rx_fut = self.phy.radio.rx(self.radio_buffer.as_raw_slice());
-        //     let timeout_fut = self.timer.at(window_duration.into());
-        //
-        //     pin_mut!(rx_fut);
-        //     pin_mut!(timeout_fut);
-        //     // Wait until either RX is complete or if we've reached window close
-        //     match select(rx_fut, timeout_fut).await {
-        //         // RX is complete!
-        //         Either::Left((r, timeout_fut)) => match r {
-        //             Ok((sz, _q)) => Rx1::Rx(sz),
-        //             // Ignore errors or timeouts and wait until the RX2 window is ready.
-        //             // Setting timeout to 0 ensures that `window_duration != rx2_start_delay`
-        //             _ => {
-        //                 timeout_fut.await;
-        //                 Rx1::Timeout(0)
-        //             }
-        //         },
-        //         // Timeout! Prepare for the next window.
-        //         Either::Right(_) => Rx1::Timeout(window_duration),
-        //     }
-        // };
-        //
-        // match response {
-        //     Rx1::Rx(sz) => {
-        //         self.phy.radio.low_power().await.map_err(Error::Radio)?;
-        //         return Ok(sz);
-        //     }
-        //     Rx1::Timeout(window_duration) => {
-        //         // If the window duration was the same as the RX2 start delay, we can skip settings the
-        //         // radio to lower power and arming the the timer
-        //         if window_duration != rx2_start_delay {
-        //             self.phy.radio.low_power().await.map_err(Error::Radio)?;
-        //             self.timer.at(rx2_start_delay.into()).await;
-        //         }
-        //     }
-        // }
-        //
-        // // RX2
-        // let response = {
-        //     // Prepare for RX using correct configuration
-        //     let rx_config = self.region.get_rx_config(self.datarate, frame, &Window::_2);
-        //     let window_duration = self.phy.radio.get_rx_window_duration_ms();
-        //
-        //     // Pass the full radio buffer slice to RX
-        //     self.phy.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
-        //     let rx_fut = self.phy.radio.rx(self.radio_buffer.as_raw_slice());
-        //     let timeout_fut = self.timer.delay_ms(window_duration.into());
-        //
-        //     pin_mut!(rx_fut);
-        //     pin_mut!(timeout_fut);
-        //     // Wait until either RX is complete or if we've reached window close
-        //     match select(rx_fut, timeout_fut).await {
-        //         // RX is complete!
-        //         Either::Left((Ok((sz, _q)), _)) => Ok(sz),
-        //         // Timeout or other RX error.
-        //         _ => Err(Error::RxTimeout),
-        //     }
-        // };
-        // self.phy.radio.low_power().await.map_err(Error::Radio)?;
-        // response
-    }
-}
-
-/// Contains data for the current session
-#[derive(Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct SessionData {
-    newskey: NewSKey,
-    appskey: AppSKey,
-    devaddr: DevAddr<[u8; 4]>,
-    fcnt_up: u32,
-    fcnt_down: u32,
-}
-
-impl SessionData {
-    pub fn derive_new<T: core::convert::AsRef<[u8]>, F: lorawan::keys::CryptoFactory>(
-        decrypt: &DecryptedJoinAcceptPayload<T, F>,
-        devnonce: DevNonce,
-        credentials: &NetworkCredentials,
-    ) -> SessionData {
-        Self::new(
-            NewSKey(decrypt.derive_newskey(&devnonce, &credentials.appkey().0)),
-            AppSKey(decrypt.derive_appskey(&devnonce, &credentials.appkey().0)),
-            decrypt.dev_addr().to_owned(),
-        )
-    }
-
-    pub fn new(newskey: NewSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]>) -> SessionData {
-        SessionData { newskey, appskey, devaddr, fcnt_up: 0, fcnt_down: 0 }
-    }
-
-    pub fn newskey(&self) -> &NewSKey {
-        &self.newskey
-    }
-
-    pub fn appskey(&self) -> &AppSKey {
-        &self.appskey
-    }
-
-    pub fn devaddr(&self) -> &DevAddr<[u8; 4]> {
-        &self.devaddr
-    }
-
-    pub fn fcnt_up(&self) -> u32 {
-        self.fcnt_up
-    }
-
-    pub fn fcnt_up_increment(&mut self) {
-        self.fcnt_up += 1;
+    async fn rx_window<F>(
+        radio: &mut R,
+        rx_buf: &mut RadioBuffer<N>,
+        window_duration: u32,
+        timeout_fut: F,
+    ) -> RxWindowResponse<F>
+    where
+        F: futures::Future<Output = ()> + Sized + Unpin,
+    {
+        let rx_fut = radio.rx(rx_buf.as_mut());
+        pin_mut!(rx_fut);
+        // Wait until either a RF frame is received or if we've reached window close
+        match select(rx_fut, timeout_fut).await {
+            // We've received an RF frame
+            Either::Left((r, timeout_fut)) => match r {
+                Ok((sz, q)) => RxWindowResponse::Rx(sz, q, timeout_fut),
+                // Ignore errors or timeouts and wait until the RX2 window is ready.
+                // Setting timeout to 0 ensures that `window_duration != rx2_start_delay`
+                _ => {
+                    timeout_fut.await;
+                    RxWindowResponse::Timeout(0)
+                }
+            },
+            // Timeout! Prepare for the next window.
+            Either::Right(_) => RxWindowResponse::Timeout(window_duration),
+        }
     }
 }

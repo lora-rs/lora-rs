@@ -18,15 +18,17 @@ use super::{
     uplink, FcntUp, Response,
 };
 
+#[derive(Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Session {
-    pub(crate) uplink: uplink::Uplink,
-    pub(crate) newskey: NewSKey,
-    pub(crate) appskey: AppSKey,
-    pub(crate) devaddr: DevAddr<[u8; 4]>,
-    pub(crate) fcnt_up: u32,
-    pub(crate) fcnt_down: u32,
-    pub(crate) confirmed: bool,
+    pub uplink: uplink::Uplink,
+    pub confirmed: bool,
+    pub newskey: NewSKey,
+    pub appskey: AppSKey,
+    pub devaddr: DevAddr<[u8; 4]>,
+    pub fcnt_up: u32,
+    pub fcnt_down: u32,
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -66,9 +68,9 @@ impl Session {
             newskey,
             appskey,
             devaddr,
+            confirmed: false,
             fcnt_down: 0,
             fcnt_up: 0,
-            confirmed: false,
             uplink: uplink::Uplink::default(),
         }
     }
@@ -89,15 +91,15 @@ impl Session {
 }
 
 impl Session {
-    pub(crate) fn handle_rx<C: CryptoFactory + Default>(
+    pub(crate) fn handle_rx<C: CryptoFactory + Default, const N: usize>(
         &mut self,
         region: &mut region::Configuration,
         configuration: &mut super::Configuration,
-        rx: &mut [u8],
+        rx: &mut RadioBuffer<N>,
         dl: &mut Option<Downlink>,
     ) -> Response {
         if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
-            lorawan_parse(rx, C::default())
+            lorawan_parse(rx.as_mut_for_read(), C::default())
         {
             if self.devaddr() == &encrypted_data.fhdr().dev_addr() {
                 let fcnt = encrypted_data.fhdr().fcnt() as u32;
@@ -165,7 +167,7 @@ impl Session {
         if self.confirmed {
             Response::NoAck
         } else {
-            Response::ReadyToSend
+            Response::RxComplete
         }
     }
 
@@ -174,6 +176,7 @@ impl Session {
         data: &SendData,
         tx_buffer: &mut RadioBuffer<N>,
     ) -> FcntUp {
+        tx_buffer.clear();
         let fcnt = self.fcnt_up;
         let mut phy: DataPayloadCreator<GenericArray<u8, U256>, C> = DataPayloadCreator::default();
 

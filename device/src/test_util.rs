@@ -14,6 +14,7 @@ use std::vec::Vec;
 /// to operate unit tests.
 ///
 
+#[derive(Debug, Clone)]
 pub struct Uplink {
     data: Vec<u8>,
     #[allow(unused)]
@@ -30,8 +31,10 @@ impl Uplink {
     }
 
     pub fn get_payload(&mut self) -> PhyPayload<&mut [u8], DefaultFactory> {
-        // unwrap since we verified parse in new
-        parse(self.data.as_mut_slice()).unwrap()
+        match parse(self.data.as_mut_slice()) {
+            Ok(p) => p,
+            Err(e) => panic!("Failed to parse payload: {:?}", e),
+        }
     }
 }
 
@@ -80,10 +83,13 @@ pub fn handle_join_request(
             phy.set_dev_addr(get_dev_addr());
             let finished = phy.build(&AES128(get_key())).unwrap();
             rx_buffer[..finished.len()].copy_from_slice(finished);
-            return finished.len();
+            finished.len()
+        } else {
+            panic!("Did not parse join request from uplink");
         }
+    } else {
+        panic!("No uplink passed to handle_join_request");
     }
-    0
 }
 
 /// Handle an uplink and respond with two LinkAdrReq on Port 0
@@ -106,7 +112,6 @@ pub fn handle_data_uplink_with_link_adr_req(
                 MacCommand::LinkADRReq(LinkADRReqPayload::new(&mac_cmds[1].build()[1..]).unwrap()),
             ];
             let cmd: Vec<&dyn SerializableMacCommand> = vec![&mac_cmds[0], &mac_cmds[1]];
-
             let mut phy =
                 lorawan::creator::DataPayloadCreator::with_options(rx_buffer, DefaultFactory)
                     .unwrap();
@@ -114,10 +119,13 @@ pub fn handle_data_uplink_with_link_adr_req(
             phy.set_dev_addr(&[0; 4]);
             phy.set_uplink(false);
             let finished = phy.build(&[], &cmd, &AES128(get_key()), &AES128(get_key())).unwrap();
-            return finished.len();
+            finished.len()
+        } else {
+            panic!("Did not decode PhyPayload::Data!");
         }
+    } else {
+        panic!("No uplink passed to handle_data_uplink_with_link_adr_req");
     }
-    0
 }
 
 fn link_adr_req_with_bank_ctrl(cm: u16) -> LinkADRReqCreator {
@@ -165,8 +173,11 @@ pub fn handle_data_uplink_with_link_adr_ans(
             phy.set_fcnt(1);
             // zero out rx_buffer
             let finished = phy.build(&[], &[], &AES128(get_key()), &AES128(get_key())).unwrap();
-            return finished.len();
+            finished.len()
+        } else {
+            panic!("Unable to parse PhyPayload::Data from uplink in handle_data_uplink_with_link_adr_ans")
         }
+    } else {
+        panic!("No uplink passed to handle_data_uplink_with_link_adr_ans")
     }
-    0
 }

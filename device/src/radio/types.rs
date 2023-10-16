@@ -49,6 +49,10 @@ impl<const N: usize> RadioBuffer<N> {
         self.pos = 0;
     }
 
+    pub(crate) fn set_pos(&mut self, pos: usize) {
+        self.pos = pos;
+    }
+
     pub(crate) fn extend_from_slice(&mut self, buf: &[u8]) -> Result<(), ()> {
         if self.pos + buf.len() < self.packet.len() {
             self.packet[self.pos..self.pos + buf.len()].copy_from_slice(buf);
@@ -59,26 +63,26 @@ impl<const N: usize> RadioBuffer<N> {
         }
     }
 
-    #[cfg(feature = "async")]
-    pub(crate) fn as_raw_slice(&mut self) -> &mut [u8] {
-        &mut self.packet
+    /// Provides a mutable slice of the buffer up to the current position.
+    pub(crate) fn as_mut_for_read(&mut self) -> &mut [u8] {
+        &mut self.packet[..self.pos]
     }
 
-    #[cfg(feature = "async")]
-    pub(crate) fn inc(&mut self, len: usize) {
-        assert!(self.pos + len < self.packet.len());
-        self.pos += len;
+    /// Provides a reference of the buffer up to the current position.
+
+    pub(crate) fn as_ref_for_read(&self) -> &[u8] {
+        &self.packet[..self.pos]
     }
 }
 
 impl<const N: usize> AsMut<[u8]> for RadioBuffer<N> {
     fn as_mut(&mut self) -> &mut [u8] {
-        &mut self.packet[..self.pos]
+        &mut self.packet
     }
 }
 
 impl<const N: usize> AsRef<[u8]> for RadioBuffer<N> {
     fn as_ref(&self) -> &[u8] {
-        &self.packet[..self.pos]
+        &self.packet
     }
 }
