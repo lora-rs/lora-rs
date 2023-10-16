@@ -52,7 +52,7 @@ fn test_unconfirmed_uplink_no_downlink() {
     let response = device.handle_event(Event::TimeoutFired).unwrap(); // being Rx2
     assert!(matches!(response, Response::TimeoutRequest(2100)));
     let response = device.handle_event(Event::TimeoutFired).unwrap(); // end Rx2
-    assert!(matches!(response, Response::ReadyToSend));
+    assert!(matches!(response, Response::RxComplete));
 }
 #[test]
 fn test_confirmed_uplink_no_ack() {

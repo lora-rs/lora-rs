@@ -5,8 +5,9 @@ During Uplink assembly, this struct will be inquired to drive construction
 use heapless::Vec;
 use lorawan::maccommands::{LinkADRAnsPayload, MacCommand, RXTimingSetupAnsPayload};
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Uplink {
     pub adr_ans: AdrAns,
     pub rx_delay_ans: RxDelayAns,

@@ -29,10 +29,6 @@ impl PhyRxTx for TestRadio {
         let length = buffer.len();
         // stash the uplink, to be consumed by channel or by rx handler
         let mut last_uplink = self.last_uplink.lock().await;
-        // ensure that we have always consumed the previous uplink
-        if last_uplink.is_some() {
-            return Err("Radio already has an uplink");
-        }
         *last_uplink = Some(Uplink::new(buffer, config)?);
         Ok(length as u32)
     }
@@ -47,11 +43,11 @@ impl PhyRxTx for TestRadio {
         receiving_buffer: &mut [u8],
     ) -> Result<(usize, RxQuality), Self::PhyError> {
         let handler = self.rx.recv().await.unwrap();
-        let mut last_uplink = self.last_uplink.lock().await;
+        let last_uplink = self.last_uplink.lock().await;
         // a quick yield to let timer arm
         time::sleep(time::Duration::from_millis(5)).await;
         if let Some(config) = &self.current_config {
-            let size = handler(last_uplink.take(), *config, receiving_buffer);
+            let size = handler(last_uplink.clone(), *config, receiving_buffer);
             Ok((size, RxQuality::new(0, 0)))
         } else {
             panic!("Trying to rx before settings config!")

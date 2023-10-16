@@ -1,9 +1,9 @@
 use super::{get_dev_addr, get_key, radio::*, region, timer::*, DefaultFactory, Device};
 
-use crate::async_device::SessionData;
+use crate::mac::Session;
 use crate::{AppSKey, NewSKey};
 
-fn setup_internal(session_data: Option<SessionData>) -> (RadioChannel, TimerChannel, Device) {
+fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel, Device) {
     let (radio_channel, mock_radio) = TestRadio::new();
     let (timer_channel, mock_timer) = TestTimer::new();
     let region = region::US915::default();
@@ -24,12 +24,14 @@ fn setup_internal(session_data: Option<SessionData>) -> (RadioChannel, TimerChan
 }
 
 pub fn setup_with_session() -> (RadioChannel, TimerChannel, Device) {
-    setup_internal(Some(SessionData {
+    setup_internal(Some(Session {
         newskey: NewSKey::from(get_key()),
         appskey: AppSKey::from(get_key()),
         devaddr: get_dev_addr(),
         fcnt_up: 0,
         fcnt_down: 0,
+        confirmed: false,
+        uplink: Default::default(),
     }))
 }
 

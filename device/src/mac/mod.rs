@@ -11,7 +11,7 @@ pub type FcntDown = u32;
 pub type FcntUp = u32;
 
 mod session;
-pub use session::SessionKeys;
+pub use session::{Session, SessionKeys};
 mod otaa;
 use crate::radio::RfConfig;
 pub use otaa::NetworkCredentials;
@@ -63,12 +63,13 @@ pub(crate) struct Mac {
 
 #[allow(clippy::large_enum_variant)]
 enum State {
-    Joined(session::Session),
+    Joined(Session),
     Otaa(otaa::Otaa),
     Unjoined,
 }
 
 #[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     NotJoined,
     JoinFailed,
@@ -112,7 +113,12 @@ impl Mac {
         appskey: AppSKey,
         devaddr: DevAddr<[u8; 4]>,
     ) {
-        self.state = State::Joined(session::Session::new(newskey, appskey, devaddr));
+        self.state = State::Joined(Session::new(newskey, appskey, devaddr));
+    }
+
+    /// Join via ABP. This does not transmit a join request frame, but instead sets the session.
+    pub(crate) fn set_session(&mut self, session: Session) {
+        self.state = State::Joined(session);
     }
 
     /// Prepare the radio buffer for transmitting a data frame and provide the radio configuration
@@ -162,18 +168,18 @@ impl Mac {
     /// verification. Upon successful join, provides Response::JoinSuccess. Upon successful data
     /// rx, provides Response::DownlinkReceived. User must take the radio buffer to parse the
     /// application payload.
-    pub(crate) fn handle_rx<C: CryptoFactory + Default>(
+    pub(crate) fn handle_rx<C: CryptoFactory + Default, const N: usize>(
         &mut self,
-        rx: &mut [u8],
+        buf: &mut RadioBuffer<N>,
         dl: &mut Option<Downlink>,
     ) -> Response {
         match &mut self.state {
             State::Joined(ref mut session) => {
-                session.handle_rx::<C>(&mut self.region, &mut self.configuration, rx, dl)
+                session.handle_rx::<C, N>(&mut self.region, &mut self.configuration, buf, dl)
             }
             State::Otaa(ref mut otaa) => {
                 if let Some(session) =
-                    otaa.handle_rx::<C>(&mut self.region, &mut self.configuration, rx)
+                    otaa.handle_rx::<C, N>(&mut self.region, &mut self.configuration, buf)
                 {
                     self.state = State::Joined(session);
                     Response::JoinSuccess
@@ -187,8 +193,8 @@ impl Mac {
 
     pub(crate) fn rx2_complete(&mut self) -> Response {
         match &mut self.state {
-            State::Joined(ref mut session) => session.rx2_complete(),
-            State::Otaa(_) => Response::NoJoinAccept,
+            State::Joined(session) => session.rx2_complete(),
+            State::Otaa(otaa) => otaa.rx2_complete(),
             State::Unjoined => Response::NoUpdate,
         }
     }
@@ -196,6 +202,14 @@ impl Mac {
     pub(crate) fn get_session_keys(&self) -> Option<SessionKeys> {
         match &self.state {
             State::Joined(session) => session.get_session_keys(),
+            State::Otaa(_) => None,
+            State::Unjoined => None,
+        }
+    }
+
+    pub(crate) fn get_session(&self) -> Option<&Session> {
+        match &self.state {
+            State::Joined(session) => Some(session),
             State::Otaa(_) => None,
             State::Unjoined => None,
         }
@@ -219,10 +233,10 @@ pub enum Response {
     NoAck,
     SessionExpired,
     DownlinkReceived(FcntDown),
-    ReadyToSend,
     NoJoinAccept,
     JoinSuccess,
     NoUpdate,
+    RxComplete,
 }
 
 impl From<Response> for crate::Response {
@@ -231,10 +245,27 @@ impl From<Response> for crate::Response {
             Response::SessionExpired => crate::Response::SessionExpired,
             Response::DownlinkReceived(fcnt) => crate::Response::DownlinkReceived(fcnt),
             Response::NoAck => crate::Response::NoAck,
-            Response::ReadyToSend => crate::Response::ReadyToSend,
             Response::NoJoinAccept => crate::Response::NoJoinAccept,
             Response::JoinSuccess => crate::Response::JoinSuccess,
             Response::NoUpdate => crate::Response::NoUpdate,
+            Response::RxComplete => crate::Response::RxComplete,
+        }
+    }
+}
+
+#[cfg(feature = "async")]
+impl From<Response> for crate::async_device::Response {
+    fn from(r: Response) -> Self {
+        match r {
+            Response::SessionExpired => crate::async_device::Response::SessionExpired,
+            Response::DownlinkReceived(fcnt) => {
+                crate::async_device::Response::DownlinkReceived(fcnt)
+            }
+            Response::NoAck => crate::async_device::Response::NoAck,
+            Response::NoJoinAccept => crate::async_device::Response::NoJoinAccept,
+            Response::JoinSuccess => crate::async_device::Response::JoinSuccess,
+            Response::NoUpdate => crate::async_device::Response::NoUpdate,
+            Response::RxComplete => crate::async_device::Response::RxComplete,
         }
     }
 }

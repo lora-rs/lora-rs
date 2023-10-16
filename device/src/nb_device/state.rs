@@ -161,7 +161,8 @@ impl Idle {
         match response {
             IntermediateResponse::EarlyReturn(response) => (State::Idle(self), response),
             IntermediateResponse::RadioTx((frame, tx_config)) => {
-                let event: radio::Event<R> = radio::Event::TxRequest(tx_config, buf.as_ref());
+                let event: radio::Event<R> =
+                    radio::Event::TxRequest(tx_config, buf.as_ref_for_read());
                 match radio.handle_event(event) {
                     Ok(response) => {
                         match response {
@@ -169,6 +170,7 @@ impl Idle {
                             // allows for asynchronous sending
                             radio::Response::Txing => (
                                 State::SendingData(SendingData { frame }),
+                                // TODO: get fcnt from mac
                                 Ok(Response::UplinkSending(0)),
                             ),
                             // directly jump to waiting for RxWindow
@@ -330,7 +332,7 @@ impl WaitingForRx {
                                     Err(Error::BufferTooSmall.into()),
                                 );
                             }
-                            match mac.handle_rx::<C>(buf.as_mut(), dl) {
+                            match mac.handle_rx::<C, N>(buf, dl) {
                                 // NoUpdate can occur when a stray radio packet is received. Maintain state
                                 mac::Response::NoUpdate => {
                                     (State::WaitingForRx(self), Ok(Response::NoUpdate))

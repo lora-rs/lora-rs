@@ -33,7 +33,7 @@ async fn test_join_rx1() {
     radio.handle_rxtx(handle_join_request);
 
     // Await the device to return and verify state
-    if let Ok(()) = async_device.await.unwrap() {
+    if let Ok(Response::JoinSuccess) = async_device.await.unwrap() {
         // NB: timer is armed twice (even if not fired twice)
         // because RX1 end is armed when packet is received
         assert_eq!(2, timer.get_armed_count().await);
@@ -83,10 +83,11 @@ async fn test_no_join_accept() {
     timer.fire().await;
 
     // Await the device to return and verify state
-    if let Err(Error::RxTimeout) = async_device.await.unwrap() {
+    let response = async_device.await.unwrap();
+    if let Ok(Response::NoJoinAccept) = response {
         assert_eq!(4, timer.get_armed_count().await);
     } else {
-        panic!();
+        panic!("Unexpected response: {response:?}");
     }
 }
 
@@ -98,11 +99,12 @@ async fn test_noise() {
         tokio::spawn(async move { async_device.join(&get_otaa_credentials()).await });
     // Trigger beginning of RX1
     timer.fire().await;
-    // Send an invalid lorawan frame. 0 length is enough to confuse it
+    // Send an invalid lorawan frame.
     radio.handle_rxtx(|_, _, _| 0);
-
+    // Pass the join request handler
+    radio.handle_rxtx(handle_join_request);
     // Await the device to return and verify state
-    let Err(Error::UnableToDecodePayload(_)) = async_device.await.unwrap() else {
+    let Ok(Response::JoinSuccess) = async_device.await.unwrap() else {
         panic!();
     };
 }
@@ -134,7 +136,7 @@ async fn test_unconfirmed_uplink_no_downlink() {
     timer.fire().await;
 
     match async_device.await.unwrap() {
-        Err(Error::RxTimeout) => (),
+        Ok(Response::RxComplete) => (),
         _ => panic!(),
     }
     assert!(*send_await_complete.lock().await);
@@ -169,7 +171,7 @@ async fn test_confirmed_uplink_no_ack() {
     match async_device.await.unwrap() {
         // TODO: implement some ACK failure notification. This response is
         // currently identical to taht of an unconfirmed uplink.
-        Err(Error::RxTimeout) => (),
+        Ok(Response::NoAck) => (),
         _ => panic!(),
     }
     assert!(*send_await_complete.lock().await);
@@ -196,7 +198,7 @@ async fn test_confirmed_uplink_with_ack_rx1() {
     // Send a downlink with confirmation
     radio.handle_rxtx(handle_data_uplink_with_link_adr_req);
     match async_device.await.unwrap() {
-        Ok(()) => (),
+        Ok(Response::DownlinkReceived(_)) => (),
         _ => {
             panic!()
         }
@@ -230,7 +232,7 @@ async fn test_confirmed_uplink_with_ack_rx2() {
     radio.handle_rxtx(handle_data_uplink_with_link_adr_req);
 
     match async_device.await.unwrap() {
-        Ok(()) => (),
+        Ok(Response::DownlinkReceived(_)) => (),
         _ => {
             panic!()
         }
@@ -264,7 +266,7 @@ async fn test_link_adr_ans() {
     // Send a downlink with confirmation
     radio.handle_rxtx(handle_data_uplink_with_link_adr_ans);
     match async_device.await.unwrap() {
-        Ok(()) => (),
+        Ok(Response::DownlinkReceived(_)) => (),
         _ => {
             panic!()
         }

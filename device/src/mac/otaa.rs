@@ -1,4 +1,4 @@
-use super::{del_to_delay_ms, session::Session};
+use super::{del_to_delay_ms, session::Session, Response};
 use crate::radio::RadioBuffer;
 use crate::region::Configuration;
 use crate::rng::*;
@@ -36,25 +36,24 @@ impl Otaa {
         buf: &mut RadioBuffer<N>,
     ) {
         self.dev_nonce = DevNonce::from(rng.get_rng().next_u32() as u16);
-
         buf.clear();
         let mut phy: JoinRequestCreator<[u8; 23], C> = JoinRequestCreator::default();
-
         phy.set_app_eui(self.network_credentials.appeui.0)
             .set_dev_eui(self.network_credentials.deveui.0)
             .set_dev_nonce(self.dev_nonce);
-        let vec = phy.build(&self.network_credentials.appkey.0).unwrap();
+        let result = phy.build(&self.network_credentials.appkey.0);
+        let vec = result.unwrap();
         buf.extend_from_slice(vec).unwrap();
     }
 
-    pub(crate) fn handle_rx<C: CryptoFactory + Default>(
+    pub(crate) fn handle_rx<C: CryptoFactory + Default, const N: usize>(
         &mut self,
         region: &mut Configuration,
         configuration: &mut super::Configuration,
-        rx: &mut [u8],
+        rx: &mut RadioBuffer<N>,
     ) -> Option<Session> {
         if let Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(encrypted))) =
-            lorawan_parse(rx, C::default())
+            lorawan_parse(rx.as_mut_for_read(), C::default())
         {
             let decrypt = encrypted.decrypt(&self.network_credentials.appkey.0);
             region.process_join_accept(&decrypt);
@@ -68,6 +67,10 @@ impl Otaa {
             }
         }
         None
+    }
+
+    pub(crate) fn rx2_complete(&mut self) -> Response {
+        Response::NoJoinAccept
     }
 }
 
