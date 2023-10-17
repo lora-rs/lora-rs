@@ -28,6 +28,7 @@ pub struct Phy<R, G: OptionalRng> {
     rng: G,
 }
 
+#[cfg(feature = "async")]
 impl<R, G: OptionalRng> Phy<R, G> {
     pub fn new(radio: R, rng: G) -> Self {
         Self { radio, rng }

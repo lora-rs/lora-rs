@@ -47,8 +47,8 @@ where
 
 #[derive(Debug)]
 pub struct Downlink {
-    data: Vec<u8, 256>,
-    fport: u8,
+    pub data: Vec<u8, 256>,
+    pub fport: u8,
 }
 
 #[cfg(feature = "defmt")]
@@ -199,7 +199,6 @@ lorawan_eui!(
     pub struct AppEui(EUI64<[u8; 8]>);
 );
 
-#[allow(dead_code)]
 impl<R, C, RNG, const N: usize> Device<R, C, RNG, N>
 where
     R: radio::PhyRxTx + Timings,
@@ -259,6 +258,14 @@ where
 
     pub fn get_fcnt_up(&self) -> Option<u32> {
         self.shared.mac.get_fcnt_up()
+    }
+
+    pub fn get_session(&self) -> Option<&mac::Session> {
+        self.shared.mac.get_session()
+    }
+
+    pub fn set_session(&mut self, s: mac::Session) {
+        self.shared.mac.set_session(s)
     }
 
     pub fn get_session_keys(&self) -> Option<mac::SessionKeys> {
