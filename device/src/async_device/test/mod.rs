@@ -99,8 +99,10 @@ async fn test_noise() {
         tokio::spawn(async move { async_device.join(&get_otaa_credentials()).await });
     // Trigger beginning of RX1
     timer.fire().await;
-    // Send an invalid lorawan frame.
-    radio.handle_rxtx(|_, _, _| 0);
+    // Send a bunch of invalid RF frames
+    for _ in 0..12 {
+        radio.handle_rxtx(|_, _, _| 5);
+    }
     // Pass the join request handler
     radio.handle_rxtx(handle_join_request);
     // Await the device to return and verify state
@@ -169,8 +171,6 @@ async fn test_confirmed_uplink_no_ack() {
     timer.fire().await;
 
     match async_device.await.unwrap() {
-        // TODO: implement some ACK failure notification. This response is
-        // currently identical to taht of an unconfirmed uplink.
         Ok(Response::NoAck) => (),
         _ => panic!(),
     }

@@ -18,6 +18,18 @@ pub use otaa::NetworkCredentials;
 
 pub(crate) mod uplink;
 
+#[derive(Copy, Clone, Debug)]
+pub(crate) enum Frame {
+    Join,
+    Data,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub(crate) enum Window {
+    _1,
+    _2,
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Configuration {
@@ -99,11 +111,11 @@ impl Mac {
         rng: &mut RNG,
         credentials: NetworkCredentials,
         buf: &mut RadioBuffer<N>,
-    ) -> radio::TxConfig {
+    ) -> (radio::TxConfig, u16) {
         let mut otaa = otaa::Otaa::new(credentials);
-        otaa.prepare_buffer::<C, RNG, N>(rng, buf);
+        let dev_nonce = otaa.prepare_buffer::<C, RNG, N>(rng, buf);
         self.state = State::Otaa(otaa);
-        self.region.create_tx_config(rng, self.configuration.data_rate, &region::Frame::Join)
+        (self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Join), dev_nonce)
     }
 
     /// Join via ABP. This does not transmit a join request frame, but instead sets the session.
@@ -128,36 +140,32 @@ impl Mac {
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
         send_data: &SendData,
-    ) -> Result<radio::TxConfig> {
-        let _fcnt = match &mut self.state {
+    ) -> Result<(radio::TxConfig, FcntUp)> {
+        let fcnt = match &mut self.state {
             State::Joined(ref mut session) => Ok(session.prepare_buffer::<C, N>(send_data, buf)),
             State::Otaa(_) => Err(Error::NotJoined),
             State::Unjoined => Err(Error::NotJoined),
         }?;
-        Ok(self.region.create_tx_config(rng, self.configuration.data_rate, &region::Frame::Data))
+        Ok((self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data), fcnt))
     }
 
-    pub(crate) fn get_rx_delay(&self, frame: &region::Frame, window: &region::Window) -> u32 {
+    pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
         match frame {
-            region::Frame::Join => match window {
-                region::Window::_1 => self.configuration.join_accept_delay1,
-                region::Window::_2 => self.configuration.join_accept_delay2,
+            Frame::Join => match window {
+                Window::_1 => self.configuration.join_accept_delay1,
+                Window::_2 => self.configuration.join_accept_delay2,
             },
-            region::Frame::Data => match window {
-                region::Window::_1 => self.configuration.rx1_delay,
+            Frame::Data => match window {
+                Window::_1 => self.configuration.rx1_delay,
                 // RECEIVE_DELAY2 is not configurable. LoRaWAN 1.0.3 Section 5.7:
                 // "The second reception slot opens one second after the first reception slot."
-                region::Window::_2 => self.configuration.rx1_delay + 1000,
+                Window::_2 => self.configuration.rx1_delay + 1000,
             },
         }
     }
 
     /// Gets the radio configuration and timing for a given frame type and window.
-    pub(crate) fn get_rx_parameters(
-        &mut self,
-        frame: &region::Frame,
-        window: &region::Window,
-    ) -> (RfConfig, u32) {
+    pub(crate) fn get_rx_parameters(&mut self, frame: &Frame, window: &Window) -> (RfConfig, u32) {
         (
             self.region.get_rx_config(self.configuration.data_rate, frame, window),
             self.get_rx_delay(frame, window),
