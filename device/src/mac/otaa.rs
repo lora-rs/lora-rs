@@ -34,7 +34,7 @@ impl Otaa {
         &mut self,
         rng: &mut G,
         buf: &mut RadioBuffer<N>,
-    ) {
+    ) -> u16 {
         self.dev_nonce = DevNonce::from(rng.get_rng().next_u32() as u16);
         buf.clear();
         let mut phy: JoinRequestCreator<[u8; 23], C> = JoinRequestCreator::default();
@@ -44,6 +44,7 @@ impl Otaa {
         let result = phy.build(&self.network_credentials.appkey.0);
         let vec = result.unwrap();
         buf.extend_from_slice(vec).unwrap();
+        u16::from(self.dev_nonce)
     }
 
     pub(crate) fn handle_rx<C: CryptoFactory + Default, const N: usize>(

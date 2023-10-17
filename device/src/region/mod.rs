@@ -3,7 +3,10 @@
 // conventions better
 use lorawan::{maccommands::ChannelMask, parser::CfList};
 
-use crate::rng::{GetRng, RngCore};
+use crate::{
+    mac::{Frame, Window},
+    rng::{GetRng, RngCore},
+};
 pub mod constants;
 pub(crate) use crate::radio::*;
 use constants::*;
@@ -104,19 +107,6 @@ pub struct Datarate {
     bandwidth: Bandwidth,
     spreading_factor: SpreadingFactor,
 }
-
-#[derive(Copy, Clone, Debug)]
-pub(crate) enum Frame {
-    Join,
-    Data,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub(crate) enum Window {
-    _1,
-    _2,
-}
-
 macro_rules! mut_region_dispatch {
   ($s:expr, $t:tt) => {
       match &mut $s.state {

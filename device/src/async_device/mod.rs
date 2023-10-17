@@ -3,8 +3,7 @@
 use super::mac::Mac;
 
 use super::{
-    mac::{self, NetworkCredentials, Session},
-    region::{Frame, Window},
+    mac::{self, Frame, NetworkCredentials, Session, Window},
     Downlink,
 };
 pub use super::{region, region::Region, JoinMode, SendData, Timings};
@@ -175,7 +174,7 @@ where
     pub async fn join(&mut self, join_mode: &JoinMode) -> Result<Response, Error<R::PhyError>> {
         match join_mode {
             JoinMode::OTAA { deveui, appeui, appkey } => {
-                let tx_config = self.mac.join_otaa::<C, Phy<R, G>, N>(
+                let (tx_config, _) = self.mac.join_otaa::<C, Phy<R, G>, N>(
                     &mut self.phy,
                     NetworkCredentials::new(*appeui, *deveui, *appkey),
                     &mut self.radio_buffer,
@@ -214,7 +213,7 @@ where
         confirmed: bool,
     ) -> Result<Response, Error<R::PhyError>> {
         // Prepare transmission buffer
-        let tx_config = self.mac.send::<C, Phy<R, G>, N>(
+        let (tx_config, _fcnt_up) = self.mac.send::<C, Phy<R, G>, N>(
             &mut self.phy,
             &mut self.radio_buffer,
             &SendData { data, fport, confirmed },
