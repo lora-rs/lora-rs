@@ -2,11 +2,41 @@ use super::*;
 use core::marker::PhantomData;
 use lorawan::maccommands::ChannelMask;
 
+// Compiler trick needed to assert array length at compile time
+#[macro_export]
+macro_rules! gen_assert {
+    ($t:ident, $c:expr) => {{
+        struct Check<const $t: usize>(usize);
+        impl<const $t: usize> Check<$t> {
+            const CHECK: () = assert!($c);
+        }
+        let _ = Check::<$t>::CHECK;
+    }};
+}
+
 mod au915;
 mod us915;
 
 pub(crate) use au915::AU915;
 pub(crate) use us915::US915;
+
+seq_macro::seq!(
+    N in 0..=71 {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        #[repr(u8)]
+        pub enum Channel {
+            #(
+                _~N,
+            )*
+        }
+    }
+);
+
+impl From<Channel> for u8 {
+    fn from(value: Channel) -> Self {
+        value as u8
+    }
+}
 
 #[derive(Clone)]
 struct PreferredJoinChannels {
@@ -33,7 +63,8 @@ impl PreferredJoinChannels {
     }
 }
 
-/// Bitflags containing subbands that haven't yet been tried for a join attempt this round.
+/// Bitflags containing subbands that haven't yet been tried for a join attempt
+/// this round.
 #[derive(Clone)]
 struct AvailableSubbands(u16);
 
@@ -111,7 +142,7 @@ impl JoinChannels {
 
 #[derive(Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub(crate) struct FixedChannelPlan<const D: usize, F: FixedChannelRegion<D>> {
+pub(crate) struct FixedChannelPlan<const NUM_DR: usize, F: FixedChannelRegion<NUM_DR>> {
     last_tx_channel: u8,
     channel_mask: ChannelMask<9>,
     _fixed_channel_region: PhantomData<F>,
@@ -119,9 +150,16 @@ pub(crate) struct FixedChannelPlan<const D: usize, F: FixedChannelRegion<D>> {
 }
 
 impl<const D: usize, F: FixedChannelRegion<D>> FixedChannelPlan<D, F> {
-    pub fn set_preferred_join_channels(&mut self, preferred_channels: &[u8], num_retries: usize) {
-        self.join_channels
-            .set_preferred(heapless::Vec::from_slice(preferred_channels).unwrap(), num_retries);
+    pub fn set_preferred_join_channels(
+        &mut self,
+        preferred_channels: &[Channel],
+        num_retries: usize,
+    ) {
+        let mut channel_vec = heapless::Vec::new();
+        for chan in preferred_channels.iter().map(|c| *c as u8) {
+            channel_vec.push(chan).unwrap();
+        }
+        self.join_channels.set_preferred(channel_vec, num_retries);
     }
 
     pub fn remove_preferred_join_channels(&mut self) {
@@ -145,8 +183,8 @@ impl<const D: usize, F: FixedChannelRegion<D>> FixedChannelPlan<D, F> {
     }
 }
 
-pub(crate) trait FixedChannelRegion<const D: usize> {
-    fn datarates() -> &'static [Option<Datarate>; D];
+pub(crate) trait FixedChannelRegion<const NUM_DR: usize> {
+    fn datarates() -> &'static [Option<Datarate>; NUM_DR];
     fn uplink_channels() -> &'static [u32; 72];
     fn downlink_channels() -> &'static [u32; 8];
     fn get_default_rx2() -> u32;
@@ -159,8 +197,8 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         &mut self,
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     ) {
-        // Reset the number of retries on the preferred channel list after a successful join, in preparation for the
-        // next potential join attempt.
+        // Reset the number of retries on the preferred channel list after a successful
+        // join, in preparation for the next potential join attempt.
         if let Some(preferred) = &mut self.join_channels.preferred_channels {
             preferred.num_retries = preferred.max_retries;
         }
@@ -278,5 +316,30 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
 
     fn get_rx_datarate(&self, tx_datarate: DR, frame: &Frame, window: &Window) -> Datarate {
         F::get_rx_datarate(tx_datarate, frame, window)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    // we do this impl From<u8> for Channel for testing purposes only
+    // if we can avoid ever doing this in the real code, we can avoid the necessary error handling
+    fn channel_from_u8(x: u8) -> Channel {
+        unsafe { core::mem::transmute(x) }
+    }
+
+    #[test]
+    fn test_u8_from_channel() {
+        for i in 0..71 {
+            let channel = channel_from_u8(i);
+            // check a few by hand to make sure
+            match i {
+                0 => assert_eq!(channel, Channel::_0),
+                1 => assert_eq!(channel, Channel::_1),
+                71 => assert_eq!(channel, Channel::_71),
+                // the rest can be verified using the From<Channel> for u8 impl
+                _ => assert_eq!(i, u8::from(channel)),
+            }
+        }
     }
 }

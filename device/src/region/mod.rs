@@ -23,14 +23,6 @@ pub(crate) use fixed_channel_plans::US915;
 mod dynamic_channel_plans;
 mod fixed_channel_plans;
 
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-pub enum Error {
-    UnsupportedChannel,
-    ChannelListTooLong,
-    UnsupportedRegion,
-}
-
 #[derive(Clone)]
 pub struct Configuration {
     state: State,
@@ -197,77 +189,6 @@ macro_rules! region_dispatch {
 impl Configuration {
     pub fn new(region: Region) -> Configuration {
         Configuration::with_state(State::new(region))
-    }
-
-    /// Create a new [`Configuration`] with a specific set of channels enabled
-    /// for joining the network. You can specify up to 16 preferred channels.
-    ///
-    /// When `join` is called on a [`Configuration`] created using this
-    /// method, the network will be attempted to be joined only on the provided
-    /// channel subset. This set of channels will be retried the number of times
-    /// specified; after which we will revert to trying to join with all
-    /// channels enabled using a preset sequence.
-    ///
-    /// This method only makes sense for fixed channel plans (AU915, US915).
-    /// Trying to call this constructor with a dynamic channel region will
-    /// return `Err`.
-    ///
-    /// # About supported channels (fixed channel plans only)
-    ///
-    /// Supported channels:
-    ///
-    /// * 64 125 kHz channels (0-63)
-    /// * 8 500 kHz channels (64-71)
-    ///
-    /// If a channel out of this range is specified, `Err(())` will be returned.
-    ///
-    /// # ⚠️Warning⚠️
-    ///
-    /// It is recommended to set a low number (ie, < 10) of join retries using the
-    /// preferred channels. The reason for this is if you *only* try to join
-    /// with a channel bias, and the network is configured to use a
-    /// strictly different set of channels than the ones you provide, the
-    /// network will NEVER be joined.
-    ///
-    /// # Returns
-    ///
-    /// * `Ok(Configuration)` if the provided channel set is correct and the
-    ///   region is a fixed channel plan
-    /// * The length of `channel_list` must be <= 16, otherwise `Err` will
-    ///   be returned.
-    /// * If a channel out of the specified channel range is specified,
-    ///   `Err` will be returned (ie, >= 72).
-    pub fn new_with_preferred_channels(
-        region: Region,
-        preferred_channels: &[u8],
-        num_retries: usize,
-    ) -> Result<Configuration, Error> {
-        use Region::*;
-        match region {
-            US915 | AU915 => {
-                if preferred_channels.len() > 16 {
-                    return Err(Error::ChannelListTooLong);
-                }
-
-                if preferred_channels.iter().any(|c| *c >= 72) {
-                    return Err(Error::UnsupportedChannel);
-                }
-
-                let mut config = Configuration::with_state(State::new(region));
-                match &mut config.state {
-                    State::US915(s) => {
-                        s.set_preferred_join_channels(preferred_channels, num_retries)
-                    }
-                    State::AU915(s) => {
-                        s.set_preferred_join_channels(preferred_channels, num_retries)
-                    }
-                    _ => (),
-                }
-
-                Ok(config)
-            }
-            _ => Err(Error::UnsupportedRegion),
-        }
     }
 
     fn with_state(state: State) -> Configuration {
