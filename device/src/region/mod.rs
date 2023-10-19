@@ -135,11 +135,11 @@ macro_rules! mut_region_dispatch {
         State::AS923_2(state) => state.$t(),
         State::AS923_3(state) => state.$t(),
         State::AS923_4(state) => state.$t(),
-        State::AU915(state) => state.$t(),
+        State::AU915(state) => state.0.$t(),
         State::EU868(state) => state.$t(),
         State::EU433(state) => state.$t(),
         State::IN865(state) => state.$t(),
-        State::US915(state) => state.$t(),
+        State::US915(state) => state.0.$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
@@ -148,11 +148,11 @@ macro_rules! mut_region_dispatch {
         State::AS923_2(state) => state.$t($($arg)*),
         State::AS923_3(state) => state.$t($($arg)*),
         State::AS923_4(state) => state.$t($($arg)*),
-        State::AU915(state) => state.$t($($arg)*),
+        State::AU915(state) => state.0.$t($($arg)*),
         State::EU868(state) => state.$t($($arg)*),
         State::EU433(state) => state.$t($($arg)*),
         State::IN865(state) => state.$t($($arg)*),
-        State::US915(state) => state.$t($($arg)*),
+        State::US915(state) => state.0.$t($($arg)*),
     }
   };
 }
@@ -164,11 +164,11 @@ macro_rules! region_dispatch {
         State::AS923_2(state) => state.$t(),
         State::AS923_3(state) => state.$t(),
         State::AS923_4(state) => state.$t(),
-        State::AU915(state) => state.$t(),
+        State::AU915(state) => state.0.$t(),
         State::EU868(state) => state.$t(),
         State::EU433(state) => state.$t(),
         State::IN865(state) => state.$t(),
-        State::US915(state) => state.$t(),
+        State::US915(state) => state.0.$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
@@ -177,11 +177,11 @@ macro_rules! region_dispatch {
         State::AS923_2(state) => state.$t($($arg)*),
         State::AS923_3(state) => state.$t($($arg)*),
         State::AS923_4(state) => state.$t($($arg)*),
-        State::AU915(state) => state.$t($($arg)*),
+        State::AU915(state) => state.0.$t($($arg)*),
         State::EU868(state) => state.$t($($arg)*),
         State::EU433(state) => state.$t($($arg)*),
         State::IN865(state) => state.$t($($arg)*),
-        State::US915(state) => state.$t($($arg)*),
+        State::US915(state) => state.0.$t($($arg)*),
     }
   };
 }

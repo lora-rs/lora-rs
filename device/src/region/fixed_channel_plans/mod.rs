@@ -2,17 +2,8 @@ use super::*;
 use core::marker::PhantomData;
 use lorawan::maccommands::ChannelMask;
 
-// Compiler trick needed to assert array length at compile time
-#[macro_export]
-macro_rules! gen_assert {
-    ($t:ident, $c:expr) => {{
-        struct Check<const $t: usize>(usize);
-        impl<const $t: usize> Check<$t> {
-            const CHECK: () = assert!($c);
-        }
-        let _ = Check::<$t>::CHECK;
-    }};
-}
+mod join_bias;
+use join_bias::JoinChannels;
 
 mod au915;
 mod us915;
@@ -35,108 +26,6 @@ seq_macro::seq!(
 impl From<Channel> for u8 {
     fn from(value: Channel) -> Self {
         value as u8
-    }
-}
-
-#[derive(Clone)]
-struct PreferredJoinChannels {
-    channel_list: heapless::Vec<u8, 16>,
-    // Number representing the maximum number of retries allowed using the preferred channels list,
-    max_retries: usize,
-    // Decrementing number representing how many tries we have left with the specified list before
-    // reverting to the default channel selection behavior.
-    num_retries: usize,
-}
-
-impl PreferredJoinChannels {
-    fn try_get_channel(&mut self, rng: &mut impl RngCore) -> Option<u8> {
-        if self.num_retries > 0 {
-            let random = rng.next_u32();
-            self.num_retries -= 1;
-            let len = self.channel_list.len();
-            // TODO non-compliant because the channel might be the same as the previously
-            // used channel?
-            Some(self.channel_list[random as usize % len])
-        } else {
-            None
-        }
-    }
-}
-
-/// Bitflags containing subbands that haven't yet been tried for a join attempt
-/// this round.
-#[derive(Clone)]
-struct AvailableSubbands(u16);
-
-impl AvailableSubbands {
-    const ALL_ENABLED: u16 = 0b111111111;
-
-    fn new() -> Self {
-        Self(Self::ALL_ENABLED)
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0 == 0
-    }
-
-    fn pop_next(&mut self) -> Option<u8> {
-        for bit in 0..=8 {
-            if (self.0 >> bit) & 1 == 1 {
-                self.0 &= !(1 << bit);
-                return Some(bit);
-            }
-        }
-        None
-    }
-
-    fn reset(&mut self) {
-        self.0 = Self::ALL_ENABLED;
-    }
-}
-
-impl Default for AvailableSubbands {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[derive(Default, Clone)]
-struct JoinChannels {
-    preferred_channels: Option<PreferredJoinChannels>,
-    // List of subbands that haven't already been tried.
-    available_subbands: AvailableSubbands,
-}
-
-impl JoinChannels {
-    /// Select a channel for a join attempt.
-    ///
-    /// ## RNG note:
-    ///
-    /// Uses 1 random number from the RNG.
-    fn select_channel(&mut self, rng: &mut impl RngCore) -> u8 {
-        // Early-return preferred channel if possible
-        if let Some(p) = self.preferred_channels.as_mut().and_then(|p| p.try_get_channel(rng)) {
-            return p;
-        }
-
-        if self.available_subbands.is_empty() {
-            self.available_subbands.reset();
-        }
-
-        // Unwrapping is ok because it should never be empty by this point
-        let subband = self.available_subbands.pop_next().unwrap();
-        8 * subband + (rng.next_u32() % 8) as u8
-    }
-
-    fn set_preferred(&mut self, preferred: heapless::Vec<u8, 16>, max_retries: usize) -> Self {
-        Self {
-            preferred_channels: Some(PreferredJoinChannels {
-                channel_list: preferred,
-                max_retries,
-                num_retries: max_retries,
-            }),
-            ..Default::default()
-        }
     }
 }
 
@@ -200,7 +89,7 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         // Reset the number of retries on the preferred channel list after a successful
         // join, in preparation for the next potential join attempt.
         if let Some(preferred) = &mut self.join_channels.preferred_channels {
-            preferred.num_retries = preferred.max_retries;
+            preferred.clear_num_retries()
         }
 
         if let Some(CfList::FixedChannel(channel_mask)) = join_accept.c_f_list() {
@@ -316,30 +205,5 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
 
     fn get_rx_datarate(&self, tx_datarate: DR, frame: &Frame, window: &Window) -> Datarate {
         F::get_rx_datarate(tx_datarate, frame, window)
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    // we do this impl From<u8> for Channel for testing purposes only
-    // if we can avoid ever doing this in the real code, we can avoid the necessary error handling
-    fn channel_from_u8(x: u8) -> Channel {
-        unsafe { core::mem::transmute(x) }
-    }
-
-    #[test]
-    fn test_u8_from_channel() {
-        for i in 0..71 {
-            let channel = channel_from_u8(i);
-            // check a few by hand to make sure
-            match i {
-                0 => assert_eq!(channel, Channel::_0),
-                1 => assert_eq!(channel, Channel::_1),
-                71 => assert_eq!(channel, Channel::_71),
-                // the rest can be verified using the From<Channel> for u8 impl
-                _ => assert_eq!(i, u8::from(channel)),
-            }
-        }
     }
 }
