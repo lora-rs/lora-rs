@@ -176,6 +176,7 @@ macro_rules! impl_join_bias {
 }
 
 impl_join_bias!(US915);
+impl_join_bias!(AU915);
 
 #[cfg(test)]
 mod test {
