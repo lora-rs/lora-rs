@@ -22,6 +22,8 @@ const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625; // FXOSC (32 MHz) * 1000000
 /// Supported SX127x chip variants
 #[derive(Clone, Copy)]
 pub enum Sx127xVariant {
+    /// Semtech SX1272
+    Sx1272,
     /// Semtech SX1276
     // TODO: should we add variants for 77, 78 and 79 as well?)
     Sx1276,
