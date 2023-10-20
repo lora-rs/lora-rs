@@ -341,35 +341,30 @@ where
     }
 
     async fn set_modulation_params(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
-        let spreading_factor_val = spreading_factor_value(mdltn_params.spreading_factor)?;
-        let bandwidth_val = self.config.chip.bandwidth_value(mdltn_params.bandwidth)?;
+        let sf_val = spreading_factor_value(mdltn_params.spreading_factor)?;
+        let bw_val = self.config.chip.bandwidth_value(mdltn_params.bandwidth)?;
         let coding_rate_denominator_val = coding_rate_denominator_value(mdltn_params.coding_rate)?;
         debug!(
             "sf = {}, bw = {}, cr_denom = {}",
-            spreading_factor_val, bandwidth_val, coding_rate_denominator_val
+            sf_val, bw_val, coding_rate_denominator_val
         );
-        let mut ldro_agc_auto_flags = 0x00u8; // LDRO and AGC Auto both off
-        if mdltn_params.low_data_rate_optimize != 0 {
-            ldro_agc_auto_flags = 0x08u8; // LDRO on and AGC Auto off
-        }
-
-        let mut optimize = 0xc3u8;
-        let mut threshold = 0x0au8;
-        if mdltn_params.spreading_factor == SpreadingFactor::_6 {
-            optimize = 0xc5u8;
-            threshold = 0x0cu8;
-        }
-        self.write_register(Register::RegDetectionOptimize, optimize, false)
-            .await?;
-        self.write_register(Register::RegDetectionThreshold, threshold, false)
-            .await?;
+        // Configure LoRa optimization (0x31) and detection threshold registers (0x37)
+        let (opt, thr) = match mdltn_params.spreading_factor {
+            SpreadingFactor::_6 => (0x05, 0x0c),
+            _ => (0x03, 0x0a),
+        };
+        let reg_val = self.read_register(Register::RegDetectionOptimize).await?;
+        // Keep reserved bits [6:3] for RegDetectOptimize
+        let val = (reg_val & 0b0111_1000) | opt;
+        self.write_register(Register::RegDetectionOptimize, val, false).await?;
+        self.write_register(Register::RegDetectionThreshold, thr, false).await?;
 
         let mut config_2 = self.read_register(Register::RegModemConfig2).await?;
-        config_2 = (config_2 & 0x0fu8) | ((spreading_factor_val << 4) & 0xf0u8);
+        config_2 = (config_2 & 0x0fu8) | ((sf_val << 4) & 0xf0u8);
         self.write_register(Register::RegModemConfig2, config_2, false).await?;
 
         let mut config_1 = self.read_register(Register::RegModemConfig1).await?;
-        config_1 = (config_1 & 0x0fu8) | (bandwidth_val << 4);
+        config_1 = (config_1 & 0x0fu8) | (bw_val << 4);
         self.write_register(Register::RegModemConfig1, config_1, false).await?;
 
         let cr = coding_rate_denominator_val - 4;
@@ -377,6 +372,10 @@ where
         config_1 = (config_1 & 0xf1u8) | (cr << 1);
         self.write_register(Register::RegModemConfig1, config_1, false).await?;
 
+        let mut ldro_agc_auto_flags = 0x00u8; // LDRO and AGC Auto both off
+        if mdltn_params.low_data_rate_optimize != 0 {
+            ldro_agc_auto_flags = 0x08u8; // LDRO on and AGC Auto off
+        }
         let mut config_3 = self.read_register(Register::RegModemConfig3).await?;
         config_3 = (config_3 & 0xf3u8) | ldro_agc_auto_flags;
         self.write_register(Register::RegModemConfig3, config_3, false).await
