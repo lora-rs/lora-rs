@@ -31,10 +31,32 @@ const SX126X_MAX_LORA_SYMB_NUM_TIMEOUT: u8 = 248;
 // Time required for the TCXO to wakeup [ms].
 const BRD_TCXO_WAKEUP_TIME: u32 = 10;
 
+/// Supported SX126x chip variants
+#[derive(Clone, PartialEq)]
+pub enum Sx126xVariant {
+    /// Semtech SX1261
+    Sx1261,
+    /// Semtech SX1261
+    Sx1262,
+    /// STM32WL System-On-Chip with SX126x-based sub-GHz radio
+    Stm32wl, // XXX: Drop and switch to board-specific configuration?
+             // STM32 manuals don't really specify which sx126x chip is used.
+             // Original code in set_tx_power_and_ramp_time assumes Sx1262-specific power rates
+}
+
+/// Configuration for SX126x-based boards
+pub struct Config {
+    /// LoRa chip variant on this board
+    pub chip: Sx126xVariant,
+    /// Configuration for TCXO and its voltage selection
+    pub txco_ctrl: Option<TcxoCtrlVoltage>,
+}
+
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
 pub struct SX1261_2<SPI, IV> {
     board_type: BoardType,
     intf: SpiInterface<SPI, IV>,
+    config: Config,
 }
 
 impl<SPI, IV> SX1261_2<SPI, IV>
@@ -43,10 +65,14 @@ where
     IV: InterfaceVariant,
 {
     /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
-    pub fn new(board_type: BoardType, spi: SPI, mut iv: IV) -> Self {
+    pub fn new(board_type: BoardType, spi: SPI, mut iv: IV, config: Config) -> Self {
         iv.set_board_type(board_type);
         let intf = SpiInterface::new(spi, iv);
-        Self { board_type, intf }
+        Self {
+            board_type,
+            intf,
+            config,
+        }
     }
 
     // Utility functions
@@ -233,7 +259,7 @@ where
 
     // Use DIO2 to control an RF Switch, depending on the board type.
     async fn init_rf_switch(&mut self) -> Result<(), RadioError> {
-        if self.board_type != BoardType::Stm32wlSx1262 {
+        if self.config.chip != Sx126xVariant::Stm32wl {
             let op_code_and_indicator = [OpCode::SetRFSwitchMode.value(), true as u8];
             self.intf.write(&op_code_and_indicator, false).await?;
         }
@@ -289,30 +315,19 @@ where
     }
 
     async fn set_oscillator(&mut self) -> Result<(), RadioError> {
-        // voltage used to control the TCXO on/off from DIO3
-        let voltage = match self.board_type {
-            BoardType::CustomBoard | BoardType::Stm32l0Sx1276 => {
-                return Err(RadioError::BoardTypeUnsupportedForRadioKind);
-            }
-            BoardType::Rak3172Sx1262 => {
-                // uses XTAL instead of TCXO
-                return Ok(());
-            }
-            BoardType::GenericSx1261
-            | BoardType::RpPicoWaveshareSx1262
-            | BoardType::Rak4631Sx1262
-            | BoardType::Stm32wlSx1262 => TcxoCtrlVoltage::Ctrl1V7,
-            BoardType::HeltecWifiLoraV31262 => TcxoCtrlVoltage::Ctrl1V8,
-        };
-        let timeout = BRD_TCXO_WAKEUP_TIME << 6; // duration allowed for TCXO to reach 32MHz
-        let op_code_and_tcxo_control = [
-            OpCode::SetTCXOMode.value(),
-            voltage.value() & 0x07,
-            Self::timeout_1(timeout),
-            Self::timeout_2(timeout),
-            Self::timeout_3(timeout),
-        ];
-        self.intf.write(&op_code_and_tcxo_control, false).await
+        if let Some(voltage) = self.config.txco_ctrl {
+            let timeout = BRD_TCXO_WAKEUP_TIME << 6; // duration allowed for TCXO to reach 32MHz
+            let op_code_and_tcxo_control = [
+                OpCode::SetTCXOMode.value(),
+                voltage.value() & 0x07,
+                Self::timeout_1(timeout),
+                Self::timeout_2(timeout),
+                Self::timeout_3(timeout),
+            ];
+            self.intf.write(&op_code_and_tcxo_control, false).await?;
+        }
+
+        Ok(())
     }
 
     // Set the power regulators operating mode to DC_DC.  Using only LDO implies that the Rx/Tx current is doubled.
@@ -355,8 +370,9 @@ where
             false => RampTime::Ramp200Us, // for instance, on initialization
         };
 
-        let chip_type: ChipType = self.board_type.into();
-        if chip_type == ChipType::Sx1261 {
+        // TODO: Switch to match so all chip variants are covered
+        let chip_type = &self.config.chip;
+        if chip_type == &Sx126xVariant::Sx1261 {
             if !(-17..=15).contains(&output_power) {
                 return Err(RadioError::InvalidOutputPower);
             }
@@ -812,7 +828,8 @@ where
         self.intf.write(&op_code_and_masks, false).await
     }
 
-    /// Process the radio IRQ.  Log unexpected interrupts, but only bail out on timeout.  Packets from other devices can cause unexpected interrupts.
+    /// Process the radio IRQ. Log unexpected interrupts, but only bail out on timeout.
+    /// Packets from other devices can cause unexpected interrupts.
     async fn process_irq(
         &mut self,
         radio_mode: RadioMode,
@@ -965,8 +982,10 @@ where
     /// The random numbers produced by the generator do not have a uniform or Gaussian distribution.
     /// If uniformity is needed, perform appropriate software post-processing.
     async fn get_random_number(&mut self) -> Result<u32, RadioError> {
-        // The stm32wl often returns 0 on the first random number generation operation.  Documentation for the stm32wl does not recommend LNA register modification.
-        if self.board_type == BoardType::Stm32wlSx1262 {
+        // The stm32wl often returns 0 on the first random number generation operation.
+        // Documentation for the stm32wl does not recommend LNA register modification.
+        // XXX: Ideally this should result in a compile-time error...
+        if self.config.chip == Sx126xVariant::Stm32wl {
             return Err(RadioError::RngUnsupported);
         }
         self.set_irq_params(None).await?;

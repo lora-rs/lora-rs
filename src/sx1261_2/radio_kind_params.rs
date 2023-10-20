@@ -208,7 +208,6 @@ impl CalibrationParams {
 }
 
 #[derive(Clone, Copy)]
-#[allow(dead_code)]
 pub enum TcxoCtrlVoltage {
     Ctrl1V6 = 0x00,
     Ctrl1V7 = 0x01,
