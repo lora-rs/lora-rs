@@ -31,7 +31,6 @@ pub struct Config {
 
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
 pub struct SX1276_7_8_9<SPI, IV> {
-    board_type: BoardType,
     intf: SpiInterface<SPI, IV>,
     _config: Config,
 }
@@ -42,10 +41,9 @@ where
     IV: InterfaceVariant,
 {
     /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
-    pub fn new(board_type: BoardType, spi: SPI, mut iv: IV, _config: Config) -> Self {
-        iv.set_board_type(board_type);
+    pub fn new(spi: SPI, iv: IV, _config: Config) -> Self {
         let intf = SpiInterface::new(spi, iv);
-        Self { board_type, intf, _config }
+        Self { intf, _config }
     }
 
     // Utility functions
@@ -91,10 +89,6 @@ where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
-    fn get_board_type(&self) -> BoardType {
-        self.board_type
-    }
-
     fn create_modulation_params(
         &self,
         spreading_factor: SpreadingFactor,

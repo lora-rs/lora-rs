@@ -52,24 +52,6 @@ pub struct PacketStatus {
     pub snr: i16,
 }
 
-/// LoRa boards supported by this crate.
-/// In addition, custom boards (possibly proprietary) can be supported by using the custom board and chip types and
-/// external implementations of the RadioKind and (in some cases) InterfaceVariant traits.  For instance:
-/// let iv = ExternalInterfaceVariantImpl::new(..params...)
-/// LoRa::new(ExternalRadioKindImpl::new(BoardType::CustomBoard, spi, iv), ...other_params...)
-#[derive(Clone, Copy, PartialEq)]
-#[allow(missing_docs)]
-pub enum BoardType {
-    CustomBoard,
-    GenericSx1261, // placeholder for Sx1261-specific features
-    HeltecWifiLoraV31262,
-    RpPicoWaveshareSx1262,
-    Rak4631Sx1262,
-    Rak3172Sx1262,
-    Stm32l0Sx1276,
-    Stm32wlSx1262,
-}
-
 /// The state of the radio
 #[derive(Clone, Copy, defmt::Format, PartialEq)]
 #[allow(missing_docs)]

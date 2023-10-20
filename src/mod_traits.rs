@@ -5,8 +5,6 @@ use crate::mod_params::*;
 /// Functions implemented for an embedded framework for an MCU/LoRa chip combination
 /// to allow this crate to control the LoRa chip.
 pub trait InterfaceVariant {
-    /// Set the LoRa board type
-    fn set_board_type(&mut self, board_type: BoardType);
     /// Reset the LoRa chip
     async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError>;
     /// Wait for the LoRa chip to become available for an operation
@@ -42,8 +40,6 @@ pub enum IrqState {
 /// Functions implemented for a specific kind of LoRa chip, called internally by the outward facing
 /// LoRa physical layer API
 pub trait RadioKind {
-    /// Get the specific type of the LoRa board (for example, Stm32wlSx1262)
-    fn get_board_type(&self) -> BoardType;
     /// Create modulation parameters specific to the LoRa chip kind and type
     fn create_modulation_params(
         &self,
