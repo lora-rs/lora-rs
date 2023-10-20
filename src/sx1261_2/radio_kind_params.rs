@@ -35,6 +35,10 @@ impl IrqMask {
     pub fn value(self) -> u16 {
         self as u16
     }
+
+    pub fn is_set_in(self, mask: u16) -> bool {
+        self.value() & mask == self.value()
+    }
 }
 
 #[derive(Clone, Copy)]

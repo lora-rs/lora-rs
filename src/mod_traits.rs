@@ -25,6 +25,24 @@ pub trait InterfaceVariant {
     async fn disable_rf_switch(&mut self) -> Result<(), RadioError>;
 }
 
+/// Specifies an IRQ processing state to run the loop to
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TargetIrqState {
+    /// Runs the loop until after the preamble has been received
+    PreambleReceived,
+    /// Runs the loop until the operation is fully complete
+    Done,
+}
+
+/// An actual operation state, including some details where necessary
+#[derive(Clone, Copy)]
+pub enum IrqState {
+    /// Preamble has been received
+    PreambleReceived,
+    /// The RX operation is complete
+    RxDone(u8, PacketStatus),
+}
+
 /// Functions implemented for a specific kind of LoRa chip, called internally by the outward facing
 /// LoRa physical layer API
 pub trait RadioKind {
@@ -122,10 +140,11 @@ pub trait RadioKind {
         &mut self,
         radio_mode: RadioMode,
         rx_continuous: bool,
+        target_rx_state: TargetIrqState,
         delay: &mut impl DelayUs,
         polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
-    ) -> Result<(), RadioError>;
+    ) -> Result<TargetIrqState, RadioError>;
     /// Set the LoRa chip into the TxContinuousWave mode
     async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError>;
 }

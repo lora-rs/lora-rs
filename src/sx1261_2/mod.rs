@@ -6,6 +6,7 @@ use embedded_hal_async::spi::*;
 use radio_kind_params::*;
 
 use crate::mod_params::*;
+use crate::mod_traits::TargetIrqState;
 use crate::{InterfaceVariant, RadioKind, SpiInterface};
 
 // Syncwords for public and private networks
@@ -822,10 +823,11 @@ where
         &mut self,
         radio_mode: RadioMode,
         rx_continuous: bool,
+        target_rx_state: TargetIrqState,
         delay: &mut impl DelayUs,
         polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
-    ) -> Result<(), RadioError> {
+    ) -> Result<TargetIrqState, RadioError> {
         let mut iteration_guard: u32 = 0;
         if polling_timeout_in_ms.is_some() {
             iteration_guard = polling_timeout_in_ms.unwrap();
@@ -880,7 +882,7 @@ where
             if radio_mode == RadioMode::Transmit {
                 if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
                     debug!("TxDone in radio mode {}", radio_mode);
-                    return Ok(());
+                    return Ok(TargetIrqState::Done);
                 }
                 if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
                     debug!("RxTxTimeout in radio mode {}", radio_mode);
@@ -927,7 +929,12 @@ where
                         ];
                         self.intf.write(&[&register_and_evt_clear], false).await?;
                     }
-                    return Ok(());
+                    return Ok(TargetIrqState::Done);
+                }
+                if target_rx_state == TargetIrqState::PreambleReceived
+                    && (IrqMask::PreambleDetected.is_set_in(irq_flags) || IrqMask::HeaderValid.is_set_in(irq_flags))
+                {
+                    return Ok(TargetIrqState::PreambleReceived);
                 }
                 if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
                     debug!("RxTxTimeout in radio mode {}", radio_mode);
@@ -941,7 +948,7 @@ where
                     *(cad_activity_detected.unwrap()) =
                         (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
                 }
-                return Ok(());
+                return Ok(TargetIrqState::Done);
             }
 
             // if an interrupt occurred for other than an error or operation completion, loop to wait again

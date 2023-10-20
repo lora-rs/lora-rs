@@ -209,16 +209,27 @@ where
         self.radio_kind.do_tx(timeout_in_ms).await?;
         match self
             .radio_kind
-            .process_irq(self.radio_mode, self.rx_continuous, &mut self.delay, None, None)
+            .process_irq(
+                self.radio_mode,
+                self.rx_continuous,
+                TargetIrqState::Done,
+                &mut self.delay,
+                None,
+                None,
+            )
             .await
         {
-            Ok(()) => Ok(()),
+            Ok(TargetIrqState::Done) => {
+                self.radio_mode = RadioMode::Standby;
+                Ok(())
+            }
             Err(err) => {
                 self.radio_kind.ensure_ready(self.radio_mode).await?;
                 self.radio_kind.set_standby().await?;
                 self.radio_mode = RadioMode::Standby;
                 Err(err)
             }
+            Ok(_) => unreachable!(),
         }
     }
 
@@ -290,22 +301,39 @@ where
         rx_pkt_params: &PacketParams,
         receiving_buffer: &mut [u8],
     ) -> Result<(u8, PacketStatus), RadioError> {
+        let IrqState::RxDone(len, status) = self.rx_until_state(rx_pkt_params, receiving_buffer, TargetIrqState::Done).await? else {
+            unreachable!();
+        };
+        Ok((len, status))
+    }
+
+    /// Obtain the results of a read operation
+    pub async fn rx_until_state(
+        &mut self,
+        rx_pkt_params: &PacketParams,
+        receiving_buffer: &mut [u8],
+        target_rx_state: TargetIrqState,
+    ) -> Result<IrqState, RadioError> {
         match self
             .radio_kind
             .process_irq(
                 self.radio_mode,
                 self.rx_continuous,
+                target_rx_state,
                 &mut self.delay,
                 self.polling_timeout_in_ms,
                 None,
             )
             .await
         {
-            Ok(()) => {
-                let received_len = self.radio_kind.get_rx_payload(rx_pkt_params, receiving_buffer).await?;
-                let rx_pkt_status = self.radio_kind.get_rx_packet_status().await?;
-                Ok((received_len, rx_pkt_status))
-            }
+            Ok(actual_state) => match actual_state {
+                TargetIrqState::PreambleReceived => Ok(IrqState::PreambleReceived),
+                TargetIrqState::Done => {
+                    let received_len = self.radio_kind.get_rx_payload(rx_pkt_params, receiving_buffer).await?;
+                    let rx_pkt_status = self.radio_kind.get_rx_packet_status().await?;
+                    Ok(IrqState::RxDone(received_len, rx_pkt_status))
+                }
+            },
             Err(err) => {
                 // if in rx continuous mode, allow the caller to determine whether to keep receiving
                 if !self.rx_continuous {
@@ -352,19 +380,21 @@ where
             .process_irq(
                 self.radio_mode,
                 self.rx_continuous,
+                TargetIrqState::Done,
                 &mut self.delay,
                 None,
                 Some(&mut cad_activity_detected),
             )
             .await
         {
-            Ok(()) => Ok(cad_activity_detected),
+            Ok(TargetIrqState::Done) => Ok(cad_activity_detected),
             Err(err) => {
                 self.radio_kind.ensure_ready(self.radio_mode).await?;
                 self.radio_kind.set_standby().await?;
                 self.radio_mode = RadioMode::Standby;
                 Err(err)
             }
+            Ok(_) => unreachable!(),
         }
     }
 
