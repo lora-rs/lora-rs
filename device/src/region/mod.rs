@@ -32,26 +32,19 @@ pub struct Configuration {
     receive_delay2: u32,
 }
 
-// This datarate type is public to the device client
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DR {
-    _0 = 0,
-    _1 = 1,
-    _2 = 2,
-    _3 = 3,
-    _4 = 4,
-    _5 = 5,
-    _6 = 6,
-    _7 = 7,
-    _8 = 8,
-    _9 = 9,
-    _10 = 10,
-    _11 = 11,
-    _12 = 12,
-    _13 = 13,
-    _14 = 14,
-    _15 = 15,
-}
+seq_macro::seq!(
+    N in 0..=15 {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        #[repr(u8)]
+        /// A restricted data rate type that exposes the number of variants to only what _may_ be
+        /// potentially be possible. Note that not all data rates are valid in all regions.
+        pub enum DR {
+            #(
+                _~N = N,
+            )*
+        }
+    }
+);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
