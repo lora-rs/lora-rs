@@ -29,6 +29,24 @@ impl From<Channel> for u8 {
     }
 }
 
+seq_macro::seq!(
+    N in 1..=8 {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        #[repr(usize)]
+        pub enum Subband {
+            #(
+                _~N,
+            )*
+        }
+    }
+);
+
+impl From<Subband> for usize {
+    fn from(value: Subband) -> Self {
+        value as usize
+    }
+}
+
 #[derive(Default, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct FixedChannelPlan<const NUM_DR: usize, F: FixedChannelRegion<NUM_DR>> {
@@ -41,14 +59,10 @@ pub(crate) struct FixedChannelPlan<const NUM_DR: usize, F: FixedChannelRegion<NU
 impl<const D: usize, F: FixedChannelRegion<D>> FixedChannelPlan<D, F> {
     pub fn set_preferred_join_channels(
         &mut self,
-        preferred_channels: &[Channel],
+        preferred_channels: ChannelMask<9>,
         num_retries: usize,
     ) {
-        let mut channel_vec = heapless::Vec::new();
-        for chan in preferred_channels.iter().map(|c| *c as u8) {
-            channel_vec.push(chan).unwrap();
-        }
-        self.join_channels.set_preferred(channel_vec, num_retries);
+        self.join_channels.set_preferred(preferred_channels, num_retries);
     }
 
     pub fn remove_preferred_join_channels(&mut self) {

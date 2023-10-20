@@ -1,6 +1,7 @@
 use super::*;
 
 #[derive(Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct JoinChannels {
     pub(crate) preferred_channels: Option<PreferredJoinChannels>,
     // List of subbands that haven't already been tried.
@@ -8,8 +9,9 @@ pub(crate) struct JoinChannels {
 }
 
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct PreferredJoinChannels {
-    channel_list: heapless::Vec<u8, 16>,
+    channel_list: ChannelMask<9>,
     // Number representing the maximum number of retries allowed using the preferred channels list,
     max_retries: usize,
     // Decrementing number representing how many tries we have left with the specified list before
@@ -24,12 +26,18 @@ impl PreferredJoinChannels {
 
     fn try_get_channel(&mut self, rng: &mut impl RngCore) -> Option<u8> {
         if self.num_retries > 0 {
-            let random = rng.next_u32();
-            self.num_retries -= 1;
-            let len = self.channel_list.len();
+            let mut random = (rng.next_u32() & 0b111111) as usize;
+            loop {
+                match self.channel_list.is_enabled(random) {
+                    Ok(true) => break,
+                    Ok(false) | Err(_) => {
+                        random = (rng.next_u32() & 0b111111) as usize;
+                    }
+                }
+            }
             // TODO non-compliant because the channel might be the same as the previously
             // used channel?
-            Some(self.channel_list[random as usize % len])
+            Some(self.channel_list.get_index(random))
         } else {
             None
         }
@@ -39,6 +47,7 @@ impl PreferredJoinChannels {
 /// Bitflags containing subbands that haven't yet been tried for a join attempt
 /// this round.
 #[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct AvailableSubbands(u16);
 
 impl AvailableSubbands {
@@ -96,7 +105,7 @@ impl JoinChannels {
 
     pub(crate) fn set_preferred(
         &mut self,
-        preferred: heapless::Vec<u8, 16>,
+        preferred: ChannelMask<9>,
         max_retries: usize,
     ) -> Self {
         Self {
@@ -108,17 +117,6 @@ impl JoinChannels {
             ..Default::default()
         }
     }
-}
-
-// Compiler trick needed to assert array length at compile time. Used in macro below.
-macro_rules! gen_assert {
-    ($t:ident, $c:expr) => {{
-        struct Check<const $t: usize>(usize);
-        impl<const $t: usize> Check<$t> {
-            const CHECK: () = assert!($c);
-        }
-        let _ = Check::<$t>::CHECK;
-    }};
 }
 
 /// This macro implements public functions relating to a fixed plan region. This is preferred to a
@@ -139,9 +137,9 @@ macro_rules! impl_join_bias {
             /// channel subset. This set of channels will be only be tried once; after which we will revert to trying to
             /// join with all channels enabled using a preset sequence. To specify a number of retries, use
             /// [`set_preferred_join_channels_and_noncompliant_retries`(Self::set_preferred_join_channels_and_noncompliant_retries).
-            pub fn set_preferred_join_channels<const N: usize>(
+            pub fn set_preferred_join_channels(
                 &mut self,
-                preferred_channels: &[Channel; N],
+                preferred_channels: ChannelMask<9>
             ) {
                 self.set_preferred_join_channels_and_noncompliant_retries(preferred_channels, 1)
             }
@@ -159,12 +157,11 @@ macro_rules! impl_join_bias {
             /// with a channel bias, and the network is configured to use a
             /// strictly different set of channels than the ones you provide, the
             /// network will NEVER be joined.
-            pub fn set_preferred_join_channels_and_noncompliant_retries<const N: usize>(
+            pub fn set_preferred_join_channels_and_noncompliant_retries(
                 &mut self,
-                preferred_channels: &[Channel; N],
+                preferred_channels: ChannelMask<9>,
                 num_retries: usize,
             ) {
-                gen_assert!(N, N <= 16);
                 self.0.set_preferred_join_channels(preferred_channels, num_retries)
             }
 
