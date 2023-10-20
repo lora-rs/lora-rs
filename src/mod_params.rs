@@ -70,34 +70,6 @@ pub enum BoardType {
     Stm32wlSx1262,
 }
 
-/// LoRa chips supported by this crate
-#[derive(Clone, Copy, PartialEq)]
-#[allow(missing_docs)]
-pub enum ChipType {
-    CustomChip,
-    Sx1261,
-    Sx1262,
-    Sx1276,
-    Sx1277,
-    Sx1278,
-    Sx1279,
-}
-
-impl From<BoardType> for ChipType {
-    fn from(board_type: BoardType) -> Self {
-        match board_type {
-            BoardType::CustomBoard => ChipType::CustomChip,
-            BoardType::GenericSx1261 => ChipType::Sx1261,
-            BoardType::HeltecWifiLoraV31262 => ChipType::Sx1262,
-            BoardType::RpPicoWaveshareSx1262 => ChipType::Sx1262,
-            BoardType::Rak4631Sx1262 => ChipType::Sx1262,
-            BoardType::Rak3172Sx1262 => ChipType::Sx1262,
-            BoardType::Stm32l0Sx1276 => ChipType::Sx1276,
-            BoardType::Stm32wlSx1262 => ChipType::Sx1262,
-        }
-    }
-}
-
 /// The state of the radio
 #[derive(Clone, Copy, defmt::Format, PartialEq)]
 #[allow(missing_docs)]
