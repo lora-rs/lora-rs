@@ -12,24 +12,6 @@ pub(crate) use au915::AU915;
 pub(crate) use us915::US915;
 
 seq_macro::seq!(
-    N in 0..=71 {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        #[repr(u8)]
-        pub enum Channel {
-            #(
-                _~N = N,
-            )*
-        }
-    }
-);
-
-impl From<Channel> for u8 {
-    fn from(value: Channel) -> Self {
-        value as u8
-    }
-}
-
-seq_macro::seq!(
     N in 1..=8 {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -90,7 +72,7 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     ) {
         // Reset the join channels state
-        self.join_channels.clear();
+        self.join_channels.reset();
 
         if let Some(CfList::FixedChannel(channel_mask)) = join_accept.c_f_list() {
             self.channel_mask = channel_mask;

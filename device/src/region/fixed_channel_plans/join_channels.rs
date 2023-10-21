@@ -26,7 +26,7 @@ impl JoinChannels {
     }
 
     /// To be called after a join accept is received. Resets state for the next join attempt.
-    pub(crate) fn clear(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.num_retries = 0;
         self.available_channels = AvailableChannels::default();
     }
@@ -52,7 +52,6 @@ impl JoinChannels {
     }
 }
 
-
 #[derive(Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct AvailableChannels {
@@ -76,6 +75,7 @@ impl AvailableChannels {
         if self.is_exhausted() {
             self.reset();
         }
+
         let channel = self.get_next_channel_inner(rng);
         // mark the channel invalid for future selection
         self.data.set_channel(channel, false);
@@ -110,7 +110,7 @@ impl AvailableChannels {
                             entropy_used = 0;
                         }
                         entropy >>= 3;
-                        entropy_used +=1;
+                        entropy_used += 1;
                         channel = (entropy & 0b111) + bank * 8;
                     }
                 }
@@ -179,26 +179,6 @@ impl_join_bias!(AU915);
 #[cfg(test)]
 mod test {
     use super::*;
-    // we do this impl From<u8> for Channel for testing purposes only
-    // if we can avoid ever doing this in the real code, we can avoid the necessary error handling
-    fn channel_from_u8(x: u8) -> Channel {
-        unsafe { core::mem::transmute(x) }
-    }
-
-    #[test]
-    fn test_u8_from_channel() {
-        for i in 0..71 {
-            let channel = channel_from_u8(i);
-            // check a few by hand to make sure
-            match i {
-                0 => assert_eq!(channel, Channel::_0),
-                1 => assert_eq!(channel, Channel::_1),
-                71 => assert_eq!(channel, Channel::_71),
-                // the rest can be verified using the From<Channel> for u8 impl
-                _ => assert_eq!(i, u8::from(channel)),
-            }
-        }
-    }
 
     #[test]
     fn test_join_channels_standard() {
