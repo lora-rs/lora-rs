@@ -17,11 +17,10 @@ pub(crate) use dynamic_channel_plans::EU433;
 pub(crate) use dynamic_channel_plans::EU868;
 pub(crate) use dynamic_channel_plans::IN865;
 
-pub(crate) use fixed_channel_plans::AU915;
-pub(crate) use fixed_channel_plans::US915;
-
 mod dynamic_channel_plans;
 mod fixed_channel_plans;
+
+pub use fixed_channel_plans::{Subband, AU915, US915};
 
 #[derive(Clone)]
 pub struct Configuration {

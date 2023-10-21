@@ -134,6 +134,7 @@ impl AvailableChannels {
 macro_rules! impl_join_bias {
     ($region:ident) => {
         impl $region {
+            /// Create this struct directly if you want to specify a subband on which to bias the join process.
             pub fn new() -> Self {
                 Self::default()
             }
@@ -151,10 +152,10 @@ macro_rules! impl_join_bias {
             /// try is attempted.
             ///
             /// This method is similar to `set_join_bias`, but allows you to specify a potentially
-            /// non-compliant amount of times your preferred join channels should be attempted.
+            /// non-compliant amount of times your preferred join subband should be attempted.
             ///
             /// It is recommended to set a low number (ie, < 10) of join retries using the
-            /// preferred channels. The reason for this is if you *only* try to join
+            /// preferred subband. The reason for this is if you *only* try to join
             /// with a channel bias, and the network is configured to use a
             /// strictly different set of channels than the ones you provide, the
             /// network will NEVER be joined.

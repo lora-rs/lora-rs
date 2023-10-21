@@ -8,11 +8,13 @@ use join_channels::JoinChannels;
 mod au915;
 mod us915;
 
-pub(crate) use au915::AU915;
-pub(crate) use us915::US915;
+pub use au915::AU915;
+pub use us915::US915;
 
 seq_macro::seq!(
     N in 1..=8 {
+        /// Subband definitions used to bias the join process. Each subband holds 8 channels. Ie, subband 1 contains
+        /// channels 0-7, subband 2 channels 8-15, etc.
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[repr(usize)]
