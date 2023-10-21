@@ -2,8 +2,8 @@ use super::*;
 use core::marker::PhantomData;
 use lorawan::maccommands::ChannelMask;
 
-mod join_bias;
-use join_bias::JoinChannels;
+mod join_channels;
+use join_channels::JoinChannels;
 
 mod au915;
 mod us915;
@@ -17,7 +17,7 @@ seq_macro::seq!(
         #[repr(u8)]
         pub enum Channel {
             #(
-                _~N,
+                _~N = N,
             )*
         }
     }
@@ -26,6 +26,25 @@ seq_macro::seq!(
 impl From<Channel> for u8 {
     fn from(value: Channel) -> Self {
         value as u8
+    }
+}
+
+seq_macro::seq!(
+    N in 1..=8 {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[repr(usize)]
+        pub enum Subband {
+            #(
+                _~N = N,
+            )*
+        }
+    }
+);
+
+impl From<Subband> for usize {
+    fn from(value: Subband) -> Self {
+        value as usize
     }
 }
 
@@ -39,22 +58,6 @@ pub(crate) struct FixedChannelPlan<const NUM_DR: usize, F: FixedChannelRegion<NU
 }
 
 impl<const D: usize, F: FixedChannelRegion<D>> FixedChannelPlan<D, F> {
-    pub fn set_preferred_join_channels(
-        &mut self,
-        preferred_channels: &[Channel],
-        num_retries: usize,
-    ) {
-        let mut channel_vec = heapless::Vec::new();
-        for chan in preferred_channels.iter().map(|c| *c as u8) {
-            channel_vec.push(chan).unwrap();
-        }
-        self.join_channels.set_preferred(channel_vec, num_retries);
-    }
-
-    pub fn remove_preferred_join_channels(&mut self) {
-        self.join_channels.preferred_channels = None;
-    }
-
     pub fn set_125k_channels(&mut self, enabled: bool) {
         let mask = if enabled {
             0xFF
@@ -86,11 +89,8 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         &mut self,
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     ) {
-        // Reset the number of retries on the preferred channel list after a successful
-        // join, in preparation for the next potential join attempt.
-        if let Some(preferred) = &mut self.join_channels.preferred_channels {
-            preferred.clear_num_retries()
-        }
+        // Reset the join channels state
+        self.join_channels.clear();
 
         if let Some(CfList::FixedChannel(channel_mask)) = join_accept.c_f_list() {
             self.channel_mask = channel_mask;
@@ -141,34 +141,19 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
     ) -> (Datarate, u32) {
         match frame {
             Frame::Join => {
-                // For the join frame, the channel is selected using the following logic:
-                //
-                // * If favorite channels are specified, a channel from these will be selected
-                //   at random until the
-                // number of retries runs out (1 by default).
-                // * Otherwise, a random channel will be selected from each group of 8 channels
-                //   (including 500 kHz
-                // channels) until every group of 8 has been tried, at which point every group
-                // will be attempted again.
-                //
-                // As per RP002-1.0.4, all join attempts are made using DR0 for 125 kHz
-                // channels, and DR4 for 500 kHz channels.
-                // TODO: contradicting data rates for US915 vs AU915?
-                let channel = self.join_channels.select_channel(rng);
+                let channel = self.join_channels.get_next_channel(rng);
                 let dr = if channel < 64 {
                     DR::_0
                 } else {
                     DR::_4
                 };
-                let datarate = F::datarates()[dr as usize].clone().unwrap();
-
-                (datarate, channel as u32)
+                let data_rate = F::datarates()[dr as usize].clone().unwrap();
+                (data_rate, F::uplink_channels()[channel])
             }
-
             Frame::Data => {
                 // For the data frame, the datarate impacts which channel sets we can choose
                 // from. If the datarate bandwidth is 500 kHz, we must use
-                // channels 64-71 Else, we must use 0-63
+                // channels 64-71. Else, we must use 0-63
                 let datarate = F::datarates()[datarate as usize].clone().unwrap();
                 if datarate.bandwidth == Bandwidth::_500KHz {
                     let mut channel = (rng.next_u32() & 0b111) as u8;
