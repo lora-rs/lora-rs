@@ -1,5 +1,6 @@
 #![allow(clippy::upper_case_acronyms)]
-// generally, we allow upper_case_acronyms to make it match the LoRaWAN naming conventions better
+// generally, we allow upper_case_acronyms to make it match the LoRaWAN naming
+// conventions better
 use lorawan::{maccommands::ChannelMask, parser::CfList};
 
 use super::RngCore;
@@ -16,11 +17,10 @@ pub(crate) use dynamic_channel_plans::EU433;
 pub(crate) use dynamic_channel_plans::EU868;
 pub(crate) use dynamic_channel_plans::IN865;
 
-pub(crate) use fixed_channel_plans::AU915;
-pub(crate) use fixed_channel_plans::US915;
-
 mod dynamic_channel_plans;
 mod fixed_channel_plans;
+
+pub use fixed_channel_plans::{Subband, AU915, US915};
 
 #[derive(Clone)]
 pub struct Configuration {
@@ -31,26 +31,19 @@ pub struct Configuration {
     receive_delay2: u32,
 }
 
-// This datarate type is public to the device client
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DR {
-    _0 = 0,
-    _1 = 1,
-    _2 = 2,
-    _3 = 3,
-    _4 = 4,
-    _5 = 5,
-    _6 = 6,
-    _7 = 7,
-    _8 = 8,
-    _9 = 9,
-    _10 = 10,
-    _11 = 11,
-    _12 = 12,
-    _13 = 13,
-    _14 = 14,
-    _15 = 15,
-}
+seq_macro::seq!(
+    N in 0..=15 {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        #[repr(u8)]
+        /// A restricted data rate type that exposes the number of variants to only what _may_ be
+        /// potentially be possible. Note that not all data rates are valid in all regions.
+        pub enum DR {
+            #(
+                _~N = N,
+            )*
+        }
+    }
+);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -93,6 +86,21 @@ impl State {
             Region::US915 => State::US915(US915::default()),
         }
     }
+
+    #[allow(dead_code)]
+    pub fn region(&self) -> Region {
+        match self {
+            Self::AS923_1(_) => Region::AS923_1,
+            Self::AS923_2(_) => Region::AS923_2,
+            Self::AS923_3(_) => Region::AS923_3,
+            Self::AS923_4(_) => Region::AS923_4,
+            Self::AU915(_) => Region::AU915,
+            Self::EU433(_) => Region::EU433,
+            Self::EU868(_) => Region::EU868,
+            Self::IN865(_) => Region::IN865,
+            Self::US915(_) => Region::US915,
+        }
+    }
 }
 
 // This datarate type is used internally for defining bandwidth/sf per region
@@ -119,11 +127,11 @@ macro_rules! mut_region_dispatch {
         State::AS923_2(state) => state.$t(),
         State::AS923_3(state) => state.$t(),
         State::AS923_4(state) => state.$t(),
-        State::AU915(state) => state.$t(),
+        State::AU915(state) => state.0.$t(),
         State::EU868(state) => state.$t(),
         State::EU433(state) => state.$t(),
         State::IN865(state) => state.$t(),
-        State::US915(state) => state.$t(),
+        State::US915(state) => state.0.$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
@@ -132,11 +140,11 @@ macro_rules! mut_region_dispatch {
         State::AS923_2(state) => state.$t($($arg)*),
         State::AS923_3(state) => state.$t($($arg)*),
         State::AS923_4(state) => state.$t($($arg)*),
-        State::AU915(state) => state.$t($($arg)*),
+        State::AU915(state) => state.0.$t($($arg)*),
         State::EU868(state) => state.$t($($arg)*),
         State::EU433(state) => state.$t($($arg)*),
         State::IN865(state) => state.$t($($arg)*),
-        State::US915(state) => state.$t($($arg)*),
+        State::US915(state) => state.0.$t($($arg)*),
     }
   };
 }
@@ -148,11 +156,11 @@ macro_rules! region_dispatch {
         State::AS923_2(state) => state.$t(),
         State::AS923_3(state) => state.$t(),
         State::AS923_4(state) => state.$t(),
-        State::AU915(state) => state.$t(),
+        State::AU915(state) => state.0.$t(),
         State::EU868(state) => state.$t(),
         State::EU433(state) => state.$t(),
         State::IN865(state) => state.$t(),
-        State::US915(state) => state.$t(),
+        State::US915(state) => state.0.$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
@@ -161,11 +169,11 @@ macro_rules! region_dispatch {
         State::AS923_2(state) => state.$t($($arg)*),
         State::AS923_3(state) => state.$t($($arg)*),
         State::AS923_4(state) => state.$t($($arg)*),
-        State::AU915(state) => state.$t($($arg)*),
+        State::AU915(state) => state.0.$t($($arg)*),
         State::EU868(state) => state.$t($($arg)*),
         State::EU433(state) => state.$t($($arg)*),
         State::IN865(state) => state.$t($($arg)*),
-        State::US915(state) => state.$t($($arg)*),
+        State::US915(state) => state.0.$t($($arg)*),
     }
   };
 }
@@ -185,8 +193,8 @@ impl Configuration {
         }
     }
 
-    // RECEIVE_DELAY2 is not configurable. LoRaWAN 1.0.3 Section 5.7: "The second reception slot
-    // opens one second after the first reception slot."
+    // RECEIVE_DELAY2 is not configurable. LoRaWAN 1.0.3 Section 5.7: "The second
+    // reception slot opens one second after the first reception slot."
     pub fn set_receive_delay1(&mut self, delay: u32) {
         self.receive_delay1 = delay;
         self.receive_delay2 = self.receive_delay1 + 1000;
@@ -286,6 +294,11 @@ impl Configuration {
 
     pub(crate) fn get_coding_rate(&self) -> CodingRate {
         region_dispatch!(self, get_coding_rate)
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn get_current_region(&self) -> super::region::Region {
+        self.state.region()
     }
 }
 

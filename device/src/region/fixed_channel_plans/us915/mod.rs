@@ -9,7 +9,29 @@ use datarates::*;
 const US_DBM: i8 = 21;
 const DEFAULT_RX2: u32 = 923_300_000;
 
-pub(crate) type US915 = FixedChannelPlan<14, US915Region>;
+/// State struct for the `US915` region. This struct may be created directly if you wish to fine-tune some parameters.
+/// At this time specifying a bias for the subband used during the join process is supported using
+/// [`set_join_bias`](Self::set_join_bias) and [`set_join_bias_and_noncompliant_retries`](Self::set_join_bias_and_noncompliant_retries)
+/// is suppored. This struct can then be turned into a [`Configuration`] as it implements [`Into<Configuration>`].
+///
+/// # Note:
+///
+/// Only [`US915`] and [`AU915`] can be created using this method, because they are the only ones which have
+/// parameters that may be fine-tuned at the region level. To create a [`Configuration`] for other regions, use
+/// [`Configuration::new`] and specify the region using the [`Region`] enum.
+///
+/// # Example: Setting up join bias
+///
+/// ```
+/// use lorawan_device::region::{Configuration, US915, Subband};
+///
+/// let mut us915 = US915::new();
+/// // Subband 2 is commonly used for The Things Network.
+/// us915.set_join_bias(Subband::_2);
+/// let configuration: Configuration = us915.into();
+/// ```
+#[derive(Default, Clone)]
+pub struct US915(pub(crate) FixedChannelPlan<14, US915Region>);
 
 #[derive(Default, Clone)]
 pub(crate) struct US915Region;

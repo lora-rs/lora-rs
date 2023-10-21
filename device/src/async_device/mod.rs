@@ -206,8 +206,9 @@ where
         self.datarate = datarate;
     }
 
-    /// Join the LoRaWAN network asynchronusly. The returned future completes when
-    /// the LoRaWAN network has been joined successfully, or an error has occured.
+    /// Join the LoRaWAN network asynchronusly. The returned future completes
+    /// when the LoRaWAN network has been joined successfully, or an error
+    /// has occured.
     ///
     /// Repeatedly calling join using OTAA will result in a new LoRaWAN session to be created.
     pub async fn join(&mut self, join_mode: &JoinMode) -> Result<(), Error<R::PhyError>> {
