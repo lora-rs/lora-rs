@@ -7,7 +7,7 @@ use heapless::Vec;
 pub mod radio;
 use radio::RadioBuffer;
 
-mod mac;
+pub mod mac;
 use mac::NetworkCredentials;
 
 pub mod region;

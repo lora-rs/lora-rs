@@ -16,6 +16,9 @@ mod otaa;
 use crate::radio::RfConfig;
 pub use otaa::NetworkCredentials;
 
+#[cfg(feature = "async")]
+use crate::async_device;
+
 pub(crate) mod uplink;
 
 #[derive(Copy, Clone, Debug)]
@@ -84,7 +87,7 @@ enum State {
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     NotJoined,
-    JoinFailed,
+    InvalidResponse(Response),
 }
 
 pub(crate) type Result<T = ()> = core::result::Result<T, Error>;
@@ -237,6 +240,7 @@ impl Mac {
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug)]
 pub enum Response {
     NoAck,
     SessionExpired,
@@ -262,18 +266,31 @@ impl From<Response> for crate::Response {
 }
 
 #[cfg(feature = "async")]
-impl From<Response> for crate::async_device::Response {
-    fn from(r: Response) -> Self {
+impl TryFrom<Response> for async_device::SendResponse {
+    type Error = Error;
+
+    fn try_from(r: Response) -> Result<async_device::SendResponse> {
         match r {
-            Response::SessionExpired => crate::async_device::Response::SessionExpired,
+            Response::SessionExpired => Ok(async_device::SendResponse::SessionExpired),
             Response::DownlinkReceived(fcnt) => {
-                crate::async_device::Response::DownlinkReceived(fcnt)
+                Ok(async_device::SendResponse::DownlinkReceived(fcnt))
             }
-            Response::NoAck => crate::async_device::Response::NoAck,
-            Response::NoJoinAccept => crate::async_device::Response::NoJoinAccept,
-            Response::JoinSuccess => crate::async_device::Response::JoinSuccess,
-            Response::NoUpdate => crate::async_device::Response::NoUpdate,
-            Response::RxComplete => crate::async_device::Response::RxComplete,
+            Response::NoAck => Ok(async_device::SendResponse::NoAck),
+            Response::RxComplete => Ok(async_device::SendResponse::RxComplete),
+            r => Err(Error::InvalidResponse(r)),
+        }
+    }
+}
+
+#[cfg(feature = "async")]
+impl TryFrom<Response> for async_device::JoinResponse {
+    type Error = Error;
+
+    fn try_from(r: Response) -> Result<async_device::JoinResponse> {
+        match r {
+            Response::NoJoinAccept => Ok(async_device::JoinResponse::NoJoinAccept),
+            Response::JoinSuccess => Ok(async_device::JoinResponse::JoinSuccess),
+            r => Err(Error::InvalidResponse(r)),
         }
     }
 }

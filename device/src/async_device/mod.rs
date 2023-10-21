@@ -2,11 +2,12 @@
 //! and allowing asynchronous radio implementations. Requires the `async` feature and `nightly`.
 use super::mac::Mac;
 
-use super::{
-    mac::{self, Frame, NetworkCredentials, Session, Window},
-    Downlink,
+use super::mac::{self, Frame, Window};
+pub use super::{
+    mac::{NetworkCredentials, Session},
+    region::{self, Region},
+    Downlink, JoinMode, SendData, Timings,
 };
-pub use super::{region, region::Region, JoinMode, SendData, Timings};
 use core::marker::PhantomData;
 use futures::{future::select, future::Either, pin_mut};
 use lorawan::{self, keys::CryptoFactory};
@@ -58,14 +59,17 @@ pub enum Error<R> {
 }
 
 #[derive(Debug)]
-pub enum Response {
-    JoinSuccess,
-    NoUpdate,
-    NoJoinAccept,
+pub enum SendResponse {
     DownlinkReceived(mac::FcntDown),
     SessionExpired,
     NoAck,
     RxComplete,
+}
+
+#[derive(Debug)]
+pub enum JoinResponse {
+    JoinSuccess,
+    NoJoinAccept,
 }
 
 impl<R> From<mac::Error> for Error<R> {
@@ -171,7 +175,7 @@ where
     /// the LoRaWAN network has been joined successfully, or an error has occurred.
     ///
     /// Repeatedly calling join using OTAA will result in a new LoRaWAN session to be created.
-    pub async fn join(&mut self, join_mode: &JoinMode) -> Result<Response, Error<R::PhyError>> {
+    pub async fn join(&mut self, join_mode: &JoinMode) -> Result<JoinResponse, Error<R::PhyError>> {
         match join_mode {
             JoinMode::OTAA { deveui, appeui, appkey } => {
                 let (tx_config, _) = self.mac.join_otaa::<C, Phy<R, G>, N>(
@@ -191,11 +195,11 @@ where
                 // Receive join response within RX window
                 self.timer.reset();
 
-                self.rx_with_timeout(&Frame::Join, ms).await
+                Ok(self.rx_with_timeout(&Frame::Join, ms).await?.try_into()?)
             }
             JoinMode::ABP { newskey, appskey, devaddr } => {
                 self.mac.join_abp(*newskey, *appskey, *devaddr);
-                Ok(Response::JoinSuccess)
+                Ok(JoinResponse::JoinSuccess)
             }
         }
     }
@@ -206,12 +210,12 @@ where
     /// The returned future completes when the data have been sent successfully and downlink data,
     /// if any, is available by calling take_downlink. Response::DownlinkReceived indicates a
     /// downlink is available.
-    async fn send(
+    pub async fn send(
         &mut self,
         data: &[u8],
         fport: u8,
         confirmed: bool,
-    ) -> Result<Response, Error<R::PhyError>> {
+    ) -> Result<SendResponse, Error<R::PhyError>> {
         // Prepare transmission buffer
         let (tx_config, _fcnt_up) = self.mac.send::<C, Phy<R, G>, N>(
             &mut self.phy,
@@ -228,7 +232,14 @@ where
 
         // Wait for received data within window
         self.timer.reset();
-        self.rx_with_timeout(&Frame::Data, ms).await
+        Ok(self.rx_with_timeout(&Frame::Data, ms).await?.try_into()?)
+    }
+
+    /// Take the downlink data from the device. This is typically called after a
+    /// `Response::DownlinkReceived` is returned from `send`. This call consumes the downlink
+    /// data. If no downlink data is available, `None` is returned.
+    pub fn take_downlink(&mut self) -> Option<Downlink> {
+        self.downlink.take()
     }
 
     /// Attempt to receive data within RX1 and RX2 windows. This function will populate the
@@ -238,7 +249,7 @@ where
         &mut self,
         frame: &Frame,
         window_delay: u32,
-    ) -> Result<Response, Error<R::PhyError>> {
+    ) -> Result<mac::Response, Error<R::PhyError>> {
         // The initial window configuration uses window 1 adjusted by window_delay and radio offset
         let rx1_start_delay = (self.mac.get_rx_delay(frame, &Window::_1) as i32
             + window_delay as i32
@@ -286,7 +297,7 @@ where
                             }
                             r => {
                                 self.phy.radio.low_power().await.map_err(Error::Radio)?;
-                                return Ok(r.into());
+                                return Ok(r);
                             }
                         }
                     }
@@ -333,13 +344,13 @@ where
                         }
                         r => {
                             self.phy.radio.low_power().await.map_err(Error::Radio)?;
-                            return Ok(r.into());
+                            return Ok(r);
                         }
                     }
                 }
                 RxWindowResponse::Timeout(_) => {
                     self.phy.radio.low_power().await.map_err(Error::Radio)?;
-                    return Ok(self.mac.rx2_complete().into());
+                    return Ok(self.mac.rx2_complete());
                 }
             };
         }
