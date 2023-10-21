@@ -33,7 +33,7 @@ async fn test_join_rx1() {
     radio.handle_rxtx(handle_join_request);
 
     // Await the device to return and verify state
-    if let Ok(Response::JoinSuccess) = async_device.await.unwrap() {
+    if let Ok(JoinResponse::JoinSuccess) = async_device.await.unwrap() {
         // NB: timer is armed twice (even if not fired twice)
         // because RX1 end is armed when packet is received
         assert_eq!(2, timer.get_armed_count().await);
@@ -84,7 +84,7 @@ async fn test_no_join_accept() {
 
     // Await the device to return and verify state
     let response = async_device.await.unwrap();
-    if let Ok(Response::NoJoinAccept) = response {
+    if let Ok(JoinResponse::NoJoinAccept) = response {
         assert_eq!(4, timer.get_armed_count().await);
     } else {
         panic!("Unexpected response: {response:?}");
@@ -106,7 +106,7 @@ async fn test_noise() {
     // Pass the join request handler
     radio.handle_rxtx(handle_join_request);
     // Await the device to return and verify state
-    let Ok(Response::JoinSuccess) = async_device.await.unwrap() else {
+    let Ok(JoinResponse::JoinSuccess) = async_device.await.unwrap() else {
         panic!();
     };
 }
@@ -138,7 +138,7 @@ async fn test_unconfirmed_uplink_no_downlink() {
     timer.fire().await;
 
     match async_device.await.unwrap() {
-        Ok(Response::RxComplete) => (),
+        Ok(SendResponse::RxComplete) => (),
         _ => panic!(),
     }
     assert!(*send_await_complete.lock().await);
@@ -171,7 +171,7 @@ async fn test_confirmed_uplink_no_ack() {
     timer.fire().await;
 
     match async_device.await.unwrap() {
-        Ok(Response::NoAck) => (),
+        Ok(SendResponse::NoAck) => (),
         _ => panic!(),
     }
     assert!(*send_await_complete.lock().await);
@@ -198,7 +198,7 @@ async fn test_confirmed_uplink_with_ack_rx1() {
     // Send a downlink with confirmation
     radio.handle_rxtx(handle_data_uplink_with_link_adr_req);
     match async_device.await.unwrap() {
-        Ok(Response::DownlinkReceived(_)) => (),
+        Ok(SendResponse::DownlinkReceived(_)) => (),
         _ => {
             panic!()
         }
@@ -232,7 +232,7 @@ async fn test_confirmed_uplink_with_ack_rx2() {
     radio.handle_rxtx(handle_data_uplink_with_link_adr_req);
 
     match async_device.await.unwrap() {
-        Ok(Response::DownlinkReceived(_)) => (),
+        Ok(SendResponse::DownlinkReceived(_)) => (),
         _ => {
             panic!()
         }
@@ -266,7 +266,7 @@ async fn test_link_adr_ans() {
     // Send a downlink with confirmation
     radio.handle_rxtx(handle_data_uplink_with_link_adr_ans);
     match async_device.await.unwrap() {
-        Ok(Response::DownlinkReceived(_)) => (),
+        Ok(SendResponse::DownlinkReceived(_)) => (),
         _ => {
             panic!()
         }
