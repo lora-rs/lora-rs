@@ -21,7 +21,6 @@ rustdoc-args = ["--cfg", "async"]
 lora-modulation = { version = ">=0.1.2", default-features = false }
 lorawan = { version = "0.7.4", path = "../encoding", default-features = false }
 heapless = "0.7"
-bitvec = { version = "1.0.1", default-features = false, features = ["atomic"] }
 generic-array = "0.14.2"
 defmt = { version = "0.3", optional = true }
 futures = { version = "0.3", default-features = false, optional = true }
