@@ -1,8 +1,5 @@
-pub(crate) mod types;
-pub use types::*;
-
 use super::TimestampMs;
-
+pub use crate::radio::*;
 pub use ::lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 
 #[derive(Debug)]
@@ -13,7 +10,7 @@ where
     TxRequest(TxConfig, &'a [u8]),
     RxRequest(RfConfig),
     CancelRx,
-    PhyEvent(R::PhyEvent),
+    Phy(R::PhyEvent),
 }
 
 #[derive(Debug)]
@@ -26,18 +23,7 @@ where
     Rxing,
     TxDone(TimestampMs),
     RxDone(RxQuality),
-    PhyResponse(R::PhyResponse),
-}
-
-#[derive(Debug)]
-pub enum Error<R> {
-    TxRequestDuringTx,
-    TxRequestDuringRx,
-    RxRequestDuringTx,
-    RxRequestDuringRx,
-    CancelRxWhileIdle,
-    CancelRxDuringTx,
-    PhyError(R),
+    Phy(R::PhyResponse),
 }
 
 use core::fmt;
@@ -51,7 +37,7 @@ pub trait PhyRxTx {
 
     // we require mutability so we may decrypt in place
     fn get_received_packet(&mut self) -> &mut [u8];
-    fn handle_event(&mut self, event: Event<Self>) -> Result<Response<Self>, Error<Self::PhyError>>
+    fn handle_event(&mut self, event: Event<Self>) -> Result<Response<Self>, Self::PhyError>
     where
-        Self: core::marker::Sized;
+        Self: Sized;
 }

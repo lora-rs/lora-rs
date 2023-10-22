@@ -2,7 +2,7 @@ use crate::{
     radio::{self, RadioBuffer},
     region,
     rng::GetRng,
-    AppSKey, Downlink, NewSKey, SendData,
+    AppSKey, Downlink, NewSKey,
 };
 use lorawan::parser::DevAddr;
 use lorawan::{self, keys::CryptoFactory, maccommands::MacCommand};
@@ -18,6 +18,8 @@ pub use otaa::NetworkCredentials;
 
 #[cfg(feature = "async")]
 use crate::async_device;
+
+use crate::nb_device;
 
 pub(crate) mod uplink;
 
@@ -88,6 +90,12 @@ enum State {
 pub enum Error {
     NotJoined,
     InvalidResponse(Response),
+}
+
+pub struct SendData<'a> {
+    pub data: &'a [u8],
+    pub fport: u8,
+    pub confirmed: bool,
 }
 
 pub(crate) type Result<T = ()> = core::result::Result<T, Error>;
@@ -251,16 +259,16 @@ pub enum Response {
     RxComplete,
 }
 
-impl From<Response> for crate::Response {
+impl From<Response> for nb_device::Response {
     fn from(r: Response) -> Self {
         match r {
-            Response::SessionExpired => crate::Response::SessionExpired,
-            Response::DownlinkReceived(fcnt) => crate::Response::DownlinkReceived(fcnt),
-            Response::NoAck => crate::Response::NoAck,
-            Response::NoJoinAccept => crate::Response::NoJoinAccept,
-            Response::JoinSuccess => crate::Response::JoinSuccess,
-            Response::NoUpdate => crate::Response::NoUpdate,
-            Response::RxComplete => crate::Response::RxComplete,
+            Response::SessionExpired => nb_device::Response::SessionExpired,
+            Response::DownlinkReceived(fcnt) => nb_device::Response::DownlinkReceived(fcnt),
+            Response::NoAck => nb_device::Response::NoAck,
+            Response::NoJoinAccept => nb_device::Response::NoJoinAccept,
+            Response::JoinSuccess => nb_device::Response::JoinSuccess,
+            Response::NoUpdate => nb_device::Response::NoUpdate,
+            Response::RxComplete => nb_device::Response::RxComplete,
         }
     }
 }
