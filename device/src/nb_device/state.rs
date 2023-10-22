@@ -41,7 +41,7 @@ else(Ready)║ ╚═════════════╝   ║              
 use super::super::*;
 use super::{
     mac::{Frame, Mac, Window},
-    RadioBuffer,
+    radio, Event, RadioBuffer, Response, Timings,
 };
 
 #[derive(Copy, Clone)]
@@ -87,10 +87,17 @@ pub enum Error {
     RadioEventWhileWaitingForRxWindow,
     NewSessionWhileWaitingForRxWindow,
     SendDataWhileWaitingForRxWindow,
+    TxRequestDuringTx,
     NewSessionWhileWaitingForRx,
     SendDataWhileWaitingForRx,
     BufferTooSmall,
     UnexpectedRadioResponse,
+}
+
+impl<R: radio::PhyRxTx> From<Error> for super::Error<R> {
+    fn from(error: Error) -> super::Error<R> {
+        super::Error::State(error)
+    }
 }
 
 impl State {
@@ -107,7 +114,7 @@ impl State {
         buf: &mut RadioBuffer<N>,
         dl: &mut Option<Downlink>,
         event: Event<R>,
-    ) -> (Self, Result<Response, super::Error<R::PhyError>>) {
+    ) -> (Self, Result<Response, super::Error<R>>) {
         match self {
             State::Idle(s) => s.handle_event::<R, C, RNG, N>(mac, radio, rng, buf, event),
             State::SendingData(s) => s.handle_event::<R, N>(mac, radio, event),
@@ -133,8 +140,8 @@ impl Idle {
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
         event: Event<R>,
-    ) -> (State, Result<Response, super::Error<R::PhyError>>) {
-        enum IntermediateResponse<R> {
+    ) -> (State, Result<Response, super::Error<R>>) {
+        enum IntermediateResponse<R: radio::PhyRxTx> {
             RadioTx((Frame, radio::TxConfig, u32)),
             EarlyReturn(Result<Response, super::Error<R>>),
         }
@@ -181,7 +188,7 @@ impl Idle {
                             _ => (State::Idle(self), Err(Error::UnexpectedRadioResponse.into())),
                         }
                     }
-                    Err(e) => (State::Idle(self), Err(e.into())),
+                    Err(e) => (State::Idle(self), Err(super::Error::Radio(e))),
                 }
             }
         }
@@ -199,7 +206,7 @@ impl SendingData {
         mac: &mut Mac,
         radio: &mut R,
         event: Event<R>,
-    ) -> (State, Result<Response, super::Error<R::PhyError>>) {
+    ) -> (State, Result<Response, super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -217,14 +224,14 @@ impl SendingData {
                             }
                         }
                     }
-                    Err(e) => (State::SendingData(self), Err(e.into())),
+                    Err(e) => (State::SendingData(self), Err(super::Error::Radio(e))),
                 }
             }
             // tolerate unexpected timeout
             Event::TimeoutFired => (State::SendingData(self), Ok(Response::NoUpdate)),
             // anything other than a RadioEvent is unexpected
             Event::Join(_) | Event::SendDataRequest(_) => {
-                panic!("Unexpected event while SendingJoin")
+                (self.into(), Err(Error::TxRequestDuringTx.into()))
             }
         }
     }
@@ -242,7 +249,7 @@ impl WaitingForRxWindow {
         mac: &mut Mac,
         radio: &mut R,
         event: Event<R>,
-    ) -> (State, Result<Response, super::Error<R::PhyError>>) {
+    ) -> (State, Result<Response, super::Error<R>>) {
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
@@ -270,7 +277,7 @@ impl WaitingForRxWindow {
                             Ok(Response::TimeoutRequest(window_close)),
                         )
                     }
-                    Err(e) => (State::WaitingForRxWindow(self), Err(e.into())),
+                    Err(e) => (State::WaitingForRxWindow(self), Err(super::Error::Radio(e))),
                 }
             }
             Event::RadioEvent(_) => (
@@ -313,7 +320,7 @@ impl WaitingForRx {
         buf: &mut RadioBuffer<N>,
         event: Event<R>,
         dl: &mut Option<Downlink>,
-    ) -> (State, Result<Response, super::Error<R::PhyError>>) {
+    ) -> (State, Result<Response, super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
             Event::RadioEvent(radio_event) => {
@@ -342,12 +349,12 @@ impl WaitingForRx {
                         }
                         _ => (State::WaitingForRx(self), Ok(Response::NoUpdate)),
                     },
-                    Err(e) => (State::WaitingForRx(self), Err(e.into())),
+                    Err(e) => (State::WaitingForRx(self), Err(super::Error::Radio(e))),
                 }
             }
             Event::TimeoutFired => {
                 if let Err(e) = radio.handle_event(radio::Event::CancelRx) {
-                    return (State::WaitingForRx(self), Err(e.into()));
+                    return (State::WaitingForRx(self), Err(super::Error::Radio(e)));
                 }
 
                 match self.window {
@@ -392,7 +399,7 @@ fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, const N: usize>(
     mac: &mut Mac,
     radio: &mut R,
     timestamp_ms: u32,
-) -> (State, Result<Response, super::Error<R::PhyError>>) {
+) -> (State, Result<Response, super::Error<R>>) {
     let delay = mac.get_rx_delay(&frame, &Window::_1);
     let t1 = (delay as i32 + timestamp_ms as i32 + radio.get_rx_window_offset_ms()) as u32;
     (

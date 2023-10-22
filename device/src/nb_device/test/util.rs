@@ -1,7 +1,11 @@
 use super::*;
-use crate::radio::{Error, Event, Response, RfConfig, RxQuality};
+use crate::radio::{RfConfig, RxQuality};
+
+use crate::nb_device::{
+    radio::{Event, PhyRxTx, Response},
+    Device, Timings,
+};
 use crate::test_util::*;
-use crate::{radio::PhyRxTx, Device, Timings};
 use lorawan::default_crypto;
 use region::{Configuration, Region};
 
@@ -9,6 +13,7 @@ pub fn test_device() -> Device<TestRadio, default_crypto::DefaultFactory, rand_c
     Device::new(Configuration::new(Region::US915), TestRadio::default(), rand::rngs::OsRng)
 }
 
+#[derive(Debug)]
 pub struct TestRadio {
     current_config: Option<RfConfig>,
     last_uplink: Option<Uplink>,
@@ -47,7 +52,7 @@ impl PhyRxTx for TestRadio {
         &mut self.buffer[..self.buffer_index]
     }
 
-    fn handle_event(&mut self, event: Event<Self>) -> Result<Response<Self>, Error<Self::PhyError>>
+    fn handle_event(&mut self, event: Event<Self>) -> Result<Response<Self>, Self::PhyError>
     where
         Self: Sized,
     {
@@ -55,16 +60,17 @@ impl PhyRxTx for TestRadio {
             Event::TxRequest(config, buf) => {
                 // ensure that we have always consumed the previous uplink
                 if self.last_uplink.is_some() {
-                    return Err(Error::PhyError("Radio already has an uplink"));
+                    panic!("last uplink not consumed")
                 }
-                self.last_uplink = Some(Uplink::new(buf, config).map_err(Error::PhyError)?);
+                self.last_uplink =
+                    Some(Uplink::new(buf, config).map_err(|_| "error creating uplink")?);
                 return Ok(Response::TxDone(0));
             }
             Event::RxRequest(rf_config) => {
                 self.current_config = Some(rf_config);
             }
             Event::CancelRx => (),
-            Event::PhyEvent(()) => {
+            Event::Phy(()) => {
                 if let (Some(rf_config), Some(rxtx_handler)) =
                     (self.current_config, self.rxtx_handler)
                 {

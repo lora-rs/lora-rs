@@ -4,9 +4,9 @@ use super::mac::Mac;
 
 use super::mac::{self, Frame, Window};
 pub use super::{
-    mac::{NetworkCredentials, Session},
+    mac::{NetworkCredentials, SendData, Session},
     region::{self, Region},
-    Downlink, JoinMode, SendData, Timings,
+    Downlink, JoinMode, Timings,
 };
 use core::marker::PhantomData;
 use futures::{future::select, future::Either, pin_mut};
@@ -14,7 +14,7 @@ use lorawan::{self, keys::CryptoFactory};
 
 pub use crate::region::DR;
 use crate::{
-    radio::types::RadioBuffer,
+    radio::RadioBuffer,
     rng::{GetRng, NoneT, OptionalRng, Phy, RngCore},
 };
 #[cfg(feature = "external-lora-phy")]

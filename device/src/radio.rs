@@ -1,4 +1,5 @@
-use super::*;
+pub use ::lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
+
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RfConfig {

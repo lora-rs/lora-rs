@@ -11,11 +11,10 @@ use lorawan::{
 use generic_array::{typenum::U256, GenericArray};
 
 use crate::radio::RadioBuffer;
-use crate::SendData;
 
 use super::{
     otaa::{DevNonce, NetworkCredentials},
-    uplink, FcntUp, Response,
+    uplink, FcntUp, Response, SendData,
 };
 
 #[derive(Clone)]
