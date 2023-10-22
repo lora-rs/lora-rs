@@ -1,13 +1,13 @@
 use super::{del_to_delay_ms, session::Session, Response};
 use crate::radio::RadioBuffer;
 use crate::region::Configuration;
-use crate::rng::*;
 use crate::{AppEui, AppKey, DevEui};
 use lorawan::keys::CryptoFactory;
 use lorawan::{
     creator::JoinRequestCreator,
     parser::{parse_with_factory as lorawan_parse, *},
 };
+use rand_core::RngCore;
 
 pub(crate) type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
 
@@ -30,12 +30,12 @@ impl Otaa {
 
     /// Prepare a join request to be sent. This populates the radio buffer with the request to be
     /// sent, and returns the radio config to use for transmitting.
-    pub(crate) fn prepare_buffer<C: CryptoFactory + Default, G: GetRng, const N: usize>(
+    pub(crate) fn prepare_buffer<C: CryptoFactory + Default, G: RngCore, const N: usize>(
         &mut self,
         rng: &mut G,
         buf: &mut RadioBuffer<N>,
     ) -> u16 {
-        self.dev_nonce = DevNonce::from(rng.get_rng().next_u32() as u16);
+        self.dev_nonce = DevNonce::from(rng.next_u32() as u16);
         buf.clear();
         let mut phy: JoinRequestCreator<[u8; 23], C> = JoinRequestCreator::default();
         phy.set_app_eui(self.network_credentials.appeui.0)

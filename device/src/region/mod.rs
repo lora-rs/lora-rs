@@ -2,11 +2,9 @@
 // generally, we allow upper_case_acronyms to make it match the LoRaWAN naming
 // conventions better
 use lorawan::{maccommands::ChannelMask, parser::CfList};
+use rand_core::RngCore;
 
-use crate::{
-    mac::{Frame, Window},
-    rng::{GetRng, RngCore},
-};
+use crate::mac::{Frame, Window};
 pub mod constants;
 pub(crate) use crate::radio::*;
 use constants::*;
@@ -174,7 +172,7 @@ impl Configuration {
         Configuration { state }
     }
 
-    pub(crate) fn create_tx_config<RNG: GetRng>(
+    pub(crate) fn create_tx_config<RNG: RngCore>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
@@ -192,7 +190,7 @@ impl Configuration {
         }
     }
 
-    fn get_tx_dr_and_frequency<RNG: GetRng>(
+    fn get_tx_dr_and_frequency<RNG: RngCore>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
@@ -288,7 +286,7 @@ pub(crate) trait RegionHandler {
     fn get_default_datarate(&self) -> DR {
         DR::_0
     }
-    fn get_tx_dr_and_frequency<RNG: GetRng>(
+    fn get_tx_dr_and_frequency<RNG: RngCore>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,

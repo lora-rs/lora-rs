@@ -11,12 +11,10 @@ pub use super::{
 use core::marker::PhantomData;
 use futures::{future::select, future::Either, pin_mut};
 use lorawan::{self, keys::CryptoFactory};
+use rand_core::RngCore;
 
 pub use crate::region::DR;
-use crate::{
-    radio::RadioBuffer,
-    rng::{GetRng, NoneT, OptionalRng, Phy, RngCore},
-};
+use crate::{radio::RadioBuffer, rng};
 #[cfg(feature = "external-lora-phy")]
 /// provide the radio through the external lora-phy crate
 pub mod lora_radio;
@@ -28,23 +26,24 @@ mod test;
 use crate::radio::RxQuality;
 use core::cmp::min;
 
-/// Type representing a LoRaWAN cabable device. A device is bound to the following types:
+/// Type representing a LoRaWAN cabable device.
+///
+/// A device is bound to the following types:
 /// - R: An asynchronous radio implementation
 /// - T: An asynchronous timer implementation
 /// - C: A CryptoFactory implementation
-/// - RNG: A random number generator implementation. This is optional depending on whether you
-///   construct [`Device`]
-/// with the `new` or `new_with_builtin_rng` methods.
+/// - RNG: A random number generator implementation. An external RNG may be provided, or you may use a builtin PRNG by
+/// providing a random seed.
 pub struct Device<R, C, T, G, const N: usize = 256>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
     C: CryptoFactory + Default,
-    G: OptionalRng,
-    Phy<R, G>: GetRng,
+    G: RngCore,
 {
     crypto: PhantomData<C>,
-    phy: Phy<R, G>,
+    radio: R,
+    rng: G,
     timer: T,
     mac: Mac,
     radio_buffer: RadioBuffer<N>,
@@ -84,20 +83,43 @@ enum RxWindowResponse<F: futures::Future<Output = ()> + Sized + Unpin> {
     Timeout(u32),
 }
 
-impl<R, C, T, const N: usize> Device<R, C, T, NoneT, N>
+impl<R, C, T, const N: usize> Device<R, C, T, rng::Prng, N>
 where
     R: radio::PhyRxTx + Timings + RngCore,
     C: CryptoFactory + Default,
     T: radio::Timer,
 {
-    /// Create a new instance of [`Device`] with a LoRa chip with a builtin RNG.
-    /// This means that `radio` should implement [`rand_core::RngCore`].
-    pub fn new_with_builtin_rng(
+    /// Create a new [`Device`] by providing your own random seed. Using this method, [`Device`] will internally
+    /// use an algorithmic PRNG. Depending on your use case, this may or may not be faster than using your own
+    /// hardware RNG.
+    ///
+    /// # ⚠️Warning⚠️
+    ///
+    /// This function must **always** be called with a new randomly generated seed! **Never** call this function more
+    /// than once using the same seed. Generate the seed using a true random number generator. Using the same seed will
+    /// leave you vulnerable to replay attacks.
+    pub fn new_with_seed(region: region::Configuration, radio: R, timer: T, seed: u64) -> Self {
+        Device::new_with_seed_and_session(region, radio, timer, seed, None)
+    }
+
+    /// Create a new [`Device`] by providing your own random seed. Also optionally provide your own [`Session`].
+    /// Using this method, [`Device`] will internally use an algorithmic PRNG to generate random numbers. Depending on
+    /// your use case, this may or may not be faster than using your own hardware RNG.
+    ///
+    /// # ⚠️Warning⚠️
+    ///
+    /// This function must **always** be called with a new randomly generated seed! **Never** call this function more
+    /// than once using the same seed. Generate the seed using a true random number generator. Using the same seed will
+    /// leave you vulnerable to replay attacks.
+    pub fn new_with_seed_and_session(
         region: region::Configuration,
         radio: R,
         timer: T,
-    ) -> Device<R, C, T, NoneT, N> {
-        Device::new_with_session(region, radio, timer, NoneT, None)
+        seed: u64,
+        session: Option<Session>,
+    ) -> Self {
+        let rng = crate::rng::Prng::new(seed);
+        Device::new_with_session(region, radio, timer, rng, session)
     }
 }
 
@@ -108,22 +130,16 @@ where
     T: radio::Timer,
     G: RngCore,
 {
-    /// Create a new instance of [`Device`] with a RNG external to the LoRa chip.
-    /// See also [`new_with_builtin_rng`](Self::new_with_builtin_rng)
-    pub fn new(region: region::Configuration, radio: R, timer: T, rng: G) -> Device<R, C, T, G, N> {
+    /// Create a new instance of [`Device`] with a RNG external to the LoRa chip. You must provide your own RNG
+    /// implementing [`RngCore`].
+    ///
+    /// See also [`new_with_seed`](Device::new_with_seed) to let [`Device`] use a builtin PRNG by providing a random
+    /// seed.
+    pub fn new(region: region::Configuration, radio: R, timer: T, rng: G) -> Self {
         Device::new_with_session(region, radio, timer, rng, None)
     }
-}
 
-#[allow(dead_code)]
-impl<R, C, T, G, const N: usize> Device<R, C, T, G, N>
-where
-    R: radio::PhyRxTx + Timings,
-    C: CryptoFactory + Default,
-    T: radio::Timer,
-    G: OptionalRng,
-    Phy<R, G>: GetRng,
-{
+    /// Create a new [`Device`] and provide an optional [`Session`].
     pub fn new_with_session(
         region: region::Configuration,
         radio: R,
@@ -137,7 +153,8 @@ where
         }
         Self {
             crypto: PhantomData,
-            phy: Phy::new(radio, rng),
+            radio,
+            rng,
             mac,
             radio_buffer: RadioBuffer::new(),
             timer,
@@ -154,11 +171,11 @@ where
     }
 
     pub fn get_radio(&mut self) -> &R {
-        &self.phy.radio
+        &self.radio
     }
 
     pub fn get_mut_radio(&mut self) -> &mut R {
-        &mut self.phy.radio
+        &mut self.radio
     }
 
     /// Retrieve the current data rate being used by this device.
@@ -178,15 +195,14 @@ where
     pub async fn join(&mut self, join_mode: &JoinMode) -> Result<JoinResponse, Error<R::PhyError>> {
         match join_mode {
             JoinMode::OTAA { deveui, appeui, appkey } => {
-                let (tx_config, _) = self.mac.join_otaa::<C, Phy<R, G>, N>(
-                    &mut self.phy,
+                let (tx_config, _) = self.mac.join_otaa::<C, G, N>(
+                    &mut self.rng,
                     NetworkCredentials::new(*appeui, *deveui, *appkey),
                     &mut self.radio_buffer,
                 );
 
                 // Transmit the join payload
                 let ms = self
-                    .phy
                     .radio
                     .tx(tx_config, self.radio_buffer.as_ref_for_read())
                     .await
@@ -217,14 +233,13 @@ where
         confirmed: bool,
     ) -> Result<SendResponse, Error<R::PhyError>> {
         // Prepare transmission buffer
-        let (tx_config, _fcnt_up) = self.mac.send::<C, Phy<R, G>, N>(
-            &mut self.phy,
+        let (tx_config, _fcnt_up) = self.mac.send::<C, G, N>(
+            &mut self.rng,
             &mut self.radio_buffer,
             &SendData { data, fport, confirmed },
         )?;
         // Transmit our data packet
         let ms = self
-            .phy
             .radio
             .tx(tx_config, self.radio_buffer.as_ref_for_read())
             .await
@@ -253,13 +268,13 @@ where
         // The initial window configuration uses window 1 adjusted by window_delay and radio offset
         let rx1_start_delay = (self.mac.get_rx_delay(frame, &Window::_1) as i32
             + window_delay as i32
-            + self.phy.radio.get_rx_window_offset_ms()) as u32;
+            + self.radio.get_rx_window_offset_ms()) as u32;
 
-        let rx1_end_delay = rx1_start_delay + self.phy.radio.get_rx_window_duration_ms();
+        let rx1_end_delay = rx1_start_delay + self.radio.get_rx_window_duration_ms();
 
         let rx2_start_delay = (self.mac.get_rx_delay(frame, &Window::_2) as i32
             + window_delay as i32
-            + self.phy.radio.get_rx_window_offset_ms()) as u32;
+            + self.radio.get_rx_window_offset_ms()) as u32;
 
         self.radio_buffer.clear();
         // Wait until RX1 window opens
@@ -273,14 +288,14 @@ where
             let mut window_duration = min(rx1_end_delay, rx2_start_delay);
 
             // Pass the full radio buffer slice to RX
-            self.phy.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+            self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
             let timeout_fut = self.timer.at(window_duration.into());
             pin_mut!(timeout_fut);
 
             let mut maybe_timeout_fut = Some(timeout_fut);
             while let Some(timeout_fut) = maybe_timeout_fut.take() {
                 match Self::rx_window(
-                    &mut self.phy.radio,
+                    &mut self.radio,
                     &mut self.radio_buffer,
                     window_duration,
                     timeout_fut,
@@ -296,7 +311,7 @@ where
                                 maybe_timeout_fut = Some(timeout_fut);
                             }
                             r => {
-                                self.phy.radio.low_power().await.map_err(Error::Radio)?;
+                                self.radio.low_power().await.map_err(Error::Radio)?;
                                 return Ok(r);
                             }
                         }
@@ -310,7 +325,7 @@ where
         };
 
         if window_duration != rx2_start_delay {
-            self.phy.radio.low_power().await.map_err(Error::Radio)?;
+            self.radio.low_power().await.map_err(Error::Radio)?;
             self.timer.at(rx2_start_delay.into()).await;
         }
 
@@ -318,17 +333,17 @@ where
         // Prepare for RX using correct configuration
         let rx_config =
             self.mac.region.get_rx_config(self.mac.configuration.data_rate, frame, &Window::_2);
-        let window_duration = self.phy.radio.get_rx_window_duration_ms();
+        let window_duration = self.radio.get_rx_window_duration_ms();
 
         // Pass the full radio buffer slice to RX
-        self.phy.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+        self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
         let timeout_fut = self.timer.delay_ms(window_duration.into());
         pin_mut!(timeout_fut);
 
         let mut maybe_timeout_fut = Some(timeout_fut);
         while let Some(timeout_fut) = maybe_timeout_fut.take() {
             match Self::rx_window(
-                &mut self.phy.radio,
+                &mut self.radio,
                 &mut self.radio_buffer,
                 window_duration,
                 timeout_fut,
@@ -343,13 +358,13 @@ where
                             maybe_timeout_fut = Some(timeout_fut);
                         }
                         r => {
-                            self.phy.radio.low_power().await.map_err(Error::Radio)?;
+                            self.radio.low_power().await.map_err(Error::Radio)?;
                             return Ok(r);
                         }
                     }
                 }
                 RxWindowResponse::Timeout(_) => {
-                    self.phy.radio.low_power().await.map_err(Error::Radio)?;
+                    self.radio.low_power().await.map_err(Error::Radio)?;
                     return Ok(self.mac.rx2_complete());
                 }
             };
