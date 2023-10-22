@@ -167,18 +167,9 @@ where
         tx_boosted_if_possible: bool,
     ) -> Result<(), RadioError> {
         self.rx_continuous = false;
-        self.radio_kind.ensure_ready(self.radio_mode).await?;
-        if self.radio_mode != RadioMode::Standby {
-            self.radio_kind.set_standby().await?;
-            self.radio_mode = RadioMode::Standby;
-        }
-        if self.cold_start {
-            self.do_cold_start().await?;
-        }
-        if self.calibrate_image {
-            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
-            self.calibrate_image = false;
-        }
+
+        self.prepare_modem(mdltn_params).await?;
+
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind
             .set_tx_power_and_ramp_time(output_power, Some(mdltn_params), tx_boosted_if_possible, true)
@@ -264,18 +255,8 @@ where
             }
         }
 
-        self.radio_kind.ensure_ready(self.radio_mode).await?;
-        if self.radio_mode != RadioMode::Standby {
-            self.radio_kind.set_standby().await?;
-            self.radio_mode = RadioMode::Standby;
-        }
-        if self.cold_start {
-            self.do_cold_start().await?;
-        }
-        if self.calibrate_image {
-            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
-            self.calibrate_image = false;
-        }
+        self.prepare_modem(mdltn_params).await?;
+
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_packet_params(rx_pkt_params).await?;
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
@@ -353,18 +334,9 @@ where
         rx_boosted_if_supported: bool,
     ) -> Result<(), RadioError> {
         self.rx_continuous = false;
-        self.radio_kind.ensure_ready(self.radio_mode).await?;
-        if self.radio_mode != RadioMode::Standby {
-            self.radio_kind.set_standby().await?;
-            self.radio_mode = RadioMode::Standby;
-        }
-        if self.cold_start {
-            self.do_cold_start().await?;
-        }
-        if self.calibrate_image {
-            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
-            self.calibrate_image = false;
-        }
+
+        self.prepare_modem(mdltn_params).await?;
+
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_mode = RadioMode::ChannelActivityDetection;
@@ -410,18 +382,9 @@ where
         tx_boosted_if_possible: bool,
     ) -> Result<(), RadioError> {
         self.rx_continuous = false;
-        self.radio_kind.ensure_ready(self.radio_mode).await?;
-        if self.radio_mode != RadioMode::Standby {
-            self.radio_kind.set_standby().await?;
-            self.radio_mode = RadioMode::Standby;
-        }
-        if self.cold_start {
-            self.do_cold_start().await?;
-        }
-        if self.calibrate_image {
-            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
-            self.calibrate_image = false;
-        }
+
+        self.prepare_modem(mdltn_params).await?;
+
         let tx_pkt_params = self
             .radio_kind
             .create_packet_params(0, false, 16, false, false, mdltn_params)?;
@@ -441,6 +404,25 @@ where
         self.radio_mode = RadioMode::Transmit;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.radio_kind.set_tx_continuous_wave_mode().await
+    }
+
+    async fn prepare_modem(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
+        self.radio_kind.ensure_ready(self.radio_mode).await?;
+        if self.radio_mode != RadioMode::Standby {
+            self.radio_kind.set_standby().await?;
+            self.radio_mode = RadioMode::Standby;
+        }
+
+        if self.cold_start {
+            self.do_cold_start().await?;
+        }
+
+        if self.calibrate_image {
+            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
+            self.calibrate_image = false;
+        }
+
+        Ok(())
     }
 }
 
