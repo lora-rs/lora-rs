@@ -1,8 +1,7 @@
 use super::radio::{PhyRxTx, RfConfig, RxQuality, TxConfig};
-use super::region::constants::DEFAULT_DBM;
 use super::Timings;
 
-use lora_phy::mod_params::{BoardType, ChipType, RadioError};
+use lora_phy::mod_params::{BoardType, RadioError};
 use lora_phy::mod_traits::RadioKind;
 use lora_phy::{DelayUs, LoRa};
 
@@ -86,17 +85,10 @@ where
         )?;
         let mut tx_pkt_params =
             self.lora.create_tx_packet_params(8, false, true, false, &mdltn_params)?;
-        let pw = match self.lora.get_board_type().into() {
-            ChipType::Sx1276 | ChipType::Sx1277 | ChipType::Sx1278 | ChipType::Sx1279 => {
-                if config.pw > DEFAULT_DBM {
-                    DEFAULT_DBM
-                } else {
-                    config.pw
-                }
-            }
-            _ => config.pw,
-        };
-        self.lora.prepare_for_tx(&mdltn_params, pw.into(), false).await?;
+
+        // TODO: 3rd argument (boost_if_possible) shouldn't be exposed, as it depends
+        // on physical board layout. Needs to be eventually handled from lora-phy side.
+        self.lora.prepare_for_tx(&mdltn_params, config.pw.into(), false).await?;
         self.lora.tx(&mdltn_params, &mut tx_pkt_params, buffer, 0xffffff).await?;
         Ok(0)
     }
