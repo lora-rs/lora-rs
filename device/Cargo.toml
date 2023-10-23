@@ -23,9 +23,10 @@ lorawan = { version = "0.7.4", path = "../encoding", default-features = false }
 heapless = "0.7"
 generic-array = "0.14.2"
 defmt = { version = "0.3", optional = true }
+fastrand = { version = "2", default-features = false }
 futures = { version = "0.3", default-features = false, optional = true }
 rand_core = { version = "0.6", default-features = false }
-serde = { version = "1", default-features = false, features = ["derive"], optional = true}
+serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 seq-macro = "0.3.5"
 lora-phy = { version = ">=2.1.1", optional = true }
 
