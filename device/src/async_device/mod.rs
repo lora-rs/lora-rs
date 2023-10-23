@@ -118,7 +118,7 @@ where
         seed: u64,
         session: Option<Session>,
     ) -> Self {
-        let rng = crate::rng::Prng::new(seed);
+        let rng = rng::Prng::new(seed);
         Device::new_with_session(region, radio, timer, rng, session)
     }
 }
