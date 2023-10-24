@@ -8,7 +8,6 @@ pub use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 #[allow(dead_code, missing_docs)]
 pub enum RadioError {
     SPI,
-    NSS,
     Reset,
     RfSwitchRx,
     RfSwitchTx,

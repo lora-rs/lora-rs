@@ -1,8 +1,7 @@
 use defmt::trace;
 use embedded_hal_async::spi::{Operation, SpiDevice};
 
-use crate::mod_params::RadioError;
-use crate::mod_params::RadioError::*;
+use crate::mod_params::RadioError::{self, SPI};
 use crate::mod_traits::InterfaceVariant;
 
 pub(crate) struct SpiInterface<SPI, IV> {
@@ -21,7 +20,7 @@ where
 
     // Write a buffer to the radio.
     pub async fn write(&mut self, write_buffer: &[u8], is_sleep_command: bool) -> Result<(), RadioError> {
-        self.spi.write(&write_buffer).await.map_err(|_| SPI)?;
+        self.spi.write(write_buffer).await.map_err(|_| SPI)?;
 
         if !is_sleep_command {
             self.iv.wait_on_busy().await?;
