@@ -72,6 +72,10 @@ where
         Ok(read_buffer[0])
     }
 
+    async fn read_buffer(&mut self, register: Register, buf: &mut [u8]) -> Result<(), RadioError> {
+        self.intf.read(&[register.read_addr()], buf).await
+    }
+
     // Set the number of symbols the radio will wait to detect a reception (maximum 1023 symbols)
     async fn set_lora_symbol_num_timeout(&mut self, symbol_num: u16) -> Result<(), RadioError> {
         if symbol_num > 0x03ffu16 {
@@ -561,10 +565,7 @@ where
         }
         let fifo_addr = self.read_register(Register::RegFifoRxCurrentAddr).await?;
         self.write_register(Register::RegFifoAddrPtr, fifo_addr, false).await?;
-        for i in 0..payload_length {
-            let byte = self.read_register(Register::RegFifo).await?;
-            receiving_buffer[i as usize] = byte;
-        }
+        self.read_buffer(Register::RegFifo, receiving_buffer).await?;
         self.write_register(Register::RegFifoAddrPtr, 0x00u8, false).await?;
 
         Ok(payload_length)
