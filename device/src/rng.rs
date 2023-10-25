@@ -23,10 +23,10 @@ use fastrand::Rng;
 use rand_core::RngCore;
 
 #[derive(Clone)]
-pub(crate) struct Prng(Rng);
+pub struct Prng(Rng);
 
 impl Prng {
-    pub fn new(seed: u64) -> Self {
+    pub(crate) fn new(seed: u64) -> Self {
         Self(Rng::with_seed(seed))
     }
 }
