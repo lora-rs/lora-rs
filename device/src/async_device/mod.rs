@@ -85,7 +85,7 @@ enum RxWindowResponse<F: futures::Future<Output = ()> + Sized + Unpin> {
 
 impl<R, C, T, const N: usize> Device<R, C, T, rng::Prng, N>
 where
-    R: radio::PhyRxTx + Timings + RngCore,
+    R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
     T: radio::Timer,
 {
