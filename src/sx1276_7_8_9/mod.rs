@@ -27,7 +27,7 @@ pub struct SX1276_7_8_9<SPI, IV> {
 
 impl<SPI, IV> SX1276_7_8_9<SPI, IV>
 where
-    SPI: SpiBus<u8>,
+    SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
     /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
@@ -45,13 +45,13 @@ where
         is_sleep_command: bool,
     ) -> Result<(), RadioError> {
         let write_buffer = [register.write_addr(), value];
-        self.intf.write(&[&write_buffer], is_sleep_command).await
+        self.intf.write(&write_buffer, is_sleep_command).await
     }
 
     async fn read_register(&mut self, register: Register) -> Result<u8, RadioError> {
         let write_buffer = [register.read_addr()];
         let mut read_buffer = [0x00u8];
-        self.intf.read(&[&write_buffer], &mut read_buffer, None).await?;
+        self.intf.read(&write_buffer, &mut read_buffer).await?;
         Ok(read_buffer[0])
     }
 
@@ -77,7 +77,7 @@ where
 
 impl<SPI, IV> RadioKind for SX1276_7_8_9<SPI, IV>
 where
-    SPI: SpiBus<u8>,
+    SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
     fn get_board_type(&self) -> BoardType {
