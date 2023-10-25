@@ -26,6 +26,7 @@ use lorawan::{
 
 pub use rand_core::RngCore;
 mod rng;
+pub use rng::Prng;
 
 #[cfg(feature = "async")]
 pub mod async_device;
