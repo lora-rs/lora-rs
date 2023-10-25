@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [Unreleased]
+## [v3.0.0] - Unreleased
+
+- Switch SpiInterface to use SpiDevice trait.
+- Implement functionality for continuous wave mode.
+- Support preamble detection allowing LoRaWAN RX1+RX2 reception.
 
 ## [v2.1.2] - 2023-09-25
 
