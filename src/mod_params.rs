@@ -5,7 +5,7 @@ pub use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 /// Errors types reported during LoRa physical layer processing
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Debug, defmt::Format, PartialEq)]
-#[allow(dead_code, missing_docs)]
+#[allow(missing_docs)]
 pub enum RadioError {
     SPI,
     Reset,
@@ -41,7 +41,6 @@ pub enum RadioError {
     DutyCycleRxContinuousUnsupported,
     CADUnexpected,
     RngUnsupported,
-    BoardTypeUnsupportedForRadioKind,
 }
 
 /// Status for a received packet
