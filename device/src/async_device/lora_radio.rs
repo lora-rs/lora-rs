@@ -72,9 +72,9 @@ where
 
     async fn tx(&mut self, config: TxConfig, buffer: &[u8]) -> Result<u32, Self::PhyError> {
         let mdltn_params = self.lora.create_modulation_params(
-            config.rf.spreading_factor,
-            config.rf.bandwidth,
-            config.rf.coding_rate,
+            config.rf.bb.sf,
+            config.rf.bb.bw,
+            config.rf.bb.cr,
             config.rf.frequency,
         )?;
         let mut tx_pkt_params =
@@ -96,9 +96,9 @@ where
 
     async fn setup_rx(&mut self, config: RfConfig) -> Result<(), Self::PhyError> {
         let mdltn_params = self.lora.create_modulation_params(
-            config.spreading_factor,
-            config.bandwidth,
-            config.coding_rate,
+            config.bb.sf,
+            config.bb.bw,
+            config.bb.cr,
             config.frequency,
         )?;
         let rx_pkt_params =

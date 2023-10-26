@@ -1,12 +1,10 @@
-pub use ::lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
+use lora_modulation::BaseBandModulationParams;
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RfConfig {
     pub frequency: u32,
-    pub bandwidth: Bandwidth,
-    pub spreading_factor: SpreadingFactor,
-    pub coding_rate: CodingRate,
+    pub bb: BaseBandModulationParams,
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
