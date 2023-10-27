@@ -7,7 +7,7 @@ use tokio::{
 };
 impl TestRadio {
     pub fn new() -> (RadioChannel, Self) {
-        let (tx, rx) = mpsc::channel(1);
+        let (tx, rx) = mpsc::channel(2);
         let last_uplink = Arc::new(Mutex::new(None));
         (
             RadioChannel { tx, last_uplink: last_uplink.clone() },
@@ -16,10 +16,16 @@ impl TestRadio {
     }
 }
 
+#[derive(Debug)]
+enum Msg {
+    RxTx(RxTxHandler),
+    // TODO: Preamble
+}
+
 pub struct TestRadio {
     current_config: Option<RfConfig>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
-    rx: mpsc::Receiver<RxTxHandler>,
+    rx: mpsc::Receiver<Msg>,
 }
 
 impl PhyRxTx for TestRadio {
@@ -38,19 +44,20 @@ impl PhyRxTx for TestRadio {
         Ok(())
     }
 
-    async fn rx(
-        &mut self,
-        receiving_buffer: &mut [u8],
-    ) -> Result<(usize, RxQuality), Self::PhyError> {
-        let handler = self.rx.recv().await.unwrap();
-        let last_uplink = self.last_uplink.lock().await;
-        // a quick yield to let timer arm
-        time::sleep(time::Duration::from_millis(5)).await;
-        if let Some(config) = &self.current_config {
-            let size = handler(last_uplink.clone(), *config, receiving_buffer);
-            Ok((size, RxQuality::new(0, 0)))
-        } else {
-            panic!("Trying to rx before settings config!")
+    async fn rx(&mut self, rx_buf: &mut [u8]) -> Result<(usize, RxQuality), Self::PhyError> {
+        let msg = self.rx.recv().await.unwrap();
+        match msg {
+            Msg::RxTx(handler) => {
+                let mut last_uplink = self.last_uplink.lock().await;
+                // a quick yield to let timer arm
+                time::sleep(time::Duration::from_millis(5)).await;
+                if let Some(config) = &self.current_config {
+                    let length = handler(last_uplink.take(), *config, rx_buf);
+                    Ok((length, RxQuality::new(-80, 0)))
+                } else {
+                    panic!("Trying to rx before settings config!")
+                }
+            }
         }
     }
 }
@@ -68,14 +75,14 @@ impl Timings for TestRadio {
 pub struct RadioChannel {
     #[allow(unused)]
     last_uplink: Arc<Mutex<Option<Uplink>>>,
-    tx: mpsc::Sender<RxTxHandler>,
+    tx: mpsc::Sender<Msg>,
 }
 
 impl RadioChannel {
     pub fn handle_rxtx(&self, handler: RxTxHandler) {
         let tx = self.tx.clone();
         tokio::spawn(async move {
-            tx.send(handler).await.unwrap();
+            tx.send(Msg::RxTx(handler)).await.unwrap();
         });
     }
 }
