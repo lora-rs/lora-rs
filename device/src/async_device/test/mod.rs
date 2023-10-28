@@ -91,7 +91,6 @@ async fn test_no_join_accept() {
     }
 }
 
-#[ignore]
 #[tokio::test]
 async fn test_noise() {
     let (radio, timer, mut async_device) = setup();

@@ -52,7 +52,7 @@ impl PhyRxTx for TestRadio {
                 // a quick yield to let timer arm
                 time::sleep(time::Duration::from_millis(5)).await;
                 if let Some(config) = &self.current_config {
-                    let length = handler(last_uplink.take(), *config, rx_buf);
+                    let length = handler(last_uplink.clone(), *config, rx_buf);
                     Ok((length, RxQuality::new(-80, 0)))
                 } else {
                     panic!("Trying to rx before settings config!")
