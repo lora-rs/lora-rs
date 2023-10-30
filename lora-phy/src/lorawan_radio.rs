@@ -1,10 +1,10 @@
 #![allow(missing_docs)]
 
-use lorawan_device::async_device::radio::{PhyRxTx, RfConfig, RxQuality, TxConfig};
+use lorawan_device::async_device::radio::{PhyRxTx, RfConfig, RxQuality, RxState, TargetRxState, TxConfig};
 use lorawan_device::Timings;
 
 use super::mod_params::{PacketParams, RadioError};
-use super::mod_traits::RadioKind;
+use super::mod_traits::{IrqState, RadioKind, TargetIrqState};
 use super::{DelayNs, LoRa};
 
 const DEFAULT_RX_WINDOW_DURATION_MS: u32 = 1050;
@@ -79,6 +79,27 @@ impl From<RadioError> for Error {
     }
 }
 
+impl From<TargetRxState> for TargetIrqState {
+    fn from(value: TargetRxState) -> Self {
+        match value {
+            TargetRxState::PreambleReceived => TargetIrqState::PreambleReceived,
+            TargetRxState::PacketReceived => TargetIrqState::Done,
+        }
+    }
+}
+
+impl From<IrqState> for RxState {
+    fn from(value: IrqState) -> Self {
+        match value {
+            IrqState::PreambleReceived => Self::PreambleReceived,
+            IrqState::RxDone(length, status) => Self::PacketReceived {
+                length,
+                lq: RxQuality::new(status.rssi, status.snr as i8),
+            },
+        }
+    }
+}
+
 /// Provide the LoRa physical layer rx/tx interface for boards supported by the external lora-phy
 /// crate
 impl<RK, DLY, const P: u8, const G: i8> PhyRxTx for LorawanRadio<RK, DLY, P, G>
@@ -135,6 +156,25 @@ where
                         RxQuality::new(rx_pkt_status.rssi, rx_pkt_status.snr as i8), // downcast snr
                     ))
                 }
+                Err(err) => Err(err.into()),
+            }
+        } else {
+            Err(Error::NoRxParams)
+        }
+    }
+
+    async fn rx_until_state(
+        &mut self,
+        receiving_buffer: &mut [u8],
+        target_state: TargetRxState,
+    ) -> Result<RxState, Self::PhyError> {
+        if let Some(rx_params) = &self.rx_pkt_params {
+            match self
+                .lora
+                .rx_until_state(rx_params, receiving_buffer, target_state.into())
+                .await
+            {
+                Ok(state) => Ok(state.into()),
                 Err(err) => Err(err.into()),
             }
         } else {
