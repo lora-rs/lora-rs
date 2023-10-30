@@ -1,5 +1,5 @@
 use super::*;
-use crate::async_device::radio::PhyRxTx;
+use crate::async_device::radio::{PhyRxTx, RxState, TargetRxState};
 use std::sync::Arc;
 use tokio::{
     sync::{mpsc, Mutex},
@@ -19,7 +19,7 @@ impl TestRadio {
 #[derive(Debug)]
 enum Msg {
     RxTx(RxTxHandler),
-    // TODO: Preamble
+    Preamble,
 }
 
 pub struct TestRadio {
@@ -48,19 +48,30 @@ impl PhyRxTx for TestRadio {
         Ok(())
     }
 
-    async fn rx(&mut self, rx_buf: &mut [u8]) -> Result<(usize, RxQuality), Self::PhyError> {
+    async fn rx_until_state(
+        &mut self,
+        rx_buf: &mut [u8],
+        target_state: TargetRxState,
+    ) -> Result<RxState, Self::PhyError> {
         let msg = self.rx.recv().await.unwrap();
-        match msg {
-            Msg::RxTx(handler) => {
+        match (msg, target_state) {
+            (Msg::Preamble, TargetRxState::PreambleReceived) => Ok(RxState::PreambleReceived),
+            (Msg::Preamble, TargetRxState::PacketReceived) => {
+                panic!("Received preamble when expecting TargetRxState::PacketReceived")
+            }
+            (Msg::RxTx(handler), TargetRxState::PacketReceived) => {
                 let last_uplink = self.last_uplink.lock().await;
                 // a quick yield to let timer arm
                 time::sleep(time::Duration::from_millis(5)).await;
                 if let Some(config) = &self.current_config {
                     let length = handler(last_uplink.clone(), *config, rx_buf);
-                    Ok((length, RxQuality::new(-80, 0)))
+                    Ok(RxState::PacketReceived { length: length as u8, lq: RxQuality::new(-80, 0) })
                 } else {
                     panic!("Trying to rx before settings config!")
                 }
+            }
+            (Msg::RxTx(_), TargetRxState::PreambleReceived) => {
+                panic!("Sent handler before sending preamble")
             }
         }
     }
@@ -84,7 +95,17 @@ pub struct RadioChannel {
 
 impl RadioChannel {
     pub async fn handle_rxtx(&self, handler: RxTxHandler) {
+        self.fire_preamble().await;
+        self.handle_rxtx_no_preamble(handler).await;
+    }
+
+    pub async fn handle_rxtx_no_preamble(&self, handler: RxTxHandler) {
         tokio::time::sleep(time::Duration::from_millis(5)).await;
         self.tx.send(Msg::RxTx(handler)).await.unwrap();
+    }
+
+    pub async fn fire_preamble(&self) {
+        tokio::time::sleep(time::Duration::from_millis(5)).await;
+        self.tx.send(Msg::Preamble).await.unwrap();
     }
 }
