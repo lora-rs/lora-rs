@@ -19,10 +19,20 @@ const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
 // Frequency synthesizer step for frequency calculation (Hz)
 const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625; // FXOSC (32 MHz) * 1000000 (Hz/MHz) / 524288 (2^19)
 
+/// Supported SX127x chip variants for further device-specific customizations
+/// Currently SX1276, SX1277, SX1278 and SX1279 are supported
+pub enum Sx127xVariant {}
+
+/// Configuration for SX127x-based boards
+pub struct Config {
+    /// LoRa chip variant on this board
+    pub chip: Sx127xVariant,
+}
+
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
 pub struct SX1276_7_8_9<SPI, IV> {
-    board_type: BoardType,
     intf: SpiInterface<SPI, IV>,
+    _config: Config,
 }
 
 impl<SPI, IV> SX1276_7_8_9<SPI, IV>
@@ -31,10 +41,9 @@ where
     IV: InterfaceVariant,
 {
     /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
-    pub fn new(board_type: BoardType, spi: SPI, mut iv: IV) -> Self {
-        iv.set_board_type(board_type);
+    pub fn new(spi: SPI, iv: IV, _config: Config) -> Self {
         let intf = SpiInterface::new(spi, iv);
-        Self { board_type, intf }
+        Self { intf, _config }
     }
 
     // Utility functions
@@ -80,10 +89,6 @@ where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
-    fn get_board_type(&self) -> BoardType {
-        self.board_type
-    }
-
     fn create_modulation_params(
         &self,
         spreading_factor: SpreadingFactor,

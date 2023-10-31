@@ -61,11 +61,6 @@ where
         Ok(lora)
     }
 
-    /// Get the board type of the LoRa board
-    pub fn get_board_type(&self) -> BoardType {
-        self.radio_kind.get_board_type()
-    }
-
     /// Create modulation parameters for a communication channel
     pub fn create_modulation_params(
         &mut self,
