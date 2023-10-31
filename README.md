@@ -58,13 +58,7 @@ Example RadioKind implementations and ancillary information:
 
 ## LoRa board-specific support
 
-LoRa boards use LoRa chip features differently.  To suppport these variations within a radio kind implementation, BoardType and ChipType are available:
-
-- <a href="https://github.com/embassy-rs/lora-phy/blob/main/src/mod_params.rs">scroll to BoardType and ChipType</a>.
-
-One can add a LoRa board (the board name includes the chip type in case the board may include a range of chip types) and the ChipType, then modify the radio kind processing to support board-specific features.  The ChipType is used for generic checks, alleviating the need to add a new board type check in places where a generic check will do.  BoardType checks only need to be implemented where the specificity is board-related.  There are examples of each type of check here:
-
-- <a href="https://github.com/embassy-rs/lora-phy/blob/main/src/sx1261_2/mod.rs">search for BoardType and ChipType</a>.
+Board-specific configuration can be handled via the chip driver specific Config struct.
 
 ## Chat
 
