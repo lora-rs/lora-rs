@@ -582,40 +582,42 @@ where
                 irq_flags, radio_mode
             );
 
-            if (irq_flags & IrqMask::HeaderValid.value()) == IrqMask::HeaderValid.value() {
-                debug!("HeaderValid in radio mode {}", radio_mode);
-            }
-
-            if radio_mode == RadioMode::Transmit {
-                if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
-                    debug!("TxDone in radio mode {}", radio_mode);
-                    return Ok(TargetIrqState::Done);
+            match radio_mode {
+                RadioMode::Transmit => {
+                    if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
+                        debug!("TxDone in radio mode {}", radio_mode);
+                        return Ok(TargetIrqState::Done);
+                    }
                 }
-            } else if radio_mode == RadioMode::Receive {
-                if (irq_flags & IrqMask::CRCError.value()) == IrqMask::CRCError.value() {
-                    debug!("CRCError in radio mode {}", radio_mode);
+                RadioMode::Receive => {
+                    if target_rx_state == TargetIrqState::PreambleReceived && IrqMask::HeaderValid.is_set_in(irq_flags)
+                    {
+                        debug!("HeaderValid in radio mode {}", radio_mode);
+                        return Ok(TargetIrqState::PreambleReceived);
+                    }
+                    if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
+                        debug!("RxDone in radio mode {}", radio_mode);
+                        return Ok(TargetIrqState::Done);
+                    }
+                    if (irq_flags & IrqMask::RxTimeout.value()) == IrqMask::RxTimeout.value() {
+                        debug!("RxTimeout in radio mode {}", radio_mode);
+                        return Err(RadioError::ReceiveTimeout);
+                    }
                 }
-                if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
-                    debug!("RxDone in radio mode {}", radio_mode);
-                    return Ok(TargetIrqState::Done);
+                RadioMode::ChannelActivityDetection => {
+                    if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+                        debug!("CADDone in radio mode {}", radio_mode);
+                        if cad_activity_detected.is_some() {
+                            *(cad_activity_detected.unwrap()) = (irq_flags & IrqMask::CADActivityDetected.value())
+                                == IrqMask::CADActivityDetected.value();
+                        }
+                        return Ok(TargetIrqState::Done);
+                    }
                 }
-                if target_rx_state == TargetIrqState::PreambleReceived && IrqMask::HeaderValid.is_set_in(irq_flags) {
-                    debug!("HeaderValid in radio mode {}", radio_mode);
-                    return Ok(TargetIrqState::PreambleReceived);
+                RadioMode::Sleep | RadioMode::Standby => {
+                    defmt::warn!("IRQ during sleep/standby?");
                 }
-                if (irq_flags & IrqMask::RxTimeout.value()) == IrqMask::RxTimeout.value() {
-                    debug!("RxTimeout in radio mode {}", radio_mode);
-                    return Err(RadioError::ReceiveTimeout);
-                }
-            } else if radio_mode == RadioMode::ChannelActivityDetection
-                && (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value()
-            {
-                debug!("CADDone in radio mode {}", radio_mode);
-                if cad_activity_detected.is_some() {
-                    *(cad_activity_detected.unwrap()) =
-                        (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
-                }
-                return Ok(TargetIrqState::Done);
+                RadioMode::FrequencySynthesis | RadioMode::ReceiveDutyCycle => todo!(),
             }
 
             // if an interrupt occurred for other than an error or operation completion, loop to wait again
