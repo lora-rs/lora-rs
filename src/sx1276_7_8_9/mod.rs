@@ -19,13 +19,17 @@ const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
 // Frequency synthesizer step for frequency calculation (Hz)
 const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625; // FXOSC (32 MHz) * 1000000 (Hz/MHz) / 524288 (2^19)
 
-/// Supported SX127x chip variants for further device-specific customizations
-/// Currently SX1276, SX1277, SX1278 and SX1279 are supported
-pub enum Sx127xVariant {}
+/// Supported SX127x chip variants
+#[derive(Clone, Copy)]
+pub enum Sx127xVariant {
+    /// Semtech SX1276
+    // TODO: should we add variants for 77, 78 and 79 as well?)
+    Sx1276,
+}
 
 /// Configuration for SX127x-based boards
 pub struct Config {
-    /// LoRa chip variant on this board
+    /// LoRa chip used on specific board
     pub chip: Sx127xVariant,
 }
 
