@@ -18,7 +18,14 @@ impl LoRaMode {
     }
 }
 
-#[derive(Clone, Copy)]
+// IRQ mapping for sx127x chips:
+// DIO0 - RxDone, TxDone, CadDone
+// DIO1 - RxTimeout, FhssChangeChannel, CadDetected
+// DIO2 - 3x FhssChangeChannel
+// DIO3 - CadDone, ValidHeader, PayloadCrcError
+// DIO4 - CadDetected, *PllLock, *PllLock
+// DIO5 - *ModeReady, *ClkOut, *ClkOut
+
 #[allow(dead_code)]
 pub enum DioMapping1Dio0 {
     RxDone = 0x00,
@@ -29,6 +36,37 @@ pub enum DioMapping1Dio0 {
 }
 
 impl DioMapping1Dio0 {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+#[allow(dead_code)]
+pub enum DioMapping1Dio1 {
+    RxTimeOut = 0b00 << 2,
+    FhssChangeChannel = 0b01 << 2,
+    CadDetected = 0b10 << 2,
+    Other = 0b11 << 2,
+    Mask = 0xf3,
+}
+
+#[allow(dead_code)]
+impl DioMapping1Dio1 {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+#[allow(dead_code)]
+pub enum DioMapping1Dio3 {
+    CadDone = 0,
+    ValidHeader = 0b01,
+    PayloadCrcError = 0b10,
+    Other = 0b11,
+    Mask = 0xfc,
+}
+
+impl DioMapping1Dio3 {
     pub fn value(self) -> u8 {
         self as u8
     }

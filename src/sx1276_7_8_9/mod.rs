@@ -478,7 +478,9 @@ where
             .await
     }
 
-    // Set the IRQ mask to disable unwanted interrupts, enable interrupts on DIO0 (the IRQ pin), and allow interrupts.
+    // Set the IRQ mask to disable unwanted interrupts,
+    // enable interrupts on DIO pins (sx127x has multiple),
+    // and allow interrupts.
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError> {
         match radio_mode {
             Some(RadioMode::Transmit) => {
@@ -500,15 +502,22 @@ where
                 self.write_register(
                     Register::RegIrqFlagsMask,
                     IrqMask::All.value()
-                        ^ (IrqMask::RxDone.value() | IrqMask::RxTimeout.value() | IrqMask::CRCError.value()),
+                        ^ (IrqMask::RxDone.value()
+                            | IrqMask::RxTimeout.value()
+                            | IrqMask::CRCError.value()
+                            | IrqMask::HeaderValid.value()),
                     false,
                 )
                 .await?;
 
-                let mut dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
-                dio_mapping_1 = (dio_mapping_1 & DioMapping1Dio0::Mask.value()) | DioMapping1Dio0::RxDone.value();
-                self.write_register(Register::RegDioMapping1, dio_mapping_1, false)
-                    .await?;
+                // HeaderValid and CRCError are mutually exclusive when attempting to
+                // trigger DIO-based interrupt, so our approach is to trigger HeaderValid
+                // as this is required for preamble detection.
+                // TODO: RxTimeout should be configured on DIO1
+                let dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
+                let val = (dio_mapping_1 & DioMapping1Dio0::Mask.value() & DioMapping1Dio3::Mask.value())
+                    | (DioMapping1Dio0::RxDone.value() | DioMapping1Dio3::ValidHeader.value());
+                self.write_register(Register::RegDioMapping1, val, false).await?;
 
                 self.write_register(Register::RegIrqFlags, 0x00u8, false).await?;
             }
@@ -578,7 +587,7 @@ where
             self.write_register(Register::RegIrqFlags, 0xffu8, false).await?; // clear all interrupts
 
             debug!(
-                "process_irq satisfied: irq_flags = 0x{:x} in radio mode {}",
+                "process_irq: irq_flags = 0b{:08b} in radio mode {}",
                 irq_flags, radio_mode
             );
 
