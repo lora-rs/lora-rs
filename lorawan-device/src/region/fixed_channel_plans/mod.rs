@@ -134,6 +134,7 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
                 } else {
                     DR::_4
                 };
+                self.last_tx_channel = channel as u8;
                 let data_rate = F::datarates()[dr as usize].clone().unwrap();
                 (data_rate, F::uplink_channels()[channel])
             }
