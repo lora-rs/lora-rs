@@ -36,6 +36,7 @@ pub(crate) enum Window {
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+/// LoRaWAN Session and Network Configurations
 pub struct Configuration {
     pub(crate) data_rate: region::DR,
     rx1_delay: u32,
@@ -74,7 +75,13 @@ impl Configuration {
 pub(crate) struct Mac {
     pub configuration: Configuration,
     pub region: region::Configuration,
+    board_eirp: BoardEirp,
     state: State,
+}
+
+struct BoardEirp {
+    max_power: u8,
+    antenna_gain: i8,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -100,9 +107,10 @@ pub struct SendData<'a> {
 pub(crate) type Result<T = ()> = core::result::Result<T, Error>;
 
 impl Mac {
-    pub(crate) fn new(region: region::Configuration) -> Self {
+    pub(crate) fn new(region: region::Configuration, max_power: u8, antenna_gain: i8) -> Self {
         let data_rate = region.get_default_datarate();
         Self {
+            board_eirp: BoardEirp { max_power, antenna_gain },
             region,
             state: State::Unjoined,
             configuration: Configuration {
@@ -125,7 +133,10 @@ impl Mac {
         let mut otaa = otaa::Otaa::new(credentials);
         let dev_nonce = otaa.prepare_buffer::<C, RNG, N>(rng, buf);
         self.state = State::Otaa(otaa);
-        (self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Join), dev_nonce)
+        let mut tx_config =
+            self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Join);
+        tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
+        (tx_config, dev_nonce)
     }
 
     /// Join via ABP. This does not transmit a join request frame, but instead sets the session.
@@ -156,7 +167,10 @@ impl Mac {
             State::Otaa(_) => Err(Error::NotJoined),
             State::Unjoined => Err(Error::NotJoined),
         }?;
-        Ok((self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data), fcnt))
+        let mut tx_config =
+            self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
+        tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
+        Ok((tx_config, fcnt))
     }
 
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {

@@ -6,8 +6,11 @@ use lora_phy::mod_params::{BoardType, ChipType, RadioError};
 use lora_phy::mod_traits::RadioKind;
 use lora_phy::{DelayUs, LoRa};
 
-/// LoRa radio using the physical layer API in the external lora-phy crate
-pub struct LoRaRadio<RK, DLY>
+/// LoRa radio using the physical layer API in the external lora-phy crate.
+///
+/// The const generic P is the max power the radio may be instructed to transmit at. The const
+/// generic G is the antenna gain and board loss in dBi.
+pub struct LoRaRadio<RK, DLY, const P: u8, const G: i8 = 0>
 where
     RK: RadioKind,
     DLY: DelayUs,
@@ -15,7 +18,7 @@ where
     pub(crate) lora: LoRa<RK, DLY>,
     rx_pkt_params: Option<lora_phy::mod_params::PacketParams>,
 }
-impl<RK, DLY> LoRaRadio<RK, DLY>
+impl<RK, DLY, const P: u8, const G: i8> LoRaRadio<RK, DLY, P, G>
 where
     RK: RadioKind,
     DLY: DelayUs,
@@ -26,7 +29,7 @@ where
 }
 
 /// Provide the timing values for boards supported by the external lora-phy crate
-impl<RK, DLY> Timings for LoRaRadio<RK, DLY>
+impl<RK, DLY, const P: u8, const G: i8> Timings for LoRaRadio<RK, DLY, P, G>
 where
     RK: RadioKind,
     DLY: DelayUs,
@@ -63,12 +66,16 @@ impl From<RadioError> for Error {
 
 /// Provide the LoRa physical layer rx/tx interface for boards supported by the external lora-phy
 /// crate
-impl<RK, DLY> PhyRxTx for LoRaRadio<RK, DLY>
+impl<RK, DLY, const P: u8, const G: i8> PhyRxTx for LoRaRadio<RK, DLY, P, G>
 where
     RK: RadioKind,
     DLY: DelayUs,
 {
     type PhyError = Error;
+
+    const ANTENNA_GAIN: i8 = G;
+
+    const MAX_RADIO_POWER: u8 = P;
 
     async fn tx(&mut self, config: TxConfig, buffer: &[u8]) -> Result<u32, Self::PhyError> {
         let mdltn_params = self.lora.create_modulation_params(

@@ -29,6 +29,13 @@ pub trait PhyRxTx: Sized {
     #[cfg(not(feature = "defmt"))]
     type PhyError;
 
+    /// Board-specific antenna gain and power loss in dBi.
+    const ANTENNA_GAIN: i8 = 0;
+
+    /// Maximum power (dBm) that the radio is able to output. When preparing instructions for radio,
+    /// the value of maximum power will be used as an upper bound.
+    const MAX_RADIO_POWER: u8;
+
     /// Transmit data buffer with the given transceiver configuration. The returned future
     /// should only complete once data have been transmitted.
     async fn tx(&mut self, config: TxConfig, buf: &[u8]) -> Result<u32, Self::PhyError>;

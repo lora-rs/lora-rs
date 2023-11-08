@@ -36,7 +36,7 @@ where
                 radio,
                 rng,
                 tx_buffer: RadioBuffer::new(),
-                mac: mac::Mac::new(region),
+                mac: Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN),
                 downlink: None,
             },
         }
@@ -108,7 +108,7 @@ where
     }
 }
 
-pub(crate) struct Shared<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize> {
+pub(crate) struct Shared<R: PhyRxTx + Timings, RNG: RngCore, const N: usize> {
     pub(crate) radio: R,
     pub(crate) rng: RNG,
     pub(crate) tx_buffer: RadioBuffer<N>,
