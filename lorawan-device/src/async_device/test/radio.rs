@@ -31,6 +31,10 @@ pub struct TestRadio {
 impl PhyRxTx for TestRadio {
     type PhyError = &'static str;
 
+    const MAX_RADIO_POWER: u8 = 26;
+
+    const ANTENNA_GAIN: i8 = 0;
+
     async fn tx(&mut self, config: TxConfig, buffer: &[u8]) -> Result<u32, Self::PhyError> {
         let length = buffer.len();
         // stash the uplink, to be consumed by channel or by rx handler

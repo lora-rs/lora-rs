@@ -147,7 +147,7 @@ where
         rng: G,
         session: Option<Session>,
     ) -> Self {
-        let mut mac = Mac::new(region);
+        let mut mac = Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN);
         if let Some(session) = session {
             mac.set_session(session);
         }

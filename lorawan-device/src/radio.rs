@@ -14,6 +14,13 @@ pub struct TxConfig {
     pub rf: RfConfig,
 }
 
+impl TxConfig {
+    pub fn adjust_power(&mut self, max_power: u8, antenna_gain: i8) {
+        self.pw -= antenna_gain;
+        self.pw = core::cmp::min(self.pw, max_power as i8);
+    }
+}
+
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RxQuality {
