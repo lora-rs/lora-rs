@@ -741,14 +741,20 @@ where
     }
     /// Set the LoRa chip into the TxContinuousWave mode
     async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError> {
-        self.intf.iv.enable_rf_switch_rx().await?;
-        let pa_config = self.read_register(Register::RegPaConfig).await?;
-        let new_pa_config = pa_config | 0b1000_0000;
-        self.write_register(Register::RegPaConfig, new_pa_config, false).await?;
-        self.write_register(Register::RegOpMode, 0b1100_0011, false).await?;
-        let modem_config = self.read_register(Register::RegModemConfig2).await?;
-        let new_modem_config = modem_config | 0b0000_1000;
-        self.write_register(Register::RegModemConfig2, new_modem_config, false)
-            .await
+        match self.config.chip {
+            Sx127xVariant::Sx1272 => todo!(),
+            Sx127xVariant::Sx1276 => {
+                self.intf.iv.enable_rf_switch_rx().await?;
+                let pa_config = self.read_register(Register::RegPaConfig).await?;
+                let new_pa_config = pa_config | 0b1000_0000;
+                self.write_register(Register::RegPaConfig, new_pa_config, false).await?;
+                self.write_register(Register::RegOpMode, 0b1100_0011, false).await?;
+                let modem_config = self.read_register(Register::RegModemConfig2).await?;
+                let new_modem_config = modem_config | 0b0000_1000;
+                self.write_register(Register::RegModemConfig2, new_modem_config, false)
+                    .await?;
+            }
+        }
+        Ok(())
     }
 }
