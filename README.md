@@ -1,6 +1,6 @@
 # lora-rs
 
-[![Continuous Integration](https://github.com/ivajloip/rust-lorawan/actions/workflows/rust.yml/badge.svg)](https://github.com/ivajloip/rust-lorawan/actions/workflows/rust.yml)
+[![Continuous Integration](https://github.com/lora-rs/lora-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/lora-rs/lora-rs/actions/workflows/rust.yml)
 
 [![Matrix](https://img.shields.io/matrix/public-lora-wan-rs%3Amatrix.org)](https://matrix.to/#/#public-lora-wan-rs:matrix.org)
 
