@@ -8,10 +8,10 @@ categories = [
     "hardware-support",
     "no-std",
 ]
-license = "Apache-2.0"
+license = "MIT"
 readme = "README.md"
 description = "A Rust LoRaWAN device stack implementation"
-repository = "https://github.com/ivajloip/rust-lorawan"
+repository = "https://github.com/lora-rs/lora-rs"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -19,7 +19,7 @@ rustdoc-args = ["--cfg", "async"]
 
 [dependencies]
 lora-modulation = { version = ">=0.1.2", default-features = false }
-lorawan = { version = "0.7.4", path = "../encoding", default-features = false }
+lorawan = { version = "0.7.4", path = "../lorawan-encoding", default-features = false }
 heapless = "0.7"
 generic-array = "0.14.2"
 defmt = { version = "0.3", optional = true }
@@ -33,7 +33,7 @@ lora-phy = { version = ">=2.1.1", optional = true }
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}
 rand = { version = "0", features = ["getrandom"] }
-lorawan = { version = "0.7.3", path = "../encoding", features = ["default-crypto"] }
+lorawan = { version = "0.7.3", path = "../lorawan-encoding", features = ["default-crypto"] }
 
 [features]
 defmt = ["dep:defmt", "lorawan/defmt", "lora-modulation/defmt"]
