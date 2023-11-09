@@ -33,6 +33,7 @@ lora-phy = { version = ">=2.1.1", optional = true }
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}
 rand = { version = "0", features = ["getrandom"] }
+lazy_static = "1"
 lorawan = { version = "0.7.3", path = "../lorawan-encoding", features = ["default-crypto"] }
 
 [features]

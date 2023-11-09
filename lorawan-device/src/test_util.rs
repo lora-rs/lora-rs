@@ -5,10 +5,11 @@ use lorawan::{
     default_crypto::DefaultFactory,
     maccommandcreator::LinkADRReqCreator,
     maccommands::{LinkADRReqPayload, MacCommand},
-    parser::{parse, DataPayload, PhyPayload},
+    parser::{parse, DataPayload, JoinAcceptPayload, PhyPayload},
 };
+use mac::Session;
 use radio::{RfConfig, TxConfig};
-use std::vec::Vec;
+use std::{collections::HashMap, sync::Mutex, vec::Vec};
 
 /// This module contains some functions for both async device and state machine driven devices
 /// to operate unit tests.
@@ -64,14 +65,20 @@ pub fn get_abp_credentials() -> JoinMode {
 
 pub type RxTxHandler = fn(Option<Uplink>, RfConfig, &mut [u8]) -> usize;
 
+lazy_static::lazy_static! {
+    static ref SESSION: Mutex<HashMap<usize, Session>> = Mutex::new(HashMap::new());
+
+}
+
 /// Handle join request and pack a JoinAccept into RxBuffer
-pub fn handle_join_request(
+pub fn handle_join_request<const I: usize>(
     uplink: Option<Uplink>,
     _config: RfConfig,
     rx_buffer: &mut [u8],
 ) -> usize {
     if let Some(mut uplink) = uplink {
         if let PhyPayload::JoinRequest(join_request) = uplink.get_payload() {
+            let devnonce = join_request.dev_nonce().to_owned();
             assert!(join_request.validate_mic(&AES128(get_key())));
             let mut buffer: [u8; 17] = [0; 17];
             let mut phy =
@@ -83,6 +90,28 @@ pub fn handle_join_request(
             phy.set_dev_addr(get_dev_addr());
             let finished = phy.build(&AES128(get_key())).unwrap();
             rx_buffer[..finished.len()].copy_from_slice(finished);
+
+            let mut copy = rx_buffer[..finished.len()].to_vec();
+            if let PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(encrypted)) =
+                parse(copy.as_mut_slice()).unwrap()
+            {
+                let decrypt = encrypted.decrypt(&AES128(get_key()));
+                let session = Session::derive_new(
+                    &decrypt,
+                    devnonce,
+                    &NetworkCredentials::new(
+                        AppEui::from([0; 8]),
+                        DevEui::from([0; 8]),
+                        AppKey::from(get_key()),
+                    ),
+                );
+                {
+                    let mut session_map = SESSION.lock().unwrap();
+                    session_map.insert(I, session);
+                }
+            } else {
+                panic!("Somehow unable to parse my own join accept?")
+            }
             finished.len()
         } else {
             panic!("Did not parse join request from uplink");
@@ -116,9 +145,45 @@ pub fn handle_data_uplink_with_link_adr_req(
                 lorawan::creator::DataPayloadCreator::with_options(rx_buffer, DefaultFactory)
                     .unwrap();
             phy.set_confirmed(uplink.is_confirmed());
+            phy.set_f_port(4);
             phy.set_dev_addr(&[0; 4]);
             phy.set_uplink(false);
-            let finished = phy.build(&[], &cmd, &AES128(get_key()), &AES128(get_key())).unwrap();
+            let finished =
+                phy.build(&[3, 2, 1], &cmd, &AES128(get_key()), &AES128(get_key())).unwrap();
+            finished.len()
+        } else {
+            panic!("Did not decode PhyPayload::Data!");
+        }
+    } else {
+        panic!("No uplink passed to handle_data_uplink_with_link_adr_req");
+    }
+}
+
+/// Handle an uplink and respond with two LinkAdrReq on Port 0
+#[cfg(feature = "async")]
+pub fn handle_class_c_uplink_after_join<const I: usize>(
+    uplink: Option<Uplink>,
+    _config: RfConfig,
+    rx_buffer: &mut [u8],
+) -> usize {
+    if let Some(mut uplink) = uplink {
+        if let PhyPayload::Data(DataPayload::Encrypted(data)) = uplink.get_payload() {
+            let fcnt = data.fhdr().fcnt() as u32;
+            let session = {
+                let session_map = SESSION.lock().unwrap();
+                session_map.get(&I).unwrap().clone()
+            };
+            assert!(data.validate_mic(&session.newskey.0, fcnt));
+            let uplink =
+                data.decrypt(Some(&AES128(get_key())), Some(&AES128(get_key())), fcnt).unwrap();
+            assert_eq!(uplink.fhdr().fcnt(), 0);
+            let mut phy =
+                lorawan::creator::DataPayloadCreator::with_options(rx_buffer, DefaultFactory)
+                    .unwrap();
+            phy.set_confirmed(uplink.is_confirmed());
+            phy.set_dev_addr(session.devaddr);
+            phy.set_uplink(false);
+            let finished = phy.build(&[], &[], &session.newskey.0, &session.appskey.0).unwrap();
             finished.len()
         } else {
             panic!("Did not decode PhyPayload::Data!");
@@ -180,4 +245,15 @@ pub fn handle_data_uplink_with_link_adr_ans(
     } else {
         panic!("No uplink passed to handle_data_uplink_with_link_adr_ans")
     }
+}
+
+#[cfg(feature = "async")]
+pub fn class_c_downlink(_uplink: Option<Uplink>, _config: RfConfig, rx_buffer: &mut [u8]) -> usize {
+    let mut phy =
+        lorawan::creator::DataPayloadCreator::with_options(rx_buffer, DefaultFactory).unwrap();
+    phy.set_f_port(3);
+    phy.set_dev_addr(&[0; 4]);
+    phy.set_uplink(false);
+    let finished = phy.build(&[1, 2, 3], &[], &AES128(get_key()), &AES128(get_key())).unwrap();
+    finished.len()
 }

@@ -12,7 +12,7 @@ fn test_join_rx1() {
     // send a timeout for beginning of window
     let response = device.handle_event(Event::TimeoutFired).unwrap();
     assert!(matches!(response, Response::TimeoutRequest(5100)));
-    device.get_radio().set_rxtx_handler(handle_join_request);
+    device.get_radio().set_rxtx_handler(handle_join_request::<1>);
     // send a radio event to let the radio device indicate a packet was received
     let response = device.handle_event(Event::RadioEvent(radio::Event::Phy(()))).unwrap();
     assert!(matches!(response, Response::JoinSuccess));
@@ -22,7 +22,7 @@ fn test_join_rx1() {
 #[test]
 fn test_join_rx2() {
     let mut device = test_device();
-    device.get_radio().set_rxtx_handler(handle_join_request);
+    device.get_radio().set_rxtx_handler(handle_join_request::<2>);
     let response = device.join(get_otaa_credentials()).unwrap();
     assert!(matches!(response, Response::TimeoutRequest(5000)));
     let response = device.handle_event(Event::TimeoutFired).unwrap();

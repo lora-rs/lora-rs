@@ -1,4 +1,4 @@
-use super::{get_dev_addr, get_key, radio::*, region, timer::*, DefaultFactory, Device};
+use super::{get_dev_addr, get_key, radio::*, region, timer::*, Device};
 
 use crate::mac::Session;
 use crate::{AppSKey, NewSKey};
@@ -7,13 +7,7 @@ fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel,
     let (radio_channel, mock_radio) = TestRadio::new();
     let (timer_channel, mock_timer) = TestTimer::new();
     let region = region::US915::default();
-    let async_device: crate::async_device::Device<
-        TestRadio,
-        DefaultFactory,
-        TestTimer,
-        rand_core::OsRng,
-        512,
-    > = Device::new_with_session(
+    let async_device = Device::new_with_session(
         region.into(),
         mock_radio,
         mock_timer,
