@@ -287,58 +287,52 @@ where
     async fn window_complete(&mut self) -> Result<(), Error<R::PhyError>> {
         if self.class_c {
             let rf_config = self.mac.region.get_rxc_config(self.mac.configuration.data_rate);
-            self.radio.setup_rx(rf_config).await.map_err(Error::Radio)?;
+            self.radio.setup_rx(rf_config).await.map_err(Error::Radio)
         } else {
-            self.radio.low_power().await.map_err(Error::Radio)?;
+            self.radio.low_power().await.map_err(Error::Radio)
         }
-        Ok(())
     }
 
     async fn between_windows(
         &mut self,
         duration: u32,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
-        if self.class_c {
-            let rf_config = self.mac.region.get_rxc_config(self.mac.configuration.data_rate);
-            self.radio.setup_rx(rf_config).await.map_err(Error::Radio)?;
-            let mut response = None;
-            let timeout_fut = self.timer.at(duration.into());
-            pin_mut!(timeout_fut);
-            let mut maybe_timeout_fut = Some(timeout_fut);
-            while let Some(timeout_fut) = maybe_timeout_fut.take() {
-                match Self::rx_window(
-                    &mut self.radio,
-                    &mut self.radio_buffer,
-                    duration,
-                    timeout_fut,
-                )
-                .await
-                {
-                    RxWindowResponse::Rx(sz, _, timeout_fut) => {
-                        self.radio_buffer.set_pos(sz);
-                        match self
-                            .mac
-                            .handle_rxc::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)?
-                        {
-                            mac::Response::NoUpdate => {
-                                self.radio_buffer.clear();
-                                maybe_timeout_fut = Some(timeout_fut);
-                            }
-                            r => {
-                                self.radio_buffer.clear();
-                                response = Some(r);
-                            }
-                        }
-                    }
-                    RxWindowResponse::Timeout(_) => return Ok(response),
-                };
-            }
-            Ok(response)
-        } else {
+        if !self.class_c {
             self.radio.low_power().await.map_err(Error::Radio)?;
             self.timer.at(duration.into()).await;
-            Ok(None)
+            return Ok(None);
         }
+        // Class C listen while waiting for the window
+        let rf_config = self.mac.region.get_rxc_config(self.mac.configuration.data_rate);
+        self.radio.setup_rx(rf_config).await.map_err(Error::Radio)?;
+        let mut response = None;
+        let timeout_fut = self.timer.at(duration.into());
+        pin_mut!(timeout_fut);
+        let mut maybe_timeout_fut = Some(timeout_fut);
+        while let Some(timeout_fut) = maybe_timeout_fut.take() {
+            match Self::rx_window(&mut self.radio, &mut self.radio_buffer, duration, timeout_fut)
+                .await
+            {
+                RxWindowResponse::Rx(sz, _, timeout_fut) => {
+                    self.radio_buffer.set_pos(sz);
+                    match self
+                        .mac
+                        .handle_rxc::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)?
+                    {
+                        mac::Response::NoUpdate => {
+                            self.radio_buffer.clear();
+                            maybe_timeout_fut = Some(timeout_fut);
+                        }
+                        r => {
+                            self.radio_buffer.clear();
+                            response = Some(r);
+                        }
+                    }
+                }
+                RxWindowResponse::Timeout(_) => return Ok(response),
+            };
+        }
+        Ok(response)
     }
 
     /// Attempt to receive data within RX1 and RX2 windows. This function will populate the
