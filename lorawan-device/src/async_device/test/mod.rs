@@ -15,7 +15,7 @@ mod radio;
 use radio::TestRadio;
 
 mod util;
-use util::{setup, setup_with_session};
+use util::{setup, setup_with_session, setup_with_session_class_c};
 
 type Device =
     crate::async_device::Device<TestRadio, DefaultFactory, TestTimer, rand_core::OsRng, 512, 4>;
@@ -196,7 +196,7 @@ async fn test_confirmed_uplink_with_ack_rx1() {
     assert!(!*send_await_complete.lock().await);
 
     // Send a downlink with confirmation
-    radio.handle_rxtx(handle_data_uplink_with_link_adr_req).await;
+    radio.handle_rxtx(handle_data_uplink_with_link_adr_req::<0, 0>).await;
     match async_device.await.unwrap() {
         Ok(SendResponse::DownlinkReceived(_)) => (),
         _ => {
@@ -229,7 +229,7 @@ async fn test_confirmed_uplink_with_ack_rx2() {
     timer.fire_most_recent().await;
 
     // Send a downlink confirmation
-    radio.handle_rxtx(handle_data_uplink_with_link_adr_req).await;
+    radio.handle_rxtx(handle_data_uplink_with_link_adr_req::<0, 0>).await;
 
     match async_device.await.unwrap() {
         Ok(SendResponse::DownlinkReceived(_)) => (),
@@ -257,7 +257,7 @@ async fn test_link_adr_ans() {
     // Trigger beginning of RX1
     timer.fire_most_recent().await;
     // Send a downlink with confirmation
-    radio.handle_rxtx(handle_data_uplink_with_link_adr_req).await;
+    radio.handle_rxtx(handle_data_uplink_with_link_adr_req::<0, 0>).await;
     tokio::time::sleep(tokio::time::Duration::from_millis(15)).await;
     assert!(*send_await_complete.lock().await);
     // at this point, the device thread should be sending the second frame
@@ -274,55 +274,23 @@ async fn test_link_adr_ans() {
 }
 
 #[tokio::test]
-async fn test_join_rx1_class_c() {
-    let (radio, timer, mut async_device) = setup();
-    async_device.enable_class_c().await.unwrap();
-    // Run the device
-    let async_device =
-        tokio::spawn(async move { async_device.join(&get_otaa_credentials()).await });
-
-    // Trigger beginning of RX1
-    timer.fire_most_recent().await;
-    // Trigger handling of JoinAccept
-    radio.handle_rxtx(handle_join_request::<6>).await;
-    // The stack internally sends a data frame after class C join
-    // and we need to respond to it to "complete" the Join procedure
-
-    // Trigger beginning of RX1
-    tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
-    timer.fire_most_recent().await;
-
-    radio.handle_rxtx(handle_class_c_uplink_after_join::<6>).await;
-
-    // Await the device to return and verify state
-    let response = async_device.await.unwrap();
-    if let Ok(JoinResponse::JoinSuccess) = response {
-        // async_device.await.unwrap() {
-        // NB: timer is armed twice (even if not fired twice)
-        // for each Join RX1 and Data RX1, because RX1 end
-        // is armed when packet is received
-        assert_eq!(4, timer.get_armed_count().await);
-    } else {
-        panic!();
-    }
-}
-
-#[tokio::test]
 async fn test_class_c_data_before_rx1() {
-    let (radio, timer, mut async_device) = setup_with_session();
-    async_device.enable_class_c().await.unwrap();
+    let (radio, timer, mut async_device) = setup_with_session_class_c().await;
+    println!("setup complete");
     // Run the device
     let task = tokio::spawn(async move {
         let response = async_device.send(&[1, 2, 3], 3, true).await;
+        println!("response not done?");
         (async_device, response)
     });
 
     // send first downlink before RX1
-    radio.handle_rxtx(class_c_downlink).await;
+    radio.handle_rxtx(class_c_downlink::<1>).await;
     // Trigger beginning of RX1
     timer.fire_most_recent().await;
-    // Send a downlink in RX1
-    radio.handle_rxtx(handle_data_uplink_with_link_adr_req).await;
+    // We expect FCntUp 1 up since the test util for Class C setup sends first frame
+    // We set FcntDown to 2, since ACK to setup (1) and Class C downlink above (2)
+    radio.handle_rxtx(handle_data_uplink_with_link_adr_req::<1, 2>).await;
     let (mut device, response) = task.await.unwrap();
     match response {
         Ok(SendResponse::DownlinkReceived(_)) => (),
@@ -336,8 +304,7 @@ async fn test_class_c_data_before_rx1() {
 
 #[tokio::test]
 async fn test_class_c_data_before_rx2() {
-    let (radio, timer, mut async_device) = setup_with_session();
-    async_device.enable_class_c().await.unwrap();
+    let (radio, timer, mut async_device) = setup_with_session_class_c().await;
     // Run the device
     let task = tokio::spawn(async move {
         let response = async_device.send(&[1, 2, 3], 3, true).await;
@@ -350,9 +317,10 @@ async fn test_class_c_data_before_rx2() {
     // Trigger end of RX1
     timer.fire_most_recent().await;
 
-    radio.handle_rxtx(class_c_downlink).await;
-    // Send a downlink in RX2
-    radio.handle_rxtx(handle_data_uplink_with_link_adr_req).await;
+    radio.handle_rxtx(class_c_downlink::<1>).await;
+    // We expect FCntUp 1 up since the test util for Class C setup sends first frame
+    // We set FcntDown to 2, since ACK to setup (1) and Class C downlink above (2)
+    radio.handle_rxtx(handle_data_uplink_with_link_adr_req::<1, 2>).await;
     let (mut device, response) = task.await.unwrap();
     match response {
         Ok(SendResponse::DownlinkReceived(_)) => (),
@@ -366,15 +334,14 @@ async fn test_class_c_data_before_rx2() {
 
 #[tokio::test]
 async fn test_class_c_async_down() {
-    let (radio, _timer, mut async_device) = setup_with_session();
-    async_device.enable_class_c().await.unwrap();
+    let (radio, _timer, mut async_device) = setup_with_session_class_c().await;
     // Run the device
     let task = tokio::spawn(async move {
         let response = async_device.rxc_listen().await;
         (async_device, response)
     });
 
-    radio.handle_rxtx(class_c_downlink).await;
+    radio.handle_rxtx(class_c_downlink::<1>).await;
     let (mut device, response) = task.await.unwrap();
     match response {
         Ok(mac::Response::DownlinkReceived(_)) => (),

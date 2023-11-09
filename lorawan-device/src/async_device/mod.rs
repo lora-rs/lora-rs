@@ -72,12 +72,6 @@ pub enum SendResponse {
     RxComplete,
 }
 
-impl SendResponse {
-    fn is_downlink_received(&self) -> bool {
-        matches!(self, SendResponse::DownlinkReceived(_))
-    }
-}
-
 #[derive(Debug)]
 pub enum JoinResponse {
     JoinSuccess,
@@ -176,13 +170,15 @@ where
         }
     }
 
-    pub async fn enable_class_c(&mut self) -> Result<(), Error<R::PhyError>> {
-        let rf_config = self.mac.region.get_rxc_config(self.mac.configuration.data_rate);
-        self.radio.setup_rx(rf_config).await.map_err(Error::Radio)?;
+    /// Enables Class C behavior. Note that Class C downlinks are not possible until a confirmed
+    /// uplink is sent to the LNS.
+
+    pub fn enable_class_c(&mut self) {
         self.class_c = true;
-        Ok(())
     }
 
+    /// Disables Class C behavior. Note that an uplink must be set for the radio to disable
+    /// Class C listen.
     pub fn disable_class_c(&mut self) {
         self.class_c = false;
     }
@@ -217,6 +213,9 @@ where
     /// the LoRaWAN network has been joined successfully, or an error has occurred.
     ///
     /// Repeatedly calling join using OTAA will result in a new LoRaWAN session to be created.
+    ///
+    /// Note that for a Class C enabled device, you must repeatedly send *confirmed* uplink until
+    /// LoRaWAN Network Server (LNS) confirmation after joining.
     pub async fn join(&mut self, join_mode: &JoinMode) -> Result<JoinResponse, Error<R::PhyError>> {
         match join_mode {
             JoinMode::OTAA { deveui, appeui, appkey } => {
@@ -235,27 +234,7 @@ where
 
                 // Receive join response within RX window
                 self.timer.reset();
-                let rx_response = self.rx_with_timeout(&Frame::Join, ms).await?.try_into();
-                if self.class_c {
-                    if let Ok(JoinResponse::JoinSuccess) = rx_response {
-                        /* The end-device that expects to receive Class C downlink frames SHALL send a confirmed uplink frame or a frame that
-                        requires an acknowledgment as soon as possible after receiving a valid Join-Accept frame. The end-device SHALL
-                        continue to send such frames until it receives the first downlink from the Network (while respecting duty cycles,
-                        if applicable, and retransmission timers). The Network Server SHALL NOT transmit a downlink before it has received
-                        a first uplink frame.
-                         */
-                        loop {
-                            let response = self.send(&[0u8; 0], 0, true).await?;
-                            if response.is_downlink_received() {
-                                return Ok(JoinResponse::JoinSuccess);
-                            }
-                        }
-                    } else {
-                        Ok(rx_response?)
-                    }
-                } else {
-                    Ok(rx_response?)
-                }
+                Ok(self.rx_with_timeout(&Frame::Join, ms).await?.try_into()?)
             }
             JoinMode::ABP { newskey, appskey, devaddr } => {
                 self.mac.join_abp(*newskey, *appskey, *devaddr);
@@ -380,7 +359,6 @@ where
         let rx2_start_delay = (self.mac.get_rx_delay(frame, &Window::_2) as i32
             + window_delay as i32
             + self.radio.get_rx_window_offset_ms()) as u32;
-
         self.radio_buffer.clear();
         let _ = self.between_windows(rx1_start_delay).await?;
 
@@ -388,6 +366,7 @@ where
             Rx(mac::Response),
             TimedOut(u32),
         }
+
         let window = {
             // Prepare for RX using correct configuration
             let rx_config =
@@ -500,7 +479,6 @@ where
                 self.mac.rx2_complete()
             }
         };
-
         self.window_complete().await?;
         Ok(response)
     }

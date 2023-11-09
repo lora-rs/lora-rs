@@ -109,7 +109,6 @@ impl Session {
                     && (fcnt > self.fcnt_down || fcnt == 0)
                 {
                     self.fcnt_down = fcnt;
-
                     // We can safely unwrap here because we already validated the MIC
                     let decrypted = encrypted_data
                         .decrypt(Some(&self.newskey().0), Some(&self.appskey().0), self.fcnt_down)
