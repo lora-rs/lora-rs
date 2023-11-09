@@ -1,6 +1,7 @@
 # lorawan-device
 
-[![Gitter chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/rust-lorawan/lorawan)
+[![Latest Version]][crates.io]
+[![Docs]][doc.rs]
 
 This is an experimental LoRaWAN device stack. It can be tested by using the
 example in [the sx12xx-rs repository](https://github.com/lthiery/sx12xx-rs). You
@@ -68,3 +69,8 @@ differs from the state machine implementation in the following ways:
 
 In terms of features, the async stack supports the same set of features as the state machine driven
 implementation.
+
+[Latest Version]: https://img.shields.io/crates/v/lorawan-device.svg
+[crates.io]: https://crates.io/crates/lorawan-device
+[Docs]: https://docs.rs/lorawan-device/badge.svg
+[doc.rs]: https://docs.rs/lorawan-device

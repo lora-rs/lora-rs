@@ -1,9 +1,7 @@
 # LoRaWAN
 
-[![Build Status](https://travis-ci.org/ivajloip/rust-lorawan.svg?branch=master)](https://travis-ci.org/ivajloip/rust-lorawan)
 [![Latest Version]][crates.io]
 [![Docs]][doc.rs]
-[![Gitter chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/rust-lorawan/lorawan)
 
 The lorawan library provides structures and tools for reading and writing
 LoRaWAN 1.0.2 messages from and to slices of bytes.
@@ -118,8 +116,15 @@ Found 8 outliers among 100 measurements (8.00%)
 Approximate memory usage per iteration: 57 from 8668603
 ```
 
+## Used code and inspiration
+
+I would like to thank the projects [lorawan][5] by [brocaar][6] for the
+inspiration and useful examples.
+
 [3]: https://gist.github.com/ivajloip/d63981e4caddaa68bd0b9c2390f4af90
 [4]: https://github.com/brocaar/lorawan/commit/6095d473cf605ce4da4584ae2b570bca8e1259ff
+[5]: https://github.com/brocaar/lorawan
+[6]: https://github.com/brocaar
 [Latest Version]: https://img.shields.io/crates/v/lorawan.svg
 [crates.io]: https://crates.io/crates/lorawan
 [Docs]: https://docs.rs/lorawan/badge.svg

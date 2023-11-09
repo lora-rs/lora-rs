@@ -1,21 +1,18 @@
-# Rust LoRaWAN
+# lora-rs
+
 [![Continuous Integration](https://github.com/ivajloip/rust-lorawan/actions/workflows/rust.yml/badge.svg)](https://github.com/ivajloip/rust-lorawan/actions/workflows/rust.yml)
 
-[![Gitter chat](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/rust-lorawan/lorawan)
+[![Matrix](https://img.shields.io/matrix/public-lora-wan-rs%3Amatrix.org)](https://matrix.to/#/#public-lora-wan-rs:matrix.org)
 
-This repository provides primitives for reading and writing LoRaWAN 1.0.2
-messages from and to slices of bytes in the `encoding` folder and an
-experimental device stack in the `device` folder. Please refer to those folders
-for more information, examples and benchmark results where available.
+This repository aims to provide a set of compatible crates for implementing LoRa end devices in Rust. 
+As a general rule, all crates are `nostd` and designed to be friendly for embedded projects.
+
+## Crates
+
+* **lora-modulation**: LoRa modulation characteristics and a utility for calculating time on air
+* **lorawan-encoding**: encoding and decoding LoRaWAN packets
+* **lorawan-device**: a LoRaWAN device stack with non-blocking and async implementations
 
 ## Contributing
 
-Please read [the contributing guidelines](CONTRIBUTING.md)
-
-## Used code and inspiration
-
-I would like to thank the projects [lorawan][1] by [brocaar][2] for the
-inspiration and useful examples.
-
-[1]: https://github.com/brocaar/lorawan
-[2]: https://github.com/brocaar
+Please read [the contributing guidelines](CONTRIBUTING.md).
