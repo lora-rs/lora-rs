@@ -3,10 +3,10 @@ name = "lora-modulation"
 version = "0.1.3"
 edition = "2021"
 authors = ["Louis Thiery <thiery.louis@gmail.com>"]
-license = "Apache-2.0"
+license = "MIT"
 readme = "README.md"
 description = "A definition of LoRa modulation characteristics with minimal external dependencies."
-repository = "https://github.com/ivajloip/rust-lorawan"
+repository = "https://github.com/lora-rs/lora-rs"
 keywords = ["lora", "iot", "lpwan"]
 
 [dependencies]
