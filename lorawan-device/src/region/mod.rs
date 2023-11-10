@@ -304,6 +304,22 @@ impl Configuration {
         region_dispatch!(self, get_rx_datarate, datarate, frame, window)
     }
 
+    // Unicast: The RXC parameters are identical to the RX2 parameters, and they use the same
+    // channel and data rate. Modifying the RX2 parameters using the appropriate MAC
+    // commands also modifies the RXC parameters.
+    pub(crate) fn get_rxc_config(&self, datarate: DR) -> RfConfig {
+        let dr = self.get_rx_datarate(datarate, &Frame::Data, &Window::_2);
+        let frequency = self.get_rx_frequency(&Frame::Data, &Window::_2);
+        RfConfig {
+            frequency,
+            bb: BaseBandModulationParams::new(
+                dr.spreading_factor,
+                dr.bandwidth,
+                self.get_coding_rate(),
+            ),
+        }
+    }
+
     pub(crate) fn get_dbm(&self) -> i8 {
         region_dispatch!(self, get_dbm)
     }

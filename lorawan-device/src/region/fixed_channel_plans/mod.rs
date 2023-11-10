@@ -58,6 +58,7 @@ impl<const D: usize, F: FixedChannelRegion<D>> FixedChannelPlan<D, F> {
         self.channel_mask.set_bank(7, mask);
     }
 
+    #[allow(unused)]
     pub fn get_max_payload_length(datarate: DR, repeater_compatible: bool, dwell_time: bool) -> u8 {
         F::get_max_payload_length(datarate, repeater_compatible, dwell_time)
     }

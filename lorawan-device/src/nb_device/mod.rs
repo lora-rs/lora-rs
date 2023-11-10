@@ -11,24 +11,24 @@ mod test;
 
 type TimestampMs = u32;
 
-pub struct Device<R, C, RNG, const N: usize>
-where
-    R: radio::PhyRxTx + Timings,
-    C: CryptoFactory + Default,
-    RNG: RngCore,
-{
-    state: State,
-    shared: Shared<R, RNG, N>,
-    crypto: PhantomData<C>,
-}
-
-impl<R, C, RNG, const N: usize> Device<R, C, RNG, N>
+pub struct Device<R, C, RNG, const N: usize, const D: usize = 1>
 where
     R: PhyRxTx + Timings,
     C: CryptoFactory + Default,
     RNG: RngCore,
 {
-    pub fn new(region: region::Configuration, radio: R, rng: RNG) -> Device<R, C, RNG, N> {
+    state: State,
+    shared: Shared<R, RNG, N, D>,
+    crypto: PhantomData<C>,
+}
+
+impl<R, C, RNG, const N: usize, const D: usize> Device<R, C, RNG, N, D>
+where
+    R: PhyRxTx + Timings,
+    C: CryptoFactory + Default,
+    RNG: RngCore,
+{
+    pub fn new(region: region::Configuration, radio: R, rng: RNG) -> Device<R, C, RNG, N, D> {
         Device {
             crypto: PhantomData,
             state: State::default(),
@@ -37,7 +37,7 @@ where
                 rng,
                 tx_buffer: RadioBuffer::new(),
                 mac: Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN),
-                downlink: None,
+                downlink: Vec::new(),
             },
         }
     }
@@ -91,11 +91,11 @@ where
     }
 
     pub fn take_downlink(&mut self) -> Option<Downlink> {
-        self.shared.downlink.take()
+        self.shared.downlink.pop()
     }
 
     pub fn handle_event(&mut self, event: Event<R>) -> Result<Response, Error<R>> {
-        let (new_state, result) = self.state.handle_event::<R, C, RNG, N>(
+        let (new_state, result) = self.state.handle_event::<R, C, RNG, N, D>(
             &mut self.shared.mac,
             &mut self.shared.radio,
             &mut self.shared.rng,
@@ -108,12 +108,12 @@ where
     }
 }
 
-pub(crate) struct Shared<R: PhyRxTx + Timings, RNG: RngCore, const N: usize> {
+pub(crate) struct Shared<R: PhyRxTx + Timings, RNG: RngCore, const N: usize, const D: usize> {
     pub(crate) radio: R,
     pub(crate) rng: RNG,
     pub(crate) tx_buffer: RadioBuffer<N>,
     pub(crate) mac: Mac,
-    pub(crate) downlink: Option<Downlink>,
+    pub(crate) downlink: Vec<Downlink, D>,
 }
 
 #[derive(Debug)]

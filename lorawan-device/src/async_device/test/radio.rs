@@ -52,7 +52,7 @@ impl PhyRxTx for TestRadio {
         let msg = self.rx.recv().await.unwrap();
         match msg {
             Msg::RxTx(handler) => {
-                let mut last_uplink = self.last_uplink.lock().await;
+                let last_uplink = self.last_uplink.lock().await;
                 // a quick yield to let timer arm
                 time::sleep(time::Duration::from_millis(5)).await;
                 if let Some(config) = &self.current_config {
@@ -83,10 +83,8 @@ pub struct RadioChannel {
 }
 
 impl RadioChannel {
-    pub fn handle_rxtx(&self, handler: RxTxHandler) {
-        let tx = self.tx.clone();
-        tokio::spawn(async move {
-            tx.send(Msg::RxTx(handler)).await.unwrap();
-        });
+    pub async fn handle_rxtx(&self, handler: RxTxHandler) {
+        tokio::time::sleep(time::Duration::from_millis(5)).await;
+        self.tx.send(Msg::RxTx(handler)).await.unwrap();
     }
 }

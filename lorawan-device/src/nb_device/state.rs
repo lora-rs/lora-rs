@@ -106,20 +106,21 @@ impl State {
         C: CryptoFactory + Default,
         RNG: RngCore,
         const N: usize,
+        const D: usize,
     >(
         self,
         mac: &mut Mac,
         radio: &mut R,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
-        dl: &mut Option<Downlink>,
+        dl: &mut Vec<Downlink, D>,
         event: Event<R>,
     ) -> (Self, Result<Response, super::Error<R>>) {
         match self {
             State::Idle(s) => s.handle_event::<R, C, RNG, N>(mac, radio, rng, buf, event),
             State::SendingData(s) => s.handle_event::<R, N>(mac, radio, event),
             State::WaitingForRxWindow(s) => s.handle_event::<R, N>(mac, radio, event),
-            State::WaitingForRx(s) => s.handle_event::<R, C, N>(mac, radio, buf, event, dl),
+            State::WaitingForRx(s) => s.handle_event::<R, C, N, D>(mac, radio, buf, event, dl),
         }
     }
 }
@@ -313,13 +314,14 @@ impl WaitingForRx {
         R: radio::PhyRxTx + Timings,
         C: CryptoFactory + Default,
         const N: usize,
+        const D: usize,
     >(
         self,
         mac: &mut Mac,
         radio: &mut R,
         buf: &mut RadioBuffer<N>,
         event: Event<R>,
-        dl: &mut Option<Downlink>,
+        dl: &mut Vec<Downlink, D>,
     ) -> (State, Result<Response, super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
@@ -338,7 +340,7 @@ impl WaitingForRx {
                                     Err(Error::BufferTooSmall.into()),
                                 );
                             }
-                            match mac.handle_rx::<C, N>(buf, dl) {
+                            match mac.handle_rx::<C, N, D>(buf, dl) {
                                 // NoUpdate can occur when a stray radio packet is received. Maintain state
                                 mac::Response::NoUpdate => {
                                     (State::WaitingForRx(self), Ok(Response::NoUpdate))
