@@ -228,7 +228,7 @@ impl Mac {
         }
     }
 
-    /// Handles a received RF frame during RXC window. Returns None is unparseable, fails decryption,
+    /// Handles a received RF frame during RXC window. Returns None if unparseable, fails decryption,
     /// or fails MIC verification. Upon successful data rx, provides Response::DownlinkReceived.
     /// User must later call `take_downlink()` on the device to get the application data.
     pub(crate) fn handle_rxc<C: CryptoFactory + Default, const N: usize, const D: usize>(
