@@ -107,9 +107,11 @@ impl State {
         RNG: RngCore,
         const N: usize,
         const D: usize,
+        const P: u8,
+        const G: i8,
     >(
         self,
-        mac: &mut Mac,
+        mac: &mut Mac<P, G>,
         radio: &mut R,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
@@ -117,10 +119,12 @@ impl State {
         event: Event<R>,
     ) -> (Self, Result<Response, super::Error<R>>) {
         match self {
-            State::Idle(s) => s.handle_event::<R, C, RNG, N>(mac, radio, rng, buf, event),
-            State::SendingData(s) => s.handle_event::<R, N>(mac, radio, event),
-            State::WaitingForRxWindow(s) => s.handle_event::<R, N>(mac, radio, event),
-            State::WaitingForRx(s) => s.handle_event::<R, C, N, D>(mac, radio, buf, event, dl),
+            State::Idle(s) => s.handle_event::<R, C, RNG, N, P, G>(mac, radio, rng, buf, event),
+            State::SendingData(s) => s.handle_event::<R, N, P, G>(mac, radio, event),
+            State::WaitingForRxWindow(s) => s.handle_event::<R, N, P, G>(mac, radio, event),
+            State::WaitingForRx(s) => {
+                s.handle_event::<R, C, N, D, P, G>(mac, radio, buf, event, dl)
+            }
         }
     }
 }
@@ -134,9 +138,11 @@ impl Idle {
         C: CryptoFactory + Default,
         RNG: RngCore,
         const N: usize,
+        const P: u8,
+        const G: i8,
     >(
         self,
-        mac: &mut Mac,
+        mac: &mut Mac<P, G>,
         radio: &mut R,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
@@ -184,7 +190,7 @@ impl Idle {
                             // directly jump to waiting for RxWindow
                             // allows for synchronous sending
                             radio::Response::TxDone(ms) => {
-                                data_rxwindow1_timeout::<R, N>(frame, mac, radio, ms)
+                                data_rxwindow1_timeout::<R, N, P, G>(frame, mac, radio, ms)
                             }
                             _ => (State::Idle(self), Err(Error::UnexpectedRadioResponse.into())),
                         }
@@ -202,9 +208,14 @@ pub struct SendingData {
 }
 
 impl SendingData {
-    pub(crate) fn handle_event<R: radio::PhyRxTx + Timings, const N: usize>(
+    pub(crate) fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        const N: usize,
+        const P: u8,
+        const G: i8,
+    >(
         self,
-        mac: &mut Mac,
+        mac: &mut Mac<P, G>,
         radio: &mut R,
         event: Event<R>,
     ) -> (State, Result<Response, super::Error<R>>) {
@@ -217,7 +228,7 @@ impl SendingData {
                         match response {
                             // expect a complete transmit
                             radio::Response::TxDone(ms) => {
-                                data_rxwindow1_timeout::<R, N>(self.frame, mac, radio, ms)
+                                data_rxwindow1_timeout::<R, N, P, G>(self.frame, mac, radio, ms)
                             }
                             // anything other than TxComplete is unexpected
                             _ => {
@@ -245,9 +256,14 @@ pub struct WaitingForRxWindow {
 }
 
 impl WaitingForRxWindow {
-    pub(crate) fn handle_event<R: radio::PhyRxTx + Timings, const N: usize>(
+    pub(crate) fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        const N: usize,
+        const P: u8,
+        const G: i8,
+    >(
         self,
-        mac: &mut Mac,
+        mac: &mut Mac<P, G>,
         radio: &mut R,
         event: Event<R>,
     ) -> (State, Result<Response, super::Error<R>>) {
@@ -315,9 +331,11 @@ impl WaitingForRx {
         C: CryptoFactory + Default,
         const N: usize,
         const D: usize,
+        const P: u8,
+        const G: i8,
     >(
         self,
-        mac: &mut Mac,
+        mac: &mut Mac<P, G>,
         radio: &mut R,
         buf: &mut RadioBuffer<N>,
         event: Event<R>,
@@ -396,9 +414,9 @@ enum Rx {
     _2(u32),
 }
 
-fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, const N: usize>(
+fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, const N: usize, const P: u8, const G: i8>(
     frame: Frame,
-    mac: &mut Mac,
+    mac: &mut Mac<P, G>,
     radio: &mut R,
     timestamp_ms: u32,
 ) -> (State, Result<Response, super::Error<R>>) {

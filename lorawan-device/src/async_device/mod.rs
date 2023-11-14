@@ -40,8 +40,16 @@ use core::cmp::min;
 /// that may be buffered. The defaults are 256 and 1 respectively which should be fine for Class A devices. **For Class
 /// C operation**, it is recommended to increase D to at least 2, if not 3. This is because during the RX1/RX2 windows
 /// after a Class A transmit, it is possible to receive Class C downlinks (in additional to any RX1/RX2 responses!).
-pub struct Device<R, C, T, G, const N: usize = 256, const D: usize = 1>
-where
+pub struct Device<
+    R,
+    C,
+    T,
+    G,
+    const N: usize = 256,
+    const D: usize = 1,
+    const POWER: u8 = { R::MAX_RADIO_POWER },
+    const GAIN: i8 = { R::ANTENNA_GAIN },
+> where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
     C: CryptoFactory + Default,
@@ -51,7 +59,7 @@ where
     radio: R,
     rng: G,
     timer: T,
-    mac: Mac,
+    mac: Mac<POWER, GAIN>,
     radio_buffer: RadioBuffer<N>,
     downlink: Vec<Downlink, D>,
     class_c: bool,
@@ -90,7 +98,8 @@ enum RxWindowResponse<F: futures::Future<Output = ()> + Sized + Unpin> {
     Timeout(u32),
 }
 
-impl<R, C, T, const N: usize> Device<R, C, T, rng::Prng, N>
+impl<R, C, T, const N: usize, const D: usize, const P: u8, const G: i8>
+    Device<R, C, T, rng::Prng, N, D, P, G>
 where
     R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
@@ -130,7 +139,8 @@ where
     }
 }
 
-impl<R, C, T, G, const N: usize, const D: usize> Device<R, C, T, G, N, D>
+impl<R, C, T, G, const N: usize, const D: usize, const POWER: u8, const GAIN: i8>
+    Device<R, C, T, G, N, D, POWER, GAIN>
 where
     R: radio::PhyRxTx + Timings,
     C: CryptoFactory + Default,
@@ -154,7 +164,7 @@ where
         rng: G,
         session: Option<Session>,
     ) -> Self {
-        let mut mac = Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN);
+        let mut mac = Mac::new(region);
         if let Some(session) = session {
             mac.set_session(session);
         }

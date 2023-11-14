@@ -73,16 +73,10 @@ impl Configuration {
     }
 }
 
-pub(crate) struct Mac {
+pub(crate) struct Mac<const P: u8, const G: i8> {
     pub configuration: Configuration,
     pub region: region::Configuration,
-    board_eirp: BoardEirp,
     state: State,
-}
-
-struct BoardEirp {
-    max_power: u8,
-    antenna_gain: i8,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -107,11 +101,10 @@ pub struct SendData<'a> {
 
 pub(crate) type Result<T = ()> = core::result::Result<T, Error>;
 
-impl Mac {
-    pub(crate) fn new(region: region::Configuration, max_power: u8, antenna_gain: i8) -> Self {
+impl<const P: u8, const G: i8> Mac<P, G> {
+    pub(crate) fn new(region: region::Configuration) -> Self {
         let data_rate = region.get_default_datarate();
         Self {
-            board_eirp: BoardEirp { max_power, antenna_gain },
             region,
             state: State::Unjoined,
             configuration: Configuration {
@@ -136,7 +129,7 @@ impl Mac {
         self.state = State::Otaa(otaa);
         let mut tx_config =
             self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Join);
-        tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
+        tx_config.adjust_power::<P, G>();
         (tx_config, dev_nonce)
     }
 
@@ -170,7 +163,7 @@ impl Mac {
         }?;
         let mut tx_config =
             self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
-        tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
+        tx_config.adjust_power::<P, G>();
         Ok((tx_config, fcnt))
     }
 

@@ -11,24 +11,32 @@ mod test;
 
 type TimestampMs = u32;
 
-pub struct Device<R, C, RNG, const N: usize, const D: usize = 1>
-where
+pub struct Device<
+    R,
+    C,
+    RNG,
+    const N: usize,
+    const D: usize = 1,
+    const P: u8 = { R::MAX_RADIO_POWER },
+    const G: i8 = { R::ANTENNA_GAIN },
+> where
     R: PhyRxTx + Timings,
     C: CryptoFactory + Default,
     RNG: RngCore,
 {
     state: State,
-    shared: Shared<R, RNG, N, D>,
+    shared: Shared<R, RNG, N, D, P, G>,
     crypto: PhantomData<C>,
 }
 
-impl<R, C, RNG, const N: usize, const D: usize> Device<R, C, RNG, N, D>
+impl<R, C, RNG, const N: usize, const D: usize, const P: u8, const G: i8>
+    Device<R, C, RNG, N, D, P, G>
 where
     R: PhyRxTx + Timings,
     C: CryptoFactory + Default,
     RNG: RngCore,
 {
-    pub fn new(region: region::Configuration, radio: R, rng: RNG) -> Device<R, C, RNG, N, D> {
+    pub fn new(region: region::Configuration, radio: R, rng: RNG) -> Device<R, C, RNG, N, D, P, G> {
         Device {
             crypto: PhantomData,
             state: State::default(),
@@ -36,7 +44,7 @@ where
                 radio,
                 rng,
                 tx_buffer: RadioBuffer::new(),
-                mac: Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN),
+                mac: Mac::new(region),
                 downlink: Vec::new(),
             },
         }
@@ -95,7 +103,7 @@ where
     }
 
     pub fn handle_event(&mut self, event: Event<R>) -> Result<Response, Error<R>> {
-        let (new_state, result) = self.state.handle_event::<R, C, RNG, N, D>(
+        let (new_state, result) = self.state.handle_event::<R, C, RNG, N, D, P, G>(
             &mut self.shared.mac,
             &mut self.shared.radio,
             &mut self.shared.rng,
@@ -108,11 +116,18 @@ where
     }
 }
 
-pub(crate) struct Shared<R: PhyRxTx + Timings, RNG: RngCore, const N: usize, const D: usize> {
+pub(crate) struct Shared<
+    R: PhyRxTx + Timings,
+    RNG: RngCore,
+    const N: usize,
+    const D: usize,
+    const P: u8 = { R::MAX_RADIO_POWER },
+    const G: i8 = { R::ANTENNA_GAIN },
+> {
     pub(crate) radio: R,
     pub(crate) rng: RNG,
     pub(crate) tx_buffer: RadioBuffer<N>,
-    pub(crate) mac: Mac,
+    pub(crate) mac: Mac<P, G>,
     pub(crate) downlink: Vec<Downlink, D>,
 }
 

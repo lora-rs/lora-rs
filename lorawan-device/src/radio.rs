@@ -15,9 +15,9 @@ pub struct TxConfig {
 }
 
 impl TxConfig {
-    pub fn adjust_power(&mut self, max_power: u8, antenna_gain: i8) {
-        self.pw -= antenna_gain;
-        self.pw = core::cmp::min(self.pw, max_power as i8);
+    pub fn adjust_power<const P: u8, const G: i8>(&mut self) {
+        self.pw -= G;
+        self.pw = core::cmp::min(self.pw, P as i8);
     }
 }
 
