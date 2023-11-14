@@ -27,7 +27,7 @@ mod test;
 use crate::radio::RxQuality;
 use core::cmp::min;
 
-/// Type representing a LoRaWAN cabable device.
+/// Type representing a LoRaWAN capable device.
 ///
 /// A device is bound to the following types:
 /// - R: An asynchronous radio implementation
