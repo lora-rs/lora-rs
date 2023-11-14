@@ -313,6 +313,7 @@ impl From<Response> for nb_device::Response {
 }
 
 #[cfg(feature = "async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 impl TryFrom<Response> for async_device::SendResponse {
     type Error = Error;
 
@@ -330,6 +331,7 @@ impl TryFrom<Response> for async_device::SendResponse {
 }
 
 #[cfg(feature = "async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 impl TryFrom<Response> for async_device::JoinResponse {
     type Error = Error;
 

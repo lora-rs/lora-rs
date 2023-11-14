@@ -17,7 +17,8 @@ use rand_core::RngCore;
 pub use crate::region::DR;
 use crate::{radio::RadioBuffer, rng};
 #[cfg(feature = "external-lora-phy")]
-/// provide the radio through the external lora-phy crate
+#[cfg_attr(docsrs, doc(cfg(feature = "external-lora-phy")))]
+/// Provide the radio through the external lora-phy crate
 pub mod lora_radio;
 pub mod radio;
 
