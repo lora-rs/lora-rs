@@ -15,7 +15,7 @@ repository = "https://github.com/lora-rs/lora-rs"
 
 [package.metadata.docs.rs]
 all-features = true
-rustdoc-args = ["--cfg", "async"]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 lora-modulation = { version = ">=0.1.2", default-features = false }

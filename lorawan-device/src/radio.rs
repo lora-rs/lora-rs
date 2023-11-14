@@ -56,6 +56,7 @@ impl<const N: usize> RadioBuffer<N> {
     }
 
     #[cfg(feature = "async")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub(crate) fn set_pos(&mut self, pos: usize) {
         self.pos = pos;
     }

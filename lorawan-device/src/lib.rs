@@ -1,4 +1,5 @@
 #![cfg_attr(not(test), no_std)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![cfg_attr(feature = "async", feature(async_fn_in_trait))]
 #![allow(incomplete_features)]
 //#![feature(generic_const_exprs)]
@@ -34,6 +35,7 @@ mod rng;
 pub use rng::Prng;
 
 #[cfg(feature = "async")]
+#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub mod async_device;
 
 #[derive(Debug)]
