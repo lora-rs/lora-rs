@@ -344,7 +344,7 @@ impl TryFrom<Response> for async_device::JoinResponse {
     }
 }
 
-pub fn del_to_delay_ms(del: u8) -> u32 {
+fn del_to_delay_ms(del: u8) -> u32 {
     match del {
         2..=15 => del as u32 * 1000,
         _ => region::constants::RECEIVE_DELAY1,
