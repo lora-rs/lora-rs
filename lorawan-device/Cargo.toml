@@ -29,6 +29,7 @@ rand_core = { version = "0.6", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 seq-macro = "0.3.5"
 lora-phy = { version = ">=2.1.1", optional = true }
+document-features = "0.2.7"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}
@@ -37,8 +38,17 @@ lazy_static = "1"
 lorawan = { version = "0.7.3", path = "../lorawan-encoding", features = ["default-crypto"] }
 
 [features]
-defmt = ["dep:defmt", "lorawan/defmt", "lora-modulation/defmt"]
 default = []
+
+## Provides asynchronous device implementation using the Rust's async-await driving
+## the state machine.
 async = ["futures"]
-serde = ["dep:serde", "lorawan/serde"]
+
+## Use [`defmt`](https://docs.rs/defmt/latest/defmt/) for logging.
+defmt = ["dep:defmt", "lorawan/defmt", "lora-modulation/defmt"]
+
+## Use physical layer LoRa radio implementation from `lora-phy` crate.
 external-lora-phy = ["dep:lora-phy"]
+
+## Enable [`serde`](https://docs.rs/serde/latest/serde/) serialization/deserialization for data structures.
+serde = ["dep:serde", "lorawan/serde"]
