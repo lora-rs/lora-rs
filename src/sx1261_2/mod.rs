@@ -397,9 +397,8 @@ where
                 }
             }
         } else {
-            if !(-9..=22).contains(&output_power) {
-                return Err(RadioError::InvalidOutputPower);
-            }
+            // Clamp power between [-9, 22] dBm
+            let txp = output_power.min(22).max(-9);
             // Provide better resistance of the SX1262 Tx to antenna mismatch (see DS_SX1261-2_V1.2 datasheet chapter 15.2)
             let mut tx_clamp_cfg = [0x00u8];
             self.intf
@@ -422,7 +421,8 @@ where
             ];
             self.intf.write(&register_and_tx_clamp_cfg, false).await?;
 
-            match output_power {
+            // From Table 13-21: PA Operating Modes with Optimal Settings
+            match txp {
                 22 => {
                     self.set_pa_config(0x04, 0x07, 0x00, 0x01).await?;
                     tx_params_power = 22;
@@ -441,7 +441,7 @@ where
                 }
                 _ => {
                     self.set_pa_config(0x04, 0x07, 0x00, 0x01).await?;
-                    tx_params_power = output_power as u8;
+                    tx_params_power = txp as u8;
                 }
             }
         }
