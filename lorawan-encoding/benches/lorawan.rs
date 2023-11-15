@@ -10,7 +10,7 @@ use aes::cipher::{generic_array::GenericArray, NewBlockCipher};
 use aes::Aes128;
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::alloc::System;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 extern crate std;
 
@@ -18,14 +18,14 @@ use lorawan::keys::*;
 use lorawan::parser::*;
 
 #[global_allocator]
-static GLOBAL: trallocator::Trallocator = trallocator::Trallocator::new(System);
+static GLOBAL: trallocator::Trallocator<System> = trallocator::Trallocator::new(System);
 
 fn bench_complete_data_payload_fhdr(c: &mut Criterion) {
-    let cnt = AtomicU64::new(0);
-    GLOBAL.reset();
+    let cnt = AtomicUsize::new(0);
+    GLOBAL.usage();
     c.bench_function("data_payload_headers_parsing", |b| {
         b.iter(|| {
-            cnt.fetch_add(1u64, Ordering::SeqCst);
+            cnt.fetch_add(1usize, Ordering::SeqCst);
             let mut data = data_payload();
             let phy = parse(&mut data).unwrap();
 
@@ -60,17 +60,17 @@ fn bench_complete_data_payload_fhdr(c: &mut Criterion) {
         })
     });
     let n = cnt.load(Ordering::SeqCst);
-    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.get_sum() / n, n);
+    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.usage() / n, n);
 }
 
 fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
     let mic_key = AES128([2; 16]);
     let factory = ConstFactory::new(&mic_key);
-    let cnt = AtomicU64::new(0);
-    GLOBAL.reset();
+    let cnt = AtomicUsize::new(0);
+    GLOBAL.usage();
     c.bench_function("data_payload_mic_validation", |b| {
         b.iter(|| {
-            cnt.fetch_add(1u64, Ordering::SeqCst);
+            cnt.fetch_add(1usize, Ordering::SeqCst);
             let mut data = data_payload();
             let phy = parse_with_factory(&mut data, &factory).unwrap();
 
@@ -82,7 +82,7 @@ fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
         })
     });
     let n = cnt.load(Ordering::SeqCst);
-    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.get_sum() / n, n);
+    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.usage() / n, n);
 }
 
 fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
@@ -90,11 +90,11 @@ fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
     payload.extend_from_slice(&String::from("hello").into_bytes()[..]);
     let key = AES128([1; 16]);
     let factory = ConstFactory::new(&key);
-    let cnt = AtomicU64::new(0);
-    GLOBAL.reset();
+    let cnt = AtomicUsize::new(0);
+    GLOBAL.usage();
     c.bench_function("data_payload_decrypt", |b| {
         b.iter(|| {
-            cnt.fetch_add(1u64, Ordering::SeqCst);
+            cnt.fetch_add(1usize, Ordering::SeqCst);
             let mut data = data_payload();
             let phy = parse_with_factory(&mut data, &factory).unwrap();
 
@@ -107,7 +107,7 @@ fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
         })
     });
     let n = cnt.load(Ordering::SeqCst);
-    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.get_sum() / n, n);
+    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.usage() / n, n);
 }
 
 pub type Cmac = cmac::Cmac<Aes128>;
