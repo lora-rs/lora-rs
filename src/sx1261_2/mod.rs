@@ -363,10 +363,10 @@ where
         // TODO: Switch to match so all chip variants are covered
         let chip_type = &self.config.chip;
         if chip_type == &Sx126xVariant::Sx1261 {
-            if !(-17..=15).contains(&output_power) {
-                return Err(RadioError::InvalidOutputPower);
-            }
-            if output_power == 15 {
+            // Clamp power between [-17, 15] dBm
+            let txp = output_power.min(15).max(-17);
+
+            if txp == 15 {
                 if let Some(m_p) = mdltn_params {
                     if m_p.frequency_in_hz < 400_000_000 {
                         return Err(RadioError::InvalidOutputPowerForFrequency);
@@ -374,7 +374,11 @@ where
                 }
             }
 
-            match output_power {
+            // For SX1261:
+            // if f < 400 MHz, paDutyCycle should not be higher than 0x04,
+            // if f > 400 Mhz, paDutyCycle should not be higher than 0x07.
+            // From Table 13-21: PA Operating Modes with Optimal Settings
+            match txp {
                 15 => {
                     self.set_pa_config(0x06, 0x00, 0x01, 0x01).await?;
                     tx_params_power = 14;
@@ -385,17 +389,16 @@ where
                 }
                 10 => {
                     self.set_pa_config(0x01, 0x00, 0x01, 0x01).await?;
-                    tx_params_power = 14;
+                    tx_params_power = 13;
                 }
                 _ => {
                     self.set_pa_config(0x04, 0x00, 0x01, 0x01).await?;
-                    tx_params_power = output_power as u8;
+                    tx_params_power = txp as u8;
                 }
             }
         } else {
-            if !(-9..=22).contains(&output_power) {
-                return Err(RadioError::InvalidOutputPower);
-            }
+            // Clamp power between [-9, 22] dBm
+            let txp = output_power.min(22).max(-9);
             // Provide better resistance of the SX1262 Tx to antenna mismatch (see DS_SX1261-2_V1.2 datasheet chapter 15.2)
             let mut tx_clamp_cfg = [0x00u8];
             self.intf
@@ -418,7 +421,8 @@ where
             ];
             self.intf.write(&register_and_tx_clamp_cfg, false).await?;
 
-            match output_power {
+            // From Table 13-21: PA Operating Modes with Optimal Settings
+            match txp {
                 22 => {
                     self.set_pa_config(0x04, 0x07, 0x00, 0x01).await?;
                     tx_params_power = 22;
@@ -437,7 +441,7 @@ where
                 }
                 _ => {
                     self.set_pa_config(0x04, 0x07, 0x00, 0x01).await?;
-                    tx_params_power = output_power as u8;
+                    tx_params_power = txp as u8;
                 }
             }
         }

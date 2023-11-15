@@ -142,14 +142,13 @@ where
     async fn set_tx_power_sx1276(&mut self, p_out: i32, tx_boost: bool) -> Result<(), RadioError> {
         let pa_reg = Register::RegPaDacSX1276;
         if tx_boost {
-            if !(2..=20).contains(&p_out) {
-                return Err(RadioError::InvalidOutputPower);
-            }
+            // Output via PA_BOOST: [2, 20] dBm
+            let txp = p_out.min(20).max(2);
 
             // Pout=17-(15-OutputPower)
-            let output_power: i32 = p_out - 2;
+            let output_power: i32 = txp - 2;
 
-            if p_out > 17 {
+            if txp > 17 {
                 self.write_register(pa_reg, PaDac::_20DbmOn.value(), false).await?;
                 self.set_ocp(OcpTrim::_240Ma).await?;
             } else {
@@ -163,13 +162,12 @@ where
             )
             .await?;
         } else {
-            if !(-4..=14).contains(&p_out) {
-                return Err(RadioError::InvalidOutputPower);
-            }
+            // Clamp output: [-4, 14] dBm
+            let txp = p_out.min(14).max(-4);
 
             // Pmax=10.8+0.6*MaxPower, where MaxPower is set below as 7 and therefore Pmax is 15
             // Pout=Pmax-(15-OutputPower)
-            let output_power: i32 = p_out;
+            let output_power: i32 = txp;
 
             self.write_register(pa_reg, PaDac::_20DbmOff.value(), false).await?;
             self.set_ocp(OcpTrim::_100Ma).await?;
