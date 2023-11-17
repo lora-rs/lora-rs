@@ -594,7 +594,9 @@ where
             .await
     }
 
-    // Set the IRQ mask to disable unwanted interrupts, enable interrupts on DIO0 (the IRQ pin), and allow interrupts.
+    // Set the IRQ mask to disable unwanted interrupts,
+    // enable interrupts on DIO pins (sx127x has multiple),
+    // and allow interrupts.
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError> {
         match radio_mode {
             Some(RadioMode::Transmit) => {
@@ -616,15 +618,22 @@ where
                 self.write_register(
                     Register::RegIrqFlagsMask,
                     IrqMask::All.value()
-                        ^ (IrqMask::RxDone.value() | IrqMask::RxTimeout.value() | IrqMask::CRCError.value()),
+                        ^ (IrqMask::RxDone.value()
+                            | IrqMask::RxTimeout.value()
+                            | IrqMask::CRCError.value()
+                            | IrqMask::HeaderValid.value()),
                     false,
                 )
                 .await?;
 
-                let mut dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
-                dio_mapping_1 = (dio_mapping_1 & DioMapping1Dio0::Mask.value()) | DioMapping1Dio0::RxDone.value();
-                self.write_register(Register::RegDioMapping1, dio_mapping_1, false)
-                    .await?;
+                // HeaderValid and CRCError are mutually exclusive when attempting to
+                // trigger DIO-based interrupt, so our approach is to trigger HeaderValid
+                // as this is required for preamble detection.
+                // TODO: RxTimeout should be configured on DIO1
+                let dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
+                let val = (dio_mapping_1 & DioMapping1Dio0::Mask.value() & DioMapping1Dio3::Mask.value())
+                    | (DioMapping1Dio0::RxDone.value() | DioMapping1Dio3::ValidHeader.value());
+                self.write_register(Register::RegDioMapping1, val, false).await?;
 
                 self.write_register(Register::RegIrqFlags, 0x00u8, false).await?;
             }
@@ -694,44 +703,46 @@ where
             self.write_register(Register::RegIrqFlags, 0xffu8, false).await?; // clear all interrupts
 
             debug!(
-                "process_irq satisfied: irq_flags = 0x{:x} in radio mode {}",
+                "process_irq: irq_flags = 0b{:08b} in radio mode {}",
                 irq_flags, radio_mode
             );
 
-            if (irq_flags & IrqMask::HeaderValid.value()) == IrqMask::HeaderValid.value() {
-                debug!("HeaderValid in radio mode {}", radio_mode);
-            }
-
-            if radio_mode == RadioMode::Transmit {
-                if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
-                    debug!("TxDone in radio mode {}", radio_mode);
-                    return Ok(TargetIrqState::Done);
+            match radio_mode {
+                RadioMode::Transmit => {
+                    if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
+                        debug!("TxDone in radio mode {}", radio_mode);
+                        return Ok(TargetIrqState::Done);
+                    }
                 }
-            } else if radio_mode == RadioMode::Receive {
-                if (irq_flags & IrqMask::CRCError.value()) == IrqMask::CRCError.value() {
-                    debug!("CRCError in radio mode {}", radio_mode);
+                RadioMode::Receive => {
+                    if target_rx_state == TargetIrqState::PreambleReceived && IrqMask::HeaderValid.is_set_in(irq_flags)
+                    {
+                        debug!("HeaderValid in radio mode {}", radio_mode);
+                        return Ok(TargetIrqState::PreambleReceived);
+                    }
+                    if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
+                        debug!("RxDone in radio mode {}", radio_mode);
+                        return Ok(TargetIrqState::Done);
+                    }
+                    if (irq_flags & IrqMask::RxTimeout.value()) == IrqMask::RxTimeout.value() {
+                        debug!("RxTimeout in radio mode {}", radio_mode);
+                        return Err(RadioError::ReceiveTimeout);
+                    }
                 }
-                if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
-                    debug!("RxDone in radio mode {}", radio_mode);
-                    return Ok(TargetIrqState::Done);
+                RadioMode::ChannelActivityDetection => {
+                    if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+                        debug!("CADDone in radio mode {}", radio_mode);
+                        if cad_activity_detected.is_some() {
+                            *(cad_activity_detected.unwrap()) = (irq_flags & IrqMask::CADActivityDetected.value())
+                                == IrqMask::CADActivityDetected.value();
+                        }
+                        return Ok(TargetIrqState::Done);
+                    }
                 }
-                if target_rx_state == TargetIrqState::PreambleReceived && IrqMask::HeaderValid.is_set_in(irq_flags) {
-                    debug!("HeaderValid in radio mode {}", radio_mode);
-                    return Ok(TargetIrqState::PreambleReceived);
+                RadioMode::Sleep | RadioMode::Standby => {
+                    defmt::warn!("IRQ during sleep/standby?");
                 }
-                if (irq_flags & IrqMask::RxTimeout.value()) == IrqMask::RxTimeout.value() {
-                    debug!("RxTimeout in radio mode {}", radio_mode);
-                    return Err(RadioError::ReceiveTimeout);
-                }
-            } else if radio_mode == RadioMode::ChannelActivityDetection
-                && (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value()
-            {
-                debug!("CADDone in radio mode {}", radio_mode);
-                if cad_activity_detected.is_some() {
-                    *(cad_activity_detected.unwrap()) =
-                        (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
-                }
-                return Ok(TargetIrqState::Done);
+                RadioMode::FrequencySynthesis | RadioMode::ReceiveDutyCycle => todo!(),
             }
 
             // if an interrupt occurred for other than an error or operation completion, loop to wait again
