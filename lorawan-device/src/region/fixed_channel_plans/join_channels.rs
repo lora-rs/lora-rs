@@ -12,9 +12,34 @@ pub(crate) struct JoinChannels {
     preferred_subband: Option<Subband>,
     /// Channels that have been attempted.
     pub(crate) available_channels: AvailableChannels,
+    /// The channel used for the previous join request.
+    pub(crate) previous_channel: usize,
 }
 
 impl JoinChannels {
+    pub(crate) fn has_bias_and_not_exhausted(&self) -> bool {
+        // there are remaining retries AND we have not yet been reset
+        self.preferred_subband.is_some()
+            && self.num_retries <= self.max_retries
+            && self.num_retries != 0
+    }
+
+    pub(crate) fn first_data_channel(&mut self, rng: &mut impl RngCore) -> Option<usize> {
+        if self.preferred_subband.is_none() && self.num_retries != 0 {
+            self.clear_join_bias();
+            // determine which subband the successful join was sent on
+            let sb = if self.previous_channel < 64 {
+                self.previous_channel / 8
+            } else {
+                self.previous_channel % 8
+            };
+            // pick another channel on that subband
+            Some((rng.next_u32() as usize % 8) + ((sb - 1) * 8))
+        } else {
+            None
+        }
+    }
+
     pub(crate) fn set_join_bias(&mut self, subband: Subband, max_retries: usize) {
         self.preferred_subband = Some(subband);
         self.max_retries = max_retries;
@@ -39,15 +64,19 @@ impl JoinChannels {
                 // NB: we don't use 500 kHz channels
                 let channel = (rng.next_u32() as usize % 8) + ((sb as usize - 1) * 8);
                 if self.num_retries == self.max_retries {
-                    // this is our last try with our favorite subband, so will intialize the
+                    // this is our last try with our favorite subband, so will initialize the
                     // standard join logic with the channel we just tried. This will ensure
                     // standard and compliant behavior when num_retries is set to 1.
                     self.available_channels.previous = Some(channel);
                     self.available_channels.data.set_channel(channel, false);
                 }
+                self.previous_channel = channel;
                 channel
             }
-            _ => self.available_channels.get_next(rng),
+            _ => {
+                self.num_retries += 1;
+                self.available_channels.get_next(rng)
+            }
         }
     }
 }
