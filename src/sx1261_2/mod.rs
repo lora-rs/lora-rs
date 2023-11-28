@@ -50,7 +50,7 @@ pub struct Config {
     /// LoRa chip variant on this board
     pub chip: Sx126xVariant,
     /// Configuration for TCXO and its voltage selection
-    pub txco_ctrl: Option<TcxoCtrlVoltage>,
+    pub tcxo_ctrl: Option<TcxoCtrlVoltage>,
 }
 
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
@@ -306,7 +306,7 @@ where
     }
 
     async fn set_oscillator(&mut self) -> Result<(), RadioError> {
-        if let Some(voltage) = self.config.txco_ctrl {
+        if let Some(voltage) = self.config.tcxo_ctrl {
             let timeout = BRD_TCXO_WAKEUP_TIME << 6; // duration allowed for TCXO to reach 32MHz
             let op_code_and_tcxo_control = [
                 OpCode::SetTCXOMode.value(),
