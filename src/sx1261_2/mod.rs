@@ -51,6 +51,8 @@ pub struct Config {
     pub chip: Sx126xVariant,
     /// Configuration for TCXO and its voltage selection
     pub tcxo_ctrl: Option<TcxoCtrlVoltage>,
+    /// Whether board is using optional DCDC in addition to LDO
+    pub use_dcdc: bool,
 }
 
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
@@ -321,10 +323,14 @@ where
         Ok(())
     }
 
-    // Set the power regulators operating mode to DC_DC.  Using only LDO implies that the Rx/Tx current is doubled.
     async fn set_regulator_mode(&mut self) -> Result<(), RadioError> {
-        let op_code_and_regulator_mode = [OpCode::SetRegulatorMode.value(), RegulatorMode::UseDCDC.value()];
-        self.intf.write(&op_code_and_regulator_mode, false).await
+        // SX1261/2 can use optional DC-DC to reduce power usage,
+        // but this is related to the hardware implementation of the board.
+        if self.config.use_dcdc {
+            let reg_data = [OpCode::SetRegulatorMode.value(), RegulatorMode::UseDCDC.value()];
+            self.intf.write(&reg_data, false).await?;
+        }
+        Ok(())
     }
 
     async fn set_tx_rx_buffer_base_address(
