@@ -3,6 +3,7 @@ mod radio_kind_params;
 use defmt::debug;
 use embedded_hal_async::delay::DelayUs;
 use embedded_hal_async::spi::*;
+pub use radio_kind_params::TcxoCtrlVoltage;
 use radio_kind_params::*;
 
 use crate::mod_params::*;
@@ -49,7 +50,9 @@ pub struct Config {
     /// LoRa chip variant on this board
     pub chip: Sx126xVariant,
     /// Configuration for TCXO and its voltage selection
-    pub txco_ctrl: Option<TcxoCtrlVoltage>,
+    pub tcxo_ctrl: Option<TcxoCtrlVoltage>,
+    /// Whether board is using optional DCDC in addition to LDO
+    pub use_dcdc: bool,
 }
 
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
@@ -305,7 +308,7 @@ where
     }
 
     async fn set_oscillator(&mut self) -> Result<(), RadioError> {
-        if let Some(voltage) = self.config.txco_ctrl {
+        if let Some(voltage) = self.config.tcxo_ctrl {
             let timeout = BRD_TCXO_WAKEUP_TIME << 6; // duration allowed for TCXO to reach 32MHz
             let op_code_and_tcxo_control = [
                 OpCode::SetTCXOMode.value(),
@@ -320,10 +323,14 @@ where
         Ok(())
     }
 
-    // Set the power regulators operating mode to DC_DC.  Using only LDO implies that the Rx/Tx current is doubled.
     async fn set_regulator_mode(&mut self) -> Result<(), RadioError> {
-        let op_code_and_regulator_mode = [OpCode::SetRegulatorMode.value(), RegulatorMode::UseDCDC.value()];
-        self.intf.write(&op_code_and_regulator_mode, false).await
+        // SX1261/2 can use optional DC-DC to reduce power usage,
+        // but this is related to the hardware implementation of the board.
+        if self.config.use_dcdc {
+            let reg_data = [OpCode::SetRegulatorMode.value(), RegulatorMode::UseDCDC.value()];
+            self.intf.write(&reg_data, false).await?;
+        }
+        Ok(())
     }
 
     async fn set_tx_rx_buffer_base_address(
