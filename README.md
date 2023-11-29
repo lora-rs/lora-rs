@@ -10,6 +10,7 @@ As a general rule, all crates are `nostd` and designed to be friendly for embedd
 ## Crates
 
 * **lora-modulation**: LoRa modulation characteristics and a utility for calculating time on air
+* **lora-phy**: LoRa radio drivers which provide a PHY layer implementation
 * **lorawan-encoding**: encoding and decoding LoRaWAN packets
 * **lorawan-device**: a LoRaWAN device stack with non-blocking and async implementations
 
