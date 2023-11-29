@@ -2,9 +2,9 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 permissions:
   checks: write
@@ -15,15 +15,12 @@ env:
 
 jobs:
   build:
-    env:
-      # the async device stack and external-lora-phy requires nightly
-      STABLE_FEATURES: defmt,serde
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: beta
           default: true
           override: true
           components: clippy, rustfmt
@@ -40,34 +37,10 @@ jobs:
         uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --tests --features ${{ env.STABLE_FEATURES }} -- -Dclippy::all
+          args: --tests --all-features -- -Dclippy::all
 
       - name: Build
-        run: cargo build --features ${{ env.STABLE_FEATURES }} --all --verbose
-
-      - name: Run tests
-        run: cargo test --verbose
-  build-nightly:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          default: true
-          override: true
-          components: clippy, rustfmt
-
-      - name: Cancel previous runs
-        uses: styfle/cancel-workflow-action@0.5.0
-        with:
-          access_token: ${{ github.token }}
-
-      - name: Check formatting
-        run: cargo fmt  -- --check
-
-      - name: Build
-        run: cargo build --all --all-features --verbose
+        run: cargo build --all-features --all --verbose
 
       - name: Run tests
         run: cargo test --all-features --verbose

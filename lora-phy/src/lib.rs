@@ -1,6 +1,5 @@
 #![no_std]
-#![feature(async_fn_in_trait)]
-#![allow(incomplete_features)]
+#![allow(async_fn_in_trait)]
 #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
 
@@ -277,7 +276,10 @@ where
         rx_pkt_params: &PacketParams,
         receiving_buffer: &mut [u8],
     ) -> Result<(u8, PacketStatus), RadioError> {
-        let IrqState::RxDone(len, status) = self.rx_until_state(rx_pkt_params, receiving_buffer, TargetIrqState::Done).await? else {
+        let IrqState::RxDone(len, status) = self
+            .rx_until_state(rx_pkt_params, receiving_buffer, TargetIrqState::Done)
+            .await?
+        else {
             unreachable!();
         };
         Ok((len, status))
