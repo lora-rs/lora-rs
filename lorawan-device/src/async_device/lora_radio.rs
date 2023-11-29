@@ -43,6 +43,7 @@ where
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug)]
 pub enum Error {
     Radio(RadioError),
     NoRxParams,
