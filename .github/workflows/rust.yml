@@ -44,3 +44,23 @@ jobs:
 
       - name: Run tests
         run: cargo test --all-features --verbose
+
+      - name: Build nrf52840 examples
+        run: |
+          cd examples/nrf52840
+          cargo build --release
+
+      - name: Build rp2040 examples
+        run: |
+          cd examples/rp
+          cargo build --release
+
+      - name: Build stm32l0 examples
+        run: |
+          cd examples/stm32l0
+          cargo build --release
+
+      - name: Build stm32wl examples
+        run: |
+          cd examples/stm32wl
+          cargo build --release
