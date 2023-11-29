@@ -70,6 +70,7 @@ pub enum Error<R> {
     Mac(mac::Error),
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug)]
 pub enum SendResponse {
     DownlinkReceived(mac::FcntDown),
@@ -78,6 +79,7 @@ pub enum SendResponse {
     RxComplete,
 }
 
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug)]
 pub enum JoinResponse {
     JoinSuccess,
