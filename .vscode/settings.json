@@ -1,8 +1,0 @@
-{
-    "editor.formatOnSave": true,
-    "[toml]": {
-        "editor.formatOnSave": false
-    },
-    "rust-analyzer.showUnlinkedFileNotification": false,
-    "rust-analyzer.check.command": "clippy"
-}
