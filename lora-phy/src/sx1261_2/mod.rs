@@ -53,6 +53,8 @@ pub struct Config {
     pub tcxo_ctrl: Option<TcxoCtrlVoltage>,
     /// Whether board is using optional DCDC in addition to LDO
     pub use_dcdc: bool,
+    /// Whether board is using DIO2 as RF switch (true) or as an IRQ
+    pub use_dio2_as_rfswitch: bool,
 }
 
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
@@ -252,10 +254,11 @@ where
 
     // Use DIO2 to control an RF Switch, depending on the board type.
     async fn init_rf_switch(&mut self) -> Result<(), RadioError> {
-        if self.config.chip != Sx126xVariant::Stm32wl {
-            let op_code_and_indicator = [OpCode::SetRFSwitchMode.value(), true as u8];
-            self.intf.write(&op_code_and_indicator, false).await?;
-        }
+        let reg_data = [
+            OpCode::SetDIO2AsRfSwitchCtrl.value(),
+            self.config.use_dio2_as_rfswitch as u8,
+        ];
+        self.intf.write(&reg_data, false).await?;
         Ok(())
     }
 
