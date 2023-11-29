@@ -22,6 +22,11 @@ use crate::{radio::RadioBuffer, rng};
 pub mod lora_radio;
 pub mod radio;
 
+#[cfg(feature = "embassy-time")]
+mod embassy_time;
+#[cfg(feature = "embassy-time")]
+pub use embassy_time::EmbassyTimer;
+
 #[cfg(test)]
 mod test;
 

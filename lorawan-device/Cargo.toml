@@ -30,6 +30,7 @@ serde = { version = "1", default-features = false, features = ["derive"], option
 seq-macro = "0.3.5"
 lora-phy = { version = "3.0.0-alpha.1", path = "../lora-phy", optional = true }
 document-features = "0.2.7"
+embassy-time = { version = "0.1.5", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}
@@ -43,6 +44,9 @@ default = []
 ## Provides asynchronous device implementation using the Rust's async-await driving
 ## the state machine.
 async = ["futures"]
+
+## Provide an `async_device::Timer` impl based on `embassy-time`.
+embassy-time = ["dep:embassy-time"]
 
 ## Use [`defmt`](https://docs.rs/defmt/latest/defmt/) for logging.
 defmt = ["dep:defmt", "lorawan/defmt", "lora-modulation/defmt"]
