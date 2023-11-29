@@ -1,0 +1,11 @@
+{
+    "editor.formatOnSave": true,
+    "[toml]": {
+        "editor.formatOnSave": false
+    },
+    "rust-analyzer.check.allTargets": false,
+    "rust-analyzer.cargo.noDefaultFeatures": true,
+    "rust-analyzer.cargo.target": "thumbv7em-none-eabi",
+    "rust-analyzer.showUnlinkedFileNotification": false,
+    "rust-analyzer.check.command": "clippy"
+}
