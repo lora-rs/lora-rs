@@ -1,6 +1,6 @@
 lora-modulation/ @ceekdee @lthiery @lulf @ivajloip
 lorawan-encoding/ @ivajloip @lthiery @lulf
 lorawan-device/ @ivajloip @lthiery @lulf
-
+lora-phy/ @lucasgranberg @plaes @CBJamo @Dirbaio
 Cargo.toml @ivajloip @lthiery @lulf
 README.md @ivajloip @lthiery @lulf
