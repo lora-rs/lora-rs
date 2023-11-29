@@ -28,7 +28,7 @@ futures = { version = "0.3", default-features = false, optional = true }
 rand_core = { version = "0.6", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 seq-macro = "0.3.5"
-lora-phy = { version = ">=2.1.1", optional = true }
+lora-phy = { version = "3.0.0-alpha.1", path = "../lora-phy", optional = true }
 document-features = "0.2.7"
 
 [dev-dependencies]

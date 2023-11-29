@@ -61,7 +61,7 @@ impl TimerChannel {
         tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         let mut tx_map = self.tx.lock().await;
         let tx = tx_map.remove(&index).unwrap();
-        if let Ok(_) = tx.try_send(()) {
+        if tx.try_send(()).is_ok() {
             panic!("Timer was not dropped");
         }
     }

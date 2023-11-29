@@ -3,6 +3,7 @@ members = [
     "lorawan-device",
     "lorawan-encoding",
     "lora-modulation",
+    "lora-phy",
 ]
 resolver = "2"
 

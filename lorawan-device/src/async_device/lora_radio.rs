@@ -1,9 +1,9 @@
 use super::radio::{PhyRxTx, RfConfig, RxQuality, TxConfig};
 use super::Timings;
 
-use lora_phy::mod_params::{BoardType, RadioError};
+use lora_phy::mod_params::RadioError;
 use lora_phy::mod_traits::RadioKind;
-use lora_phy::{DelayUs, LoRa};
+use lora_phy::{DelayNs, LoRa};
 
 /// LoRa radio using the physical layer API in the external lora-phy crate.
 ///
@@ -12,7 +12,7 @@ use lora_phy::{DelayUs, LoRa};
 pub struct LoRaRadio<RK, DLY, const P: u8, const G: i8 = 0>
 where
     RK: RadioKind,
-    DLY: DelayUs,
+    DLY: DelayNs,
 {
     pub(crate) lora: LoRa<RK, DLY>,
     rx_pkt_params: Option<lora_phy::mod_params::PacketParams>,
@@ -20,7 +20,7 @@ where
 impl<RK, DLY, const P: u8, const G: i8> LoRaRadio<RK, DLY, P, G>
 where
     RK: RadioKind,
-    DLY: DelayUs,
+    DLY: DelayNs,
 {
     pub fn new(lora: LoRa<RK, DLY>) -> Self {
         Self { lora, rx_pkt_params: None }
@@ -31,23 +31,14 @@ where
 impl<RK, DLY, const P: u8, const G: i8> Timings for LoRaRadio<RK, DLY, P, G>
 where
     RK: RadioKind,
-    DLY: DelayUs,
+    DLY: DelayNs,
 {
+    // TODO: Use a struct with Default or Option fallback?
     fn get_rx_window_offset_ms(&self) -> i32 {
-        match self.lora.get_board_type() {
-            BoardType::Rak4631Sx1262 => -15,
-            BoardType::Stm32l0Sx1276 => -15,
-            BoardType::Stm32wlSx1262 => -50,
-            _ => -50,
-        }
+        -50
     }
     fn get_rx_window_duration_ms(&self) -> u32 {
-        match self.lora.get_board_type() {
-            BoardType::Rak4631Sx1262 => 1050,
-            BoardType::Stm32l0Sx1276 => 1003,
-            BoardType::Stm32wlSx1262 => 1050,
-            _ => 1050,
-        }
+        1050
     }
 }
 
@@ -68,7 +59,7 @@ impl From<RadioError> for Error {
 impl<RK, DLY, const P: u8, const G: i8> PhyRxTx for LoRaRadio<RK, DLY, P, G>
 where
     RK: RadioKind,
-    DLY: DelayUs,
+    DLY: DelayNs,
 {
     type PhyError = Error;
 

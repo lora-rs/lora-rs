@@ -1,8 +1,6 @@
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![cfg_attr(feature = "async", feature(async_fn_in_trait))]
-#![allow(incomplete_features)]
-//#![feature(generic_const_exprs)]
+#![allow(async_fn_in_trait)]
 
 //! ## Feature flags
 #![doc = document_features::document_features!(feature_label = r#"<span class="stab portability"><code>{feature}</code></span>"#)]
