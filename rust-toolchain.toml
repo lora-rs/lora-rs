@@ -3,3 +3,7 @@
 [toolchain]
 channel = "beta"
 components = [ "rust-src", "rustfmt", "llvm-tools" ]
+targets = [
+    "thumbv6m-none-eabi",
+    "thumbv7em-none-eabi",
+]
