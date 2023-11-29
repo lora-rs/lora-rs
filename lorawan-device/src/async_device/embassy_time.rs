@@ -13,6 +13,12 @@ impl EmbassyTimer {
     }
 }
 
+impl Default for EmbassyTimer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Timer for EmbassyTimer {
     fn reset(&mut self) {
         self.start = Instant::now();
