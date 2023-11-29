@@ -1,6 +1,6 @@
 # LoRa physical layer (the rustaceous radio)
 
-[![CI](https://github.com/embassy-rs/lora-phy/actions/workflows/ci.yaml/badge.svg)](https://github.com/embassy-rs/lora-phy/actions/workflows/ci.yaml)
+[![CI](https://github.com/lora-rs/lora-rs/actions/workflows/rust.yml/badge.svg)](https://github.com/lora-rs/lora-rs/actions/workflows/rust.yml)
 
 ## Why?
 
@@ -22,39 +22,40 @@
 
 For users wishing to implement a LoRaWAN or P2P solution, the following implementation files provide the necessary context for lora-phy version 2.
 
-- <a href="https://github.com/embassy-rs/lora-phy/blob/main/src/lib.rs">the API itself</a>;
-- <a href="https://github.com/embassy-rs/lora-phy/blob/main/src/mod_params.rs">pertinent ancillary information</a>.
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/lib.rs">the API itself</a>;
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/mod_params.rs">pertinent ancillary information</a>.
 
 Examples of API usage:
 
-- <a href="https://github.com/embassy-rs/embassy/blob/master/examples/stm32wl/src/bin/lora_p2p_send.rs">stm32wl P2P send and sleep</a>;
-- <a href="https://github.com/embassy-rs/embassy/blob/master/examples/stm32wl/src/bin/lora_lorawan.rs">stm32wl LoRaWAN using rust-lorawan</a>;
-- <a href="https://github.com/embassy-rs/embassy/blob/master/examples/stm32l0/src/bin/lora_p2p_receive.rs">stm32l0 P2P receive continuous</a>;
-- <a href="https://github.com/embassy-rs/embassy/blob/master/examples/nrf52840/src/bin/lora_p2p_receive_duty_cycle.rs">nrf52840 duty cycle receive</a>;
-- <a href="https://github.com/embassy-rs/embassy/blob/master/examples/nrf52840/src/bin/lora_cad.rs">nrf52840 channel activity detection</a>;
-- <a href="https://github.com/embassy-rs/embassy/blob/master/examples/rp/src/bin/lora_p2p_send_multicore.rs">rp pico P2P send and sleep using the second core</a>.
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/examples/stm32wl/src/bin/lora_p2p_send.rs">stm32wl P2P send and sleep</a>;
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/examples/stm32wl/src/bin/lora_lorawan.rs">stm32wl LoRaWAN using rust-lorawan</a>;
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/examples/stm32l0/src/bin/lora_p2p_receive.rs">stm32l0 P2P receive continuous</a>;
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/examples/nrf52840/src/bin/lora_p2p_receive_duty_cycle.rs">nrf52840 duty cycle receive</a>;
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/examples/nrf52840/src/bin/lora_cad.rs">nrf52840 channel activity detection</a>;
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/examples/rp/src/bin/lora_p2p_send_multicore.rs">rp pico P2P send and sleep using the second core</a>.
 
 ## Embedded framework/MCU support
 
 For embedded framework developers wishing to add LoRa support as a feature for one or more MCU/LoRa chip combinations:
 
-- <a href="https://github.com/embassy-rs/lora-phy/blob/main/src/mod_traits.rs">the InterfaceVariant trait</a>, which enables this lora-phy crate to interface to a specific embedded framework/MCU/LoRa chip combination.
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/mod_traits.rs">the InterfaceVariant trait</a>, which enables this lora-phy crate to interface to a specific embedded framework/MCU/LoRa chip combination.
 
 Example InterfaceVariant implementations:
 
-- <a href="https://github.com/embassy-rs/embassy/blob/master/embassy-lora/src/iv.rs">Embassy stm32wl/Sx1262, stm32l0/Sx1276, and nrf52840/Sx1262</a>
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/iv.rs">Implementations based on `embedded-hal` and `embedded-hal-async` traits</a>. These are usable with any HAL crate that implements the `embedded-hal` traits.
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/examples/stm32wl/src/iv.rs">STM32WL + Embassy implementation</a>. STM32WL is special because LoRa uses an internal SPI, this implementation shows how to use it with `embassy-stm32`.
 
 ## LoRa chip support
 
 For developers wishing to add support for new LoRa chips or enhance support for existing chips:
 
-- <a href="https://github.com/embassy-rs/lora-phy/blob/main/src/mod_traits.rs">the RadioKind trait</a>, which must be implemented for each kind of LoRa chip for access through the lora-phy crate API;
-- <a href="https://github.com/embassy-rs/lora-phy/blob/main/src/interface.rs">the interface implementation</a>, which captures the three key read/write operations allowing control of the LoRa chip from this crate through either opcode or register operations.
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/mod_traits.rs">the RadioKind trait</a>, which must be implemented for each kind of LoRa chip for access through the lora-phy crate API;
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/interface.rs">the interface implementation</a>, which captures the three key read/write operations allowing control of the LoRa chip from this crate through either opcode or register operations.
 
 Example RadioKind implementations and ancillary information:
 
-- <a href="https://github.com/embassy-rs/lora-phy/tree/main/src/sx1261_2">the Sx1261/2 radio kind</a>;
-- <a href="https://github.com/embassy-rs/lora-phy/tree/main/src/sx1276_7_8_9">the Sx1276/7/8/9 radio kind</a>.
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/sx1261_2">the Sx1261/2 radio kind</a>;
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/sx1276_7_8_9">the Sx1276/7/8/9 radio kind</a>.
 
 ## LoRa board-specific support
 
