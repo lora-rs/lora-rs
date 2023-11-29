@@ -432,8 +432,8 @@ where
 
         match self.config.chip {
             Sx127xVariant::Sx1272 => {
-                let hdr = (pkt_params.implicit_header == true) as u8;
-                let crc = (pkt_params.crc_on == true) as u8;
+                let hdr = pkt_params.implicit_header as u8;
+                let crc = pkt_params.crc_on as u8;
 
                 let cfg1 = (modemcfg1 & 0b1111_1001) | (hdr << 2) | (crc << 1);
                 self.write_register(Register::RegModemConfig1, cfg1, false).await?;
