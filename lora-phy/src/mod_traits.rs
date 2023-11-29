@@ -1,4 +1,4 @@
-use embedded_hal_async::delay::DelayUs;
+use embedded_hal_async::delay::DelayNs;
 
 use crate::mod_params::*;
 
@@ -6,7 +6,7 @@ use crate::mod_params::*;
 /// to allow this crate to control the LoRa chip.
 pub trait InterfaceVariant {
     /// Reset the LoRa chip
-    async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError>;
+    async fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), RadioError>;
     /// Wait for the LoRa chip to become available for an operation
     async fn wait_on_busy(&mut self) -> Result<(), RadioError>;
     /// Wait for the LoRa chip to indicate an event has occurred
@@ -59,7 +59,7 @@ pub trait RadioKind {
         modulation_params: &ModulationParams,
     ) -> Result<PacketParams, RadioError>;
     /// Reset the loRa chip
-    async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError>;
+    async fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), RadioError>;
     /// Ensure the LoRa chip is in the appropriate state to allow operation requests
     async fn ensure_ready(&mut self, mode: RadioMode) -> Result<(), RadioError>;
     /// Perform any necessary antenna initialization
@@ -67,7 +67,7 @@ pub trait RadioKind {
     /// Place the LoRa chip in standby mode
     async fn set_standby(&mut self) -> Result<(), RadioError>;
     /// Place the LoRa chip in power-saving mode
-    async fn set_sleep(&mut self, warm_start_if_possible: bool, delay: &mut impl DelayUs) -> Result<(), RadioError>;
+    async fn set_sleep(&mut self, warm_start_if_possible: bool, delay: &mut impl DelayNs) -> Result<(), RadioError>;
     /// Perform operations to set a multi-protocol chip as a LoRa chip
     async fn set_lora_modem(&mut self, enable_public_network: bool) -> Result<(), RadioError>;
     /// Perform operations to set the LoRa chip oscillator
@@ -133,7 +133,7 @@ pub trait RadioKind {
         radio_mode: RadioMode,
         rx_continuous: bool,
         target_rx_state: TargetIrqState,
-        delay: &mut impl DelayUs,
+        delay: &mut impl DelayNs,
         polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<TargetIrqState, RadioError>;

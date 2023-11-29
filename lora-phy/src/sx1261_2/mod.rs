@@ -1,7 +1,7 @@
 mod radio_kind_params;
 
 use defmt::debug;
-use embedded_hal_async::delay::DelayUs;
+use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
 pub use radio_kind_params::TcxoCtrlVoltage;
 use radio_kind_params::*;
@@ -235,7 +235,7 @@ where
         })
     }
 
-    async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
+    async fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), RadioError> {
         self.intf.iv.reset(delay).await
     }
 
@@ -266,7 +266,7 @@ where
         self.intf.iv.disable_rf_switch().await
     }
 
-    async fn set_sleep(&mut self, warm_start_if_possible: bool, delay: &mut impl DelayUs) -> Result<(), RadioError> {
+    async fn set_sleep(&mut self, warm_start_if_possible: bool, delay: &mut impl DelayNs) -> Result<(), RadioError> {
         self.intf.iv.disable_rf_switch().await?;
         let sleep_params = SleepParams {
             wakeup_rtc: false,
@@ -836,7 +836,7 @@ where
         radio_mode: RadioMode,
         rx_continuous: bool,
         target_rx_state: TargetIrqState,
-        delay: &mut impl DelayUs,
+        delay: &mut impl DelayNs,
         polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<TargetIrqState, RadioError> {

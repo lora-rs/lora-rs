@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Switch SpiInterface to use SpiDevice trait.
 - Implement functionality for continuous wave mode.
 - Support preamble detection allowing LoRaWAN RX1+RX2 reception.
+- Update embedded-hal-async version to 1.0.0-rc.2.
 
 ## [v2.1.2] - 2023-09-25
 

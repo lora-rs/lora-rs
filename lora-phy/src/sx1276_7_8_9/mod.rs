@@ -1,7 +1,7 @@
 mod radio_kind_params;
 
 use defmt::debug;
-use embedded_hal_async::delay::DelayUs;
+use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
 use radio_kind_params::*;
 
@@ -242,7 +242,7 @@ where
         })
     }
 
-    async fn reset(&mut self, delay: &mut impl DelayUs) -> Result<(), RadioError> {
+    async fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), RadioError> {
         self.intf.iv.reset(delay).await?;
         self.set_sleep(false, delay).await?; // ensure sleep mode is entered so that the LoRa mode bit is set
         Ok(())
@@ -263,7 +263,7 @@ where
         self.intf.iv.disable_rf_switch().await
     }
 
-    async fn set_sleep(&mut self, _warm_start_if_possible: bool, _delay: &mut impl DelayUs) -> Result<(), RadioError> {
+    async fn set_sleep(&mut self, _warm_start_if_possible: bool, _delay: &mut impl DelayNs) -> Result<(), RadioError> {
         self.intf.iv.disable_rf_switch().await?;
         self.write_register(Register::RegOpMode, LoRaMode::Sleep.value(), true)
             .await?;
@@ -674,7 +674,7 @@ where
         radio_mode: RadioMode,
         _rx_continuous: bool,
         target_rx_state: TargetIrqState,
-        delay: &mut impl DelayUs,
+        delay: &mut impl DelayNs,
         polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<TargetIrqState, RadioError> {

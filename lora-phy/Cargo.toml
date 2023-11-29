@@ -13,4 +13,4 @@ defmt = { version = "0.3" }
 lora-modulation = { version = ">=0.1.2" }
 num-traits = { version = "0.2", default-features = false }
 
-embedded-hal-async = { version = "=1.0.0-rc.1"}
+embedded-hal-async = { version = "=1.0.0-rc.2"}
