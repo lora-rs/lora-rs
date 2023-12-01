@@ -207,6 +207,7 @@ impl CalibrationParams {
     }
 }
 
+#[allow(missing_docs)]
 #[derive(Clone, Copy)]
 pub enum TcxoCtrlVoltage {
     Ctrl1V6 = 0x00,
@@ -219,6 +220,7 @@ pub enum TcxoCtrlVoltage {
     Ctrl3V3 = 0x07,
 }
 
+#[allow(missing_docs)]
 impl TcxoCtrlVoltage {
     pub fn value(self) -> u8 {
         self as u8
