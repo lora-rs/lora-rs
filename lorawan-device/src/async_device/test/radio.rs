@@ -39,7 +39,7 @@ impl PhyRxTx for TestRadio {
         let length = buffer.len();
         // stash the uplink, to be consumed by channel or by rx handler
         let mut last_uplink = self.last_uplink.lock().await;
-        *last_uplink = Some(Uplink::new(buffer, config)?);
+        *last_uplink = Some(Uplink::new(buffer, config).map_err(|_| "Parse error")?);
         Ok(length as u32)
     }
 

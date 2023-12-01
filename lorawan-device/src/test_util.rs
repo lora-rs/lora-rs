@@ -8,6 +8,8 @@ use lorawan::{
     parser::{parse, DataPayload, JoinAcceptPayload, PhyPayload},
 };
 use mac::Session;
+#[cfg(feature = "async")]
+use parser::FCtrl;
 use radio::{RfConfig, TxConfig};
 use std::{collections::HashMap, sync::Mutex, vec::Vec};
 
