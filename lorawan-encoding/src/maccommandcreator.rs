@@ -8,6 +8,18 @@
 
 use super::maccommands::*;
 
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Error {
+    InvalidDataRate,
+    InvalidTxPower,
+    MarginOutOfRange,
+    DelayOutOfRange,
+    MaxEirpOutOfRange,
+    NanoSecondsOutOfRange,
+    BufferTooShort,
+}
+
 macro_rules! impl_mac_cmd_creator_boilerplate {
     ($type:ident, $cid:expr) => {
         impl Default for $type {
@@ -157,9 +169,9 @@ impl LinkADRReqCreator {
     /// # Argument
     ///
     /// * data_rate - data rate index of the ADR request. The value must be between 0 and 15.
-    pub fn set_data_rate(&mut self, data_rate: u8) -> Result<&mut Self, &str> {
+    pub fn set_data_rate(&mut self, data_rate: u8) -> Result<&mut Self, Error> {
         if data_rate > 0x0f {
-            return Err("data_rate out of range");
+            return Err(Error::InvalidDataRate);
         }
         self.data[1] &= 0x0f;
         self.data[1] |= data_rate << 4;
@@ -172,9 +184,9 @@ impl LinkADRReqCreator {
     /// # Argument
     ///
     /// * tx_power - TX power index. The value must be between 0 and 15.
-    pub fn set_tx_power(&mut self, tx_power: u8) -> Result<&mut Self, &str> {
+    pub fn set_tx_power(&mut self, tx_power: u8) -> Result<&mut Self, Error> {
         if tx_power > 0x0f {
-            return Err("tx_power out of range");
+            return Err(Error::InvalidTxPower);
         }
         self.data[1] &= 0xf0;
         self.data[1] |= tx_power & 0x0f;
@@ -287,7 +299,7 @@ impl DutyCycleReqCreator {
     ///
     /// * max_duty_cycle - the value used to determine the aggregated duty cycle using the formula
     /// `1 / (2 ** max_duty_cycle)`.
-    pub fn set_max_duty_cycle(&mut self, max_duty_cycle: u8) -> Result<&mut Self, &str> {
+    pub fn set_max_duty_cycle(&mut self, max_duty_cycle: u8) -> Result<&mut Self, Error> {
         self.data[1] = max_duty_cycle;
 
         Ok(self)
@@ -452,9 +464,9 @@ impl DevStatusAnsCreator {
     /// # Argument
     ///
     /// * margin - the value to be used as margin.
-    pub fn set_margin(&mut self, margin: i8) -> Result<&mut Self, &str> {
+    pub fn set_margin(&mut self, margin: i8) -> Result<&mut Self, Error> {
         if !(-32..=31).contains(&margin) {
-            return Err("margin out of range");
+            return Err(Error::MarginOutOfRange);
         }
         self.data[2] = ((margin << 2) as u8) >> 2;
 
@@ -581,9 +593,9 @@ impl RXTimingSetupReqCreator {
     /// # Argument
     ///
     /// * delay - the value to be used as delay.
-    pub fn set_delay(&mut self, delay: u8) -> Result<&mut Self, &str> {
+    pub fn set_delay(&mut self, delay: u8) -> Result<&mut Self, Error> {
         if delay > 0x0f {
-            return Err("delay out of range");
+            return Err(Error::DelayOutOfRange);
         }
         self.data[1] &= 0xf0;
         self.data[1] |= delay;
@@ -621,9 +633,9 @@ impl TXParamSetupReqCreator {
         self.data[1] |= (1 << 4) as u8;
         self
     }
-    pub fn set_max_eirp(&mut self, max_eirp: u8) -> Result<&mut Self, &str> {
+    pub fn set_max_eirp(&mut self, max_eirp: u8) -> Result<&mut Self, Error> {
         if max_eirp > 0x0F {
-            return Err("max_eirp out of range");
+            return Err(Error::MaxEirpOutOfRange);
         }
         self.data[1] &= 0xf0;
         self.data[1] |= max_eirp;
@@ -701,22 +713,22 @@ impl DeviceTimeAnsCreator {
         self.data[1..5].copy_from_slice(&seconds.to_le_bytes());
         self
     }
-    pub fn set_nano_seconds(&mut self, nano_seconds: u32) -> Result<&mut Self, &str> {
+    pub fn set_nano_seconds(&mut self, nano_seconds: u32) -> Result<&mut Self, Error> {
         if nano_seconds > 1000000000 {
-            return Err("nano_seconds out of range (max 1 second)");
+            return Err(Error::NanoSecondsOutOfRange);
         }
         self.data[5] = (nano_seconds / 3906250) as u8;
         Ok(self)
     }
 }
 
-pub fn build_mac_commands<'a, T: AsMut<[u8]>>(
+pub fn build_mac_commands<T: AsMut<[u8]>>(
     cmds: &[&dyn SerializableMacCommand],
     mut out: T,
-) -> Result<usize, &'a str> {
+) -> Result<usize, Error> {
     let res = out.as_mut();
     if mac_commands_len(cmds) > res.len() {
-        return Err("failed to serialize mac commands in provided buffer: too small");
+        return Err(Error::BufferTooShort);
     }
     let mut i = 0;
     for mc in cmds {

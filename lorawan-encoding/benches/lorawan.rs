@@ -101,7 +101,7 @@ fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
             if let PhyPayload::Data(DataPayload::Encrypted(data_payload)) = phy {
                 assert_eq!(
                     data_payload.decrypt(None, Some(&key), 1).unwrap().frm_payload(),
-                    Ok(FRMPayload::Data(&payload[..]))
+                    FRMPayload::Data(&payload[..])
                 );
             }
         })

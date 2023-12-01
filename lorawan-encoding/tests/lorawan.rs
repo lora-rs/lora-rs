@@ -155,7 +155,7 @@ fn test_parse_phy_payload_with_unsupported_major_versoin() {
     let phy = parse(bytes);
 
     // this is now part of the API.
-    assert_eq!(phy.err(), Some("Unsupported major version"));
+    assert_eq!(phy.err(), Some(lorawan::parser::Error::UnsupportedMajorVersion));
 }
 
 #[test]
@@ -194,14 +194,14 @@ fn test_parse_data_payload_no_panic_when_bad_packet() {
     // This reproduces a panic from https://github.com/ivajloip/rust-lorawan/issues/94.
     let data = [0x40, 0x04, 0x03, 0x02, 0x01, 0x85, 0x01, 0x00, 0xd6, 0xc3, 0xb5, 0x82];
     let phy = parse(data);
-    assert_eq!(phy.err(), Some("can not build EncryptedDataPayload from the provided data"));
+    assert_eq!(phy.err(), Some(lorawan::parser::Error::InvalidData));
 }
 
 #[test]
 fn test_parse_data_payload_no_panic_when_too_short_packet() {
     let data = [0x40, 0x04, 0x03, 0x02, 0x01];
     let phy = EncryptedDataPayload::new(data);
-    assert_eq!(phy.err(), Some("can not build EncryptedDataPayload from the provided data"));
+    assert_eq!(phy.err(), Some(lorawan::parser::Error::InvalidData));
 }
 
 #[test]
@@ -356,7 +356,7 @@ fn test_complete_dataup_payload_frm_payload() {
     let mut payload = Vec::new();
     payload.extend_from_slice(&String::from("hello").into_bytes()[..]);
 
-    assert_eq!(decrypted.frm_payload(), Ok(FRMPayload::Data(&payload)));
+    assert_eq!(decrypted.frm_payload(), FRMPayload::Data(&payload));
 }
 
 #[test]
@@ -368,7 +368,7 @@ fn test_complete_long_dataup_payload_frm_payload() {
     let mut payload = Vec::new();
     payload.extend_from_slice(&long_data_payload().into_bytes()[..]);
 
-    assert_eq!(decrypted.frm_payload(), Ok(FRMPayload::Data(&payload)));
+    assert_eq!(decrypted.frm_payload(), FRMPayload::Data(&payload));
 }
 
 #[test]
@@ -379,7 +379,7 @@ fn test_complete_datadown_payload_frm_payload() {
     let mut payload = Vec::new();
     payload.extend_from_slice(&String::from("hello lora").into_bytes()[..]);
 
-    assert_eq!(decrypted.frm_payload(), Ok(FRMPayload::Data(&payload)));
+    assert_eq!(decrypted.frm_payload(), FRMPayload::Data(&payload));
 }
 
 #[test]
@@ -606,7 +606,7 @@ fn test_join_accept_creator() {
         .set_dl_settings(0)
         .set_rx_delay(0);
 
-    assert_eq!(phy.build(&key).unwrap(), &phy_join_accept_payload()[..]);
+    assert_eq!(phy.build(&key), &phy_join_accept_payload()[..]);
 }
 
 #[test]
@@ -617,7 +617,7 @@ fn test_join_request_creator() {
         .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
         .set_dev_nonce(&[0x2du8, 0x10]);
 
-    assert_eq!(phy.build(&key).unwrap(), &phy_join_request_payload()[..]);
+    assert_eq!(phy.build(&key), &phy_join_request_payload()[..]);
 }
 
 #[test]
@@ -630,7 +630,7 @@ fn test_join_request_creator_with_options() {
             .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
             .set_dev_nonce(&[0x2du8, 0x10]);
 
-        assert_eq!(phy.build(&key).unwrap(), &phy_join_request_payload()[..]);
+        assert_eq!(phy.build(&key), &phy_join_request_payload()[..]);
     }
     assert_eq!(&data[..], &phy_join_request_payload()[..]);
 }
