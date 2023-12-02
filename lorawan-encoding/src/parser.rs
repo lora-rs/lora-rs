@@ -29,9 +29,7 @@
 //! ```
 
 use super::keys::{CryptoFactory, Encrypter, AES128, MIC};
-use super::maccommands::{
-    parse_mac_commands, ChannelMask, DLSettings, Frequency, MacCommandIterator,
-};
+use super::maccommands::{ChannelMask, DLSettings, Frequency};
 use super::securityhelpers;
 use super::securityhelpers::generic_array::GenericArray;
 
@@ -1059,12 +1057,13 @@ impl<'a> FHDR<'a> {
         (u16::from(self.0[6]) << 8) | u16::from(self.0[5])
     }
 
-    /// Gives the piggy-backed MAC ommands associated with the given payload.
-    pub fn fopts(&self) -> MacCommandIterator {
-        let f_opts_len = FCtrl(self.0[4], self.1).f_opts_len();
-        let start = 7;
-        let end = 7 + f_opts_len as usize;
-        parse_mac_commands(&self.0[start..end], self.1)
+    /// Gives the size of FOpts.
+    pub fn fopts_len(&self) -> u8 {
+        FCtrl(self.0[4], self.1).f_opts_len()
+    }
+
+    pub fn data(&self) -> &[u8] {
+        &self.0[7_usize..(7 + self.fopts_len()) as usize]
     }
 }
 
@@ -1130,8 +1129,12 @@ impl<'a> FRMMacCommands<'a> {
         FRMMacCommands(uplink, bytes)
     }
 
-    /// Gives the list of mac commands represented in the FRMPayload.
-    pub fn mac_commands(&self) -> MacCommandIterator {
-        parse_mac_commands(self.1, self.0)
+    pub fn data(&self) -> &[u8] {
+        self.1
     }
+
+    // /// Gives the list of mac commands represented in the FRMPayload.
+    // pub fn mac_commands(&self) -> MacCommandIterator {
+    //     parse_mac_commands(self.1, self.0)
+    // }
 }
