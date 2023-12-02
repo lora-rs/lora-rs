@@ -50,6 +50,7 @@ async fn main(_spawner: Spawner) {
         chip: Sx126xVariant::Sx1262,
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
+        use_dio2_as_rfswitch: true,
     };
     let iv = GenericSx126xInterfaceVariant::new(reset, dio1, busy, Some(rf_switch_rx), Some(rf_switch_tx)).unwrap();
     let lora = LoRa::new(SX1261_2::new(spi, iv, config), true, Delay).await.unwrap();
