@@ -38,10 +38,10 @@ impl Otaa {
         self.dev_nonce = DevNonce::from(rng.next_u32() as u16);
         buf.clear();
         let mut phy: JoinRequestCreator<[u8; 23], C> = JoinRequestCreator::default();
-        phy.set_app_eui(self.network_credentials.appeui.0)
-            .set_dev_eui(self.network_credentials.deveui.0)
+        phy.set_app_eui(self.network_credentials.appeui)
+            .set_dev_eui(self.network_credentials.deveui)
             .set_dev_nonce(self.dev_nonce);
-        let vec = phy.build(&self.network_credentials.appkey.0);
+        let vec = phy.build(&self.network_credentials.appkey);
         buf.extend_from_slice(vec).unwrap();
         u16::from(self.dev_nonce)
     }
@@ -55,10 +55,10 @@ impl Otaa {
         if let Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(encrypted))) =
             lorawan_parse(rx.as_mut_for_read(), C::default())
         {
-            let decrypt = encrypted.decrypt(&self.network_credentials.appkey.0);
+            let decrypt = encrypted.decrypt(&self.network_credentials.appkey);
             region.process_join_accept(&decrypt);
             configuration.rx1_delay = del_to_delay_ms(decrypt.rx_delay());
-            if decrypt.validate_mic(&self.network_credentials.appkey.0) {
+            if decrypt.validate_mic(&self.network_credentials.appkey) {
                 return Some(Session::derive_new(
                     &decrypt,
                     self.dev_nonce,

@@ -76,7 +76,7 @@ impl JoinRequestCreator<[u8; 23], DefaultFactory> {
     ///
     /// ```
     /// let mut phy = lorawan::creator::JoinRequestCreator::new();
-    /// let key = lorawan::keys::AES128([7; 16]);
+    /// let key = lorawan::keys::AppKey::from([7; 16]);
     /// phy.set_app_eui(&[1; 8]);
     /// phy.set_dev_eui(&[2; 8]);
     /// phy.set_dev_nonce(&[3; 2]);
@@ -141,11 +141,10 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedJoinAcceptPayload<T, DefaultFactory>
     /// let mut data = vec![0x20u8, 0x49u8, 0x3eu8, 0xebu8, 0x51u8, 0xfbu8,
     ///     0xa2u8, 0x11u8, 0x6fu8, 0x81u8, 0x0eu8, 0xdbu8, 0x37u8, 0x42u8,
     ///     0x97u8, 0x51u8, 0x42u8];
-    /// let key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
-    ///     0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
+    /// let key = lorawan::keys::AppKey::from([2; 16]);
     /// let phy = lorawan::parser::DecryptedJoinAcceptPayload::new(&mut data[..], &key);
     /// ```
-    pub fn new(data: T, key: &AES128) -> Result<Self, Error> {
+    pub fn new(data: T, key: &AppKey) -> Result<Self, Error> {
         Self::new_with_factory(data, key, DefaultFactory)
     }
 }

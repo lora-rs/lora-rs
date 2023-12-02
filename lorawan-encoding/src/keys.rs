@@ -5,9 +5,78 @@
 // copied, modified, or distributed except according to those terms.
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
+use super::parser::EUI64;
 use super::securityhelpers::generic_array::{typenum::U16, GenericArray};
 
-/// AES128 represents 128 bit AES key.
+macro_rules! lorawan_key {
+    (
+        $(#[$outer:meta])*
+        pub struct $type:ident(AES128);
+    ) => {
+        $(#[$outer])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+        pub struct $type(pub(crate) AES128);
+
+        impl From<[u8;16]> for $type {
+            fn from(key: [u8; 16]) -> Self {
+                $type(AES128(key))
+            }
+        }
+
+        impl $type {
+            pub fn inner(&self) -> &AES128 {
+                &self.0
+            }
+        }
+
+        };
+    }
+
+lorawan_key!(
+    pub struct AppKey(AES128);
+);
+lorawan_key!(
+    pub struct NewSKey(AES128);
+);
+lorawan_key!(
+    pub struct AppSKey(AES128);
+);
+
+macro_rules! lorawan_eui {
+    (
+        $(#[$outer:meta])*
+        pub struct $type:ident(EUI64<[u8; 8]>);
+    ) => {
+        $(#[$outer])*
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+        pub struct $type(EUI64<[u8; 8]>);
+
+        impl From<[u8;8]> for $type {
+            fn from(key: [u8; 8]) -> Self {
+                $type(EUI64::from(key))
+            }
+        }
+
+        impl From<$type> for EUI64<[u8; 8]> {
+            fn from(key: $type) -> Self {
+                key.0
+            }
+        }
+    };
+}
+
+lorawan_eui!(
+    pub struct DevEui(EUI64<[u8; 8]>);
+);
+lorawan_eui!(
+    pub struct AppEui(EUI64<[u8; 8]>);
+);
+
+/// AES128 represents 128-bit AES key.
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
