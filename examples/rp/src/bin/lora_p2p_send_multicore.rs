@@ -79,6 +79,7 @@ async fn core1_task(
         chip: Sx126xVariant::Sx1262,
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
+        use_dio2_as_rfswitch: true,
     };
     let mut lora = LoRa::new(SX1261_2::new(spi, iv, config), true, Delay).await.unwrap();
 
