@@ -209,12 +209,14 @@ impl_join_bias!(AU915);
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{
-        test_util::{handle_join_request, Uplink, get_key},
-        mac::{Mac, SendData}, AppEui, AppKey, DevEui, NetworkCredentials};
-    use lorawan::default_crypto::DefaultFactory;
-    use heapless::Vec;
     use crate::mac::Response;
+    use crate::{
+        mac::{Mac, SendData},
+        test_util::{get_key, handle_join_request, Uplink},
+        AppEui, AppKey, DevEui, NetworkCredentials,
+    };
+    use heapless::Vec;
+    use lorawan::default_crypto::DefaultFactory;
 
     #[test]
     fn test_join_channels_standard() {
@@ -304,35 +306,48 @@ mod test {
             &mut buf,
         );
         // Confirm that the join request occurs on our subband
-        assert!(tx_config.rf.frequency >= 903_900_000, "Unexpected frequency: {} is below 903.9 MHz!", tx_config.rf.frequency);
-        assert!(tx_config.rf.frequency <= 905_300_000, "Unexpected frequency: {} is above 905.3 MHz!", tx_config.rf.frequency);
+        assert!(
+            tx_config.rf.frequency >= 903_900_000,
+            "Unexpected frequency: {} is below 903.9 MHz!",
+            tx_config.rf.frequency
+        );
+        assert!(
+            tx_config.rf.frequency <= 905_300_000,
+            "Unexpected frequency: {} is above 905.3 MHz!",
+            tx_config.rf.frequency
+        );
         let mut downlinks: Vec<_, 3> = Vec::new();
         let mut data = std::vec::Vec::new();
         data.extend_from_slice(buf.as_ref_for_read());
-        let uplink = Uplink::new(
-            buf.as_ref_for_read(),
-            tx_config,
-        ).unwrap();
+        let uplink = Uplink::new(buf.as_ref_for_read(), tx_config).unwrap();
 
         let mut rx_buf = [0; 255];
-        let len = handle_join_request::<0>(
-            Some(uplink),
-            tx_config.rf,
-            &mut rx_buf,);
+        let len = handle_join_request::<0>(Some(uplink), tx_config.rf, &mut rx_buf);
         buf.clear();
         buf.extend_from_slice(&rx_buf[..len]).unwrap();
         let response = mac.handle_rx::<DefaultFactory, 255, 3>(&mut buf, &mut downlinks);
-        if let Response::JoinSuccess = response {} else {
+        if let Response::JoinSuccess = response {
+        } else {
             assert!(false);
         }
-        let (tx_config, len) = mac.send::<DefaultFactory, _, 255>(&mut rand::rngs::OsRng, &mut buf, &SendData {
-            fport: 1,
-            data: &[0x0; 1],
-            confirmed: false,
-        }).unwrap();
+        let (tx_config, len) = mac
+            .send::<DefaultFactory, _, 255>(
+                &mut rand::rngs::OsRng,
+                &mut buf,
+                &SendData { fport: 1, data: &[0x0; 1], confirmed: false },
+            )
+            .unwrap();
         // Confirm that the first data frame occurs on our subband
-        assert!(tx_config.rf.frequency >= 903_900_000, "Unexpected frequency: {} is below 903.9 MHz!", tx_config.rf.frequency);
-        assert!(tx_config.rf.frequency <= 905_300_000, "Unexpected frequency: {} is above 905.3 MHz!", tx_config.rf.frequency);
+        assert!(
+            tx_config.rf.frequency >= 903_900_000,
+            "Unexpected frequency: {} is below 903.9 MHz!",
+            tx_config.rf.frequency
+        );
+        assert!(
+            tx_config.rf.frequency <= 905_300_000,
+            "Unexpected frequency: {} is above 905.3 MHz!",
+            tx_config.rf.frequency
+        );
     }
 
     #[test]
@@ -352,38 +367,50 @@ mod test {
             &mut buf,
         );
         // Confirm that the join request occurs on our subband
-        assert!(tx_config.rf.frequency >= 903_900_000, "Unexpected frequency: {} is below 903.9 MHz!", tx_config.rf.frequency);
-        assert!(tx_config.rf.frequency <= 905_300_000, "Unexpected frequency: {} is above 905.3 MHz!", tx_config.rf.frequency);
+        assert!(
+            tx_config.rf.frequency >= 903_900_000,
+            "Unexpected frequency: {} is below 903.9 MHz!",
+            tx_config.rf.frequency
+        );
+        assert!(
+            tx_config.rf.frequency <= 905_300_000,
+            "Unexpected frequency: {} is above 905.3 MHz!",
+            tx_config.rf.frequency
+        );
         let mut downlinks: Vec<_, 3> = Vec::new();
         let mut data = std::vec::Vec::new();
         data.extend_from_slice(buf.as_ref_for_read());
-        let uplink = Uplink::new(
-            buf.as_ref_for_read(),
-            tx_config,
-        ).unwrap();
+        let uplink = Uplink::new(buf.as_ref_for_read(), tx_config).unwrap();
 
         let mut rx_buf = [0; 255];
-        let len = handle_join_request::<0>(
-            Some(uplink),
-            tx_config.rf,
-            &mut rx_buf,);
+        let len = handle_join_request::<0>(Some(uplink), tx_config.rf, &mut rx_buf);
         buf.clear();
         buf.extend_from_slice(&rx_buf[..len]).unwrap();
         let response = mac.handle_rx::<DefaultFactory, 255, 3>(&mut buf, &mut downlinks);
-        if let Response::JoinSuccess = response {} else {
+        if let Response::JoinSuccess = response {
+        } else {
             assert!(false);
         }
         for i in 0..8 {
-            let (tx_config, len) = mac.send::<DefaultFactory, _, 255>(&mut rand::rngs::OsRng, &mut buf, &SendData {
-                fport: 1,
-                data: &[0x0; 1],
-                confirmed: false,
-            }).unwrap();
+            let (tx_config, len) = mac
+                .send::<DefaultFactory, _, 255>(
+                    &mut rand::rngs::OsRng,
+                    &mut buf,
+                    &SendData { fport: 1, data: &[0x0; 1], confirmed: false },
+                )
+                .unwrap();
             // Confirm that the first data frame occurs on our subband
-            assert!(tx_config.rf.frequency >= 903_900_000, "Unexpected frequency: {} is below 903.9 MHz!", tx_config.rf.frequency);
-            assert!(tx_config.rf.frequency <= 905_300_000, "Unexpected frequency: {} is above 905.3 MHz!", tx_config.rf.frequency);
+            assert!(
+                tx_config.rf.frequency >= 903_900_000,
+                "Unexpected frequency: {} is below 903.9 MHz!",
+                tx_config.rf.frequency
+            );
+            assert!(
+                tx_config.rf.frequency <= 905_300_000,
+                "Unexpected frequency: {} is above 905.3 MHz!",
+                tx_config.rf.frequency
+            );
             mac.rx2_complete();
         }
-
     }
 }
