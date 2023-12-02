@@ -1,3 +1,5 @@
+use crate::parser::Error;
+
 // Copyright (c) 2020 Ivaylo Petrov
 //
 // Licensed under the MIT license <LICENSE-MIT or
@@ -78,7 +80,7 @@ impl JoinRequestCreator<[u8; 23], DefaultFactory> {
     /// phy.set_app_eui(&[1; 8]);
     /// phy.set_dev_eui(&[2; 8]);
     /// phy.set_dev_nonce(&[3; 2]);
-    /// let payload = phy.build(&key).unwrap();
+    /// let payload = phy.build(&key);
     /// ```
     pub fn new() -> Self {
         Self::with_options([0; 23], DefaultFactory).unwrap()
@@ -99,7 +101,7 @@ impl<T: AsRef<[u8]>> JoinRequestPayload<T, DefaultFactory> {
     ///     0x02, 0x05, 0x04, 0x03, 0x02, 0x2d, 0x10, 0x6a, 0x99, 0x0e, 0x12];
     /// let phy = lorawan::parser::JoinRequestPayload::new(data);
     /// ```
-    pub fn new<'a>(data: T) -> Result<Self, &'a str> {
+    pub fn new(data: T) -> Result<Self, Error> {
         Self::new_with_factory(data, DefaultFactory)
     }
 }
@@ -118,7 +120,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> EncryptedJoinAcceptPayload<T, DefaultFactory>
     ///     0x37, 0x42, 0x97, 0x51, 0x42];
     /// let phy = lorawan::parser::EncryptedJoinAcceptPayload::new(data);
     /// ```
-    pub fn new<'a>(data: T) -> Result<Self, &'a str> {
+    pub fn new(data: T) -> Result<Self, Error> {
         Self::new_with_factory(data, DefaultFactory)
     }
 }
@@ -143,7 +145,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedJoinAcceptPayload<T, DefaultFactory>
     ///     0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
     /// let phy = lorawan::parser::DecryptedJoinAcceptPayload::new(&mut data[..], &key);
     /// ```
-    pub fn new<'a>(data: T, key: &AES128) -> Result<Self, &'a str> {
+    pub fn new(data: T, key: &AES128) -> Result<Self, Error> {
         Self::new_with_factory(data, key, DefaultFactory)
     }
 }
@@ -162,7 +164,7 @@ impl<T: AsRef<[u8]>> EncryptedDataPayload<T, DefaultFactory> {
     ///     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
     /// let phy = lorawan::parser::EncryptedDataPayload::new(data);
     /// ```
-    pub fn new<'a>(data: T) -> Result<Self, &'a str> {
+    pub fn new(data: T) -> Result<Self, Error> {
         Self::new_with_factory(data, DefaultFactory)
     }
 }
@@ -192,15 +194,15 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>> DecryptedDataPayload<T> {
     ///     Some(&app_skey),
     ///     1).unwrap();
     /// ```
-    pub fn new<'a, 'b>(
+    pub fn new<'a>(
         data: T,
         nwk_skey: &'a AES128,
         app_skey: Option<&'a AES128>,
         fcnt: u32,
-    ) -> Result<Self, &'b str> {
+    ) -> Result<Self, Error> {
         let t = EncryptedDataPayload::new(data)?;
         if !t.validate_mic(nwk_skey, fcnt) {
-            return Err("invalid mic");
+            return Err(Error::InvalidMic);
         }
         t.decrypt(Some(nwk_skey), app_skey, fcnt)
     }

@@ -41,8 +41,7 @@ impl Otaa {
         phy.set_app_eui(self.network_credentials.appeui.0)
             .set_dev_eui(self.network_credentials.deveui.0)
             .set_dev_nonce(self.dev_nonce);
-        let result = phy.build(&self.network_credentials.appkey.0);
-        let vec = result.unwrap();
+        let vec = phy.build(&self.network_credentials.appkey.0);
         buf.extend_from_slice(vec).unwrap();
         u16::from(self.dev_nonce)
     }

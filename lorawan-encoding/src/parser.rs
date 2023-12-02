@@ -19,7 +19,7 @@
 //! if let Ok(PhyPayload::Data(DataPayload::Encrypted(phy))) = parse(data) {
 //!     let key = AES128([1; 16]);
 //!     let decrypted = phy.decrypt(None, Some(&key), 1).unwrap();
-//!     if let Ok(FRMPayload::Data(data_payload)) =
+//!     if let FRMPayload::Data(data_payload) =
 //!             decrypted.frm_payload() {
 //!         println!("{}", String::from_utf8_lossy(data_payload));
 //!     }
@@ -37,6 +37,17 @@ use super::securityhelpers::generic_array::GenericArray;
 
 #[cfg(feature = "default-crypto")]
 use super::default_crypto::DefaultFactory;
+
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Error {
+    InvalidData,
+    InvalidMic,
+    InvalidKey,
+    InvalidMessageType,
+    InvalidPayload,
+    UnsupportedMajorVersion,
+}
 
 macro_rules! fixed_len_struct {
     (
@@ -271,9 +282,9 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> JoinRequestPayload<T, F> {
     /// let phy = lorawan::parser::JoinRequestPayload::new_with_factory(data,
     ///     lorawan::default_crypto::DefaultFactory);
     /// ```
-    pub fn new_with_factory<'a>(data: T, factory: F) -> Result<Self, &'a str> {
+    pub fn new_with_factory(data: T, factory: F) -> Result<Self, Error> {
         if !Self::can_build_from(data.as_ref()) {
-            Err("can not build JoinRequestPayload from the provided data")
+            Err(Error::InvalidData)
         } else {
             Ok(Self(data, factory))
         }
@@ -329,11 +340,11 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
     ///
     /// * data - the bytes for the payload.
     /// * factory - the factory that shall be used to create object for crypto functions.
-    pub fn new_with_factory<'a>(data: T, factory: F) -> Result<Self, &'a str> {
+    pub fn new_with_factory(data: T, factory: F) -> Result<Self, Error> {
         if Self::can_build_from(data.as_ref()) {
             Ok(Self(data, factory))
         } else {
-            Err("can not build EncryptedJoinAcceptPayload from the provided data")
+            Err(Error::InvalidData)
         }
     }
 
@@ -568,13 +579,13 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<
     /// * bytes - the data from which the PhyPayload is to be built.
     /// * key - the key that is to be used to decrypt the payload.
     /// * factory - the factory that shall be used to create object for crypto functions.
-    pub fn new_with_factory<'a>(data: T, key: &AES128, factory: F) -> Result<Self, &'a str> {
+    pub fn new_with_factory(data: T, key: &AES128, factory: F) -> Result<Self, Error> {
         let t = EncryptedJoinAcceptPayload::new_with_factory(data, factory)?;
         let res = t.decrypt(key);
         if res.validate_mic(key) {
             Ok(res)
         } else {
-            Err("MIC did not match")
+            Err(Error::InvalidMic)
         }
     }
 }
@@ -650,11 +661,11 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> {
     ///
     /// * data - the bytes for the payload.
     /// * factory - the factory that shall be used to create object for crypto functions.
-    pub fn new_with_factory<'a>(data: T, factory: F) -> Result<Self, &'a str> {
+    pub fn new_with_factory(data: T, factory: F) -> Result<Self, Error> {
         if Self::can_build_from(data.as_ref()) {
             Ok(Self(data, factory))
         } else {
-            Err("can not build EncryptedDataPayload from the provided data")
+            Err(Error::InvalidData)
         }
     }
 
@@ -712,12 +723,12 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
     /// let enc_phy = lorawan::parser::EncryptedDataPayload::new(data).unwrap();
     /// let dec_phy = enc_phy.decrypt(None, Some(&key), 1);
     /// ```
-    pub fn decrypt<'a, 'b>(
+    pub fn decrypt<'a>(
         mut self,
         nwk_skey: Option<&'a AES128>,
         app_skey: Option<&'a AES128>,
         fcnt: u32,
-    ) -> Result<DecryptedDataPayload<T>, &'b str> {
+    ) -> Result<DecryptedDataPayload<T>, Error> {
         let fhdr_length = self.fhdr_length();
         let fhdr = self.fhdr();
         let full_fcnt = compute_fcnt(fcnt, fhdr.fcnt());
@@ -727,7 +738,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
             nwk_skey
         };
         if key.is_none() {
-            return Err("key needed to decrypt the frm data payload was None");
+            return Err(Error::InvalidKey);
         }
         let data = self.0.as_mut();
         let len = data.len();
@@ -800,21 +811,21 @@ impl<T: AsRef<[u8]>> DataHeader for DecryptedDataPayload<T> {
 impl<T: AsRef<[u8]>> DecryptedDataPayload<T> {
     /// Returns FRMPayload that can represent either application payload or mac commands if fport
     /// is 0.
-    pub fn frm_payload(&self) -> Result<FRMPayload, &str> {
+    pub fn frm_payload(&self) -> FRMPayload {
         let data = self.as_data_bytes();
         let len = data.len();
         let fhdr_length = self.fhdr_length();
         //we have more bytes than fhdr + fport
         if len < fhdr_length + 6 {
-            Ok(FRMPayload::None)
+            FRMPayload::None
         } else if self.f_port() != Some(0) {
             // the size guarantees the existance of f_port
-            Ok(FRMPayload::Data(&data[(1 + fhdr_length + 1)..(len - 4)]))
+            FRMPayload::Data(&data[(1 + fhdr_length + 1)..(len - 4)])
         } else {
-            Ok(FRMPayload::MACCommands(FRMMacCommands::new(
+            FRMPayload::MACCommands(FRMMacCommands::new(
                 &data[(1 + fhdr_length + 1)..(len - 4)],
                 self.is_uplink(),
-            )))
+            ))
         }
     }
 }
@@ -837,9 +848,9 @@ impl<T: AsRef<[u8]>> DecryptedDataPayload<T> {
 /// }
 /// ```
 #[cfg(feature = "default-crypto")]
-pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(
+pub fn parse<T: AsRef<[u8]> + AsMut<[u8]>>(
     data: T,
-) -> Result<PhyPayload<T, DefaultFactory>, &'a str> {
+) -> Result<PhyPayload<T, DefaultFactory>, Error> {
     parse_with_factory(data, DefaultFactory)
 }
 
@@ -853,7 +864,7 @@ pub fn parse<'a, T: AsRef<[u8]> + AsMut<[u8]>>(
 ///
 /// * bytes - the data from which the PhyPayload is to be built.
 /// * factory - the factory that shall be used to create object for crypto functions.
-pub fn parse_with_factory<'a, T, F>(data: T, factory: F) -> Result<PhyPayload<T, F>, &'a str>
+pub fn parse_with_factory<T, F>(data: T, factory: F) -> Result<PhyPayload<T, F>, Error>
 where
     T: AsRef<[u8]> + AsMut<[u8]>,
     F: CryptoFactory,
@@ -873,23 +884,23 @@ where
         | MType::ConfirmedDataDown => Ok(PhyPayload::Data(DataPayload::Encrypted(
             EncryptedDataPayload::new_with_factory(data, factory)?,
         ))),
-        _ => Err("unsupported message type"),
+        _ => Err(Error::InvalidMessageType),
     }
 }
 
-fn check_phy_data<'a>(bytes: &[u8]) -> Result<(), &'a str> {
+fn check_phy_data(bytes: &[u8]) -> Result<(), Error> {
     let len = bytes.len();
     if len == 0 {
-        return Err("can not parse empty payload as LoRaWAN phy payload");
+        return Err(Error::InvalidPayload);
     }
     let mhdr = MHDR(bytes[0]);
     if mhdr.major() != Major::LoRaWANR1 {
-        return Err("Unsupported major version");
+        return Err(Error::UnsupportedMajorVersion);
     }
     // the smallest payload is a data payload without fport and FRMPayload
     // which is 12 bytes long.
     if len < 12 {
-        Err("insufficient number of bytes")
+        Err(Error::InvalidPayload)
     } else {
         Ok(())
     }

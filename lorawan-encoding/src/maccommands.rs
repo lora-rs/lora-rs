@@ -6,6 +6,15 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Error {
+    UnknownMacCommand,
+    BufferTooShort,
+    InvalidIndex,
+    InvalidDataRateRange,
+}
+
 /// MacCommand represents the enumeration of all LoRaWAN MACCommands.
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, PartialEq, Eq)]
@@ -144,12 +153,12 @@ macro_rules! mac_cmd_zero_len {
             pub struct $type();
 
             impl $type {
-                pub fn new(_: &[u8]) -> Result<$type, &str> {
-                    Ok($type())
+                pub fn new(_: &[u8]) -> $type {
+                    $type()
                 }
 
-                pub fn new_as_mac_cmd<'a>(data: &[u8]) -> Result<(MacCommand<'a>, usize), &str> {
-                    Ok((MacCommand::$name($type::new(data)?), 0))
+                pub fn new_as_mac_cmd<'a>(data: &[u8]) -> (MacCommand<'a>, usize) {
+                    (MacCommand::$name($type::new(data)), 0)
                 }
 
                 pub const fn cid() -> u8 {
@@ -166,12 +175,12 @@ macro_rules! mac_cmd_zero_len {
             }
         )*
 
-        fn parse_zero_len_mac_cmd<'b>(data: &[u8], uplink: bool) -> Result<(usize, MacCommand<'_>), &'b str> {
+        fn parse_zero_len_mac_cmd(data: &[u8], uplink: bool) -> Result<(usize, MacCommand<'_>), Error> {
             match (data[0], uplink) {
                 $(
-                    ($cid, $uplink) => Ok((0, MacCommand::$name($type::new(&[])?))),
+                    ($cid, $uplink) => Ok((0, MacCommand::$name($type::new(&[])))),
                 )*
-                _ => Err("uknown mac command")
+                _ => Err(Error::UnknownMacCommand)
             }
         }
     }
@@ -191,15 +200,15 @@ macro_rules! mac_cmds {
 
             impl<'a> $type<'a> {
                 /// Creates a new instance of the mac command if there is enought data.
-                pub fn new<'b>(data: &'a [u8]) -> Result<$type<'a>, &'b str> {
+                pub fn new(data: &'a [u8]) -> Result<$type<'a>, Error> {
                     if data.len() < $size {
-                        Err("incorrect size for")
+                        Err(Error::BufferTooShort)
                     } else {
                         Ok($type(&data))
                     }
                 }
 
-                pub fn new_as_mac_cmd<'b>(data: &'a [u8]) -> Result<(MacCommand<'a>, usize), &'b str> {
+                pub fn new_as_mac_cmd(data: &'a [u8]) -> Result<(MacCommand<'a>, usize), Error> {
                     Ok((MacCommand::$name($type::new(data)?), $size))
                 }
 
@@ -220,7 +229,7 @@ macro_rules! mac_cmds {
             }
         )*
 
-        fn parse_one_mac_cmd<'b>(data: &[u8], uplink: bool) -> Result<(usize, MacCommand<'_>), &'b str> {
+        fn parse_one_mac_cmd(data: &[u8], uplink: bool) -> Result<(usize, MacCommand<'_>), Error> {
             match (data[0], uplink) {
                 $(
                     ($cid, $uplink) if data.len() > $size => Ok(($size, MacCommand::$name($type::new(&data[1.. 1 + $size])?))),
@@ -516,9 +525,9 @@ impl<'de, const N: usize> serde::Deserialize<'de> for ChannelMask<N> {
 
 impl<const N: usize> ChannelMask<N> {
     /// Constructs a new ChannelMask from the provided data.
-    pub fn new(data: &[u8]) -> Result<Self, &str> {
+    pub fn new(data: &[u8]) -> Result<Self, Error> {
         if data.len() < N {
-            return Err("at least {N} bytes expected to read");
+            return Err(Error::BufferTooShort);
         }
         Ok(Self::new_from_raw(data))
     }
@@ -561,10 +570,10 @@ impl<const N: usize> ChannelMask<N> {
     }
 
     /// Verifies if a given channel is enabled.
-    pub fn is_enabled(&self, index: usize) -> Result<bool, &str> {
+    pub fn is_enabled(&self, index: usize) -> Result<bool, Error> {
         let index_limit = N * 8 - 1;
         if index > index_limit {
-            return Err("index should be between 0 and {index_limit}");
+            return Err(Error::InvalidIndex);
         }
         Ok(self.channel_enabled(index))
     }
@@ -818,16 +827,16 @@ impl DataRateRange {
     }
 
     /// Constructs a new DataRateRange from the provided byte.
-    pub fn new(byte: u8) -> Result<DataRateRange, &'static str> {
+    pub fn new(byte: u8) -> Result<DataRateRange, Error> {
         Self::can_build_from(byte)?;
 
         Ok(Self::new_from_raw(byte))
     }
 
     /// Check if the byte can be used to create DataRateRange.
-    pub fn can_build_from(byte: u8) -> Result<(), &'static str> {
+    pub fn can_build_from(byte: u8) -> Result<(), Error> {
         if (byte >> 4) < (byte & 0x0f) {
-            return Err("data rate range can not have max data rate smaller than min data rate");
+            return Err(Error::InvalidDataRateRange);
         }
         Ok(())
     }

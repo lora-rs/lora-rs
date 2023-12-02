@@ -79,8 +79,7 @@ impl Uplink {
         self.adr_ans.clear();
 
         if self.rx_delay_ans.get() != 0 {
-            macs.push(MacCommand::RXTimingSetupAns(RXTimingSetupAnsPayload::new(&[]).unwrap()))
-                .unwrap();
+            macs.push(MacCommand::RXTimingSetupAns(RXTimingSetupAnsPayload::new(&[]))).unwrap();
         }
         self.rx_delay_ans.clear();
     }

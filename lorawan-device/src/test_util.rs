@@ -1,13 +1,15 @@
 use super::*;
 use lorawan::maccommands::{ChannelMask, SerializableMacCommand};
-use lorawan::parser::DataHeader;
+use lorawan::parser::{self, DataHeader};
 use lorawan::{
     default_crypto::DefaultFactory,
     maccommandcreator::LinkADRReqCreator,
     maccommands::{LinkADRReqPayload, MacCommand},
-    parser::{parse, DataPayload, FCtrl, JoinAcceptPayload, PhyPayload},
+    parser::{parse, DataPayload, JoinAcceptPayload, PhyPayload},
 };
 use mac::Session;
+#[cfg(feature = "async")]
+use parser::FCtrl;
 use radio::{RfConfig, TxConfig};
 use std::{collections::HashMap, sync::Mutex, vec::Vec};
 
@@ -24,7 +26,7 @@ pub struct Uplink {
 
 impl Uplink {
     /// Creates a copy from a reference and ensures the packet is at least parseable.
-    pub fn new(data_in: &[u8], tx_config: TxConfig) -> Result<Self, &'static str> {
+    pub fn new(data_in: &[u8], tx_config: TxConfig) -> Result<Self, parser::Error> {
         let mut data: Vec<u8> = Vec::new();
         data.extend_from_slice(data_in);
         let _parse = parse(data.as_mut_slice())?;

@@ -121,7 +121,7 @@ impl Session {
                             &mut self.uplink,
                             &mut decrypted.fhdr().fopts(),
                         );
-                        if let Ok(FRMPayload::MACCommands(mac_cmds)) = decrypted.frm_payload() {
+                        if let FRMPayload::MACCommands(mac_cmds) = decrypted.frm_payload() {
                             configuration.handle_downlink_macs(
                                 region,
                                 &mut self.uplink,
@@ -140,7 +140,7 @@ impl Session {
                     } else {
                         // we can always increment fcnt_up when we receive a downlink
                         self.fcnt_up += 1;
-                        if let (Some(fport), Ok(FRMPayload::Data(data))) =
+                        if let (Some(fport), FRMPayload::Data(data)) =
                             (decrypted.f_port(), decrypted.frm_payload())
                         {
                             // heapless Vec from slice fails only if slice is too large.
@@ -212,7 +212,7 @@ impl Session {
                 tx_buffer.clear();
                 tx_buffer.extend_from_slice(packet).unwrap();
             }
-            Err(e) => panic!("Error assembling packet! {} ", e),
+            Err(e) => panic!("Error assembling packet! {:?} ", e),
         }
         fcnt
     }

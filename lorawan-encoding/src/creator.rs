@@ -31,6 +31,16 @@ use aes::cipher::generic_array::GenericArray;
 #[cfg(feature = "default-crypto")]
 use aes::cipher::generic_array::typenum::U256;
 
+#[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+pub enum Error {
+    BufferTooShort,
+    InvalidChannelList,
+    MacCommandTooBigForFOpts,
+    DataAndMacCommandsInPayloadNotAllowed,
+    FRMPayloadWithFportZero,
+}
+
 const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
 /// JoinAcceptCreator serves for creating binary representation of Physical
@@ -49,7 +59,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     /// Creates a well initialized JoinAcceptCreator with specific data and crypto functions.
     ///
     /// TODO: Add more details & and example
-    pub fn with_options<'a>(mut data: D, factory: F) -> Result<Self, &'a str> {
+    pub fn with_options(mut data: D, factory: F) -> Result<Self, Error> {
         // length verification will occur during building
         let d = data.as_mut();
         d[0] = 0x20;
@@ -134,10 +144,10 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     pub fn set_c_f_list<'a, C: AsRef<[Frequency<'a>]>>(
         &mut self,
         list: C,
-    ) -> Result<&mut Self, &str> {
+    ) -> Result<&mut Self, Error> {
         let ch_list = list.as_ref();
         if ch_list.len() > 5 {
-            return Err("too many frequencies");
+            return Err(Error::InvalidChannelList);
         }
         let d = self.data.as_mut();
         ch_list.iter().enumerate().for_each(|(i, fr)| {
@@ -156,14 +166,14 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     /// # Argument
     ///
     /// * key - the key to be used for encryption and setting the MIC.
-    pub fn build(&mut self, key: &keys::AES128) -> Result<&[u8], &str> {
+    pub fn build(&mut self, key: &keys::AES128) -> Result<&[u8], Error> {
         let required_len = if self.with_c_f_list {
             33
         } else {
             17
         };
         if self.data.as_mut().len() < required_len {
-            return Err("data slice is too short");
+            return Err(Error::BufferTooShort);
         }
         if !self.encrypted {
             self.encrypt_payload(key);
@@ -233,10 +243,10 @@ pub struct JoinRequestCreator<D, F> {
 
 impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     /// Creates a well initialized JoinRequestCreator with specific crypto functions.
-    pub fn with_options<'a>(mut data: D, factory: F) -> Result<Self, &'a str> {
+    pub fn with_options(mut data: D, factory: F) -> Result<Self, Error> {
         let d = data.as_mut();
         if d.len() < 23 {
-            return Err("data slice is too short");
+            return Err(Error::BufferTooShort);
         }
         d[0] = 0x00;
         Ok(Self { data, factory })
@@ -294,10 +304,10 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     /// # Argument
     ///
     /// * key - the key to be used for setting the MIC.
-    pub fn build(&mut self, key: &keys::AES128) -> Result<&[u8], &str> {
+    pub fn build(&mut self, key: &keys::AES128) -> &[u8] {
         let d = self.data.as_mut();
         set_mic(d, key, &self.factory);
-        Ok(d)
+        d
     }
 }
 
@@ -330,10 +340,10 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     /// Creates a well initialized DataPayloadCreator with specific crypto functions.
     ///
     /// By default the packet is unconfirmed data up packet.
-    pub fn with_options<'a>(mut data: D, factory: F) -> Result<Self, &'a str> {
+    pub fn with_options(mut data: D, factory: F) -> Result<Self, Error> {
         let d = data.as_mut();
         if d.len() < 255 {
-            return Err("data slice is too short");
+            return Err(Error::BufferTooShort);
         }
         d[0] = 0x40;
         Ok(DataPayloadCreator { data, data_f_port: None, fcnt: 0, factory })
@@ -459,13 +469,13 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     /// let app_skey = lorawan::keys::AES128([1; 16]);
     /// phy.build(&[], &cmds, &nwk_skey, &app_skey).unwrap();
     /// ```
-    pub fn build<'a>(
+    pub fn build(
         &mut self,
         payload: &[u8],
         cmds: &[&dyn SerializableMacCommand],
         nwk_skey: &keys::AES128,
         app_skey: &keys::AES128,
-    ) -> Result<&[u8], &'a str> {
+    ) -> Result<&[u8], Error> {
         let d = self.data.as_mut();
         let mut last_filled = 8; // MHDR + FHDR without the FOpts
         let has_fport = self.data_f_port.is_some();
@@ -474,17 +484,17 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
 
         // Set MAC Commands
         if mac_cmds_len > PIGGYBACK_MAC_COMMANDS_MAX_LEN && !has_fport_zero {
-            return Err("mac commands are too big for FOpts");
+            return Err(Error::MacCommandTooBigForFOpts);
         }
 
         // Set FPort
         let mut payload_len = payload.len();
 
         if has_fport_zero && payload_len > 0 {
-            return Err("mac commands in payload can not be send together with payload");
+            return Err(Error::DataAndMacCommandsInPayloadNotAllowed);
         }
         if !has_fport && payload_len > 0 {
-            return Err("fport must be provided when there is FRMPayload");
+            return Err(Error::FRMPayloadWithFportZero);
         }
         // Set FOptsLen if present
         if !has_fport_zero && mac_cmds_len > 0 {
@@ -493,7 +503,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
                 cmds,
                 &mut d[last_filled..last_filled + mac_cmds_len],
             )
-            .unwrap();
+            .map_err(|_| Error::BufferTooShort)?;
             last_filled += mac_cmds_len;
         }
 
@@ -510,7 +520,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
                 cmds,
                 &mut d[last_filled..last_filled + payload_len],
             )
-            .unwrap();
+            .map_err(|_| Error::BufferTooShort)?;
         } else {
             d[last_filled..last_filled + payload_len].copy_from_slice(payload);
         };

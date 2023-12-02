@@ -30,8 +30,7 @@ macro_rules! test_helper {
         {
             let data = [];
             let mc = $type::new_as_mac_cmd(&data[..]);
-            assert!(mc.is_ok());
-            if let (MacCommand::$name(_), size) = mc.unwrap() {
+            if let (MacCommand::$name(_), size) = mc {
                 assert_eq!(size, 0);
             } else {
                 panic!("failed to parse {}", stringify!($type));
