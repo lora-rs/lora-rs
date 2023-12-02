@@ -77,10 +77,9 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         &mut self,
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     ) {
-        // Reset the join channels state
-        self.join_channels.reset();
-
         if let Some(CfList::FixedChannel(channel_mask)) = join_accept.c_f_list() {
+            // Reset the join channels state
+            self.join_channels.reset();
             self.channel_mask = channel_mask;
         }
     }
@@ -90,6 +89,7 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
         channel_mask_control: u8,
         channel_mask: ChannelMask<2>,
     ) {
+        self.join_channels.reset();
         match channel_mask_control {
             0..=4 => {
                 let base_index = channel_mask_control as usize * 2;
@@ -140,26 +140,47 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
                 (data_rate, F::uplink_channels()[channel])
             }
             Frame::Data => {
-                // For the data frame, the datarate impacts which channel sets we can choose
-                // from. If the datarate bandwidth is 500 kHz, we must use
-                // channels 64-71. Else, we must use 0-63
-                let datarate = F::datarates()[datarate as usize].clone().unwrap();
-                if datarate.bandwidth == Bandwidth::_500KHz {
-                    let mut channel = (rng.next_u32() & 0b111) as u8;
-                    // keep selecting a random channel until we find one that is enabled
-                    while !self.channel_mask.is_enabled(channel.into()).unwrap() {
-                        channel = (rng.next_u32() & 0b111) as u8;
-                    }
-                    self.last_tx_channel = channel;
-                    (datarate, F::uplink_channels()[(64 + channel) as usize])
+                // The join bias gets reset after receiving CFList in Join Frame
+                // or ChannelMask in the LinkADRReq in Data Frame.
+                // If it has not been reset yet, we continue to use the bias for the data frames.
+                // We hope to acquire ChannelMask via LinkADRReq.
+                if self.join_channels.has_bias_and_not_exhausted() {
+                    let channel = self.join_channels.get_next_channel(rng);
+                    let dr = if channel < 64 {
+                        DR::_0
+                    } else {
+                        DR::_4
+                    };
+                    self.last_tx_channel = channel as u8;
+                    let data_rate = F::datarates()[dr as usize].clone().unwrap();
+                    (data_rate, F::uplink_channels()[channel])
+                // Alternatively, we will ask JoinChannel logic to determine a channel from the
+                // subband that  the join succeeded on.
+                } else if let Some(channel) = self.join_channels.first_data_channel(rng) {
+                    let data_rate = F::datarates()[DR::_0 as usize].clone().unwrap();
+                    (data_rate, F::uplink_channels()[channel])
                 } else {
-                    let mut channel = (rng.next_u32() & 0b111111) as u8;
-                    // keep selecting a random channel until we find one that is enabled
-                    while !self.channel_mask.is_enabled(channel.into()).unwrap() {
-                        channel = (rng.next_u32() & 0b111111) as u8;
+                    // For the data frame, the datarate impacts which channel sets we can choose
+                    // from. If the datarate bandwidth is 500 kHz, we must use
+                    // channels 64-71. Else, we must use 0-63
+                    let datarate = F::datarates()[datarate as usize].clone().unwrap();
+                    if datarate.bandwidth == Bandwidth::_500KHz {
+                        let mut channel = (rng.next_u32() & 0b111) as u8;
+                        // keep selecting a random channel until we find one that is enabled
+                        while !self.channel_mask.is_enabled(channel.into()).unwrap() {
+                            channel = (rng.next_u32() & 0b111) as u8;
+                        }
+                        self.last_tx_channel = channel;
+                        (datarate, F::uplink_channels()[(64 + channel) as usize])
+                    } else {
+                        let mut channel = (rng.next_u32() & 0b111111) as u8;
+                        // keep selecting a random channel until we find one that is enabled
+                        while !self.channel_mask.is_enabled(channel.into()).unwrap() {
+                            channel = (rng.next_u32() & 0b111111) as u8;
+                        }
+                        self.last_tx_channel = channel;
+                        (datarate, F::uplink_channels()[channel as usize])
                     }
-                    self.last_tx_channel = channel;
-                    (datarate, F::uplink_channels()[channel as usize])
                 }
             }
         }

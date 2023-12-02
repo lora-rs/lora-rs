@@ -57,6 +57,7 @@ impl TimerChannel {
         tx.send(()).await.unwrap();
     }
 
+    #[allow(unused)]
     pub async fn confirm_dropped_timer(&self, index: usize) {
         tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         let mut tx_map = self.tx.lock().await;
