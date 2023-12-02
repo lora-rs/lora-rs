@@ -328,9 +328,9 @@ mod test {
         let response = mac.handle_rx::<DefaultFactory, 255, 3>(&mut buf, &mut downlinks);
         if let Response::JoinSuccess = response {
         } else {
-            assert!(false);
+            panic!("Did not receive join success");
         }
-        let (tx_config, len) = mac
+        let (tx_config, _len) = mac
             .send::<DefaultFactory, _, 255>(
                 &mut rand::rngs::OsRng,
                 &mut buf,
@@ -389,10 +389,10 @@ mod test {
         let response = mac.handle_rx::<DefaultFactory, 255, 3>(&mut buf, &mut downlinks);
         if let Response::JoinSuccess = response {
         } else {
-            assert!(false);
+            panic!("Did not receive JoinSuccess")
         }
-        for i in 0..8 {
-            let (tx_config, len) = mac
+        for _ in 0..8 {
+            let (tx_config, _len) = mac
                 .send::<DefaultFactory, _, 255>(
                     &mut rand::rngs::OsRng,
                     &mut buf,
