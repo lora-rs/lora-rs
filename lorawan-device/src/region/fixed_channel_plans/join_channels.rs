@@ -20,12 +20,12 @@ impl JoinChannels {
     pub(crate) fn has_bias_and_not_exhausted(&self) -> bool {
         // there are remaining retries AND we have not yet been reset
         self.preferred_subband.is_some()
-            && self.num_retries <= self.max_retries
+            && self.num_retries < self.max_retries
             && self.num_retries != 0
     }
 
     pub(crate) fn first_data_channel(&mut self, rng: &mut impl RngCore) -> Option<usize> {
-        if self.preferred_subband.is_none() && self.num_retries != 0 {
+        if self.preferred_subband.is_some() && self.num_retries != 0 {
             self.clear_join_bias();
             // determine which subband the successful join was sent on
             let sb = if self.previous_channel < 64 {
@@ -34,7 +34,7 @@ impl JoinChannels {
                 self.previous_channel % 8
             };
             // pick another channel on that subband
-            Some((rng.next_u32() as usize % 8) + ((sb - 1) * 8))
+            Some((rng.next_u32() as usize % 8) + (sb * 8))
         } else {
             None
         }
@@ -209,6 +209,12 @@ impl_join_bias!(AU915);
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::{
+        test_util::{handle_join_request, Uplink, get_key},
+        mac::{Mac, SendData}, AppEui, AppKey, DevEui, NetworkCredentials};
+    use lorawan::default_crypto::DefaultFactory;
+    use heapless::Vec;
+    use crate::mac::Response;
 
     #[test]
     fn test_join_channels_standard() {
@@ -279,5 +285,105 @@ mod test {
             assert_eq!(ninth_channel / 8, first_channel / 8);
             assert_ne!(ninth_channel, first_channel);
         }
+    }
+
+    #[test]
+    fn test_full_mac_compliant_bias() {
+        let mut us915 = US915::new();
+        us915.set_join_bias(Subband::_2);
+        let mut mac = Mac::new(us915.into(), 21, 2);
+
+        let mut buf: RadioBuffer<255> = RadioBuffer::new();
+        let (tx_config, _len) = mac.join_otaa::<DefaultFactory, _, 255>(
+            &mut rand::rngs::OsRng,
+            NetworkCredentials::new(
+                AppEui::from([0x0; 8]),
+                DevEui::from([0x0; 8]),
+                AppKey::from(get_key()),
+            ),
+            &mut buf,
+        );
+        // Confirm that the join request occurs on our subband
+        assert!(tx_config.rf.frequency >= 903_900_000, "Unexpected frequency: {} is below 903.9 MHz!", tx_config.rf.frequency);
+        assert!(tx_config.rf.frequency <= 905_300_000, "Unexpected frequency: {} is above 905.3 MHz!", tx_config.rf.frequency);
+        let mut downlinks: Vec<_, 3> = Vec::new();
+        let mut data = std::vec::Vec::new();
+        data.extend_from_slice(buf.as_ref_for_read());
+        let uplink = Uplink::new(
+            buf.as_ref_for_read(),
+            tx_config,
+        ).unwrap();
+
+        let mut rx_buf = [0; 255];
+        let len = handle_join_request::<0>(
+            Some(uplink),
+            tx_config.rf,
+            &mut rx_buf,);
+        buf.clear();
+        buf.extend_from_slice(&rx_buf[..len]).unwrap();
+        let response = mac.handle_rx::<DefaultFactory, 255, 3>(&mut buf, &mut downlinks);
+        if let Response::JoinSuccess = response {} else {
+            assert!(false);
+        }
+        let (tx_config, len) = mac.send::<DefaultFactory, _, 255>(&mut rand::rngs::OsRng, &mut buf, &SendData {
+            fport: 1,
+            data: &[0x0; 1],
+            confirmed: false,
+        }).unwrap();
+        // Confirm that the first data frame occurs on our subband
+        assert!(tx_config.rf.frequency >= 903_900_000, "Unexpected frequency: {} is below 903.9 MHz!", tx_config.rf.frequency);
+        assert!(tx_config.rf.frequency <= 905_300_000, "Unexpected frequency: {} is above 905.3 MHz!", tx_config.rf.frequency);
+    }
+
+    #[test]
+    fn test_full_mac_non_compliant_bias() {
+        let mut us915 = US915::new();
+        us915.set_join_bias_and_noncompliant_retries(Subband::_2, 8);
+        let mut mac = Mac::new(us915.into(), 21, 2);
+
+        let mut buf: RadioBuffer<255> = RadioBuffer::new();
+        let (tx_config, _len) = mac.join_otaa::<DefaultFactory, _, 255>(
+            &mut rand::rngs::OsRng,
+            NetworkCredentials::new(
+                AppEui::from([0x0; 8]),
+                DevEui::from([0x0; 8]),
+                AppKey::from(get_key()),
+            ),
+            &mut buf,
+        );
+        // Confirm that the join request occurs on our subband
+        assert!(tx_config.rf.frequency >= 903_900_000, "Unexpected frequency: {} is below 903.9 MHz!", tx_config.rf.frequency);
+        assert!(tx_config.rf.frequency <= 905_300_000, "Unexpected frequency: {} is above 905.3 MHz!", tx_config.rf.frequency);
+        let mut downlinks: Vec<_, 3> = Vec::new();
+        let mut data = std::vec::Vec::new();
+        data.extend_from_slice(buf.as_ref_for_read());
+        let uplink = Uplink::new(
+            buf.as_ref_for_read(),
+            tx_config,
+        ).unwrap();
+
+        let mut rx_buf = [0; 255];
+        let len = handle_join_request::<0>(
+            Some(uplink),
+            tx_config.rf,
+            &mut rx_buf,);
+        buf.clear();
+        buf.extend_from_slice(&rx_buf[..len]).unwrap();
+        let response = mac.handle_rx::<DefaultFactory, 255, 3>(&mut buf, &mut downlinks);
+        if let Response::JoinSuccess = response {} else {
+            assert!(false);
+        }
+        for i in 0..8 {
+            let (tx_config, len) = mac.send::<DefaultFactory, _, 255>(&mut rand::rngs::OsRng, &mut buf, &SendData {
+                fport: 1,
+                data: &[0x0; 1],
+                confirmed: false,
+            }).unwrap();
+            // Confirm that the first data frame occurs on our subband
+            assert!(tx_config.rf.frequency >= 903_900_000, "Unexpected frequency: {} is below 903.9 MHz!", tx_config.rf.frequency);
+            assert!(tx_config.rf.frequency <= 905_300_000, "Unexpected frequency: {} is above 905.3 MHz!", tx_config.rf.frequency);
+            mac.rx2_complete();
+        }
+
     }
 }

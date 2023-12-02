@@ -151,7 +151,6 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
             phy.set_dev_addr(&[0; 4]);
             phy.set_uplink(false);
             phy.set_fcnt(FCNT_DOWN);
-            println!("Packaged with Fcnt {}", FCNT_DOWN);
             let finished =
                 phy.build(&[3, 2, 1], &cmd, &AES128(get_key()), &AES128(get_key())).unwrap();
             finished.len()
