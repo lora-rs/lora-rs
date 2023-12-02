@@ -60,6 +60,7 @@ async fn main(_spawner: Spawner) {
         chip: Sx126xVariant::Stm32wl,
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
+        use_dio2_as_rfswitch: true,
     };
     let iv = Stm32wlInterfaceVariant::new(Irqs, None, Some(ctrl2)).unwrap();
     let mut lora = LoRa::new(SX1261_2::new(spi, iv, config), false, Delay).await.unwrap();
