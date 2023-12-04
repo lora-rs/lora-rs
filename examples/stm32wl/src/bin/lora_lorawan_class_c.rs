@@ -26,7 +26,7 @@ use lora_phy::sx1261_2::{self, Sx126xVariant, TcxoCtrlVoltage, SX1261_2};
 use lora_phy::LoRa;
 use lorawan::default_crypto::DefaultFactory as Crypto;
 use lorawan_device::async_device::lora_radio::LoRaRadio;
-use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode, JoinResponse, SendResponse};
+use lorawan_device::async_device::{Device, EmbassyTimer, JoinMode, JoinResponse, SendResponse};
 use lorawan_device::region::{Subband, US915};
 use lorawan_device::{AppEui, AppKey, DevEui};
 use {defmt_rtt as _, panic_probe as _};
@@ -34,6 +34,9 @@ use {defmt_rtt as _, panic_probe as _};
 use self::iv::{InterruptHandler, Stm32wlInterfaceVariant, SubghzSpiDevice};
 
 const MAX_TX_POWER: u8 = 21;
+// During uplinks, it possible to receive a class A downlink and many Class C downlinks.
+// Increasing the stacks buffer to at least 3 is a good start.
+const DOWNLINK_BUFFER: usize = 3;
 
 bind_interrupts!(struct Irqs{
     SUBGHZ_RADIO => InterruptHandler;
@@ -107,7 +110,8 @@ async fn lora_task(
     // Setting join bias causes the device to attempt the first join on subband 2.
     // If it fails, it will proceed with the other subbands sequentially.
     us915.set_join_bias(Subband::_2);
-    let mut device: Device<_, Crypto, _, _> = Device::new(us915.into(), radio, EmbassyTimer::new(), rng);
+    let mut device: Device<_, Crypto, _, _, 256, DOWNLINK_BUFFER> =
+        Device::new(us915.into(), radio, EmbassyTimer::new(), rng);
     device.enable_class_c();
 
     // TODO: Adjust the EUI and Keys according to your network credentials
@@ -133,8 +137,9 @@ async fn lora_task(
         info!("Sending uplink...");
         let result = device.send(&[0x01, 0x02, 0x03, 0x04], 1, true).await;
         if let Ok(SendResponse::DownlinkReceived(_)) = result {
-            // After a class C uplink, it is important to check for many downlinks in case
-            // downlinks were received during Class C Windows.
+            // After an uplink with Class C enabled, it is important to check for multiple downlinks.
+            // It is theoretically possible to receive a Class A downlink and any number of Class C
+            // downlinks during the Class C windows.
             while let Some(downlink) = device.take_downlink() {
                 info!("Received {:?}", downlink);
             }
@@ -151,8 +156,9 @@ async fn lora_task(
                 info!("Button state: {:?}", button_state);
                 let resp = device.send(&[0x03], 1, true).await;
                 info!("Sent uplink: {:?}", resp);
-                // After a class C uplink, it is important to check for many downlinks in case
-                // downlinks were received during Class C Windows.
+                // After an uplink with Class C enabled, it is important to check for multiple downlinks.
+                // It is theoretically possible to receive a Class A downlink and any number of Class C
+                // downlinks during the Class C windows.
                 while let Some(downlink) = device.take_downlink() {
                     info!("Received {:?}", downlink);
                 }
