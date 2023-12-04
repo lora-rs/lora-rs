@@ -159,14 +159,12 @@ impl Session {
     }
 
     pub(crate) fn rx2_complete(&mut self) -> Response {
-        // we only increment the fcnt_up if the uplink was not confirmed
-        if !self.confirmed {
-            if self.fcnt_up == 0xFFFF_FFFF {
-                // if the FCnt is used up, the session has expired
-                return Response::SessionExpired;
-            } else {
-                self.fcnt_up += 1;
-            }
+        // Until we handle NbTrans, there is no case where we should not increment FCntUp.
+        if self.fcnt_up == 0xFFFF_FFFF {
+            // if the FCnt is used up, the session has expired
+            return Response::SessionExpired;
+        } else {
+            self.fcnt_up += 1;
         }
         if self.confirmed {
             Response::NoAck
