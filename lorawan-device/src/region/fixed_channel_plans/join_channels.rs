@@ -36,7 +36,7 @@ impl JoinChannels {
                 self.previous_channel % 8
             };
             // pick another channel on that subband
-            Some((rng.next_u32() as u8 % 8) + (sb * 8))
+            Some((rng.next_u32() & 0b111) as u8 + (sb * 8))
         } else {
             None
         }
@@ -64,7 +64,7 @@ impl JoinChannels {
                 self.num_retries += 1;
                 // pick a  random number 0-7 on the preferred subband
                 // NB: we don't use 500 kHz channels
-                let channel = (rng.next_u32() as u8 % 8) + ((sb as usize - 1) as u8 * 8);
+                let channel = ((rng.next_u32() & 0xFF) as u8 % 8) + ((sb as usize - 1) as u8 * 8);
                 if self.num_retries == self.max_retries {
                     // this is our last try with our favorite subband, so will initialize the
                     // standard join logic with the channel we just tried. This will ensure
