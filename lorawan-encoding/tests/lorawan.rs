@@ -508,7 +508,8 @@ fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
     let mut phy = DataPayloadCreator::new();
     let nwk_skey = [2; 16].into();
     let app_skey = [1; 16].into();
-    let new_channel_req = NewChannelReqPayload::new_as_mac_cmd(&[0x00; 5]).unwrap().0;
+    let new_channel_req =
+        DownlinkMacCommand::NewChannelReq(NewChannelReqPayload::new_from_raw(&[0x00; 5]));
 
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
     cmds.extend_from_slice(&[&new_channel_req, &new_channel_req, &new_channel_req]);
@@ -529,7 +530,7 @@ fn test_data_payload_creator_when_mac_commands_in_payload() {
     let mut phy = DataPayloadCreator::new();
     let nwk_skey = [1; 16].into();
     let app_skey = [0; 16].into();
-    let mac_cmd1 = MacCommand::LinkCheckReq(LinkCheckReqPayload());
+    let mac_cmd1 = UplinkMacCommand::LinkCheckReq(LinkCheckReqPayload());
     let mut mac_cmd2 = LinkADRAnsCreator::new();
     mac_cmd2.set_channel_mask_ack(true).set_data_rate_ack(false).set_tx_power_ack(true);
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
@@ -546,7 +547,7 @@ fn test_data_payload_creator_when_mac_commands_in_f_opts() {
     let mut phy = DataPayloadCreator::new();
     let nwk_skey = [1; 16].into();
     let app_skey = [0; 16].into();
-    let mac_cmd1 = MacCommand::LinkCheckReq(LinkCheckReqPayload());
+    let mac_cmd1 = UplinkMacCommand::LinkCheckReq(LinkCheckReqPayload());
     let mut mac_cmd2 = LinkADRAnsCreator::new();
     mac_cmd2.set_channel_mask_ack(true).set_data_rate_ack(false).set_tx_power_ack(true);
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
