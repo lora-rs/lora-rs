@@ -1,5 +1,5 @@
 //! This example runs on a STM32WL board, which has a builtin Semtech Sx1262 radio.
-//! It demonstrates LoRaWAN join functionality.
+//! It demonstrates join bias for US915 devices and Class C functionality.
 #![no_std]
 #![no_main]
 
