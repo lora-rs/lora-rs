@@ -11,7 +11,7 @@
 //! See [JoinAcceptCreator.new](struct.JoinAcceptCreator.html#method.new) for an example.
 
 use super::keys;
-use super::keys::CryptoFactory;
+use super::keys::{AppKey, AppSKey, CryptoFactory, NewSKey};
 use super::maccommandcreator;
 use super::maccommands::{mac_commands_len, SerializableMacCommand};
 #[cfg(feature = "with-downlink")]
@@ -304,9 +304,9 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     /// # Argument
     ///
     /// * key - the key to be used for setting the MIC.
-    pub fn build(&mut self, key: &keys::AES128) -> &[u8] {
+    pub fn build(&mut self, key: &AppKey) -> &[u8] {
         let d = self.data.as_mut();
-        set_mic(d, key, &self.factory);
+        set_mic(d, &key.0, &self.factory);
         d
     }
 }
@@ -318,8 +318,8 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
 ///
 /// ```
 /// let mut phy = lorawan::creator::DataPayloadCreator::new();
-/// let nwk_skey = lorawan::keys::AES128([2; 16]);
-/// let app_skey = lorawan::keys::AES128([1; 16]);
+/// let nwk_skey = lorawan::keys::NewSKey::from([2; 16]);
+/// let app_skey = lorawan::keys::AppSKey::from([1; 16]);
 /// phy.set_confirmed(true)
 ///     .set_uplink(true)
 ///     .set_f_port(42)
@@ -465,16 +465,16 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     /// let mut cmds: Vec<&dyn lorawan::maccommands::SerializableMacCommand> = Vec::new();
     /// cmds.push(&mac_cmd1);
     /// cmds.push(&mac_cmd2);
-    /// let nwk_skey = lorawan::keys::AES128([2; 16]);
-    /// let app_skey = lorawan::keys::AES128([1; 16]);
+    /// let nwk_skey = lorawan::keys::NewSKey::from([2; 16]);
+    /// let app_skey = lorawan::keys::AppSKey::from([1; 16]);
     /// phy.build(&[], &cmds, &nwk_skey, &app_skey).unwrap();
     /// ```
     pub fn build(
         &mut self,
         payload: &[u8],
         cmds: &[&dyn SerializableMacCommand],
-        nwk_skey: &keys::AES128,
-        app_skey: &keys::AES128,
+        nwk_skey: &NewSKey,
+        app_skey: &AppSKey,
     ) -> Result<&[u8], Error> {
         let d = self.data.as_mut();
         let mut last_filled = 8; // MHDR + FHDR without the FOpts
@@ -512,9 +512,9 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
             last_filled += 1;
         }
 
-        let mut enc_key = app_skey;
+        let mut enc_key = app_skey.0;
         if mac_cmds_len > 0 && has_fport_zero {
-            enc_key = nwk_skey;
+            enc_key = nwk_skey.0;
             payload_len = mac_cmds_len;
             maccommandcreator::build_mac_commands(
                 cmds,
@@ -531,13 +531,13 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
             last_filled,
             last_filled + payload_len,
             self.fcnt,
-            &self.factory.new_enc(enc_key),
+            &self.factory.new_enc(&enc_key),
         );
 
         // MIC set
         let mic = securityhelpers::calculate_data_mic(
             &d[..last_filled + payload_len],
-            self.factory.new_mac(nwk_skey),
+            self.factory.new_mac(&nwk_skey.0),
             self.fcnt,
         );
         d[last_filled + payload_len..last_filled + payload_len + 4].copy_from_slice(&mic.0);
@@ -556,8 +556,8 @@ impl DataPayloadCreator<GenericArray<u8, U256>, DefaultFactory> {
     ///
     /// ```
     /// let mut phy = lorawan::creator::DataPayloadCreator::new();
-    /// let nwk_skey = lorawan::keys::AES128([2; 16]);
-    /// let app_skey = lorawan::keys::AES128([1; 16]);
+    /// let nwk_skey = lorawan::keys::NewSKey::from([2; 16]);
+    /// let app_skey = lorawan::keys::AppSKey::from([1; 16]);
     /// let fctrl = lorawan::parser::FCtrl::new(0x80, true);
     /// phy.set_confirmed(false).
     ///     set_uplink(true).

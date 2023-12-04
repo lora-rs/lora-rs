@@ -28,8 +28,8 @@
 //! }
 //! ```
 
-use super::keys::{CryptoFactory, Encrypter, AES128, MIC};
-use super::maccommands::{ChannelMask, DLSettings, Frequency};
+use super::keys::{AppKey, AppSKey, CryptoFactory, Encrypter, AES128, MIC};
+use super::maccommands::{ChannelMask, DLSettings, Frequency, MacCommandIterator};
 use super::securityhelpers;
 use super::securityhelpers::generic_array::GenericArray;
 
@@ -365,15 +365,15 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
     /// let mut data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb,
     ///     0x37, 0x42, 0x97, 0x51, 0x42];
     /// let phy = lorawan::parser::EncryptedJoinAcceptPayload::new(data);
-    /// let key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    /// let key = lorawan::keys::AppKey::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
     ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
     /// let decrypted = phy.unwrap().decrypt(&key);
     /// ```
-    pub fn decrypt(mut self, key: &AES128) -> DecryptedJoinAcceptPayload<T, F> {
+    pub fn decrypt(mut self, key: &AppKey) -> DecryptedJoinAcceptPayload<T, F> {
         {
             let bytes = self.0.as_mut();
             let len = bytes.len();
-            let aes_enc = self.1.new_enc(key);
+            let aes_enc = self.1.new_enc(&key.0);
 
             for i in 0..(len >> 4) {
                 let start = (i << 4) + 1;
@@ -401,13 +401,13 @@ impl<T: AsRef<[u8]>, F> AsPhyPayloadBytes for DecryptedJoinAcceptPayload<T, F> {
 
 impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     /// Verifies that the JoinAccept has correct MIC.
-    pub fn validate_mic(&self, key: &AES128) -> bool {
+    pub fn validate_mic(&self, key: &AppKey) -> bool {
         self.mic() == self.calculate_mic(key)
     }
 
-    pub fn calculate_mic(&self, key: &AES128) -> MIC {
+    pub fn calculate_mic(&self, key: &AppKey) -> MIC {
         let d = self.0.as_ref();
-        securityhelpers::calculate_mic(&d[..d.len() - 4], self.1.new_mac(key))
+        securityhelpers::calculate_mic(&d[..d.len() - 4], self.1.new_mac(&key.0))
     }
 
     /// Computes the network session key for a given device.
@@ -425,7 +425,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     /// let dev_nonce = vec![0xcc, 0xdd];
     /// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37,
     ///     0x42, 0x97, 0x51, 0x42];
-    /// let app_key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    /// let app_key = lorawan::keys::AppKey::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
     ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
     /// let join_accept = lorawan::parser::DecryptedJoinAcceptPayload::new(data, &app_key).unwrap();
     ///
@@ -437,9 +437,9 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     pub fn derive_newskey<TT: AsRef<[u8]>>(
         &self,
         dev_nonce: &DevNonce<TT>,
-        key: &AES128,
-    ) -> AES128 {
-        self.derive_session_key(0x1, dev_nonce, key)
+        key: &AppKey,
+    ) -> NewSKey {
+        NewSKey(self.derive_session_key(0x1, dev_nonce, &key.0))
     }
 
     /// Computes the application session key for a given device.
@@ -457,7 +457,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     /// let dev_nonce = vec![0xcc, 0xdd];
     /// let data = vec![0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37,
     ///     0x42, 0x97, 0x51, 0x42];
-    /// let app_key = lorawan::keys::AES128([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
+    /// let app_key = lorawan::keys::AppKey::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88,
     ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
     /// let join_accept = lorawan::parser::DecryptedJoinAcceptPayload::new(data, &app_key).unwrap();
     ///
@@ -469,9 +469,9 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     pub fn derive_appskey<TT: AsRef<[u8]>>(
         &self,
         dev_nonce: &DevNonce<TT>,
-        key: &AES128,
-    ) -> AES128 {
-        self.derive_session_key(0x2, dev_nonce, key)
+        key: &AppKey,
+    ) -> AppSKey {
+        AppSKey(self.derive_session_key(0x2, dev_nonce, &key.0))
     }
 
     fn derive_session_key<TT: AsRef<[u8]>>(
@@ -577,7 +577,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<
     /// * bytes - the data from which the PhyPayload is to be built.
     /// * key - the key that is to be used to decrypt the payload.
     /// * factory - the factory that shall be used to create object for crypto functions.
-    pub fn new_with_factory(data: T, key: &AES128, factory: F) -> Result<Self, Error> {
+    pub fn new_with_factory(data: T, key: &AppKey, factory: F) -> Result<Self, Error> {
         let t = EncryptedJoinAcceptPayload::new_with_factory(data, factory)?;
         let res = t.decrypt(key);
         if res.validate_mic(key) {

@@ -207,7 +207,7 @@ fn test_parse_data_payload_no_panic_when_too_short_packet() {
 #[test]
 fn test_new_join_accept_payload_too_short() {
     let mut bytes = phy_join_accept_payload();
-    let key = AES128(app_key());
+    let key = app_key().into();
     let len = bytes.len();
     assert!(DecryptedJoinAcceptPayload::new(&mut bytes[..(len - 1)], &key).is_err());
 }
@@ -215,19 +215,19 @@ fn test_new_join_accept_payload_too_short() {
 #[test]
 fn test_new_join_accept_payload_mic_validation() {
     let decrypted_phy = new_decrypted_join_accept();
-    assert!(decrypted_phy.validate_mic(&AES128([1; 16])));
+    assert!(decrypted_phy.validate_mic(&[1; 16].into()));
 }
 
 fn new_decrypted_join_accept() -> DecryptedJoinAcceptPayload<Vec<u8>, DefaultFactory> {
     let data = phy_join_accept_payload_with_c_f_list();
-    let key = AES128([1; 16]);
+    let key = [1; 16].into();
     DecryptedJoinAcceptPayload::new(data, &key).unwrap()
 }
 
 #[test]
 fn test_new_join_accept_c_f_list_empty() {
     let data = phy_join_accept_payload();
-    let key = AES128(app_key());
+    let key = app_key().into();
     let decrypted_phy = DecryptedJoinAcceptPayload::new(data, &key).unwrap();
     assert_eq!(decrypted_phy.c_f_list(), None);
 }
@@ -261,7 +261,7 @@ fn test_dl_settings() {
 #[test]
 fn test_new_join_accept_payload_with_c_f_list() {
     let data = phy_join_accept_payload_with_c_f_list();
-    let key = AES128([1; 16]);
+    let key = [1; 16].into();
     let decrypted_phy = DecryptedJoinAcceptPayload::new(data, &key).unwrap();
 
     let expected_c_f_list = CfList::DynamicChannel([
@@ -443,8 +443,8 @@ fn test_fctrl_downlink_complete() {
 #[test]
 fn test_data_payload_uplink_creator() {
     let mut phy = DataPayloadCreator::new();
-    let nwk_skey = AES128([2; 16]);
-    let app_skey = AES128([1; 16]);
+    let nwk_skey = [2; 16].into();
+    let app_skey = [1; 16].into();
     let fctrl = FCtrl::new(0x80, true);
     phy.set_confirmed(false)
         .set_uplink(true)
@@ -459,8 +459,8 @@ fn test_data_payload_uplink_creator() {
 #[test]
 fn test_long_data_payload_uplink_creator() {
     let mut phy = DataPayloadCreator::new();
-    let nwk_skey = AES128([2; 16]);
-    let app_skey = AES128([1; 16]);
+    let nwk_skey = [2; 16].into();
+    let app_skey = [1; 16].into();
     let fctrl = FCtrl::new(0x00, true);
     phy.set_confirmed(false)
         .set_uplink(true)
@@ -478,8 +478,8 @@ fn test_long_data_payload_uplink_creator() {
 #[test]
 fn test_data_payload_downlink_creator() {
     let mut phy = DataPayloadCreator::new();
-    let nwk_skey = AES128([2; 16]);
-    let app_skey = AES128([1; 16]);
+    let nwk_skey = [2; 16].into();
+    let app_skey = [1; 16].into();
     let fctrl = FCtrl::new(0x80, false);
     phy.set_confirmed(true)
         .set_uplink(false)
@@ -497,8 +497,8 @@ fn test_data_payload_downlink_creator() {
 #[test]
 fn test_data_payload_creator_when_payload_and_fport_0() {
     let mut phy = DataPayloadCreator::new();
-    let nwk_skey = AES128([2; 16]);
-    let app_skey = AES128([1; 16]);
+    let nwk_skey = [2; 16].into();
+    let app_skey = [1; 16].into();
     phy.set_f_port(0);
     assert!(phy.build(b"hello", &[], &nwk_skey, &app_skey).is_err());
 }
@@ -506,10 +506,9 @@ fn test_data_payload_creator_when_payload_and_fport_0() {
 #[test]
 fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
     let mut phy = DataPayloadCreator::new();
-    let nwk_skey = AES128([2; 16]);
-    let app_skey = AES128([1; 16]);
-    let new_channel_req =
-        DownlinkMacCommand::NewChannelReq(NewChannelReqPayload::new(&[0x00; 5]).unwrap());
+    let nwk_skey = [2; 16].into();
+    let app_skey = [1; 16].into();
+    let new_channel_req = NewChannelReqPayload::new_as_mac_cmd(&[0x00; 5]).unwrap().0;
 
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
     cmds.extend_from_slice(&[&new_channel_req, &new_channel_req, &new_channel_req]);
@@ -520,23 +519,24 @@ fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
 #[test]
 fn test_data_payload_creator_when_payload_no_fport() {
     let mut phy = DataPayloadCreator::new();
-    let nwk_skey = AES128([2; 16]);
-    let app_skey = AES128([1; 16]);
+    let nwk_skey = [2; 16].into();
+    let app_skey = [1; 16].into();
     assert!(phy.build(b"hello", &[], &nwk_skey, &app_skey).is_err());
 }
 
 #[test]
 fn test_data_payload_creator_when_mac_commands_in_payload() {
     let mut phy = DataPayloadCreator::new();
-    let nwk_skey = AES128([1; 16]);
-    let mac_cmd1 = UplinkMacCommand::LinkCheckReq(LinkCheckReqPayload());
+    let nwk_skey = [1; 16].into();
+    let app_skey = [0; 16].into();
+    let mac_cmd1 = MacCommand::LinkCheckReq(LinkCheckReqPayload());
     let mut mac_cmd2 = LinkADRAnsCreator::new();
     mac_cmd2.set_channel_mask_ack(true).set_data_rate_ack(false).set_tx_power_ack(true);
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
     cmds.extend_from_slice(&[&mac_cmd1, &mac_cmd2]);
     phy.set_confirmed(false).set_uplink(true).set_f_port(0).set_dev_addr(&[4, 3, 2, 1]).set_fcnt(0);
     assert_eq!(
-        phy.build(b"", &cmds[..], &nwk_skey, &nwk_skey).unwrap(),
+        phy.build(b"", &cmds[..], &nwk_skey, &app_skey).unwrap(),
         &data_payload_with_fport_zero()[..]
     );
 }
@@ -544,8 +544,9 @@ fn test_data_payload_creator_when_mac_commands_in_payload() {
 #[test]
 fn test_data_payload_creator_when_mac_commands_in_f_opts() {
     let mut phy = DataPayloadCreator::new();
-    let nwk_skey = AES128([1; 16]);
-    let mac_cmd1 = UplinkMacCommand::LinkCheckReq(LinkCheckReqPayload());
+    let nwk_skey = [1; 16].into();
+    let app_skey = [0; 16].into();
+    let mac_cmd1 = MacCommand::LinkCheckReq(LinkCheckReqPayload());
     let mut mac_cmd2 = LinkADRAnsCreator::new();
     mac_cmd2.set_channel_mask_ack(true).set_data_rate_ack(false).set_tx_power_ack(true);
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
@@ -553,7 +554,7 @@ fn test_data_payload_creator_when_mac_commands_in_f_opts() {
     phy.set_confirmed(false).set_uplink(true).set_dev_addr(&[4, 3, 2, 1]).set_fcnt(0);
 
     assert_eq!(
-        phy.build(b"", &cmds[..], &nwk_skey, &nwk_skey).unwrap(),
+        phy.build(b"", &cmds[..], &nwk_skey, &app_skey).unwrap(),
         &data_payload_with_f_opts()[..]
     );
 }
@@ -614,7 +615,7 @@ fn test_join_accept_creator() {
 #[test]
 fn test_join_request_creator() {
     let mut phy = JoinRequestCreator::new();
-    let key = AES128([1; 16]);
+    let key = [1; 16].into();
     phy.set_app_eui(&[0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01])
         .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
         .set_dev_nonce(&[0x2du8, 0x10]);
@@ -627,7 +628,7 @@ fn test_join_request_creator_with_options() {
     let mut data = [0; 23];
     {
         let mut phy = JoinRequestCreator::with_options(&mut data[..], DefaultFactory).unwrap();
-        let key = AES128([1; 16]);
+        let key = [1; 16].into();
         phy.set_app_eui(&[0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01])
             .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
             .set_dev_nonce(&[0x2du8, 0x10]);
@@ -639,33 +640,33 @@ fn test_join_request_creator_with_options() {
 
 #[test]
 fn test_derive_newskey() {
-    let key = AES128(app_key());
+    let key = AppKey::from(app_key());
     let join_request = JoinRequestPayload::new(phy_join_request_payload()).unwrap();
     let join_accept = DecryptedJoinAcceptPayload::new(phy_join_accept_payload(), &key).unwrap();
 
     let newskey = join_accept.derive_newskey(&join_request.dev_nonce(), &key);
     //AppNonce([49, 3e, eb]), NwkAddr([51, fb, a2]), DevNonce([2d, 10])
-    let expect = [
+    let expect = NewSKey::from([
         0x7b, 0xb2, 0x5f, 0x89, 0xe0, 0xd1, 0x37, 0x1e, 0x1f, 0xbf, 0x4d, 0x99, 0x7e, 0x14, 0x68,
         0xa3,
-    ];
-    assert_eq!(newskey.0, expect);
+    ]);
+    assert_eq!(newskey, expect);
 }
 
 #[test]
 fn test_derive_appskey() {
-    let key = AES128(app_key());
+    let key = app_key().into();
     let join_request = JoinRequestPayload::new(phy_join_request_payload()).unwrap();
     let join_accept = DecryptedJoinAcceptPayload::new(phy_join_accept_payload(), &key).unwrap();
 
     let appskey = join_accept.derive_appskey(&join_request.dev_nonce(), &key);
     //AppNonce([49, 3e, eb]), NwkAddr([51, fb, a2]), DevNonce([2d, 10])
-    let expect = [
+    let expect = AppSKey::from([
         0x14, 0x88, 0x20, 0xdf, 0xb1, 0xe0, 0xc9, 0xd6, 0x28, 0x9c, 0xde, 0x16, 0xc1, 0xaf, 0x24,
         0x9f,
-    ];
+    ]);
 
-    assert_eq!(appskey.0, expect);
+    assert_eq!(appskey, expect);
 }
 
 #[test]

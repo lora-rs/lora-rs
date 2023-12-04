@@ -23,9 +23,9 @@ pub mod nb_device;
 use nb_device::state::State;
 
 use core::marker::PhantomData;
-use lorawan::{
-    keys::{CryptoFactory, AES128},
-    parser::{DevAddr, EUI64},
+pub use lorawan::{
+    keys::{AppEui, AppKey, AppSKey, CryptoFactory, DevEui, NewSKey},
+    parser::DevAddr,
 };
 
 pub use rand_core::RngCore;
@@ -65,56 +65,3 @@ pub enum JoinMode {
     OTAA { deveui: DevEui, appeui: AppEui, appkey: AppKey },
     ABP { newskey: NewSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]> },
 }
-macro_rules! lorawan_key {
-    (
-        $(#[$outer:meta])*
-        pub struct $type:ident(AES128);
-    ) => {
-        $(#[$outer])*
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-        pub struct $type(AES128);
-
-        impl From<[u8;16]> for $type {
-            fn from(key: [u8; 16]) -> Self {
-                $type(AES128(key))
-            }
-        }
-        };
-    }
-
-lorawan_key!(
-    pub struct AppKey(AES128);
-);
-lorawan_key!(
-    pub struct NewSKey(AES128);
-);
-lorawan_key!(
-    pub struct AppSKey(AES128);
-);
-
-macro_rules! lorawan_eui {
-    (
-        $(#[$outer:meta])*
-        pub struct $type:ident(EUI64<[u8; 8]>);
-    ) => {
-        $(#[$outer])*
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-        pub struct $type(EUI64<[u8; 8]>);
-
-        impl From<[u8;8]> for $type {
-            fn from(key: [u8; 8]) -> Self {
-                $type(EUI64::from(key))
-            }
-        }
-        };
-    }
-lorawan_eui!(
-    pub struct DevEui(EUI64<[u8; 8]>);
-);
-lorawan_eui!(
-    pub struct AppEui(EUI64<[u8; 8]>);
-);
