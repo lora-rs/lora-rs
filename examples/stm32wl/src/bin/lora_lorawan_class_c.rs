@@ -131,8 +131,9 @@ async fn lora_task(
         info!("Join failed: {:?}. Retrying...", join_result);
     }
 
-    // After joining Class C, it is important to send a confirmed uplink immediately after joining
-    // until a confirmed
+    // After joining Class C, the LoRaWAN specification indicates that it is important to send a
+    // confirmed uplink immediately after joining until confirmed such that Class C downlinks are
+    // enabled.
     loop {
         info!("Sending uplink...");
         let result = device.send(&[0x01, 0x02, 0x03, 0x04], 1, true).await;
