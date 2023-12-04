@@ -33,8 +33,6 @@ use {defmt_rtt as _, panic_probe as _};
 
 use self::iv::{InterruptHandler, Stm32wlInterfaceVariant, SubghzSpiDevice};
 
-// TODO: set these appropriately for the region
-const LORAWAN_REGION: region::Region = region::Region::US915;
 const MAX_TX_POWER: u8 = 21;
 
 bind_interrupts!(struct Irqs{
@@ -109,8 +107,7 @@ async fn lora_task(
     // Setting join bias causes the device to attempt the first join on subband 2.
     // If it fails, it will proceed with the other subbands sequentially.
     us915.set_join_bias(Subband::_2);
-    let region: region::Configuration = region::Configuration::new(LORAWAN_REGION);
-    let mut device: Device<_, Crypto, _, _> = Device::new(region, radio, EmbassyTimer::new(), rng);
+    let mut device: Device<_, Crypto, _, _> = Device::new(us915.into(), radio, EmbassyTimer::new(), rng);
     device.enable_class_c();
 
     // TODO: Adjust the EUI and Keys according to your network credentials
