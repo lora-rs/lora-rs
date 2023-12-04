@@ -23,8 +23,10 @@ pub mod nb_device;
 use nb_device::state::State;
 
 use core::marker::PhantomData;
-pub use lorawan::keys::{AppEui, AppKey, AppSKey, DevEui, NewSKey};
-use lorawan::{keys::CryptoFactory, parser::DevAddr};
+pub use lorawan::{
+    keys::{AppEui, AppKey, AppSKey, CryptoFactory, DevEui, NewSKey},
+    parser::DevAddr,
+};
 
 pub use rand_core::RngCore;
 mod rng;
