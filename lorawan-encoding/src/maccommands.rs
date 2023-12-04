@@ -897,7 +897,7 @@ impl DataRateRange {
     }
 
     /// The lowest data rate allowed on this channel.
-    pub fn min_data_range(&self) -> u8 {
+    pub fn min_data_rate(&self) -> u8 {
         self.0 & 0x0f
     }
 

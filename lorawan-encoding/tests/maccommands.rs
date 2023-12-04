@@ -375,7 +375,7 @@ fn test_data_rate_range() {
     assert!(drr_raw.is_ok());
     let drr = drr_raw.unwrap();
     assert_eq!(drr.max_data_rate(), 0x0a);
-    assert_eq!(drr.min_data_range(), 0x05);
+    assert_eq!(drr.min_data_rate(), 0x05);
 }
 
 #[test]
