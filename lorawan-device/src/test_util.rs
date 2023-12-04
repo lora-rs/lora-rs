@@ -81,7 +81,7 @@ pub fn handle_join_request<const I: usize>(
     if let Some(mut uplink) = uplink {
         if let PhyPayload::JoinRequest(join_request) = uplink.get_payload() {
             let devnonce = join_request.dev_nonce().to_owned();
-            assert!(join_request.validate_mic(&AES128(get_key())));
+            assert!(join_request.validate_mic(&get_key().into()));
             let mut buffer: [u8; 17] = [0; 17];
             let mut phy =
                 lorawan::creator::JoinAcceptCreator::with_options(&mut buffer, DefaultFactory)
@@ -90,14 +90,14 @@ pub fn handle_join_request<const I: usize>(
             phy.set_app_nonce(&app_nonce_bytes);
             phy.set_net_id(&[1; 3]);
             phy.set_dev_addr(get_dev_addr());
-            let finished = phy.build(&AES128(get_key())).unwrap();
+            let finished = phy.build(&get_key().into()).unwrap();
             rx_buffer[..finished.len()].copy_from_slice(finished);
 
             let mut copy = rx_buffer[..finished.len()].to_vec();
             if let PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(encrypted)) =
                 parse(copy.as_mut_slice()).unwrap()
             {
-                let decrypt = encrypted.decrypt(&AES128(get_key()));
+                let decrypt = encrypted.decrypt(&get_key().into());
                 let session = Session::derive_new(
                     &decrypt,
                     devnonce,
@@ -132,9 +132,9 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
     if let Some(mut uplink) = uplink {
         if let PhyPayload::Data(DataPayload::Encrypted(data)) = uplink.get_payload() {
             let fcnt = data.fhdr().fcnt() as u32;
-            assert!(data.validate_mic(&AES128(get_key()), fcnt));
+            assert!(data.validate_mic(&get_key().into(), fcnt));
             let uplink =
-                data.decrypt(Some(&AES128(get_key())), Some(&AES128(get_key())), fcnt).unwrap();
+                data.decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt).unwrap();
             assert_eq!(uplink.fhdr().fcnt(), FCNT_UP);
             let mac_cmds = [link_adr_req_with_bank_ctrl(0b10), link_adr_req_with_bank_ctrl(0b100)];
             let mac_cmds = [
@@ -152,7 +152,7 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
             phy.set_uplink(false);
             phy.set_fcnt(FCNT_DOWN);
             let finished =
-                phy.build(&[3, 2, 1], &cmd, &AES128(get_key()), &AES128(get_key())).unwrap();
+                phy.build(&[3, 2, 1], &cmd, &get_key().into(), &get_key().into()).unwrap();
             finished.len()
         } else {
             panic!("Did not decode PhyPayload::Data!");
@@ -172,9 +172,9 @@ pub fn handle_class_c_uplink_after_join(
     if let Some(mut uplink) = uplink {
         if let PhyPayload::Data(DataPayload::Encrypted(data)) = uplink.get_payload() {
             let fcnt = data.fhdr().fcnt() as u32;
-            assert!(data.validate_mic(&AES128(get_key()), fcnt));
+            assert!(data.validate_mic(&get_key().into(), fcnt));
             let uplink =
-                data.decrypt(Some(&AES128(get_key())), Some(&AES128(get_key())), fcnt).unwrap();
+                data.decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt).unwrap();
             assert_eq!(uplink.fhdr().fcnt(), 0);
             let mut phy =
                 lorawan::creator::DataPayloadCreator::with_options(rx_buffer, DefaultFactory)
@@ -186,7 +186,7 @@ pub fn handle_class_c_uplink_after_join(
             phy.set_uplink(false);
             phy.set_fctrl(&fctrl);
             // set ack bit
-            let finished = phy.build(&[], &[], &AES128(get_key()), &AES128(get_key())).unwrap();
+            let finished = phy.build(&[], &[], &get_key().into(), &get_key().into()).unwrap();
             finished.len()
         } else {
             panic!("Did not decode PhyPayload::Data!");
@@ -219,9 +219,9 @@ pub fn handle_data_uplink_with_link_adr_ans(
     if let Some(mut uplink) = uplink {
         if let PhyPayload::Data(DataPayload::Encrypted(data)) = uplink.get_payload() {
             let fcnt = data.fhdr().fcnt() as u32;
-            assert!(data.validate_mic(&AES128(get_key()), fcnt));
+            assert!(data.validate_mic(&get_key().into(), fcnt));
             let uplink =
-                data.decrypt(Some(&AES128(get_key())), Some(&AES128(get_key())), fcnt).unwrap();
+                data.decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt).unwrap();
             let fhdr = uplink.fhdr();
             let mac_cmds: Vec<MacCommand> = fhdr.fopts().collect();
 
@@ -240,7 +240,7 @@ pub fn handle_data_uplink_with_link_adr_ans(
             //phy.set_f_port(3);
             phy.set_fcnt(1);
             // zero out rx_buffer
-            let finished = phy.build(&[], &[], &AES128(get_key()), &AES128(get_key())).unwrap();
+            let finished = phy.build(&[], &[], &get_key().into(), &get_key().into()).unwrap();
             finished.len()
         } else {
             panic!("Unable to parse PhyPayload::Data from uplink in handle_data_uplink_with_link_adr_ans")
@@ -262,6 +262,6 @@ pub fn class_c_downlink<const FCNT_DOWN: u32>(
     phy.set_dev_addr(&[0; 4]);
     phy.set_uplink(false);
     phy.set_fcnt(FCNT_DOWN);
-    let finished = phy.build(&[1, 2, 3], &[], &AES128(get_key()), &AES128(get_key())).unwrap();
+    let finished = phy.build(&[1, 2, 3], &[], &get_key().into(), &get_key().into()).unwrap();
     finished.len()
 }

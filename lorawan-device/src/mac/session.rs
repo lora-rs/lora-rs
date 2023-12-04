@@ -51,8 +51,8 @@ impl Session {
         credentials: &NetworkCredentials,
     ) -> Self {
         Self::new(
-            NewSKey(decrypt.derive_newskey(&devnonce, &credentials.appkey().0)),
-            AppSKey(decrypt.derive_appskey(&devnonce, &credentials.appkey().0)),
+            decrypt.derive_newskey(&devnonce, credentials.appkey()),
+            decrypt.derive_appskey(&devnonce, credentials.appkey()),
             DevAddr::new([
                 decrypt.dev_addr().as_ref()[0],
                 decrypt.dev_addr().as_ref()[1],
@@ -105,13 +105,17 @@ impl Session {
             if self.devaddr() == &encrypted_data.fhdr().dev_addr() {
                 let fcnt = encrypted_data.fhdr().fcnt() as u32;
                 let confirmed = encrypted_data.is_confirmed();
-                if encrypted_data.validate_mic(&self.newskey().0, fcnt)
+                if encrypted_data.validate_mic(self.newskey().inner(), fcnt)
                     && (fcnt > self.fcnt_down || fcnt == 0)
                 {
                     self.fcnt_down = fcnt;
                     // We can safely unwrap here because we already validated the MIC
                     let decrypted = encrypted_data
-                        .decrypt(Some(&self.newskey().0), Some(&self.appskey().0), self.fcnt_down)
+                        .decrypt(
+                            Some(self.newskey().inner()),
+                            Some(self.appskey().inner()),
+                            self.fcnt_down,
+                        )
                         .unwrap();
 
                     if !ignore_mac {
@@ -205,7 +209,7 @@ impl Session {
             }
         }
 
-        match phy.build(data.data, dyn_cmds.as_slice(), &self.newskey.0, &self.appskey.0) {
+        match phy.build(data.data, dyn_cmds.as_slice(), &self.newskey, &self.appskey) {
             Ok(packet) => {
                 tx_buffer.clear();
                 tx_buffer.extend_from_slice(packet).unwrap();
