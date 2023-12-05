@@ -135,30 +135,27 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
                 } else {
                     DR::_4
                 };
-                self.last_tx_channel = channel as u8;
+                self.last_tx_channel = channel;
                 let data_rate = F::datarates()[dr as usize].clone().unwrap();
-                (data_rate, F::uplink_channels()[channel])
+                (data_rate, F::uplink_channels()[channel as usize])
             }
             Frame::Data => {
                 // The join bias gets reset after receiving CFList in Join Frame
                 // or ChannelMask in the LinkADRReq in Data Frame.
                 // If it has not been reset yet, we continue to use the bias for the data frames.
                 // We hope to acquire ChannelMask via LinkADRReq.
-                if self.join_channels.has_bias_and_not_exhausted() {
+                let (data_rate, channel) = if self.join_channels.has_bias_and_not_exhausted() {
                     let channel = self.join_channels.get_next_channel(rng);
                     let dr = if channel < 64 {
                         DR::_0
                     } else {
                         DR::_4
                     };
-                    self.last_tx_channel = channel as u8;
-                    let data_rate = F::datarates()[dr as usize].clone().unwrap();
-                    (data_rate, F::uplink_channels()[channel])
+                    (F::datarates()[dr as usize].clone().unwrap(), channel)
                 // Alternatively, we will ask JoinChannel logic to determine a channel from the
                 // subband that  the join succeeded on.
                 } else if let Some(channel) = self.join_channels.first_data_channel(rng) {
-                    let data_rate = F::datarates()[DR::_0 as usize].clone().unwrap();
-                    (data_rate, F::uplink_channels()[channel])
+                    (F::datarates()[datarate as usize].clone().unwrap(), channel)
                 } else {
                     // For the data frame, the datarate impacts which channel sets we can choose
                     // from. If the datarate bandwidth is 500 kHz, we must use
@@ -170,18 +167,18 @@ impl<const D: usize, F: FixedChannelRegion<D>> RegionHandler for FixedChannelPla
                         while !self.channel_mask.is_enabled(channel.into()).unwrap() {
                             channel = (rng.next_u32() & 0b111) as u8;
                         }
-                        self.last_tx_channel = channel;
-                        (datarate, F::uplink_channels()[(64 + channel) as usize])
+                        (datarate, 64 + channel)
                     } else {
                         let mut channel = (rng.next_u32() & 0b111111) as u8;
                         // keep selecting a random channel until we find one that is enabled
                         while !self.channel_mask.is_enabled(channel.into()).unwrap() {
                             channel = (rng.next_u32() & 0b111111) as u8;
                         }
-                        self.last_tx_channel = channel;
-                        (datarate, F::uplink_channels()[channel as usize])
+                        (datarate, channel)
                     }
-                }
+                };
+                self.last_tx_channel = channel;
+                (data_rate, F::uplink_channels()[channel as usize])
             }
         }
     }
