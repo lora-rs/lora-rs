@@ -13,7 +13,7 @@ pub(crate) struct JoinChannels {
     /// Channels that have been attempted.
     pub(crate) available_channels: AvailableChannels,
     /// The channel used for the previous join request.
-    pub(crate) previous_channel: usize,
+    pub(crate) previous_channel: u8,
 }
 
 impl JoinChannels {
@@ -24,7 +24,9 @@ impl JoinChannels {
             && self.num_retries != 0
     }
 
-    pub(crate) fn first_data_channel(&mut self, rng: &mut impl RngCore) -> Option<usize> {
+    /// The first data channel will always be some random channel (possibly the same as previous)
+    /// of the preferred subband. Returns None if there is no preferred subband.
+    pub(crate) fn first_data_channel(&mut self, rng: &mut impl RngCore) -> Option<u8> {
         if self.preferred_subband.is_some() && self.num_retries != 0 {
             self.clear_join_bias();
             // determine which subband the successful join was sent on
@@ -34,7 +36,7 @@ impl JoinChannels {
                 self.previous_channel % 8
             };
             // pick another channel on that subband
-            Some((rng.next_u32() as usize % 8) + (sb * 8))
+            Some((rng.next_u32() & 0b111) as u8 + (sb * 8))
         } else {
             None
         }
@@ -56,19 +58,19 @@ impl JoinChannels {
         self.available_channels = AvailableChannels::default();
     }
 
-    pub(crate) fn get_next_channel(&mut self, rng: &mut impl RngCore) -> usize {
+    pub(crate) fn get_next_channel(&mut self, rng: &mut impl RngCore) -> u8 {
         match (self.preferred_subband, self.num_retries.cmp(&self.max_retries)) {
             (Some(sb), Ordering::Less) => {
                 self.num_retries += 1;
                 // pick a  random number 0-7 on the preferred subband
                 // NB: we don't use 500 kHz channels
-                let channel = (rng.next_u32() as usize % 8) + ((sb as usize - 1) * 8);
+                let channel = (rng.next_u32() % 8) as u8 + ((sb as usize - 1) as u8 * 8);
                 if self.num_retries == self.max_retries {
                     // this is our last try with our favorite subband, so will initialize the
                     // standard join logic with the channel we just tried. This will ensure
                     // standard and compliant behavior when num_retries is set to 1.
                     self.available_channels.previous = Some(channel);
-                    self.available_channels.data.set_channel(channel, false);
+                    self.available_channels.data.set_channel(channel.into(), false);
                 }
                 self.previous_channel = channel;
                 channel
@@ -85,7 +87,7 @@ impl JoinChannels {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct AvailableChannels {
     data: ChannelMask<9>,
-    previous: Option<usize>,
+    previous: Option<u8>,
 }
 
 impl AvailableChannels {
@@ -99,7 +101,7 @@ impl AvailableChannels {
         true
     }
 
-    fn get_next(&mut self, rng: &mut impl RngCore) -> usize {
+    fn get_next(&mut self, rng: &mut impl RngCore) -> u8 {
         // this guarantees that there will be _some_ open channel available
         if self.is_exhausted() {
             self.reset();
@@ -107,17 +109,17 @@ impl AvailableChannels {
 
         let channel = self.get_next_channel_inner(rng);
         // mark the channel invalid for future selection
-        self.data.set_channel(channel, false);
+        self.data.set_channel(channel.into(), false);
         self.previous = Some(channel);
         channel
     }
 
-    fn get_next_channel_inner(&mut self, rng: &mut impl RngCore) -> usize {
+    fn get_next_channel_inner(&mut self, rng: &mut impl RngCore) -> u8 {
         if let Some(previous) = self.previous {
             // choose the next one by possibly wrapping around
             let next = (previous + 8) % 72;
             // if the channel is valid, great!
-            if self.data.is_enabled(next).unwrap() {
+            if self.data.is_enabled(next.into()).unwrap() {
                 next
             } else {
                 // We've wrapped around to our original random bank.
@@ -126,28 +128,28 @@ impl AvailableChannels {
                 // bank to get exhausted and the caller of this function will reset
                 // when the last one is exhausted.
                 let bank = next / 8;
-                let mut entropy = rng.next_u32() as usize;
-                let mut channel = (entropy & 0b111) + bank * 8;
+                let mut entropy = rng.next_u32();
+                let mut channel = (entropy & 0b111) as u8 + bank * 8;
                 let mut entropy_used = 1;
                 loop {
-                    if self.data.is_enabled(channel).unwrap() {
+                    if self.data.is_enabled(channel.into()).unwrap() {
                         return channel;
                     } else {
                         // we've used 30 of the 32 bits of entropy. reset the byte
                         if entropy_used == 10 {
-                            entropy = rng.next_u32() as usize;
+                            entropy = rng.next_u32();
                             entropy_used = 0;
                         }
                         entropy >>= 3;
                         entropy_used += 1;
-                        channel = (entropy & 0b111) + bank * 8;
+                        channel = (entropy & 0b111) as u8 + bank * 8;
                     }
                 }
             }
         } else {
             // pick a completely random channel on the bottom 64
             // NB: all channels are currently valid
-            (rng.next_u32() as usize) & 0b111111
+            (rng.next_u32() as u8) & 0b111111
         }
     }
 
