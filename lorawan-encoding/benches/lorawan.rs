@@ -9,6 +9,7 @@
 use aes::cipher::{generic_array::GenericArray, NewBlockCipher};
 use aes::Aes128;
 use criterion::{criterion_group, criterion_main, Criterion};
+use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
 use std::alloc::System;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -43,7 +44,7 @@ fn bench_complete_data_payload_fhdr(c: &mut Criterion) {
                     panic!("no way");
                 }
                 assert_eq!(fhdr.fcnt(), 1u16);
-                assert_eq!(fhdr.fopts().count(), 0);
+                assert_eq!(MacCommandIterator::<DownlinkMacCommand>::new(fhdr.data()).count(), 0);
 
                 let fctrl = fhdr.fctrl();
 

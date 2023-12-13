@@ -3,8 +3,8 @@ use crate::{
     region, AppSKey, Downlink, NewSKey,
 };
 use heapless::Vec;
-use lorawan::parser::DevAddr;
-use lorawan::{self, keys::CryptoFactory, maccommands::MacCommand};
+use lorawan::{self, keys::CryptoFactory};
+use lorawan::{maccommands::DownlinkMacCommand, parser::DevAddr};
 
 pub type FcntDown = u32;
 pub type FcntUp = u32;
@@ -50,12 +50,12 @@ impl Configuration {
         &mut self,
         region: &mut region::Configuration,
         uplink: &mut uplink::Uplink,
-        cmds: &mut lorawan::maccommands::MacCommandIterator,
+        cmds: lorawan::maccommands::MacCommandIterator<DownlinkMacCommand>,
     ) {
         use uplink::MacAnsTrait;
         for cmd in cmds {
             match cmd {
-                MacCommand::LinkADRReq(payload) => {
+                DownlinkMacCommand::LinkADRReq(payload) => {
                     // we ignore DR and TxPwr
                     region.set_channel_mask(
                         payload.redundancy().channel_mask_control(),
@@ -63,7 +63,7 @@ impl Configuration {
                     );
                     uplink.adr_ans.add();
                 }
-                MacCommand::RXTimingSetupReq(payload) => {
+                DownlinkMacCommand::RXTimingSetupReq(payload) => {
                     self.rx1_delay = del_to_delay_ms(payload.delay());
                     uplink.ack_rx_delay();
                 }

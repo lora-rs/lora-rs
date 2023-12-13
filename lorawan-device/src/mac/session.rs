@@ -1,6 +1,7 @@
 use crate::{region, AppSKey, Downlink, NewSKey};
 use heapless::Vec;
 use lorawan::keys::CryptoFactory;
+use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
 use lorawan::{
     creator::DataPayloadCreator,
     maccommands::SerializableMacCommand,
@@ -123,13 +124,13 @@ impl Session {
                         configuration.handle_downlink_macs(
                             region,
                             &mut self.uplink,
-                            &mut decrypted.fhdr().fopts(),
+                            MacCommandIterator::<DownlinkMacCommand>::new(decrypted.fhdr().data()),
                         );
                         if let FRMPayload::MACCommands(mac_cmds) = decrypted.frm_payload() {
                             configuration.handle_downlink_macs(
                                 region,
                                 &mut self.uplink,
-                                &mut mac_cmds.mac_commands(),
+                                MacCommandIterator::<DownlinkMacCommand>::new(mac_cmds.data()),
                             );
                         }
                     }

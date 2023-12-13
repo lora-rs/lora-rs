@@ -10,44 +10,43 @@ use lorawan::maccommandcreator::*;
 use lorawan::maccommands::*;
 
 macro_rules! test_helper {
-    ( $data:ident, $name:ident, $type:ident, $size:expr, $( ( $method:ident, $val:expr ) ,)*) => {{
+    ( $cmd:ident, $data:ident, $name:ident, $type:ident, $size:expr, $( ( $method:ident, $val:expr ) ,)*) => {{
         {
-            assert!($type::new_as_mac_cmd(&[]).is_err());
-            let mc = $type::new_as_mac_cmd(&$data[..]);
-            assert!(mc.is_ok());
-            if let (MacCommand::$name(res), size) = mc.unwrap() {
-                assert_eq!(size, $size);
-                $(
-                    assert_eq!(res.$method(), $val);
-                )*
-            } else {
-                panic!("failed to parse {}", stringify!($type));
-            }
+            assert!($type::new(&[]).is_err());
+            let res = $type::new(&$data[..]).unwrap();
+            assert_eq!($type::len(), $size);
+            $(
+                assert_eq!(res.$method(), $val);
+            )*
         }
     }};
 
-    ( $name:ident, $type:ident ) => {{
+    ( $cmd:ident, $name:ident, $type:ident ) => {{
         {
             let data = [];
-            let mc = $type::new_as_mac_cmd(&data[..]);
-            if let (MacCommand::$name(_), size) = mc {
-                assert_eq!(size, 0);
-            } else {
-                panic!("failed to parse {}", stringify!($type));
-            }
+            let mc = $cmd::$name($type::new(&data[..]));
+            assert_eq!(mc.len(), 0);
         }
     }};
 }
 
 #[test]
 fn test_link_check_req_new() {
-    test_helper!(LinkCheckReq, LinkCheckReqPayload);
+    test_helper!(UplinkMacCommand, LinkCheckReq, LinkCheckReqPayload);
 }
 
 #[test]
 fn test_link_check_ans_new() {
     let data = [0xa, 0x0f];
-    test_helper!(data, LinkCheckAns, LinkCheckAnsPayload, 2, (margin, 10), (gateway_count, 15),);
+    test_helper!(
+        DownlinkMacCommand,
+        data,
+        LinkCheckAns,
+        LinkCheckAnsPayload,
+        2,
+        (margin, 10),
+        (gateway_count, 15),
+    );
 }
 
 #[test]
@@ -55,6 +54,7 @@ fn test_link_adr_req_new() {
     let data = [0x12, 0x04, 0x00, 0x45];
     let expected_channel_mask = ChannelMask::new(&[0x04, 0x00]).unwrap();
     test_helper!(
+        DownlinkMacCommand,
         data,
         LinkADRReq,
         LinkADRReqPayload,
@@ -75,19 +75,14 @@ fn test_link_adr_ans_new() {
         ([0x04], false, false, true, false),
         ([0x07], true, true, true, true),
     ];
-    assert!(LinkADRReqPayload::new_as_mac_cmd(&[]).is_err());
+    assert!(LinkADRReqPayload::new(&[]).is_err());
     for (v, e_power, e_dr, e_cm, e_ack) in &examples {
-        let mc = LinkADRAnsPayload::new_as_mac_cmd(&v[..]);
-        assert!(mc.is_ok());
-        if let (MacCommand::LinkADRAns(laa), size) = mc.unwrap() {
-            assert_eq!(size, 1);
-            assert_eq!(laa.channel_mask_ack(), *e_power);
-            assert_eq!(laa.data_rate_ack(), *e_dr);
-            assert_eq!(laa.powert_ack(), *e_cm);
-            assert_eq!(laa.ack(), *e_ack);
-        } else {
-            panic!("failed to parse LinkADRAnsPayload");
-        }
+        let laa = LinkADRAnsPayload::new(&v[..]).unwrap();
+        assert_eq!(LinkADRAnsPayload::len(), 1);
+        assert_eq!(laa.channel_mask_ack(), *e_power);
+        assert_eq!(laa.data_rate_ack(), *e_dr);
+        assert_eq!(laa.powert_ack(), *e_cm);
+        assert_eq!(laa.ack(), *e_ack);
     }
 }
 
@@ -96,6 +91,7 @@ fn test_duty_cycle_req_new() {
     #![allow(clippy::float_cmp)]
     let data = [0x02];
     test_helper!(
+        DownlinkMacCommand,
         data,
         DutyCycleReq,
         DutyCycleReqPayload,
@@ -107,13 +103,14 @@ fn test_duty_cycle_req_new() {
 
 #[test]
 fn test_duty_cycle_ans_new() {
-    test_helper!(DutyCycleAns, DutyCycleAnsPayload);
+    test_helper!(UplinkMacCommand, DutyCycleAns, DutyCycleAnsPayload);
 }
 
 #[test]
 fn test_rx_param_setup_req_new() {
     let data = [0x3b, 0x01, 0x02, 0x04];
     test_helper!(
+        DownlinkMacCommand,
         data,
         RXParamSetupReq,
         RXParamSetupReqPayload,
@@ -132,37 +129,41 @@ fn test_rx_param_setup_ans_new() {
         ([0x04], false, false, true, false),
         ([0x07], true, true, true, true),
     ];
-    assert!(RXParamSetupAnsPayload::new_as_mac_cmd(&[]).is_err());
+    assert!(RXParamSetupAnsPayload::new(&[]).is_err());
     for (v, e_ch, e_rx2_dr, e_rx1_dr_offset, e_ack) in &examples {
-        let mc = RXParamSetupAnsPayload::new_as_mac_cmd(&v[..]);
-        assert!(mc.is_ok());
-        if let (MacCommand::RXParamSetupAns(psa), size) = mc.unwrap() {
-            assert_eq!(size, 1);
-            assert_eq!(psa.channel_ack(), *e_ch);
-            assert_eq!(psa.rx2_data_rate_ack(), *e_rx2_dr);
-            assert_eq!(psa.rx1_dr_offset_ack(), *e_rx1_dr_offset);
-            assert_eq!(psa.ack(), *e_ack);
-        } else {
-            panic!("failed to parse RXParamSetupAnsPayload");
-        }
+        let psa = RXParamSetupAnsPayload::new(&v[..]).unwrap();
+        assert_eq!(RXParamSetupAnsPayload::len(), 1);
+        assert_eq!(psa.channel_ack(), *e_ch);
+        assert_eq!(psa.rx2_data_rate_ack(), *e_rx2_dr);
+        assert_eq!(psa.rx1_dr_offset_ack(), *e_rx1_dr_offset);
+        assert_eq!(psa.ack(), *e_ack);
     }
 }
 
 #[test]
 fn test_dev_status_req() {
-    test_helper!(DevStatusReq, DevStatusReqPayload);
+    test_helper!(DownlinkMacCommand, DevStatusReq, DevStatusReqPayload);
 }
 
 #[test]
 fn test_dev_status_ans() {
     let data = [0xfe, 0x3f];
-    test_helper!(data, DevStatusAns, DevStatusAnsPayload, 2, (battery, 254), (margin, -1),);
+    test_helper!(
+        DownlinkMacCommand,
+        data,
+        DevStatusAns,
+        DevStatusAnsPayload,
+        2,
+        (battery, 254),
+        (margin, -1),
+    );
 }
 
 #[test]
 fn test_new_channel_req() {
     let data = [0x03, 0x01, 0x02, 0x04, 0xa5];
     test_helper!(
+        DownlinkMacCommand,
         data,
         NewChannelReq,
         NewChannelReqPayload,
@@ -181,36 +182,32 @@ fn test_new_channel_ans() {
         ([0x02], false, true, false),
         ([0x03], true, true, true),
     ];
-    assert!(NewChannelAnsPayload::new_as_mac_cmd(&[]).is_err());
+    assert!(NewChannelAnsPayload::new(&[]).is_err());
     for (v, e_ch_freq, e_drr, e_ack) in &examples {
-        let mc = NewChannelAnsPayload::new_as_mac_cmd(&v[..]);
-        assert!(mc.is_ok());
-        if let (MacCommand::NewChannelAns(nca), size) = mc.unwrap() {
-            assert_eq!(size, 1);
-            assert_eq!(nca.data_rate_range_ack(), *e_drr);
-            assert_eq!(nca.channel_freq_ack(), *e_ch_freq);
-            assert_eq!(nca.ack(), *e_ack);
-        } else {
-            panic!("failed to parse RXParamSetupAnsPayload");
-        }
+        let nca = NewChannelAnsPayload::new(&v[..]).unwrap();
+        assert_eq!(NewChannelAnsPayload::len(), 1);
+        assert_eq!(nca.data_rate_range_ack(), *e_drr);
+        assert_eq!(nca.channel_freq_ack(), *e_ch_freq);
+        assert_eq!(nca.ack(), *e_ack);
     }
 }
 
 #[test]
 fn test_rx_timing_setup_req() {
     let data = [0x02];
-    test_helper!(data, RXTimingSetupReq, RXTimingSetupReqPayload, 1, (delay, 2),);
+    test_helper!(UplinkMacCommand, data, RXTimingSetupReq, RXTimingSetupReqPayload, 1, (delay, 2),);
 }
 
 #[test]
 fn test_rx_timing_setup_ans() {
-    test_helper!(RXTimingSetupAns, RXTimingSetupAnsPayload);
+    test_helper!(UplinkMacCommand, RXTimingSetupAns, RXTimingSetupAnsPayload);
 }
 
 #[test]
 fn test_tx_param_setup_req() {
     let data = [0b011110];
     test_helper!(
+        UplinkMacCommand,
         data,
         TXParamSetupReq,
         TXParamSetupReqPayload,
@@ -223,13 +220,14 @@ fn test_tx_param_setup_req() {
 
 #[test]
 fn test_tx_param_setup_ans() {
-    test_helper!(TXParamSetupAns, TXParamSetupAnsPayload);
+    test_helper!(UplinkMacCommand, TXParamSetupAns, TXParamSetupAnsPayload);
 }
 
 #[test]
 fn test_dl_channel_req() {
     let data = [1, 2, 3, 4];
     test_helper!(
+        UplinkMacCommand,
         data,
         DlChannelReq,
         DlChannelReqPayload,
@@ -243,6 +241,7 @@ fn test_dl_channel_req() {
 fn test_dl_channel_ans() {
     let data = [0x3];
     test_helper!(
+        UplinkMacCommand,
         data,
         DlChannelAns,
         DlChannelAnsPayload,
@@ -254,17 +253,18 @@ fn test_dl_channel_ans() {
 
 #[test]
 fn test_parse_mac_commands_empty_downlink() {
-    assert_eq!(parse_mac_commands(&[], false).count(), 0);
+    assert_eq!(parse_downlink_mac_commands(&[]).count(), 0);
 }
 
 #[test]
 fn test_device_time_req() {
-    test_helper!(DeviceTimeReq, DeviceTimeReqPayload);
+    test_helper!(UplinkMacCommand, DeviceTimeReq, DeviceTimeReqPayload);
 }
 #[test]
 fn test_device_time_ans() {
     let data = [0x1, 0x2, 0x3, 0x4, 0x5];
     test_helper!(
+        UplinkMacCommand,
         data,
         DeviceTimeAns,
         DeviceTimeAnsPayload,
@@ -276,31 +276,31 @@ fn test_device_time_ans() {
 
 #[test]
 fn test_parse_mac_commands_empty_uplink() {
-    assert_eq!(parse_mac_commands(&[], true).count(), 0);
+    assert_eq!(parse_uplink_mac_commands(&[]).count(), 0);
 }
 
 #[test]
 fn test_parse_mac_commands_with_multiple_cmds() {
     let data = mac_cmds_payload();
-    let mut commands = parse_mac_commands(&data[..], true);
-    assert_eq!(commands.next(), Some(MacCommand::LinkCheckReq(LinkCheckReqPayload())));
-    let expected = LinkADRAnsPayload::new_as_mac_cmd(&data[2..]).unwrap().0;
+    let mut commands = parse_uplink_mac_commands(&data[..]);
+    assert_eq!(commands.next(), Some(UplinkMacCommand::LinkCheckReq(LinkCheckReqPayload())));
+    let expected = UplinkMacCommand::LinkADRAns(LinkADRAnsPayload::new(&data[2..]).unwrap());
     assert_eq!(commands.next(), Some(expected));
 }
 
 #[test]
 fn test_parse_mac_commands_with_multiple_cmds_with_payloads() {
     let data = [3, 0, 0, 0, 112, 3, 0, 0, 255, 0];
-    let mut commands = parse_mac_commands(&data, false);
+    let mut commands = parse_downlink_mac_commands(&data);
 
     assert_eq!(
         commands.next(),
-        Some(MacCommand::LinkADRReq(LinkADRReqPayload::new(&[0, 0, 0, 112]).unwrap()))
+        Some(DownlinkMacCommand::LinkADRReq(LinkADRReqPayload::new(&[0, 0, 0, 112]).unwrap()))
     );
 
     assert_eq!(
         commands.next(),
-        Some(MacCommand::LinkADRReq(LinkADRReqPayload::new(&[0, 0, 255, 0]).unwrap()))
+        Some(DownlinkMacCommand::LinkADRReq(LinkADRReqPayload::new(&[0, 0, 255, 0]).unwrap()))
     );
 }
 
@@ -375,7 +375,7 @@ fn test_data_rate_range() {
     assert!(drr_raw.is_ok());
     let drr = drr_raw.unwrap();
     assert_eq!(drr.max_data_rate(), 0x0a);
-    assert_eq!(drr.min_data_range(), 0x05);
+    assert_eq!(drr.min_data_rate(), 0x05);
 }
 
 #[test]
@@ -401,8 +401,10 @@ fn test_mac_commands_len_with_creators() {
 
 #[test]
 fn test_mac_commands_len_with_mac_cmds() {
-    let rx_timing_setup_req = RXTimingSetupReqPayload::new_as_mac_cmd(&[0x02]).unwrap().0;
-    let dev_status_ans = DevStatusAnsPayload::new_as_mac_cmd(&[0xfe, 0x3f]).unwrap().0;
+    let rx_timing_setup_req =
+        DownlinkMacCommand::RXTimingSetupReq(RXTimingSetupReqPayload::new(&[0x02]).unwrap());
+    let dev_status_ans =
+        UplinkMacCommand::DevStatusAns(DevStatusAnsPayload::new(&[0xfe, 0x3f]).unwrap());
     let cmds: Vec<&dyn SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_ans];
 
     assert_eq!(mac_commands_len(&cmds[..]), 5);

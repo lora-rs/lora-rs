@@ -6,6 +6,8 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
+use core::marker::PhantomData;
+
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
@@ -15,124 +17,10 @@ pub enum Error {
     InvalidDataRateRange,
 }
 
-/// MacCommand represents the enumeration of all LoRaWAN MACCommands.
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug, PartialEq, Eq)]
-pub enum MacCommand<'a> {
-    LinkCheckReq(LinkCheckReqPayload),
-    LinkCheckAns(LinkCheckAnsPayload<'a>),
-    LinkADRReq(LinkADRReqPayload<'a>),
-    LinkADRAns(LinkADRAnsPayload<'a>),
-    DutyCycleReq(DutyCycleReqPayload<'a>),
-    DutyCycleAns(DutyCycleAnsPayload),
-    RXParamSetupReq(RXParamSetupReqPayload<'a>),
-    RXParamSetupAns(RXParamSetupAnsPayload<'a>),
-    DevStatusReq(DevStatusReqPayload),
-    DevStatusAns(DevStatusAnsPayload<'a>),
-    NewChannelReq(NewChannelReqPayload<'a>),
-    NewChannelAns(NewChannelAnsPayload<'a>),
-    RXTimingSetupReq(RXTimingSetupReqPayload<'a>),
-    RXTimingSetupAns(RXTimingSetupAnsPayload),
-    TXParamSetupReq(TXParamSetupReqPayload<'a>),
-    TXParamSetupAns(TXParamSetupAnsPayload),
-    DeviceTimeReq(DeviceTimeReqPayload),
-    DeviceTimeAns(DeviceTimeAnsPayload<'a>),
-    DlChannelReq(DlChannelReqPayload<'a>),
-    DlChannelAns(DlChannelAnsPayload<'a>),
-}
-
-impl<'a> MacCommand<'a> {
-    #![allow(clippy::len_without_is_empty)]
-    pub fn len(&self) -> usize {
-        match *self {
-            MacCommand::LinkCheckReq(_) => LinkCheckReqPayload::len(),
-            MacCommand::LinkCheckAns(_) => LinkCheckAnsPayload::len(),
-            MacCommand::LinkADRReq(_) => LinkADRReqPayload::len(),
-            MacCommand::LinkADRAns(_) => LinkADRAnsPayload::len(),
-            MacCommand::DutyCycleReq(_) => DutyCycleReqPayload::len(),
-            MacCommand::DutyCycleAns(_) => DutyCycleAnsPayload::len(),
-            MacCommand::RXParamSetupReq(_) => RXParamSetupReqPayload::len(),
-            MacCommand::RXParamSetupAns(_) => RXParamSetupAnsPayload::len(),
-            MacCommand::DevStatusReq(_) => DevStatusReqPayload::len(),
-            MacCommand::DevStatusAns(_) => DevStatusAnsPayload::len(),
-            MacCommand::NewChannelReq(_) => NewChannelReqPayload::len(),
-            MacCommand::NewChannelAns(_) => NewChannelAnsPayload::len(),
-            MacCommand::RXTimingSetupReq(_) => RXTimingSetupReqPayload::len(),
-            MacCommand::RXTimingSetupAns(_) => RXTimingSetupAnsPayload::len(),
-            MacCommand::TXParamSetupReq(_) => TXParamSetupReqPayload::len(),
-            MacCommand::TXParamSetupAns(_) => TXParamSetupAnsPayload::len(),
-            MacCommand::DeviceTimeReq(_) => DeviceTimeReqPayload::len(),
-            MacCommand::DeviceTimeAns(_) => DeviceTimeAnsPayload::len(),
-            MacCommand::DlChannelReq(_) => DlChannelReqPayload::len(),
-            MacCommand::DlChannelAns(_) => DlChannelAnsPayload::len(),
-        }
-    }
-
-    pub fn bytes(&self) -> &[u8] {
-        match *self {
-            MacCommand::LinkCheckReq(_) => &[],
-            MacCommand::LinkCheckAns(ref v) => v.0,
-            MacCommand::LinkADRReq(ref v) => v.0,
-            MacCommand::LinkADRAns(ref v) => v.0,
-            MacCommand::DutyCycleReq(ref v) => v.0,
-            MacCommand::DutyCycleAns(_) => &[],
-            MacCommand::RXParamSetupReq(ref v) => v.0,
-            MacCommand::RXParamSetupAns(ref v) => v.0,
-            MacCommand::DevStatusReq(_) => &[],
-            MacCommand::DevStatusAns(ref v) => v.0,
-            MacCommand::NewChannelReq(ref v) => v.0,
-            MacCommand::NewChannelAns(ref v) => v.0,
-            MacCommand::RXTimingSetupReq(ref v) => v.0,
-            MacCommand::RXTimingSetupAns(_) => &[],
-            MacCommand::TXParamSetupReq(ref v) => v.0,
-            MacCommand::TXParamSetupAns(_) => &[],
-            MacCommand::DeviceTimeReq(_) => &[],
-            MacCommand::DeviceTimeAns(ref v) => v.0,
-            MacCommand::DlChannelReq(ref v) => v.0,
-            MacCommand::DlChannelAns(ref v) => v.0,
-        }
-    }
-}
-
 pub trait SerializableMacCommand {
     fn payload_bytes(&self) -> &[u8];
     fn cid(&self) -> u8;
     fn payload_len(&self) -> usize;
-}
-
-impl<'a> SerializableMacCommand for MacCommand<'a> {
-    fn payload_bytes(&self) -> &[u8] {
-        self.bytes()
-    }
-
-    fn cid(&self) -> u8 {
-        match *self {
-            MacCommand::LinkCheckReq(_) => LinkCheckReqPayload::cid(),
-            MacCommand::LinkCheckAns(_) => LinkCheckAnsPayload::cid(),
-            MacCommand::LinkADRReq(_) => LinkADRReqPayload::cid(),
-            MacCommand::LinkADRAns(_) => LinkADRAnsPayload::cid(),
-            MacCommand::DutyCycleReq(_) => DutyCycleReqPayload::cid(),
-            MacCommand::DutyCycleAns(_) => DutyCycleAnsPayload::cid(),
-            MacCommand::RXParamSetupReq(_) => RXParamSetupReqPayload::cid(),
-            MacCommand::RXParamSetupAns(_) => RXParamSetupAnsPayload::cid(),
-            MacCommand::DevStatusReq(_) => DevStatusReqPayload::cid(),
-            MacCommand::DevStatusAns(_) => DevStatusAnsPayload::cid(),
-            MacCommand::NewChannelReq(_) => NewChannelReqPayload::cid(),
-            MacCommand::NewChannelAns(_) => NewChannelAnsPayload::cid(),
-            MacCommand::RXTimingSetupReq(_) => RXTimingSetupReqPayload::cid(),
-            MacCommand::RXTimingSetupAns(_) => RXTimingSetupAnsPayload::cid(),
-            MacCommand::TXParamSetupReq(_) => TXParamSetupReqPayload::cid(),
-            MacCommand::TXParamSetupAns(_) => TXParamSetupAnsPayload::cid(),
-            MacCommand::DeviceTimeReq(_) => DeviceTimeReqPayload::cid(),
-            MacCommand::DeviceTimeAns(_) => DeviceTimeAnsPayload::cid(),
-            MacCommand::DlChannelReq(_) => DlChannelReqPayload::cid(),
-            MacCommand::DlChannelAns(_) => DlChannelAnsPayload::cid(),
-        }
-    }
-
-    fn payload_len(&self) -> usize {
-        self.len()
-    }
 }
 
 /// Calculates the len in bytes of a sequence of mac commands, including th CIDs.
@@ -153,36 +41,37 @@ macro_rules! mac_cmd_zero_len {
             pub struct $type();
 
             impl $type {
+                /// Creation.
                 pub fn new(_: &[u8]) -> $type {
                     $type()
                 }
 
-                pub fn new_as_mac_cmd<'a>(data: &[u8]) -> (MacCommand<'a>, usize) {
-                    (MacCommand::$name($type::new(data)), 0)
+                /// dupliciate fn to be compatible with the mac_cmds macro
+                pub fn new_from_raw(_: &[u8]) ->$type {
+                    $type()
                 }
 
+                /// Get the CID.
                 pub const fn cid() -> u8 {
                     $cid
                 }
 
+                /// Sent by end device or sent by network server.
                 pub const fn uplink() -> bool {
                     $uplink
                 }
 
+                /// Length of the empty payload.
                 pub const fn len() -> usize {
                     0
                 }
+
+                /// Reference to the empty payload.
+                pub fn bytes (&self) -> &[u8]{
+                    &[]
+                }
             }
         )*
-
-        fn parse_zero_len_mac_cmd(data: &[u8], uplink: bool) -> Result<(usize, MacCommand<'_>), Error> {
-            match (data[0], uplink) {
-                $(
-                    ($cid, $uplink) => Ok((0, MacCommand::$name($type::new(&[])))),
-                )*
-                _ => Err(Error::UnknownMacCommand)
-            }
-        }
     }
 }
 
@@ -196,23 +85,27 @@ macro_rules! mac_cmds {
     ) => {
         $(
             $(#[$outer])*
-            pub struct $type<'a>(&'a [u8]);
+            pub struct $type<'a>(pub(crate) &'a [u8]);
 
             impl<'a> $type<'a> {
                 /// Creates a new instance of the mac command if there is enought data.
                 pub fn new(data: &'a [u8]) -> Result<$type<'a>, Error> {
-                    if data.len() < $size {
+                    if data.len() != $size {
                         Err(Error::BufferTooShort)
                     } else {
                         Ok($type(&data))
                     }
                 }
-
-                pub fn new_as_mac_cmd(data: &'a [u8]) -> Result<(MacCommand<'a>, usize), Error> {
-                    Ok((MacCommand::$name($type::new(data)?), $size))
+                /// Constructs a new instance of the mac command from the provided data,
+                /// without verifying the data length
+                ///
+                /// Improper use of this method could lead to panic during runtime!
+                pub fn new_from_raw(data: &'a [u8]) ->$type<'a> {
+                    $type(&data)
                 }
 
-                /// Command identifier.
+
+                /// Get the CID.
                 pub const fn cid() -> u8 {
                     $cid
                 }
@@ -222,21 +115,154 @@ macro_rules! mac_cmds {
                     $uplink
                 }
 
-                /// length of the payload of the mac command.
+                /// Length of payload without the CID.
                 pub const fn len() -> usize {
                     $size
                 }
+
+                /// Reference to the payload.
+                pub fn bytes (&self) -> &[u8]{
+                    self.0
+                }
             }
         )*
+    }
+}
 
-        fn parse_one_mac_cmd(data: &[u8], uplink: bool) -> Result<(usize, MacCommand<'_>), Error> {
-            match (data[0], uplink) {
-                $(
-                    ($cid, $uplink) if data.len() > $size => Ok(($size, MacCommand::$name($type::new(&data[1.. 1 + $size])?))),
-                )*
-                _ => parse_zero_len_mac_cmd(data, uplink)
+macro_rules! mac_cmds_enum {
+    (
+        $outer_vis:vis enum $outer_type:ident$(<$outer_lifetime:lifetime>),* {
+        $(
+            $name:ident($type:ident$(<$lifetime:lifetime>),*)
+        )*
+    }
+    ) => {
+        #[derive(Debug, PartialEq)]
+        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+        #[allow(clippy::len_without_is_empty, missing_docs)]
+        $outer_vis enum $outer_type$(<$outer_lifetime>)* {
+            $(
+                $name($type$(<$lifetime>)*),
+            )*
+        }
+        impl$(<$outer_lifetime>)* $outer_type$(<$outer_lifetime>)* {
+            /// Get the length.
+            pub fn len(&self) -> usize {
+                match *self {
+                    $(
+                        Self::$name(_) => $type::len(),
+                    )*
+                }
+            }
+
+            /// Sent by end device or sent by network server.
+            pub fn uplink(&self) -> bool {
+                match *self {
+                    $(
+                        Self::$name(_) => $type::uplink(),
+                    )*
+                }
+            }
+
+            /// Get a referece to the data.
+            pub fn bytes(&self) -> &[u8] {
+                match *self {
+                    $(
+                        Self::$name(ref v) => v.bytes(),
+                    )*
+                }
             }
         }
+
+        impl$(<$outer_lifetime>)* SerializableMacCommand for $outer_type$(<$outer_lifetime>)* {
+            fn payload_bytes(&self) -> &[u8] {
+                &self.bytes()
+            }
+
+            fn cid(&self) -> u8 {
+                match *self {
+                    $(
+                        Self::$name(_) => $type::cid(),
+                    )*
+                }
+            }
+
+            fn payload_len(&self) -> usize {
+                self.len()
+            }
+        }
+
+        impl$(<$outer_lifetime>)* Iterator for MacCommandIterator<$($outer_lifetime)*, $outer_type$(<$outer_lifetime>)*> {
+            type Item = $outer_type$(<$outer_lifetime>)*;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                if self.index < self.data.len() {
+                    let data = &self.data[self.index..];
+                    $(
+                        if data[0] == $type::cid() && data.len() >= $type::len() {
+                            self.index = self.index + $type::len()+1;
+                            Some($outer_type::$name($type::new_from_raw(&data[1.. 1 + $type::len()])))
+                        } else
+                    )* {
+                        None
+                    }
+                }else{
+                    None
+                }
+            }
+        }
+        impl<'a> From<&'a super::parser::FHDR<'a>>
+            for MacCommandIterator<$($outer_lifetime)*, $outer_type$(<$outer_lifetime>)*>
+        {
+            fn from(fhdr: &'a super::parser::FHDR) -> Self {
+                Self {
+                    data: &fhdr.data(),
+                    index: 0,
+                    item: core::marker::PhantomData,
+                }
+            }
+        }
+
+        impl<'a> From<&'a super::parser::FRMMacCommands<'a>>
+            for MacCommandIterator<$($outer_lifetime)*, $outer_type$(<$outer_lifetime>)*>
+        {
+            fn from(frmm: &'a super::parser::FRMMacCommands) -> Self {
+                Self {
+                    data: frmm.data(),
+                    index: 0,
+                    item: core::marker::PhantomData,
+                }
+            }
+        }
+    }
+}
+mac_cmds_enum! {
+    pub enum DownlinkMacCommand<'a> {
+        LinkCheckAns(LinkCheckAnsPayload<'a>)
+        LinkADRReq(LinkADRReqPayload<'a>)
+        DutyCycleReq(DutyCycleReqPayload<'a>)
+        RXParamSetupReq(RXParamSetupReqPayload<'a>)
+        DevStatusReq(DevStatusReqPayload)
+        NewChannelReq(NewChannelReqPayload<'a>)
+        RXTimingSetupReq(RXTimingSetupReqPayload<'a>)
+        TXParamSetupReq(TXParamSetupReqPayload<'a>)
+        DlChannelReq(DlChannelReqPayload<'a>)
+        DeviceTimeAns(DeviceTimeAnsPayload<'a>)
+    }
+}
+
+mac_cmds_enum! {
+    pub enum UplinkMacCommand<'a> {
+        LinkCheckReq(LinkCheckReqPayload)
+        LinkADRAns(LinkADRAnsPayload<'a>)
+        DutyCycleAns(DutyCycleAnsPayload)
+        RXParamSetupAns(RXParamSetupAnsPayload<'a>)
+        DevStatusAns(DevStatusAnsPayload<'a>)
+        NewChannelAns(NewChannelAnsPayload<'a>)
+        RXTimingSetupAns(RXTimingSetupAnsPayload)
+        TXParamSetupAns(TXParamSetupAnsPayload)
+        DlChannelAns(DlChannelAnsPayload<'a>)
+        DeviceTimeReq(DeviceTimeReqPayload)
     }
 }
 
@@ -369,46 +395,70 @@ macro_rules! create_value_reader_fn {
     )
 }
 
-/// Parses bytes to mac commands if possible.
+/// Parses bytes to uplink mac commands if possible.
 ///
 /// Could return error if some values are out of range or the payload does not end at mac command
 /// boundry.
 /// # Argument
 ///
 /// * bytes - the data from which the MAC commands are to be built.
-/// * uplink - whether the packet is uplink or downlink.
 ///
 /// # Examples
 ///
 /// ```
 /// let mut data = vec![0x02, 0x03, 0x00];
-/// let mac_cmds: Vec<lorawan::maccommands::MacCommand> =
-///     lorawan::maccommands::parse_mac_commands(&data[..], true).collect();
+/// let mac_cmds: Vec<lorawan::maccommands::UplinkMacCommand> =
+///     lorawan::maccommands::parse_uplink_mac_commands(&data).collect();
 /// ```
-pub fn parse_mac_commands(data: &[u8], uplink: bool) -> MacCommandIterator {
-    MacCommandIterator { index: 0, data, uplink }
+pub fn parse_uplink_mac_commands(data: &[u8]) -> MacCommandIterator<UplinkMacCommand> {
+    MacCommandIterator::new(data)
+}
+/// Parses bytes to downlink mac commands if possible.
+///
+/// Could return error if some values are out of range or the payload does not end at mac command
+/// boundry.
+/// # Argument
+///
+/// * bytes - the data from which the MAC commands are to be built.
+///
+/// # Examples
+///
+/// ```
+/// let mut data = vec![0x02, 0x03, 0x00];
+/// let mac_cmds: Vec<lorawan::maccommands::DownlinkMacCommand> =
+///     lorawan::maccommands::parse_downlink_mac_commands(&data).collect();
+/// ```
+pub fn parse_downlink_mac_commands(data: &[u8]) -> MacCommandIterator<DownlinkMacCommand> {
+    MacCommandIterator::new(data)
 }
 
 /// Implementation of iterator for mac commands.
-pub struct MacCommandIterator<'a> {
-    data: &'a [u8],
-    index: usize,
-    uplink: bool,
+pub struct MacCommandIterator<'a, T> {
+    pub(crate) data: &'a [u8],
+    pub(crate) index: usize,
+    pub(crate) item: PhantomData<T>,
 }
 
-impl<'a> Iterator for MacCommandIterator<'a> {
-    type Item = MacCommand<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.data.len() {
-            if let Ok((l, v)) = parse_one_mac_cmd(&self.data[self.index..], self.uplink) {
-                self.index += 1 + l;
-                return Some(v);
-            }
-        }
-        None
+impl<'a, T> MacCommandIterator<'a, T> {
+    /// Creation.
+    pub fn new(data: &'a [u8]) -> Self {
+        Self { data, index: 0, item: Default::default() }
     }
 }
+
+// impl<'a, T> Iterator for MacCommandIterator<'a, T> {
+//     type Item = T;
+
+//     fn next(&mut self) -> Option<Self::Item> {
+//         if self.index < self.data.len() {
+//             if let Ok((l, v)) = parse_one_mac_cmd(&self.data[self.index..], self.uplink) {
+//                 self.index += 1 + l;
+//                 return Some(v);
+//             }
+//         }
+//         None
+//     }
+// }
 
 impl<'a> LinkCheckAnsPayload<'a> {
     create_value_reader_fn!(
@@ -847,7 +897,7 @@ impl DataRateRange {
     }
 
     /// The lowest data rate allowed on this channel.
-    pub fn min_data_range(&self) -> u8 {
+    pub fn min_data_rate(&self) -> u8 {
         self.0 & 0x0f
     }
 

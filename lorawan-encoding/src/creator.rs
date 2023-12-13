@@ -455,7 +455,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     ///
     /// ```
     /// let mut phy = lorawan::creator::DataPayloadCreator::new();
-    /// let mac_cmd1 = lorawan::maccommands::MacCommand::LinkCheckReq(
+    /// let mac_cmd1 = lorawan::maccommands::UplinkMacCommand::LinkCheckReq(
     ///     lorawan::maccommands::LinkCheckReqPayload());
     /// let mut mac_cmd2 = lorawan::maccommandcreator::LinkADRAnsCreator::new();
     /// mac_cmd2

@@ -1,10 +1,12 @@
 use super::*;
-use lorawan::maccommands::{ChannelMask, SerializableMacCommand};
+use lorawan::maccommands::{
+    ChannelMask, DownlinkMacCommand, MacCommandIterator, SerializableMacCommand, UplinkMacCommand,
+};
 use lorawan::parser::{self, DataHeader};
 use lorawan::{
     default_crypto::DefaultFactory,
     maccommandcreator::LinkADRReqCreator,
-    maccommands::{LinkADRReqPayload, MacCommand},
+    maccommands::LinkADRReqPayload,
     parser::{parse, DataPayload, JoinAcceptPayload, PhyPayload},
 };
 use mac::Session;
@@ -139,8 +141,12 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
             let mac_cmds = [link_adr_req_with_bank_ctrl(0b10), link_adr_req_with_bank_ctrl(0b100)];
             let mac_cmds = [
                 // drop the CID byte when building the MAC Command (ie: [1..])
-                MacCommand::LinkADRReq(LinkADRReqPayload::new(&mac_cmds[0].build()[1..]).unwrap()),
-                MacCommand::LinkADRReq(LinkADRReqPayload::new(&mac_cmds[1].build()[1..]).unwrap()),
+                DownlinkMacCommand::LinkADRReq(
+                    LinkADRReqPayload::new(&mac_cmds[0].build()[1..]).unwrap(),
+                ),
+                DownlinkMacCommand::LinkADRReq(
+                    LinkADRReqPayload::new(&mac_cmds[1].build()[1..]).unwrap(),
+                ),
             ];
             let cmd: Vec<&dyn SerializableMacCommand> = vec![&mac_cmds[0], &mac_cmds[1]];
             let mut phy =
@@ -223,11 +229,12 @@ pub fn handle_data_uplink_with_link_adr_ans(
             let uplink =
                 data.decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt).unwrap();
             let fhdr = uplink.fhdr();
-            let mac_cmds: Vec<MacCommand> = fhdr.fopts().collect();
+            let mac_cmds: Vec<UplinkMacCommand> =
+                MacCommandIterator::<UplinkMacCommand>::new(fhdr.data()).collect();
 
             assert_eq!(mac_cmds.len(), 2);
-            assert!(matches!(mac_cmds[0], MacCommand::LinkADRAns(_)));
-            assert!(matches!(mac_cmds[1], MacCommand::LinkADRAns(_)));
+            assert!(matches!(mac_cmds[0], UplinkMacCommand::LinkADRAns(_)));
+            assert!(matches!(mac_cmds[1], UplinkMacCommand::LinkADRAns(_)));
 
             // Build the actual data payload with FPort 0 which allows MAC Commands in payload
             rx_buffer.iter_mut().for_each(|x| *x = 0);

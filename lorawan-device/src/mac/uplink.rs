@@ -3,7 +3,7 @@ This a temporary design where flags will be left about desired MAC uplinks by th
 During Uplink assembly, this struct will be inquired to drive construction
  */
 use heapless::Vec;
-use lorawan::maccommands::{LinkADRAnsPayload, MacCommand, RXTimingSetupAnsPayload};
+use lorawan::maccommands::{LinkADRAnsPayload, RXTimingSetupAnsPayload, UplinkMacCommand};
 
 #[derive(Default, Debug, Clone)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
@@ -72,14 +72,16 @@ impl Uplink {
         self.rx_delay_ans.add();
     }
 
-    pub fn get_cmds(&mut self, macs: &mut Vec<MacCommand, 8>) {
+    pub fn get_cmds(&mut self, macs: &mut Vec<UplinkMacCommand, 8>) {
         for _ in 0..self.adr_ans.get() {
-            macs.push(MacCommand::LinkADRAns(LinkADRAnsPayload::new(&[0x07]).unwrap())).unwrap();
+            macs.push(UplinkMacCommand::LinkADRAns(LinkADRAnsPayload::new(&[0x07]).unwrap()))
+                .unwrap();
         }
         self.adr_ans.clear();
 
         if self.rx_delay_ans.get() != 0 {
-            macs.push(MacCommand::RXTimingSetupAns(RXTimingSetupAnsPayload::new(&[]))).unwrap();
+            macs.push(UplinkMacCommand::RXTimingSetupAns(RXTimingSetupAnsPayload::new(&[])))
+                .unwrap();
         }
         self.rx_delay_ans.clear();
     }

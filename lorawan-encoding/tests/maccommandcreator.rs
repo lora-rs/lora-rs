@@ -196,8 +196,10 @@ fn test_device_time_ans_creator() {
 
 #[test]
 fn test_build_mac_commands() {
-    let rx_timing_setup_req = RXTimingSetupReqPayload::new_as_mac_cmd(&[0x02]).unwrap().0;
-    let dev_status_ans = DevStatusAnsPayload::new_as_mac_cmd(&[0xfe, 0x3f]).unwrap().0;
+    let rx_timing_setup_req =
+        DownlinkMacCommand::RXTimingSetupReq(RXTimingSetupReqPayload::new(&[0x02]).unwrap());
+    let dev_status_ans =
+        UplinkMacCommand::DevStatusAns(DevStatusAnsPayload::new(&[0xfe, 0x3f]).unwrap());
     let cmds: Vec<&dyn SerializableMacCommand> = vec![&rx_timing_setup_req, &dev_status_ans];
     let expected_len = mac_commands_len(&cmds[..]);
     let mut res = vec![0; expected_len];
