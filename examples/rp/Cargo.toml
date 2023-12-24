@@ -20,7 +20,7 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 
 cortex-m = { version = "0.7.6", features = ["inline-asm"] }
 cortex-m-rt = "0.7.0"
-embedded-hal-bus = { version = "0.1.0-rc.2", features = ["async"]}
+embedded-hal-bus = { version = "0.1.0-rc.3", features = ["async"]}
 
 static_cell = { version = "2.0.0" }
 portable-atomic = { version = "1.5", features = ["critical-section"] } # needed for static_cell on thumbv6
