@@ -1,3 +1,6 @@
+//! A non-blocking LoRaWAN device implementation which uses explicitly defined state machine
+//! for driving the protocol state against pin and timer events. Depends on a non-async radio
+//! implementation.
 use super::radio::RadioBuffer;
 use super::*;
 use crate::nb_device::radio::PhyRxTx;
