@@ -1,3 +1,4 @@
+//! LoRaWAN device region definitions (eg: EU868, US915, etc).
 use lora_modulation::{Bandwidth, BaseBandModulationParams, CodingRate, SpreadingFactor};
 use lorawan::{maccommands::ChannelMask, parser::CfList};
 use rand_core::RngCore;
