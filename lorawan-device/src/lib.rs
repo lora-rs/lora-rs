@@ -26,6 +26,7 @@ use core::marker::PhantomData;
 pub use lorawan::{
     keys::{AppEui, AppKey, AppSKey, CryptoFactory, DevEui, NewSKey},
     parser::DevAddr,
+    default_crypto,
 };
 
 pub use rand_core::RngCore;
