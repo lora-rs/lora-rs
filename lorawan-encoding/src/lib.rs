@@ -9,6 +9,8 @@
 //! This module implements LoRaWAN packet handling and parsing.
 #![no_std]
 #![allow(clippy::upper_case_acronyms)]
+#![doc = include_str!("../README.md")]
+
 pub mod creator;
 pub mod keys;
 pub mod maccommandcreator;
