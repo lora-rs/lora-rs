@@ -18,6 +18,16 @@
 
 - while the current examples use the Embassy embedded framework, nrf52840, rp pico, stm32l0, and stm32wl MCUs, and Sx127x/Sx126x chips, this crate provides a path forward for other embedded frameworks, MCU types, and LoRa chips in a Rust development environment.
 
+## Examples
+
+Please see [examples](https://github.com/lora-rs/lora-rs/tree/main/examples) for usage.
+
+## Chat
+
+A public chat on LoRa/LoRaWAN topics using Rust is here:
+
+- <a href="https://matrix.to/#/#public-lora-wan-rs:matrix.org">Matrix room</a>
+
 ## LoRa physical layer API
 
 For users wishing to implement a LoRaWAN or P2P solution, the following implementation files provide the necessary context for lora-phy version 2.
@@ -61,8 +71,3 @@ Example RadioKind implementations and ancillary information:
 
 Board-specific configuration can be handled via the chip driver specific Config struct.
 
-## Chat
-
-A public chat on LoRa/LoRaWAN topics using Rust is here:
-
-- <a href="https://matrix.to/#/#public-lora-wan-rs:matrix.org">Matrix room</a>
