@@ -1,5 +1,5 @@
-//! Asynchronous Device using Rust async-await for driving the state machine,
-//! and allowing asynchronous radio implementations. Requires the `async` feature and `nightly`.
+//! LoRaWAN device which uses async-await for driving the protocol state against pin and timer events,
+//! allowing for asynchronous radio implementations. Requires the `async` feature.
 use super::mac::Mac;
 
 use super::mac::{self, Frame, Window};
