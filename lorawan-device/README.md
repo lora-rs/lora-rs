@@ -14,11 +14,8 @@ LoRaWAN 1.0.x is approximately implemented:
 - Class A device behavior
 - Class C device behavior (async only)
 - Over-the-Air Activation (OTAA) and Activation by Personalization (ABP)
-- Regional support for AS923_1, AS923_2, AS923_3, AS923_4, AU915, EU868, EU433, IN865, US915
 - CFList is supported for fixed and dynamic channel plans
-- the stack starts deriving a new session when the FCnt maxes out the 32-bit
-  counter; new session may also be created by any time by the user, as long the
-  stack is not mid-transmit
+- Regional support for AS923_1, AS923_2, AS923_3, AS923_4, AU915, EU868, EU433, IN865, US915 (note: regional power limits are not enforced ([#168](https://github.com/lora-rs/lora-rs/issues/168))
 
 **Currently, MAC commands are minimally mocked. For example, an ADRReq is responded with an ADRResp, but not much
 is actually done with the payload**. 
