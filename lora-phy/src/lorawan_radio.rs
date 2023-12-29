@@ -3,7 +3,7 @@
 use lorawan_device::async_device::radio::{PhyRxTx, RfConfig, RxQuality, TxConfig};
 use lorawan_device::Timings;
 
-use super::mod_params::{RadioError, PacketParams};
+use super::mod_params::{PacketParams, RadioError};
 use super::mod_traits::RadioKind;
 use super::{DelayNs, LoRa};
 
@@ -26,7 +26,10 @@ where
     DLY: DelayNs,
 {
     fn from(lora: LoRa<RK, DLY>) -> Self {
-        Self { lora, rx_pkt_params: None }
+        Self {
+            lora,
+            rx_pkt_params: None,
+        }
     }
 }
 
@@ -77,34 +80,34 @@ where
             config.rf.bb.cr,
             config.rf.frequency,
         )?;
-        let mut tx_pkt_params =
-            self.lora.create_tx_packet_params(8, false, true, false, &mdltn_params)?;
+        let mut tx_pkt_params = self
+            .lora
+            .create_tx_packet_params(8, false, true, false, &mdltn_params)?;
 
         // TODO: 3rd argument (boost_if_possible) shouldn't be exposed, as it depends
         // on physical board layout. Needs to be eventually handled from lora-phy side.
         self.lora.prepare_for_tx(&mdltn_params, config.pw.into(), false).await?;
-        self.lora.tx(&mdltn_params, &mut tx_pkt_params, buffer, 0xffffff).await?;
+        self.lora
+            .tx(&mdltn_params, &mut tx_pkt_params, buffer, 0xffffff)
+            .await?;
         Ok(0)
     }
 
     async fn setup_rx(&mut self, config: RfConfig) -> Result<(), Self::PhyError> {
-        let mdltn_params = self.lora.create_modulation_params(
-            config.bb.sf,
-            config.bb.bw,
-            config.bb.cr,
-            config.frequency,
-        )?;
-        let rx_pkt_params =
-            self.lora.create_rx_packet_params(8, false, 255, true, true, &mdltn_params)?;
-        self.lora.prepare_for_rx(&mdltn_params, &rx_pkt_params, None, None, false).await?;
+        let mdltn_params =
+            self.lora
+                .create_modulation_params(config.bb.sf, config.bb.bw, config.bb.cr, config.frequency)?;
+        let rx_pkt_params = self
+            .lora
+            .create_rx_packet_params(8, false, 255, true, true, &mdltn_params)?;
+        self.lora
+            .prepare_for_rx(&mdltn_params, &rx_pkt_params, None, None, false)
+            .await?;
         self.rx_pkt_params = Some(rx_pkt_params);
         Ok(())
     }
 
-    async fn rx(
-        &mut self,
-        receiving_buffer: &mut [u8],
-    ) -> Result<(usize, RxQuality), Self::PhyError> {
+    async fn rx(&mut self, receiving_buffer: &mut [u8]) -> Result<(usize, RxQuality), Self::PhyError> {
         if let Some(rx_params) = &self.rx_pkt_params {
             match self.lora.rx(rx_params, receiving_buffer).await {
                 Ok((received_len, rx_pkt_status)) => {
