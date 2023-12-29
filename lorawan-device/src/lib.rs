@@ -63,6 +63,7 @@ pub trait Timings {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Join the network using either OTAA or ABP.
 pub enum JoinMode {
     OTAA { deveui: DevEui, appeui: AppEui, appkey: AppKey },
     ABP { newskey: NewSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]> },
