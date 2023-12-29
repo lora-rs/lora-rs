@@ -18,11 +18,13 @@ lorawan = "0.7.0"
 ### Packet generation
 
 ```rust
-use lorawan::{creator, keys, maccommands};
+use lorawan::{creator::JoinAcceptCreator, keys, maccommands};
+use lorawan::default_crypto::DefaultFactory;
 use heapless;
 
 fn main() {
-    let mut phy = creator::JoinAcceptCreator::new();
+    let mut data = [0; 33];
+    let mut phy = JoinAcceptCreator::with_options(&mut data, DefaultFactory).unwrap();
     let key = keys::AES128([1; 16]);
     let app_nonce_bytes = [1; 3];
     phy.set_app_nonce(&app_nonce_bytes);
@@ -30,7 +32,7 @@ fn main() {
     phy.set_dev_addr(&[1; 4]);
     phy.set_dl_settings(2);
     phy.set_rx_delay(1);
-    let mut freqs: heapless::Vec<lorawan::maccommands::Frequency, heapless::consts::U256> = heapless::Vec::new();
+    let mut freqs: heapless::Vec<lorawan::maccommands::Frequency, 2> = heapless::Vec::new();
     freqs.push(maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap()).unwrap();
     freqs.push(maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()).unwrap();
     phy.set_c_f_list(freqs).unwrap();
@@ -51,7 +53,7 @@ fn main() {
     if let Ok(PhyPayload::Data(DataPayload::Encrypted(phy))) = parse(data) {
         let key = AES128([1; 16]);
         let decrypted = phy.decrypt(None, Some(&key), 1).unwrap();
-        if let Ok(FRMPayload::Data(data_payload)) = decrypted.frm_payload() {
+        if let FRMPayload::Data(data_payload) = decrypted.frm_payload() {
                 println!("{}", String::from_utf8_lossy(data_payload));
         }
     } else {
@@ -68,7 +70,7 @@ Ran on Intel i7-8550U CPU @ 1.80GHz with 16GB RAM running Ubuntu 18.04.
   [here][3], results were obtained by running `go test -bench . -benchtime=5s`,
   `go1.13.1`)
 
-```
+```bash
 pkg: github.com/brocaar/lorawan
 BenchmarkDecode-8                  40410            150498 ns/op
 BenchmarkValidateMic-8              2959           2026736 ns/op
@@ -78,7 +80,7 @@ BenchmarkDecrypt-8                  9390            648402 ns/op
 * Benchmarks rust-lorawan (the code is inside `benches/lorawan.rs`, results are
   obtained running `cargo bench --workspace`, `rustc 1.43.0`)
 
-```
+```bash
   Running target/release/deps/lorawan-32e80b41705c7d41
 Gnuplot not found, using plotters backend
 
