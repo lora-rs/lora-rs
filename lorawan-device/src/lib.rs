@@ -37,6 +37,7 @@ pub use rng::Prng;
 pub mod async_device;
 
 #[derive(Debug)]
+/// Provides the application payload and FPort of a downlink message.
 pub struct Downlink {
     pub data: Vec<u8, 256>,
     pub fport: u8,
