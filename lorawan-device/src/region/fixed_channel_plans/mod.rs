@@ -13,8 +13,8 @@ pub use us915::US915;
 
 seq_macro::seq!(
     N in 1..=8 {
-        /// Subband definitions used to bias the join process. Each subband holds 8 channels. Ie, subband 1 contains
-        /// channels 0-7, subband 2 channels 8-15, etc.
+        /// Subband definitions used to bias the join process of a fixed channel plan (ie: US915, AU915).
+        /// Each Subband holds 8 channels. eg: subband 1 contains: channels 0-7, subband 2: channels 8-15, etc.
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[repr(usize)]

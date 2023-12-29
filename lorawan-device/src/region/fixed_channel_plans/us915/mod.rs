@@ -6,6 +6,8 @@ use frequencies::*;
 mod datarates;
 use datarates::*;
 
+pub use super::Subband;
+
 const US_DBM: i8 = 21;
 const DEFAULT_RX2: u32 = 923_300_000;
 
