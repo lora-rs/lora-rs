@@ -6,7 +6,7 @@ use super::*;
 use crate::nb_device::radio::PhyRxTx;
 use mac::{Mac, SendData};
 
-pub mod state;
+pub(crate) mod state;
 
 pub mod radio;
 #[cfg(test)]
