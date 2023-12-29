@@ -1,5 +1,3 @@
-use crate::parser::Error;
-
 // Copyright (c) 2020 Ivaylo Petrov
 //
 // Licensed under the MIT license <LICENSE-MIT or
@@ -7,6 +5,8 @@ use crate::parser::Error;
 // copied, modified, or distributed except according to those terms.
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
+//! Provides a default software implementation for LoRaWAN's cryptographic functions.
+use crate::parser::Error;
 use super::creator::JoinRequestCreator;
 use super::keys::*;
 use super::parser::{
