@@ -1,4 +1,5 @@
 #![cfg_attr(not(test), no_std)]
+#![doc = include_str!("../README.md")]
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
