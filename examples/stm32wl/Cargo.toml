@@ -13,8 +13,7 @@ embassy-sync = { version = "0.4.0", features = ["defmt"] }
 embassy-futures = { version = "0", features = ["defmt"] }
 
 lora-phy = { path = "../../lora-phy" }
-lorawan-device = { path = "../../lorawan-device", default-features = false, features = ["async", "external-lora-phy", "embassy-time", "defmt"] }
-lorawan = { path = "../../lorawan-encoding", default-features = false, features = ["default-crypto"] }
+lorawan-device = { path = "../../lorawan-device", default-features = false, features = ["async", "external-lora-phy", "embassy-time", "default-crypto", "defmt"] }
 
 defmt = "0.3"
 defmt-rtt = "0.4"

@@ -24,10 +24,10 @@ use embassy_time::Delay;
 
 use lora_phy::sx1261_2::{self, Sx126xVariant, TcxoCtrlVoltage, SX1261_2};
 use lora_phy::LoRa;
-use lorawan::default_crypto::DefaultFactory as Crypto;
 use lorawan_device::async_device::lora_radio::LoRaRadio;
 use lorawan_device::async_device::{Device, EmbassyTimer, JoinMode, JoinResponse, SendResponse};
 use lorawan_device::region::{Subband, US915};
+use lorawan_device::default_crypto::DefaultFactory as Crypto;
 use lorawan_device::{AppEui, AppKey, DevEui};
 use {defmt_rtt as _, panic_probe as _};
 

@@ -23,10 +23,11 @@ pub mod nb_device;
 use nb_device::state::State;
 
 use core::marker::PhantomData;
+#[cfg(feature = "default-crypto")]
+pub use lorawan::default_crypto;
 pub use lorawan::{
     keys::{AppEui, AppKey, AppSKey, CryptoFactory, DevEui, NewSKey},
     parser::DevAddr,
-    default_crypto,
 };
 
 pub use rand_core::RngCore;

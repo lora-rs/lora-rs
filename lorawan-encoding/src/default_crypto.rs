@@ -6,7 +6,6 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 //! Provides a default software implementation for LoRaWAN's cryptographic functions.
-use crate::parser::Error;
 use super::creator::JoinRequestCreator;
 use super::keys::*;
 use super::parser::{
@@ -14,6 +13,7 @@ use super::parser::{
     EncryptedJoinAcceptPayload, JoinRequestPayload,
 };
 use super::securityhelpers::generic_array::{typenum::U16, GenericArray};
+use crate::parser::Error;
 use aes::cipher::{BlockCipher, NewBlockCipher};
 use aes::Aes128;
 use cmac::crypto_mac::NewMac;
