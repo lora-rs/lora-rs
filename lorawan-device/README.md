@@ -26,6 +26,8 @@ is actually done with the payload**.
 Furthermore, both async and non-blocking implementation do not implement any retries for failed joins or failed 
 confirmed uplinks. It is up to the client to implement retry behavior; see the examples for more.
 
+Please see [examples](https://github.com/lora-rs/lora-rs/tree/main/examples) for usage.
+
 [Latest Version]: https://img.shields.io/crates/v/lorawan-device.svg
 [crates.io]: https://crates.io/crates/lorawan-device
 [Docs]: https://docs.rs/lorawan-device/badge.svg
