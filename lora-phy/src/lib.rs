@@ -3,6 +3,11 @@
 #![warn(missing_docs)]
 #![doc = include_str!("../README.md")]
 
+#[cfg(feature = "lorawan-radio")]
+#[cfg_attr(docsrs, doc(cfg(feature = "lorawan-radio")))]
+/// Provides an implementation of the async LoRaWAN device trait.
+pub mod lorawan_radio;
+
 /// The read/write interface between an embedded framework/MCU combination and a LoRa chip
 pub(crate) mod interface;
 /// InterfaceVariant implementations using `embedded-hal`.

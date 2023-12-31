@@ -28,7 +28,6 @@ futures = { version = "0.3", default-features = false, optional = true }
 rand_core = { version = "0.6", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 seq-macro = "0.3.5"
-lora-phy = { version = "3.0.0-alpha.1", path = "../lora-phy", optional = true }
 document-features = "0.2.7"
 embassy-time = { version = "0.1.5", optional = true }
 
@@ -50,9 +49,6 @@ embassy-time = ["dep:embassy-time"]
 
 ## Use [`defmt`](https://docs.rs/defmt/latest/defmt/) for logging.
 defmt = ["dep:defmt", "lorawan/defmt", "lora-modulation/defmt"]
-
-## Use physical layer LoRa radio implementation from `lora-phy` crate.
-external-lora-phy = ["dep:lora-phy"]
 
 ## Enable [`serde`](https://docs.rs/serde/latest/serde/) serialization/deserialization for data structures.
 serde = ["dep:serde", "lorawan/serde"]

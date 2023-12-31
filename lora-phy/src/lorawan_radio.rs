@@ -1,34 +1,37 @@
-use super::radio::{PhyRxTx, RfConfig, RxQuality, TxConfig};
-use super::Timings;
+#![allow(missing_docs)]
 
-use lora_phy::mod_params::RadioError;
-use lora_phy::mod_traits::RadioKind;
-use lora_phy::{DelayNs, LoRa};
+use lorawan_device::async_device::radio::{PhyRxTx, RfConfig, RxQuality, TxConfig};
+use lorawan_device::Timings;
+
+use super::mod_params::{RadioError, PacketParams};
+use super::mod_traits::RadioKind;
+use super::{DelayNs, LoRa};
 
 /// LoRa radio using the physical layer API in the external lora-phy crate.
 ///
 /// The const generic P is the max power the radio may be instructed to transmit at. The const
 /// generic G is the antenna gain and board loss in dBi.
-pub struct LoRaRadio<RK, DLY, const P: u8, const G: i8 = 0>
+pub struct LorawanRadio<RK, DLY, const P: u8, const G: i8 = 0>
 where
     RK: RadioKind,
     DLY: DelayNs,
 {
     pub(crate) lora: LoRa<RK, DLY>,
-    rx_pkt_params: Option<lora_phy::mod_params::PacketParams>,
+    rx_pkt_params: Option<PacketParams>,
 }
-impl<RK, DLY, const P: u8, const G: i8> LoRaRadio<RK, DLY, P, G>
+
+impl<RK, DLY, const P: u8, const G: i8> From<LoRa<RK, DLY>> for LorawanRadio<RK, DLY, P, G>
 where
     RK: RadioKind,
     DLY: DelayNs,
 {
-    pub fn new(lora: LoRa<RK, DLY>) -> Self {
+    fn from(lora: LoRa<RK, DLY>) -> Self {
         Self { lora, rx_pkt_params: None }
     }
 }
 
 /// Provide the timing values for boards supported by the external lora-phy crate
-impl<RK, DLY, const P: u8, const G: i8> Timings for LoRaRadio<RK, DLY, P, G>
+impl<RK, DLY, const P: u8, const G: i8> Timings for LorawanRadio<RK, DLY, P, G>
 where
     RK: RadioKind,
     DLY: DelayNs,
@@ -42,8 +45,7 @@ where
     }
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug)]
+#[derive(Debug, defmt::Format)]
 pub enum Error {
     Radio(RadioError),
     NoRxParams,
@@ -57,7 +59,7 @@ impl From<RadioError> for Error {
 
 /// Provide the LoRa physical layer rx/tx interface for boards supported by the external lora-phy
 /// crate
-impl<RK, DLY, const P: u8, const G: i8> PhyRxTx for LoRaRadio<RK, DLY, P, G>
+impl<RK, DLY, const P: u8, const G: i8> PhyRxTx for LorawanRadio<RK, DLY, P, G>
 where
     RK: RadioKind,
     DLY: DelayNs,
