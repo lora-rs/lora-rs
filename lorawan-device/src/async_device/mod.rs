@@ -1,5 +1,5 @@
-//! Asynchronous Device using Rust async-await for driving the state machine,
-//! and allowing asynchronous radio implementations. Requires the `async` feature and `nightly`.
+//! LoRaWAN device which uses async-await for driving the protocol state against pin and timer events,
+//! allowing for asynchronous radio implementations. Requires the `async` feature.
 use super::mac::Mac;
 
 use super::mac::{self, Frame, Window};
@@ -40,7 +40,9 @@ use core::cmp::min;
 /// - T: An asynchronous timer implementation
 /// - C: A CryptoFactory implementation
 /// - RNG: A random number generator implementation. An external RNG may be provided, or you may use a builtin PRNG by
-/// providing a random seed.
+/// providing a random seed
+/// - N: The size of the radio buffer. Generally, this should be set to 256 to support the largest possible LoRa frames.
+/// - D: The amount of downlinks that may be buffered. This is used to support Class C operation. See below for more.
 ///
 /// Note that the const generics N and D are used to configure the size of the radio buffer and the number of downlinks
 /// that may be buffered. The defaults are 256 and 1 respectively which should be fine for Class A devices. **For Class

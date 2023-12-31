@@ -36,7 +36,7 @@ embassy-time = { version = "0.1.5", optional = true }
 tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}
 rand = { version = "0", features = ["getrandom"] }
 lazy_static = "1"
-lorawan = { version = "0.7.3", path = "../lorawan-encoding", features = ["default-crypto"] }
+lorawan = { version = "0.7.3", path = "../lorawan-encoding" }
 
 [features]
 default = []
@@ -56,3 +56,5 @@ external-lora-phy = ["dep:lora-phy"]
 
 ## Enable [`serde`](https://docs.rs/serde/latest/serde/) serialization/deserialization for data structures.
 serde = ["dep:serde", "lorawan/serde"]
+
+default-crypto = ["lorawan/default-crypto"]

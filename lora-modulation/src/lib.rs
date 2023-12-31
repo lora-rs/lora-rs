@@ -1,8 +1,9 @@
 #![cfg_attr(not(test), no_std)]
+#![doc = include_str!("../README.md")]
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
-/// Channel width.
+/// Channel width. Lower values increase time on air, but may be able to find clear frequencies.
 pub enum Bandwidth {
     _7KHz,
     _10KHz,
@@ -41,7 +42,7 @@ impl From<Bandwidth> for u32 {
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
-/// Controls the chirp rate. Lower values are slower bandwidth, but more robust.
+/// Controls the chirp rate. Lower values are slower bandwidth (longer time on air), but more robust.
 pub enum SpreadingFactor {
     _5,
     _6,

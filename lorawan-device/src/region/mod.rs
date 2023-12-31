@@ -1,9 +1,10 @@
+//! LoRaWAN device region definitions (eg: EU868, US915, etc).
 use lora_modulation::{Bandwidth, BaseBandModulationParams, CodingRate, SpreadingFactor};
 use lorawan::{maccommands::ChannelMask, parser::CfList};
 use rand_core::RngCore;
 
 use crate::mac::{Frame, Window};
-pub mod constants;
+pub(crate) mod constants;
 pub(crate) use crate::radio::*;
 use constants::*;
 
@@ -41,6 +42,8 @@ pub(crate) trait ChannelRegion<const D: usize> {
 }
 
 #[derive(Clone)]
+/// Contains LoRaWAN region-specific configuration; is required for creating a LoRaWAN Device.
+/// Generally constructed using the `Region` enum, unless you need to fine-tune US915 or AU915.
 pub struct Configuration {
     state: State,
 }
@@ -61,6 +64,7 @@ seq_macro::seq!(
 );
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Regions supported by this crate: AS923_1, AS923_2, AS923_3, AS923_4, AU915, EU868, EU433, IN865, US915.
 pub enum Region {
     AS923_1,
     AS923_2,

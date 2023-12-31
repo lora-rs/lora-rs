@@ -1,3 +1,7 @@
+//! LoRaWAN MAC layer implementation written as a non-async state machine (leveraged by `async_device` and `nb_device`).
+//! Manages state internally while providing client with transmit and receive frequencies, while writing to and
+//! decrypting from send and receive buffers.
+
 use crate::{
     radio::{self, RadioBuffer},
     region, AppSKey, Downlink, NewSKey,

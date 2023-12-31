@@ -15,9 +15,9 @@ use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::Stm32l0InterfaceVariant;
 use lora_phy::sx1276_7_8_9::{self, Sx127xVariant, SX1276_7_8_9};
 use lora_phy::LoRa;
-use lorawan::default_crypto::DefaultFactory as Crypto;
 use lorawan_device::async_device::lora_radio::LoRaRadio;
 use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode};
+use lorawan_device::default_crypto::DefaultFactory as Crypto;
 use lorawan_device::{AppEui, AppKey, DevEui};
 use {defmt_rtt as _, panic_probe as _};
 

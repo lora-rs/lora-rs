@@ -15,9 +15,9 @@ use lora_phy::iv::GenericSx126xInterfaceVariant;
 use lora_phy::sx1261_2;
 use lora_phy::sx1261_2::{Sx126xVariant, TcxoCtrlVoltage, SX1261_2};
 use lora_phy::LoRa;
-use lorawan::default_crypto::DefaultFactory as Crypto;
 use lorawan_device::async_device::lora_radio::LoRaRadio;
 use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode};
+use lorawan_device::default_crypto::DefaultFactory as Crypto;
 use lorawan_device::{AppEui, AppKey, DevEui};
 use {defmt_rtt as _, panic_probe as _};
 
