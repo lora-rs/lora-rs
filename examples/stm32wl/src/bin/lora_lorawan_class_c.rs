@@ -24,10 +24,10 @@ use embassy_time::Delay;
 
 use lora_phy::sx1261_2::{self, Sx126xVariant, TcxoCtrlVoltage, SX1261_2};
 use lora_phy::LoRa;
-use lorawan_device::async_device::lora_radio::LoRaRadio;
+use lora_phy::lorawan_radio::LorawanRadio;
 use lorawan_device::async_device::{Device, EmbassyTimer, JoinMode, JoinResponse, SendResponse};
-use lorawan_device::region::{Subband, US915};
 use lorawan_device::default_crypto::DefaultFactory as Crypto;
+use lorawan_device::region::{Subband, US915};
 use lorawan_device::{AppEui, AppKey, DevEui};
 use {defmt_rtt as _, panic_probe as _};
 
@@ -105,7 +105,7 @@ async fn lora_task(
     rng: Rng<'static, peripherals::RNG>,
     rx: Receiver<'static, ThreadModeRawMutex, ButtonState, 3>,
 ) {
-    let radio = LoRaRadio::<_, _, MAX_TX_POWER>::new(lora);
+    let radio: LorawanRadio::<_, _, MAX_TX_POWER> = lora.into();
     let mut us915 = US915::new();
     // Setting join bias causes the device to attempt the first join on subband 2.
     // If it fails, it will proceed with the other subbands sequentially.
