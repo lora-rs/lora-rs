@@ -121,9 +121,9 @@ impl State {
     }
 }
 
-// This datarate type is used internally for defining bandwidth/sf per region
+/// This datarate type is used internally for defining bandwidth/sf per region
 #[derive(Debug, Clone)]
-pub struct Datarate {
+pub(crate) struct Datarate {
     bandwidth: Bandwidth,
     spreading_factor: SpreadingFactor,
     max_mac_payload_size: u8,
