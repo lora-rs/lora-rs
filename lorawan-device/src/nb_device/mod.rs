@@ -1,4 +1,4 @@
-//! A non-blocking LoRaWAN device implementation which uses explicitly defined state machine
+//! A non-blocking LoRaWAN device implementation which uses an explicitly defined state machine
 //! for driving the protocol state against pin and timer events. Depends on a non-async radio
 //! implementation.
 use super::radio::RadioBuffer;
