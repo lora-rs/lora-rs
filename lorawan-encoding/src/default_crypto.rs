@@ -14,9 +14,8 @@ use super::parser::{
 };
 use super::securityhelpers::generic_array::{typenum::U16, GenericArray};
 use crate::parser::Error;
-use aes::cipher::{BlockCipher, NewBlockCipher};
+use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::Aes128;
-use cmac::crypto_mac::NewMac;
 
 pub type Cmac = cmac::Cmac<Aes128>;
 
@@ -45,13 +44,13 @@ impl CryptoFactory for DefaultFactory {
 
 impl Encrypter for Aes128 {
     fn encrypt_block(&self, block: &mut GenericArray<u8, U16>) {
-        BlockCipher::encrypt_block(self, block);
+        BlockEncrypt::encrypt_block(self, block);
     }
 }
 
 impl Decrypter for Aes128 {
     fn decrypt_block(&self, block: &mut GenericArray<u8, U16>) {
-        BlockCipher::decrypt_block(self, block);
+        BlockDecrypt::decrypt_block(self, block);
     }
 }
 
