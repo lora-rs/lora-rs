@@ -45,6 +45,7 @@ macro_rules! impl_mac_cmd_creator_boilerplate {
             }
 
             /// Get the length.
+            #[allow(clippy::len_without_is_empty)]
             pub const fn len(&self) -> usize {
                 1
             }
@@ -80,6 +81,7 @@ macro_rules! impl_mac_cmd_creator_boilerplate {
             }
 
             /// Get the length.
+            #[allow(clippy::len_without_is_empty)]
             pub const fn len(&self) -> usize {
                 $len
             }
