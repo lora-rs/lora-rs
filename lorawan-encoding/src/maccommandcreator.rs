@@ -38,6 +38,16 @@ macro_rules! impl_mac_cmd_creator_boilerplate {
             pub fn build(&self) -> &[u8] {
                 &[$cid]
             }
+
+            /// Get the CID.
+            pub const fn cid(&self) -> u8 {
+                $cid
+            }
+
+            /// Get the length.
+            pub const fn len(&self) -> usize {
+                1
+            }
         }
 
         impl_mac_cmd_payload!($type);
@@ -62,6 +72,16 @@ macro_rules! impl_mac_cmd_creator_boilerplate {
             /// Returns the serialized version of the class as bytes.
             pub fn build(&self) -> &[u8] {
                 &self.data[..]
+            }
+
+            /// Get the CID.
+            pub const fn cid(&self) -> u8 {
+                $cid
+            }
+
+            /// Get the length.
+            pub const fn len(&self) -> usize {
+                $len
             }
         }
 
@@ -98,6 +118,8 @@ macro_rules! impl_mac_cmd_payload {
 /// let mut creator = lorawan::maccommandcreator::LinkCheckReqCreator::new();
 /// let res = creator.build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct LinkCheckReqCreator {}
 
 impl_mac_cmd_creator_boilerplate!(LinkCheckReqCreator, 0x02);
@@ -110,6 +132,8 @@ impl_mac_cmd_creator_boilerplate!(LinkCheckReqCreator, 0x02);
 /// let mut creator = lorawan::maccommandcreator::LinkCheckAnsCreator::new();
 /// let res = creator.set_margin(253).set_gateway_count(254).build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct LinkCheckAnsCreator {
     data: [u8; 3],
 }
@@ -157,6 +181,8 @@ impl LinkCheckAnsCreator {
 ///     .set_redundancy(0x37)
 ///     .build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct LinkADRReqCreator {
     data: [u8; 5],
 }
@@ -234,6 +260,8 @@ impl LinkADRReqCreator {
 ///     .set_tx_power_ack(true)
 ///     .build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct LinkADRAnsCreator {
     data: [u8; 2],
 }
@@ -286,6 +314,8 @@ impl LinkADRAnsCreator {
 /// let mut creator = lorawan::maccommandcreator::DutyCycleReqCreator::new();
 /// let res = creator.set_max_duty_cycle(0x0f).unwrap().build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DutyCycleReqCreator {
     data: [u8; 2],
 }
@@ -314,6 +344,8 @@ impl DutyCycleReqCreator {
 /// let creator = lorawan::maccommandcreator::DutyCycleAnsCreator::new();
 /// let res = creator.build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DutyCycleAnsCreator {}
 
 impl_mac_cmd_creator_boilerplate!(DutyCycleAnsCreator, 0x04);
@@ -329,6 +361,8 @@ impl_mac_cmd_creator_boilerplate!(DutyCycleAnsCreator, 0x04);
 ///     .set_frequency(&[0x12, 0x34, 0x56])
 ///     .build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RXParamSetupReqCreator {
     data: [u8; 5],
 }
@@ -375,6 +409,8 @@ impl RXParamSetupReqCreator {
 ///     .set_rx1_data_rate_offset_ack(true)
 ///     .build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RXParamSetupAnsCreator {
     data: [u8; 2],
 }
@@ -427,6 +463,8 @@ impl RXParamSetupAnsCreator {
 /// let creator = lorawan::maccommandcreator::DevStatusReqCreator::new();
 /// let res = creator.build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DevStatusReqCreator {}
 
 impl_mac_cmd_creator_boilerplate!(DevStatusReqCreator, 0x06);
@@ -439,6 +477,8 @@ impl_mac_cmd_creator_boilerplate!(DevStatusReqCreator, 0x06);
 /// let mut creator = lorawan::maccommandcreator::DevStatusAnsCreator::new();
 /// let res = creator.set_battery(0xfe).set_margin(-32).unwrap().build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DevStatusAnsCreator {
     data: [u8; 3],
 }
@@ -486,6 +526,8 @@ impl DevStatusAnsCreator {
 ///     .set_data_rate_range(0x53)
 ///     .build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct NewChannelReqCreator {
     data: [u8; 6],
 }
@@ -541,6 +583,8 @@ impl NewChannelReqCreator {
 ///     .set_data_rate_range_ack(true)
 ///     .build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct NewChannelAnsCreator {
     data: [u8; 2],
 }
@@ -581,6 +625,8 @@ impl NewChannelAnsCreator {
 /// let mut creator = lorawan::maccommandcreator::RXTimingSetupReqCreator::new();
 /// let res = creator.set_delay(0x0f).unwrap().build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RXTimingSetupReqCreator {
     data: [u8; 2],
 }
@@ -612,11 +658,13 @@ impl RXTimingSetupReqCreator {
 /// let creator = lorawan::maccommandcreator::RXTimingSetupAnsCreator::new();
 /// let res = creator.build();
 /// ```
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct RXTimingSetupAnsCreator {}
 
 impl_mac_cmd_creator_boilerplate!(RXTimingSetupAnsCreator, 0x08);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TXParamSetupReqCreator {
     data: [u8; 2],
@@ -644,12 +692,12 @@ impl TXParamSetupReqCreator {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct TXParamSetupAnsCreator;
 impl_mac_cmd_creator_boilerplate!(TXParamSetupAnsCreator, 0x09);
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DlChannelReqCreator {
     data: [u8; 5],
@@ -667,7 +715,7 @@ impl DlChannelReqCreator {
         self
     }
 }
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DlChannelAnsCreator {
     data: [u8; 2],
@@ -698,11 +746,11 @@ impl DlChannelAnsCreator {
         self
     }
 }
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DeviceTimeReqCreator;
 impl_mac_cmd_creator_boilerplate!(DeviceTimeReqCreator, 0x0D);
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct DeviceTimeAnsCreator {
     data: [u8; 6],
@@ -740,4 +788,89 @@ pub fn build_mac_commands<T: AsMut<[u8]>>(
         i = end;
     }
     Ok(i)
+}
+
+macro_rules! mac_cmds_creator_enum {
+    (
+        $outer_vis:vis enum $outer_type:ident$(<$outer_lifetime:lifetime>),* {
+        $(
+            $name:ident, $creator:ident
+        )*
+    }
+    ) => {
+        #[allow(dead_code, missing_docs)]
+        #[derive(Debug)]
+        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+        $outer_vis enum $outer_type$(<$outer_lifetime>)* {
+            $(
+                $name($creator),
+            )*
+        }
+        #[allow(clippy::len_without_is_empty)]
+        impl$(<$outer_lifetime>)* $outer_type$(<$outer_lifetime>)* {
+            /// Get the length.
+            pub fn len(&self) -> usize {
+                match self {
+                    $(
+                        Self::$name(creator) => creator.len(),
+                    )*
+                }
+            }
+            /// Build.
+            pub fn build(&self) -> &[u8] {
+                match *self {
+                    $(
+                        Self::$name(ref v) => v.build(),
+                    )*
+                }
+            }
+        }
+        impl SerializableMacCommand for $outer_type$(<$outer_lifetime>)* {
+            fn payload_bytes(&self) -> &[u8] {
+                &self.build()[1..]
+            }
+
+            fn cid(&self) -> u8 {
+                match self {
+                    $(
+                        Self::$name(creator) => creator.cid(),
+                    )*
+                }
+            }
+
+            fn payload_len(&self) -> usize {
+                self.len() - 1
+            }
+        }
+    }
+}
+
+mac_cmds_creator_enum! {
+    pub enum UplinkMacCommandCreator {
+        LinkCheckReq, LinkCheckReqCreator
+        LinkADRAns, LinkADRAnsCreator
+        DutyCycleAns, DutyCycleAnsCreator
+        RXParamSetupAns, RXParamSetupAnsCreator
+        DevStatusAns, DevStatusAnsCreator
+        NewChannelAns, NewChannelAnsCreator
+        RXTimingSetupAns, RXTimingSetupAnsCreator
+        TXParamSetupAns, TXParamSetupAnsCreator
+        DlChannelAns, DlChannelAnsCreator
+        DeviceTimeReq, DeviceTimeReqCreator
+    }
+}
+
+mac_cmds_creator_enum! {
+    pub enum DownlinkMacCommandCreator {
+        LinkCheckAns, LinkCheckAnsCreator
+        LinkADRReq, LinkADRReqCreator
+        DutyCycleReq, DutyCycleReqCreator
+        RXParamSetupReq, RXParamSetupReqCreator
+        DevStatusReq, DevStatusReqCreator
+        NewChannelReq, NewChannelReqCreator
+        RXTimingSetupReq, RXTimingSetupReqCreator
+        TXParamSetupReq, TXParamSetupReqCreator
+        DlChannelReq, DlChannelReqCreator
+        DeviceTimeAns, DeviceTimeAnsCreator
+    }
 }
