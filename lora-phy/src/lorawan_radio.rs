@@ -7,6 +7,9 @@ use super::mod_params::{PacketParams, RadioError};
 use super::mod_traits::RadioKind;
 use super::{DelayNs, LoRa};
 
+const DEFAULT_RX_WINDOW_DURATION_MS: u32 = 1050;
+const DEFAULT_RX_WINDOW_OFFSET_MS: i32 = -50;
+
 /// LoRa radio using the physical layer API in the external lora-phy crate.
 ///
 /// The const generic P is the max power the radio may be instructed to transmit at. The const
@@ -18,6 +21,8 @@ where
 {
     pub(crate) lora: LoRa<RK, DLY>,
     rx_pkt_params: Option<PacketParams>,
+    rx_window_offset_ms: i32,
+    rx_window_duration_ms: u32,
 }
 
 impl<RK, DLY, const P: u8, const G: i8> From<LoRa<RK, DLY>> for LorawanRadio<RK, DLY, P, G>
@@ -29,7 +34,22 @@ where
         Self {
             lora,
             rx_pkt_params: None,
+            rx_window_offset_ms: DEFAULT_RX_WINDOW_OFFSET_MS,
+            rx_window_duration_ms: DEFAULT_RX_WINDOW_DURATION_MS,
         }
+    }
+}
+
+impl<RK, DLY, const P: u8, const G: i8> LorawanRadio<RK, DLY, P, G>
+where
+    RK: RadioKind,
+    DLY: DelayNs,
+{
+    pub fn set_rx_window_offset_ms(&mut self, offset: i32) {
+        self.rx_window_offset_ms = offset;
+    }
+    pub fn set_rx_window_duration_ms(&mut self, duration: u32) {
+        self.rx_window_duration_ms = duration;
     }
 }
 
@@ -39,12 +59,11 @@ where
     RK: RadioKind,
     DLY: DelayNs,
 {
-    // TODO: Use a struct with Default or Option fallback?
     fn get_rx_window_offset_ms(&self) -> i32 {
-        -50
+        self.rx_window_offset_ms
     }
     fn get_rx_window_duration_ms(&self) -> u32 {
-        1050
+        self.rx_window_duration_ms
     }
 }
 
