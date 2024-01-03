@@ -6,7 +6,7 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use aes::cipher::{generic_array::GenericArray, NewBlockCipher};
+use aes::cipher::{generic_array::GenericArray, KeyInit};
 use aes::Aes128;
 use criterion::{criterion_group, criterion_main, Criterion};
 use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
@@ -124,10 +124,9 @@ impl PartialEq for ConstFactory {
 
 impl ConstFactory {
     fn new(key: &AES128) -> Self {
-        use cmac::crypto_mac::NewMac;
         ConstFactory(
             Aes128::new(GenericArray::from_slice(&key.0[..])),
-            Cmac::new_varkey(&key.0[..]).unwrap(),
+            Cmac::new((&key.0[..]).into()),
         )
     }
 }
