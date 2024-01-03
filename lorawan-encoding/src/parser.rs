@@ -1076,11 +1076,21 @@ pub struct FCtrl(pub u8, pub bool);
 
 impl FCtrl {
     pub fn set_ack(&mut self) {
-        self.0 |= 0b1 << 5;
+        self.0 |= 1 << 5;
     }
 
     pub fn new(bytes: u8, uplink: bool) -> FCtrl {
         FCtrl(bytes, uplink)
+    }
+
+    /// Set ADR ACK requested.
+    pub fn set_adr_ack_req(&mut self) {
+        self.0 |= 1 << 6;
+    }
+
+    /// Set ADR enabled.
+    pub fn set_adr(&mut self) {
+        self.0 |= 1 << 7;
     }
 
     /// Gives whether ADR is enabled or not.
