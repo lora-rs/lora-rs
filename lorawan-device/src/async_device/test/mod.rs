@@ -20,7 +20,6 @@ use util::{setup, setup_with_session, setup_with_session_class_c};
 type Device =
     crate::async_device::Device<TestRadio, DefaultFactory, TestTimer, rand_core::OsRng, 512, 4>;
 
-#[ignore]
 #[tokio::test]
 async fn test_join_rx1() {
     let (radio, timer, mut async_device) = setup();
@@ -35,17 +34,15 @@ async fn test_join_rx1() {
 
     // Await the device to return and verify state
     if let Ok(JoinResponse::JoinSuccess) = async_device.await.unwrap() {
-        // NB: timer is armed three times (even if not fired)
+        // NB: timer is armed two times (even if not fired)
         // 1. start of rx1
         // 2. timeout after preamble (not firing)
-        // 3. end of rx1
-        assert_eq!(3, timer.get_armed_count().await);
+        assert_eq!(2, timer.get_armed_count().await);
     } else {
         panic!();
     }
 }
 
-#[ignore]
 #[tokio::test]
 async fn test_join_long_rx1() {
     let (radio, timer, mut async_device) = setup();
@@ -62,17 +59,15 @@ async fn test_join_long_rx1() {
     radio.handle_rxtx_no_preamble(handle_join_request::<4>).await;
     // Verify state
     if let Ok(JoinResponse::JoinSuccess) = async_device.await.unwrap() {
-        // NB: timer is armed thrice
+        // NB: timer is armed twice
         // 1. start of rx1
         // 2. end of rx1
-        // 3. timeout after preamble
-        assert_eq!(3, timer.get_armed_count().await);
+        assert_eq!(2, timer.get_armed_count().await);
     } else {
         panic!();
     }
 }
 
-#[ignore]
 #[tokio::test]
 async fn test_join_rx2() {
     let (radio, timer, mut async_device) = setup();
@@ -91,8 +86,7 @@ async fn test_join_rx2() {
 
     // Await the device to return and verify state
     if async_device.await.unwrap().is_ok() {
-        // NB: the 5th time arming is from the preamble timeout
-        assert_eq!(5, timer.get_armed_count().await);
+        assert_eq!(4, timer.get_armed_count().await);
     } else {
         panic!();
     }
@@ -210,7 +204,6 @@ async fn test_confirmed_uplink_no_ack() {
     assert!(*send_await_complete.lock().await);
 }
 
-#[ignore]
 #[tokio::test]
 async fn test_confirmed_uplink_with_ack_rx1() {
     let (radio, timer, mut async_device) = setup_with_session();
@@ -239,7 +232,6 @@ async fn test_confirmed_uplink_with_ack_rx1() {
     }
 }
 
-#[ignore]
 #[tokio::test]
 async fn test_confirmed_uplink_with_ack_rx2() {
     let (radio, timer, mut async_device) = setup_with_session();
@@ -274,7 +266,6 @@ async fn test_confirmed_uplink_with_ack_rx2() {
     }
 }
 
-#[ignore]
 #[tokio::test]
 async fn test_link_adr_ans() {
     let (radio, timer, mut async_device) = setup_with_session();

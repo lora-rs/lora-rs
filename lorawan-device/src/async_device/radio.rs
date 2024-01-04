@@ -22,7 +22,6 @@ pub trait Timer {
 }
 
 /// Expected state for PhyRxTx after initiating RX
-#[derive(Debug)]
 pub enum TargetRxState {
     PreambleReceived,
     PacketReceived,
