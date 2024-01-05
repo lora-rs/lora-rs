@@ -1,0 +1,17 @@
+[net]
+git-fetch-with-cli = true
+
+[patch.crates-io]
+embedded-hal = { git = "https://github.com/Dirbaio/embedded-hal", rev = "0e4a3fd08ab919a0b697368305cd3dd926319ed2"}
+embedded-hal-bus = { git = "https://github.com/Dirbaio/embedded-hal", rev = "0e4a3fd08ab919a0b697368305cd3dd926319ed2"}
+embedded-hal-async = { git = "https://github.com/Dirbaio/embedded-hal", rev = "0e4a3fd08ab919a0b697368305cd3dd926319ed2"}
+embedded-hal-nb = { git = "https://github.com/Dirbaio/embedded-hal", rev = "0e4a3fd08ab919a0b697368305cd3dd926319ed2"}
+
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "7b1035fd2aec124d47cc9107e5aae56ad3c1cccd" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "7b1035fd2aec124d47cc9107e5aae56ad3c1cccd" }
+embassy-rp = { git = "https://github.com/embassy-rs/embassy.git", rev = "7b1035fd2aec124d47cc9107e5aae56ad3c1cccd" }
+embassy-nrf = { git = "https://github.com/embassy-rs/embassy.git", rev = "7b1035fd2aec124d47cc9107e5aae56ad3c1cccd" }
+embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "7b1035fd2aec124d47cc9107e5aae56ad3c1cccd" }
+
+#[patch.'https://github.com/embassy-rs/stm32-data-generated']
+#stm32-metapac = { path = "/home/dirbaio/embassy/stm32-data/build/stm32-metapac" }
