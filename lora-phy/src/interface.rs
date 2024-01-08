@@ -21,12 +21,11 @@ where
     // Write a buffer to the radio.
     pub async fn write(&mut self, write_buffer: &[u8], is_sleep_command: bool) -> Result<(), RadioError> {
         self.spi.write(write_buffer).await.map_err(|_| SPI)?;
+        trace!("write: {=[u8]:02x}", write_buffer);
 
         if !is_sleep_command {
             self.iv.wait_on_busy().await?;
         }
-
-        trace!("write: 0x{:x}", write_buffer);
 
         Ok(())
     }
@@ -40,12 +39,11 @@ where
     ) -> Result<(), RadioError> {
         let mut ops = [Operation::Write(write_buffer), Operation::Write(payload)];
         self.spi.transaction(&mut ops).await.map_err(|_| SPI)?;
+        trace!("write_buf: {=[u8]:02x} -> {=[u8]:02x}", write_buffer, payload);
 
         if !is_sleep_command {
             self.iv.wait_on_busy().await?;
         }
-
-        trace!("write: 0x{:x}", write_buffer);
 
         Ok(())
     }
@@ -60,8 +58,12 @@ where
 
         self.iv.wait_on_busy().await?;
 
-        trace!("write: 0x{:x}", write_buffer);
-        trace!("read {}: 0x{:x}", read_buffer.len(), read_buffer);
+        trace!(
+            "read: addr={=[u8]:02x}, len={}, data={=[u8]:02x}",
+            write_buffer,
+            read_buffer.len(),
+            read_buffer
+        );
 
         Ok(())
     }
@@ -81,9 +83,9 @@ where
 
         self.iv.wait_on_busy().await?;
 
-        trace!("write: 0x{:x}", write_buffer);
         trace!(
-            "read {} status 0x{:x}: 0x{:x}",
+            "read: addr={=[u8]:02x}, len={}, status={:02x}, buf={=[u8]:02x}",
+            write_buffer,
             read_buffer.len(),
             status[0],
             read_buffer
