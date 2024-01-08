@@ -484,7 +484,7 @@ where
     async fn set_payload(&mut self, payload: &[u8]) -> Result<(), RadioError> {
         self.write_register(Register::RegFifoAddrPtr, 0x00u8).await?;
         self.write_register(Register::RegPayloadLength, 0x00u8).await?;
-        self.write_buffer(Register::RegFifo, &payload).await?;
+        self.write_buffer(Register::RegFifo, payload).await?;
         self.write_register(Register::RegPayloadLength, payload.len() as u8)
             .await
     }
@@ -547,7 +547,8 @@ where
         }
         let fifo_addr = self.read_register(Register::RegFifoRxCurrentAddr).await?;
         self.write_register(Register::RegFifoAddrPtr, fifo_addr).await?;
-        self.read_buffer(Register::RegFifo, receiving_buffer).await?;
+        self.read_buffer(Register::RegFifo, &mut receiving_buffer[0..payload_length as usize])
+            .await?;
         self.write_register(Register::RegFifoAddrPtr, 0x00u8).await?;
 
         Ok(payload_length)
