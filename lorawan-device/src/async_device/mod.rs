@@ -354,9 +354,7 @@ where
         Ok(response)
     }
 
-    /// Attempt to receive data within RX1 and RX2 windows. This function will populate the
-    /// provided buffer with data if received. Will return a RxTimeout error if no RX within
-    /// the windows.
+    /// Listen for data during RX1 and RX2 windows.
     async fn rx_with_timeout(
         &mut self,
         frame: &Frame,
@@ -377,8 +375,6 @@ where
 
         self.radio_buffer.clear();
 
-        // defmt::info!("Delays: RX1: [{},{}], RX2: [{},{}]", rx1_start_delay, rx1_end_delay, rx2_start_delay, 0);
-
         // Handle Class C
         let _ = self.between_windows(rx1_start_delay).await?;
 
@@ -386,11 +382,13 @@ where
         let window_duration = min(rx1_end_delay, rx2_start_delay);
 
         let rx1 = self.rx_handle_window(window_duration, frame, &Window::_1).await?;
-
+        // TODO: Set up timeout here as well, currently in worst case we can listen forever...
         match rx1 {
-            // XXX: As we currently have no nice way to detect whether timer has expired,
+            // XXX: As currently there's no way to detect whether timer has expired,
             // therefore once we have detected preamble, we attempt to fetch packet and
             // then just return response.
+            // TODO: We hould also wait until ValidHeader IRQ, then check whether packet
+            // was intended for us...
             WindowResult::Preamble => {
                 let (sz, _q) = match self.radio.rx(self.radio_buffer.as_mut()).await {
                     Ok((sz, q)) => (sz, q),
@@ -426,11 +424,8 @@ where
         defmt::info!("RX2 init, ends at {:?}", window_duration);
 
         let rx2 = self.rx_handle_window(window_duration, frame, &Window::_2).await?;
-
+        // TODO: Set up timeout here as well, currently in worst case we can listen forever...
         match rx2 {
-            // XXX: As we currently have no nice way to detect whether timer has expired,
-            // therefore once we have detected preamble, we attempt to parse packet and
-            // exit...
             WindowResult::Preamble => {
                 let (sz, _q) = match self.radio.rx(self.radio_buffer.as_mut()).await {
                     Ok((sz, q)) => (sz, q),
@@ -453,7 +448,6 @@ where
                 self.window_complete().await?;
                 return result;
             }
-            // if we didn't mac response, we continue to next window or bail out...
             WindowResult::TimedOut(window_duration) => (),
         }
 
@@ -461,12 +455,15 @@ where
         Ok(self.mac.rx2_complete())
     }
 
+    /// Handle preamble detection during RX1/RX2 windows.
+    /// Returns when either preamble is detected or window timeout expires.
     async fn rx_handle_window(
         &mut self,
         mut window_duration: u32,
         frame: &Frame,
         window: &Window,
     ) -> Result<WindowResult, Error<R::PhyError>> {
+
         let rx_config =
             self.mac.region.get_rx_config(self.mac.configuration.data_rate, frame, window);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
@@ -493,6 +490,8 @@ where
                 }
             };
         }
+        // TODO: Receive data until header is received (HeaderValid irq),
+        // to check whether the packet was actually intended for our device
         if let Some(result) = maybe_result {
             Ok(result)
         } else {
@@ -500,6 +499,7 @@ where
         }
     }
 
+    /// Listen until packet preamble is detected or Rx1/Rx2 window expires
     async fn rx_detect_preamble(
         radio: &mut R,
         rx_buf: &mut RadioBuffer<N>,
@@ -514,7 +514,7 @@ where
             Either::Left((r, timeout_fut)) => match r {
                 Ok(RxState::PreambleReceived) => RxPreambleResponse::Preamble,
                 Ok(_) => {
-                    // TODO: Handle case where whole packet was received...
+                    // TODO: Handle case where whole packet was received???
                     unimplemented!("TODO ...");
                 }
                 // Ignore errors or timeouts and wait until the RX2 window is ready.
@@ -527,6 +527,9 @@ where
             // Window timeout, prepare for the next window
             Either::Right(_) => RxPreambleResponse::Timeout(window_duration),
         }
+        // TODO: Set up another listening window until HeaderValid IRQ is triggered?
+        // This would allow us to restart receiving during the window in case packet
+        // is intended to some other end device.
     }
 
     async fn rx_window<F>(
