@@ -268,10 +268,13 @@ where
     }
 
     async fn set_sleep(&mut self, _warm_start_if_possible: bool, _delay: &mut impl DelayNs) -> Result<(), RadioError> {
+        // Warm start is unavailable for sx127x
         self.intf.iv.disable_rf_switch().await?;
-        self.write_register(Register::RegOpMode, LoRaMode::Sleep.value(), true)
-            .await?;
-        Ok(()) // warm start unavailable for sx127x
+        let buf = [Register::RegOpMode.write_addr(), LoRaMode::Sleep.value()];
+        // NB! Switching to sleep mode is "sleep" command...
+        self.intf.write(&buf, true).await?;
+
+        Ok(())
     }
 
     /// The sx127x LoRa mode is set when setting a mode while in sleep mode.
