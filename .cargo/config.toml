@@ -7,6 +7,3 @@ embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "0027a
 embassy-rp = { git = "https://github.com/embassy-rs/embassy.git", rev = "0027a76bb61f19fcae1fe588ba3ff62660d7f7e3" }
 embassy-nrf = { git = "https://github.com/embassy-rs/embassy.git", rev = "0027a76bb61f19fcae1fe588ba3ff62660d7f7e3" }
 embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "0027a76bb61f19fcae1fe588ba3ff62660d7f7e3" }
-
-#[patch.'https://github.com/embassy-rs/stm32-data-generated']
-#stm32-metapac = { path = "/home/dirbaio/embassy/stm32-data/build/stm32-metapac" }
