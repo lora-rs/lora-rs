@@ -14,8 +14,9 @@ use heapless::Vec;
 use lorawan::{self, keys::CryptoFactory};
 use rand_core::RngCore;
 
+use crate::radio::{RadioBuffer, RfConfig};
 pub use crate::region::DR;
-use crate::{radio::RadioBuffer, rng};
+use crate::rng;
 
 pub mod radio;
 
@@ -359,8 +360,10 @@ where
         &mut self,
         frame: &Frame,
         window_delay: u32,
+        expected_payload_length: u8,
     ) -> Result<mac::Response, Error<R::PhyError>> {
         // The initial window configuration uses window 1 adjusted by window_delay and radio offset
+        // TODO: use self.mac.get_rx_parameters
         let rx1_start_delay = (self.mac.get_rx_delay(frame, &Window::_1) as i32
             + window_delay as i32
             + self.radio.get_rx_window_offset_ms()) as u32;
@@ -381,7 +384,10 @@ where
         // RX1
         let window_duration = min(rx1_end_delay, rx2_start_delay);
 
-        match self.rx_handle_window(window_duration, frame, &Window::_1).await? {
+        // TODO: use self.mac.get_rx_parameters where we get both rx_conf + window_delay
+        let rx_config =
+            self.mac.region.get_rx_config(self.mac.configuration.data_rate, frame, &Window::_1);
+        match self.rx_handle_window(window_duration, rx_config).await? {
             // XXX: As currently there's no way to detect whether timer has expired,
             // therefore once we have detected preamble, we attempt to fetch packet and
             // then just return response.
@@ -401,10 +407,16 @@ where
         // RX2
         // TODO: This is mess, we should use region::constants::RECEIVE_DELAY2
         // and then customize with radio-specific adjustments..
+        // XXX: use self.mac.get_rx_parameters
         let window_duration = rx2_start_delay + 2000; //(2 * self.radio.get_rx_window_duration_ms());
+        #[cfg(feature = "defmt")]
         defmt::info!("RX2 init, ends at {:?}", window_duration);
 
-        match self.rx_handle_window(window_duration, frame, &Window::_2).await? {
+        // TODO: use self.mac.get_rx_parameters where we get both rx_conf + window_delay
+        let rx_config =
+            self.mac.region.get_rx_config(self.mac.configuration.data_rate, frame, &Window::_2);
+
+        match self.rx_handle_window(window_duration, rx_config).await? {
             // TODO: Set up timeout here as well, currently in worst case we can listen forever...
             WindowResult::Preamble => {
                 let resp = self.rx_packet_with_timeout(0).await;
@@ -438,11 +450,8 @@ where
     async fn rx_handle_window(
         &mut self,
         mut window_duration: u32,
-        frame: &Frame,
-        window: &Window,
+        rx_config: RfConfig,
     ) -> Result<WindowResult, Error<R::PhyError>> {
-        let rx_config =
-            self.mac.region.get_rx_config(self.mac.configuration.data_rate, frame, window);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
 
         let timeout_fut = self.timer.at(window_duration.into());
