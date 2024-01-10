@@ -35,9 +35,10 @@ async fn test_join_rx1() {
     // Await the device to return and verify state
     if let Ok(JoinResponse::JoinSuccess) = async_device.await.unwrap() {
         // NB: timer is armed two times (even if not fired)
-        // 1. start of rx1
+        // 1. start of rx1 preamble detect
         // 2. timeout after preamble (not firing)
-        assert_eq!(2, timer.get_armed_count().await);
+        // 3. start of rx1 payload rx
+        assert_eq!(3, timer.get_armed_count().await);
     } else {
         panic!();
     }
@@ -60,9 +61,10 @@ async fn test_join_long_rx1() {
     // Verify state
     if let Ok(JoinResponse::JoinSuccess) = async_device.await.unwrap() {
         // NB: timer is armed twice
-        // 1. start of rx1
-        // 2. end of rx1
-        assert_eq!(2, timer.get_armed_count().await);
+        // 1. start of rx1 preamble detect
+        // 2. start of rx1 payload receive
+        // 3. end of rx1
+        assert_eq!(3, timer.get_armed_count().await);
     } else {
         panic!();
     }
@@ -86,7 +88,7 @@ async fn test_join_rx2() {
 
     // Await the device to return and verify state
     if async_device.await.unwrap().is_ok() {
-        assert_eq!(4, timer.get_armed_count().await);
+        assert_eq!(5, timer.get_armed_count().await);
     } else {
         panic!();
     }
