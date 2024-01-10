@@ -2,11 +2,6 @@
 git-fetch-with-cli = true
 
 [patch.crates-io]
-embedded-hal = { git = "https://github.com/Dirbaio/embedded-hal", rev = "d90b59b0f48bba1e65129d9f8d5c702d47794d9f"}
-embedded-hal-bus = { git = "https://github.com/Dirbaio/embedded-hal", rev = "d90b59b0f48bba1e65129d9f8d5c702d47794d9f"}
-embedded-hal-async = { git = "https://github.com/Dirbaio/embedded-hal", rev = "d90b59b0f48bba1e65129d9f8d5c702d47794d9f"}
-embedded-hal-nb = { git = "https://github.com/Dirbaio/embedded-hal", rev = "d90b59b0f48bba1e65129d9f8d5c702d47794d9f"}
-
 embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "0027a76bb61f19fcae1fe588ba3ff62660d7f7e3" }
 embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "0027a76bb61f19fcae1fe588ba3ff62660d7f7e3" }
 embassy-rp = { git = "https://github.com/embassy-rs/embassy.git", rev = "0027a76bb61f19fcae1fe588ba3ff62660d7f7e3" }
