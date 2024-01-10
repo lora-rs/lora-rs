@@ -15,6 +15,7 @@ pub mod creator;
 pub mod keys;
 pub mod maccommandcreator;
 pub mod maccommands;
+pub mod packet_length;
 pub mod parser;
 
 #[cfg(feature = "full")]
