@@ -11,7 +11,8 @@ pub use super::{
 use core::marker::PhantomData;
 use futures::{future::select, future::Either, pin_mut};
 use heapless::Vec;
-use lorawan::{self, keys::CryptoFactory};
+use lorawan::{self, keys::CryptoFactory, packet_length::phy::mac::JOIN_ACCEPT_MAX};
+
 use rand_core::RngCore;
 
 use crate::radio::{RadioBuffer, RfConfig};
@@ -254,7 +255,7 @@ where
 
                 // Receive join response within RX window
                 self.timer.reset();
-                Ok(self.rx_with_timeout(&Frame::Join, ms).await?.try_into()?)
+                Ok(self.rx_with_timeout(&Frame::Join, ms, JOIN_ACCEPT_MAX).await?.try_into()?)
             }
             JoinMode::ABP { newskey, appskey, devaddr } => {
                 self.mac.join_abp(*newskey, *appskey, *devaddr);
@@ -294,7 +295,9 @@ where
 
         // Wait for received data within window
         self.timer.reset();
-        Ok(self.rx_with_timeout(&Frame::Data, ms).await?.try_into()?)
+        let max_payload_length =
+            self.mac.region.get_max_payload_length(self.mac.configuration.data_rate, false, false);
+        Ok(self.rx_with_timeout(&Frame::Data, ms, max_payload_length).await?.try_into()?)
     }
 
     /// Take the downlink data from the device. This is typically called after a
