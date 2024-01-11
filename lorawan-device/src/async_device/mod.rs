@@ -365,41 +365,40 @@ where
         window_delay: u32,
         expected_payload_length: u8,
     ) -> Result<mac::Response, Error<R::PhyError>> {
-        // The initial window configuration uses window 1 adjusted by window_delay and radio offset
-        // TODO: use self.mac.get_rx_parameters
-        let rx1_start_delay = (self.mac.get_rx_delay(frame, &Window::_1) as i32
-            + window_delay as i32
-            + self.radio.get_rx_window_offset_ms()) as u32;
+        let (rx1_config, rx1_start) = self.mac.get_rx_parameters(frame, &Window::_1);
+        let (rx2_config, rx2_start) = self.mac.get_rx_parameters(frame, &Window::_2);
 
-        // TODO: This is mess, we should use region::constants::RECEIVE_DELAY{1,2}
-        // and then customize with radio-specific adjustments..
-        let rx1_end_delay = rx1_start_delay + self.radio.get_rx_window_duration_ms();
+        let radio_offset = self.radio.get_rx_window_offset_ms();
 
-        let rx2_start_delay = (self.mac.get_rx_delay(frame, &Window::_2) as i32
-            + window_delay as i32
-            + self.radio.get_rx_window_offset_ms()) as u32;
+        // Adjust the start time of window by generic window delay and radio offset
+        let rx1_start_delay = ((rx1_start + window_delay) as i32 + radio_offset) as u32;
+
+        // Prepare RX1 window timeout, which is the time when radio stops listening
+        // for preamble signal (sx126x) or until receiving valid header (sx127x).
+        // XXX: ~940ms for sx127x radio to receive ValidHeader IRQ (SF12, 125kHz, CR(5))
+        // TODO: Switch to radio-based RxTimeout IRQ
+        let rx1_timeout = rx1_start_delay + self.radio.get_rx_window_duration_ms();
 
         self.radio_buffer.clear();
 
-        // Handle Class C
+        // Initiate Class C reception until start of RX1 window
         let _ = self.between_windows(rx1_start_delay).await?;
 
         // RX1
-        let window_duration = min(rx1_end_delay, rx2_start_delay);
+        let rx2_start_delay = ((rx2_start + window_delay) as i32 + radio_offset) as u32;
+        let listen_duration = min(rx1_timeout, rx2_start_delay);
 
-        // TODO: use self.mac.get_rx_parameters where we get both rx_conf + window_delay
-        let rx_config =
-            self.mac.region.get_rx_config(self.mac.configuration.data_rate, frame, &Window::_1);
-
-        // XXX: As currently there's no way to detect whether timer has expired,
-        // therefore once we have detected preamble, we attempt to fetch packet and
-        // then just exit even with no response.
-        let rx1 = match self.rx_handle_window(window_duration, rx_config).await? {
+        let rx1 = match self.rx_handle_window(listen_duration, rx1_config).await? {
             // TODO: We should also wait until ValidHeader IRQ, then check whether packet
             // was intended for us...
             WindowResult::Preamble => {
+                // TODO: This is somehwat nonsense for sx127x as by this time we have already
+                // received packet header, thus during JOIN we are already at least 1/3 into the
+                // packet.
+                // TODO: `Some(8)` is to cater sx126x as otherwise we run a bit short and timeout
+                // occurs...
                 let timeout =
-                    rx_config.bb.time_on_air_us(Some(8), true, expected_payload_length) / 1000;
+                    rx1_config.bb.time_on_air_us(Some(8), true, expected_payload_length) / 1000;
                 #[cfg(feature = "defmt")]
                 defmt::info!(
                     "Payload timeout: {}ms for {} bytes",
@@ -443,31 +442,27 @@ where
                 response
             }
             // continue to next window in case we didn't detect a packet start...
-            WindowResult::TimedOut(window_duration) => {
-                let _ = self.between_windows(window_duration).await?;
+            WindowResult::TimedOut(_) => {
+                let _ = self.between_windows(rx2_start_delay).await?;
                 None
             }
         };
 
+        // TODO: Check whether timer has expired, currently once preamble/header is
+        // detected, then its followed up by listening for rest of packet and
+        // returning it for processing, thus skipping RX2 in "noise" cases.
         if let Some(response) = rx1 {
             self.window_complete().await?;
             return Ok(response);
         }
 
         // RX2
-        // TODO: This is mess, we should use region::constants::RECEIVE_DELAY2
-        // and then customize with radio-specific adjustments..
-        // XXX: use self.mac.get_rx_parameters
-        let window_duration = rx2_start_delay + 2000; //(2 * self.radio.get_rx_window_duration_ms());
+        let listen_duration = rx2_start_delay + self.radio.get_rx_window_duration_ms();
 
-        // TODO: use self.mac.get_rx_parameters where we get both rx_conf + window_delay
-        let rx_config =
-            self.mac.region.get_rx_config(self.mac.configuration.data_rate, frame, &Window::_2);
-
-        let rx2 = match self.rx_handle_window(window_duration, rx_config).await? {
+        let rx2 = match self.rx_handle_window(listen_duration, rx2_config).await? {
             WindowResult::Preamble => {
                 let timeout =
-                    rx_config.bb.time_on_air_us(Some(8), true, expected_payload_length) / 1000;
+                    rx2_config.bb.time_on_air_us(Some(8), true, expected_payload_length) / 1000;
                 #[cfg(feature = "defmt")]
                 defmt::info!(
                     "Payload timeout: {}ms for {} bytes",
