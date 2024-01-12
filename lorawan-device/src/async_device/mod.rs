@@ -241,7 +241,7 @@ where
 
                 // Receive join response within RX window
                 self.timer.reset();
-                Ok(self.rx_with_timeout(&Frame::Join, ms).await?.try_into()?)
+                Ok(self.rx_downlink(&Frame::Join, ms).await?.try_into()?)
             }
             JoinMode::ABP { newskey, appskey, devaddr } => {
                 self.mac.join_abp(*newskey, *appskey, *devaddr);
@@ -281,7 +281,7 @@ where
 
         // Wait for received data within window
         self.timer.reset();
-        Ok(self.rx_with_timeout(&Frame::Data, ms).await?.try_into()?)
+        Ok(self.rx_downlink(&Frame::Data, ms).await?.try_into()?)
     }
 
     /// Take the downlink data from the device. This is typically called after a
@@ -343,9 +343,8 @@ where
     }
 
     /// Attempt to receive data within RX1 and RX2 windows. This function will populate the
-    /// provided buffer with data if received. Will return a RxTimeout error if no RX within
-    /// the windows.
-    async fn rx_with_timeout(
+    /// provided buffer with data if received.
+    async fn rx_downlink(
         &mut self,
         frame: &Frame,
         window_delay: u32,
