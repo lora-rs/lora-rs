@@ -12,9 +12,9 @@ use embassy_nrf::{bind_interrupts, peripherals, rng, spim};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx126xInterfaceVariant;
+use lora_phy::lorawan_radio::LorawanRadio;
 use lora_phy::sx1261_2::{self, Sx126xVariant, TcxoCtrlVoltage, SX1261_2};
 use lora_phy::LoRa;
-use lora_phy::lorawan_radio::LorawanRadio;
 use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode};
 use lorawan_device::default_crypto::DefaultFactory as Crypto;
 use lorawan_device::{AppEui, AppKey, DevEui};
@@ -54,7 +54,7 @@ async fn main(_spawner: Spawner) {
     let iv = GenericSx126xInterfaceVariant::new(reset, dio1, busy, Some(rf_switch_rx), Some(rf_switch_tx)).unwrap();
     let lora = LoRa::new(SX1261_2::new(spi, iv, config), true, Delay).await.unwrap();
 
-    let radio: LorawanRadio::<_, _, MAX_TX_POWER> = lora.into();
+    let radio: LorawanRadio<_, _, MAX_TX_POWER> = lora.into();
     let region: region::Configuration = region::Configuration::new(LORAWAN_REGION);
     let mut device: Device<_, Crypto, _, _> = Device::new(region, radio, EmbassyTimer::new(), Rng::new(p.RNG, Irqs));
 

@@ -26,8 +26,18 @@ use interface::*;
 use mod_params::*;
 use mod_traits::*;
 
-// Maximum value for symbol timeout across known LoRa chips
-const MAX_LORA_SYMB_NUM_TIMEOUT: u32 = 248;
+/// Listening mode for LoRaWAN packet detection/reception
+pub enum RxMode {
+    /// Single shot Rx Mode to listen until packet preamble is detected or RxTimeout occurs.
+    /// The device will stay in RX Mode until a packet is received.
+    /// Preamble length as symbols is configured via following registers:
+    /// sx126x: uses `SetLoRaSymbNumTimeout(0 < n < 255)` + `SetStopRxTimerOnPreamble(1)`
+    /// sx127x: uses `RegSymbTimeout (4 < n < 1023)`
+    // TODO: Single mode with time-based timeout is available on sx126x, but not sx127x
+    Single(u16),
+    /// Continuous Rx mode to listen for incoming packets continuously
+    Continuous,
+}
 
 /// Provides the physical layer API to support LoRa chips
 pub struct LoRa<RK, DLY>
@@ -225,36 +235,32 @@ where
         }
     }
 
-    /// Prepare the Semtech chip for a receive operation (single shot, continuous, or duty cycled) and initiate the operation
-    #[allow(clippy::too_many_arguments)]
+    /// Prepare the Semtech chip for a receive operation (single mode, continuous, or duty cycled) and initiate the operation
+    ///
+    /// Notes:
+    /// * sx126x SetRx(0 < timeout < MAX) will listen util LoRa packet header is detected,
+    /// therefore we only use 0 (Single Mode) and MAX (continuous) values.
+    /// TODO: Find a way to express timeout for sx126x, allowing waiting for packet upto 262s
     pub async fn prepare_for_rx(
         &mut self,
+        listen_mode: RxMode,
         mdltn_params: &ModulationParams,
         rx_pkt_params: &PacketParams,
-        window_in_secs: Option<u8>, // None for Rx continuous
         duty_cycle_params: Option<&DutyCycleParams>,
         rx_boosted_if_supported: bool,
     ) -> Result<(), RadioError> {
-        let mut symbol_timeout: u32 = 0;
-        match window_in_secs {
-            Some(window) => {
-                let sf = u32::from(mdltn_params.spreading_factor);
-                let bw = u32::from(mdltn_params.bandwidth);
-                let symbols_per_sec = bw / (0x01u32 << sf); // symbol rate in symbols/sec = (BW in Hz) / (2 raised to the SF power)
-                let window_in_ms: u32 = (window as u32).checked_mul(1000).unwrap();
-                symbol_timeout = (window_in_ms - 200).checked_mul(symbols_per_sec).unwrap() / 1000; // leave a gap (subtract 200ms) to allow time to set up another window
-                if symbol_timeout > MAX_LORA_SYMB_NUM_TIMEOUT {
-                    symbol_timeout = MAX_LORA_SYMB_NUM_TIMEOUT;
-                }
-                self.rx_continuous = false;
-                // provide a safety net polling timeout while allowing reception of a packet which starts within the window but exceeds the window size
-                self.polling_timeout_in_ms = Some(window_in_ms.checked_mul(5).unwrap());
-            }
-            None => {
-                self.rx_continuous = true;
-                self.polling_timeout_in_ms = None;
-            }
-        }
+        // Disable polling functionality for RX as we mostly rely on DIO interrupts.
+        // TODO: If someone really wants polling, implement separate poll_irq
+        self.polling_timeout_in_ms = None;
+
+        let (rxc, num_symbols) = match listen_mode {
+            RxMode::Single(n) => (false, n),
+            RxMode::Continuous => (true, 0),
+        };
+
+        self.rx_continuous = rxc;
+
+        defmt::trace!("RX mode: RxC: {}, symbol_timeout: {}", rxc, num_symbols);
 
         self.prepare_modem(mdltn_params).await?;
 
@@ -272,7 +278,7 @@ where
                 duty_cycle_params,
                 self.rx_continuous,
                 rx_boosted_if_supported,
-                symbol_timeout as u16,
+                num_symbols,
             )
             .await
     }
@@ -299,6 +305,7 @@ where
         receiving_buffer: &mut [u8],
         target_rx_state: TargetIrqState,
     ) -> Result<IrqState, RadioError> {
+        defmt::trace!("RX: continuous: {}", self.rx_continuous);
         match self
             .radio_kind
             .process_irq(

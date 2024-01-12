@@ -5,7 +5,7 @@ use lorawan_device::Timings;
 
 use super::mod_params::{PacketParams, RadioError};
 use super::mod_traits::RadioKind;
-use super::{DelayNs, LoRa};
+use super::{DelayNs, LoRa, RxMode};
 
 const DEFAULT_RX_WINDOW_DURATION_MS: u32 = 1050;
 const DEFAULT_RX_WINDOW_OFFSET_MS: i32 = -50;
@@ -120,7 +120,7 @@ where
             .lora
             .create_rx_packet_params(8, false, 255, true, true, &mdltn_params)?;
         self.lora
-            .prepare_for_rx(&mdltn_params, &rx_pkt_params, None, None, false)
+            .prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params, None, false)
             .await?;
         self.rx_pkt_params = Some(rx_pkt_params);
         Ok(())
