@@ -14,8 +14,8 @@ use embassy_stm32::spi::Spi;
 use embassy_stm32::time::Hertz;
 use embassy_time::{Delay, Timer};
 use lora_phy::sx1261_2::{Sx126xVariant, TcxoCtrlVoltage, SX1261_2};
-use lora_phy::LoRa;
 use lora_phy::{mod_params::*, sx1261_2};
+use lora_phy::{LoRa, RxMode};
 use {defmt_rtt as _, panic_probe as _};
 
 use self::iv::{InterruptHandler, Stm32wlInterfaceVariant, SubghzSpiDevice};
@@ -100,7 +100,7 @@ async fn main(_spawner: Spawner) {
     };
 
     match lora
-        .prepare_for_rx(&mdltn_params, &rx_pkt_params, None, None, false)
+        .prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params, None, false)
         .await
     {
         Ok(()) => {}

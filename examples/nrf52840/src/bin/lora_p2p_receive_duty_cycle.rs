@@ -12,8 +12,8 @@ use embassy_time::{Delay, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx126xInterfaceVariant;
 use lora_phy::sx1261_2::{Sx126xVariant, TcxoCtrlVoltage, SX1261_2};
-use lora_phy::LoRa;
 use lora_phy::{mod_params::*, sx1261_2};
+use lora_phy::{LoRa, RxMode};
 use {defmt_rtt as _, panic_probe as _};
 
 const LORA_FREQUENCY_IN_HZ: u32 = 903_900_000; // warning: set this appropriately for the region
@@ -84,9 +84,9 @@ async fn main(_spawner: Spawner) {
     // See "RM0453 Reference manual STM32WL5x advanced Arm®-based 32-bit MCUs with sub-GHz radio solution" for the best explanation of Rx duty cycle processing.
     match lora
         .prepare_for_rx(
+            RxMode::Continuous,
             &mdltn_params,
             &rx_pkt_params,
-            None,
             Some(&DutyCycleParams {
                 rx_time: 300_000,    // 300_000 units * 15.625 us/unit = 4.69 s
                 sleep_time: 200_000, // 200_000 units * 15.625 us/unit = 3.13 s
