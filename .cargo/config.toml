@@ -1,9 +1,0 @@
-[net]
-git-fetch-with-cli = true
-
-[patch.crates-io]
-embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "0027a76bb61f19fcae1fe588ba3ff62660d7f7e3" }
-embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "0027a76bb61f19fcae1fe588ba3ff62660d7f7e3" }
-embassy-rp = { git = "https://github.com/embassy-rs/embassy.git", rev = "0027a76bb61f19fcae1fe588ba3ff62660d7f7e3" }
-embassy-nrf = { git = "https://github.com/embassy-rs/embassy.git", rev = "0027a76bb61f19fcae1fe588ba3ff62660d7f7e3" }
-embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "0027a76bb61f19fcae1fe588ba3ff62660d7f7e3" }
