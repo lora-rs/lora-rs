@@ -29,7 +29,7 @@ rand_core = { version = "0.6", default-features = false }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 seq-macro = "0.3.5"
 document-features = "0.2.7"
-embassy-time = { version = "0.2.0", optional = true }
+embassy-time = { version = "0.3.0", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}
