@@ -19,6 +19,10 @@ const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
 // Frequency synthesizer step for frequency calculation (Hz)
 const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625; // FXOSC (32 MHz) * 1000000 (Hz/MHz) / 524288 (2^19)
 
+// Limits for preamble detection window in single reception mode
+const SX127X_MIN_LORA_SYMB_NUM_TIMEOUT: u16 = 4;
+const SX127X_MAX_LORA_SYMB_NUM_TIMEOUT: u16 = 1023;
+
 /// Supported SX127x chip variants
 #[derive(Clone, Copy)]
 pub enum Sx127xVariant {
@@ -75,13 +79,12 @@ where
         self.intf.write_with_payload(&[register.write_addr()], buf, false).await
     }
 
-    // Set the number of symbols the radio will wait to detect a reception (maximum 1023 symbols)
+    // Set the number of symbols the radio will wait to detect a reception (up to 1023 symbols)
     async fn set_lora_symbol_num_timeout(&mut self, symbol_num: u16) -> Result<(), RadioError> {
-        if symbol_num > 0x03ffu16 {
-            return Err(RadioError::InvalidSymbolTimeout);
-        }
-        let symbol_num_msb = ((symbol_num & 0x0300u16) >> 8) as u8;
-        let symbol_num_lsb = (symbol_num & 0x00ffu16) as u8;
+        let val = symbol_num.min(SX127X_MAX_LORA_SYMB_NUM_TIMEOUT);
+
+        let symbol_num_msb = ((val >> 8) & 0x03) as u8;
+        let symbol_num_lsb = (val & 0xff) as u8;
         let mut config_2 = self.read_register(Register::RegModemConfig2).await?;
         config_2 = (config_2 & 0xfcu8) | symbol_num_msb;
         self.write_register(Register::RegModemConfig2, config_2).await?;
@@ -509,11 +512,13 @@ where
 
         self.intf.iv.enable_rf_switch_rx().await?;
 
-        let mut symbol_timeout_final = symbol_timeout;
-        if rx_continuous {
-            symbol_timeout_final = 0;
-        }
-        self.set_lora_symbol_num_timeout(symbol_timeout_final).await?;
+        let final_symbol_timeout = if rx_continuous {
+            0
+        } else {
+            // Modem needs to wait at least 4 symbols to acquire lock
+            symbol_timeout.max(SX127X_MIN_LORA_SYMB_NUM_TIMEOUT)
+        };
+        self.set_lora_symbol_num_timeout(final_symbol_timeout).await?;
 
         let mut lna_gain_final = LnaGain::G1.value();
         if rx_boosted_if_supported {

@@ -19,7 +19,6 @@ pub enum RadioError {
     InvalidBaseAddress(usize, usize),
     PayloadSizeUnexpected(usize),
     PayloadSizeMismatch(usize, usize),
-    InvalidSymbolTimeout,
     RetentionListExceeded,
     UnavailableSpreadingFactor,
     UnavailableBandwidth,
