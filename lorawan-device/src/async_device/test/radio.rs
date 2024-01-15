@@ -19,7 +19,7 @@ impl TestRadio {
 #[derive(Debug)]
 enum Msg {
     RxTx(RxTxHandler),
-    // TODO: Preamble
+    Timeout,
 }
 
 pub struct TestRadio {
@@ -62,10 +62,25 @@ impl PhyRxTx for TestRadio {
                     panic!("Trying to rx before settings config!")
                 }
             }
+            Msg::Timeout => Err("Unexpected Timeout"),
         }
     }
-    async fn rx_single(&mut self, _rx_buf: &mut [u8]) -> Result<RxStatus, Self::PhyError> {
-        Ok(RxStatus::RxTimeout)
+    async fn rx_single(&mut self, rx_buf: &mut [u8]) -> Result<RxStatus, Self::PhyError> {
+        let msg = self.rx.recv().await.unwrap();
+        match msg {
+            Msg::RxTx(handler) => {
+                let last_uplink = self.last_uplink.lock().await;
+                // a quick yield to let timer arm
+                time::sleep(time::Duration::from_millis(5)).await;
+                if let Some(config) = &self.current_config {
+                    let length = handler(last_uplink.clone(), config.rf, rx_buf);
+                    Ok(RxStatus::Rx(length, RxQuality::new(-80, 0)))
+                } else {
+                    panic!("Trying to rx before settings config!")
+                }
+            }
+            Msg::Timeout => Ok(RxStatus::RxTimeout),
+        }
     }
 }
 
@@ -86,5 +101,9 @@ impl RadioChannel {
     pub async fn handle_rxtx(&self, handler: RxTxHandler) {
         tokio::time::sleep(time::Duration::from_millis(5)).await;
         self.tx.send(Msg::RxTx(handler)).await.unwrap();
+    }
+    pub async fn handle_timeout(&self) {
+        tokio::time::sleep(time::Duration::from_millis(5)).await;
+        self.tx.send(Msg::Timeout).await.unwrap();
     }
 }

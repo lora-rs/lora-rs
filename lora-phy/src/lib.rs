@@ -224,12 +224,12 @@ where
         }
     }
 
-    /// Prepare the Semtech chip for a receive operation (single mode, continuous, or duty cycled) and initiate the operation
-    ///
+    /// Prepare radio to receive a frame in either single or continuous packet mode.
     /// Notes:
     /// * sx126x SetRx(0 < timeout < MAX) will listen util LoRa packet header is detected,
     /// therefore we only use 0 (Single Mode) and MAX (continuous) values.
     /// TODO: Find a way to express timeout for sx126x, allowing waiting for packet upto 262s
+    /// TODO: Allow DutyCycle as well?
     pub async fn prepare_for_rx(
         &mut self,
         listen_mode: RxMode,
