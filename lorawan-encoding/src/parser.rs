@@ -239,7 +239,6 @@ impl<T: AsPhyPayloadBytes> MICAble for T {
     fn mic(&self) -> MIC {
         let data = self.as_bytes();
         let len = data.len();
-
         MIC([data[len - 4], data[len - 3], data[len - 2], data[len - 1]])
     }
 }
