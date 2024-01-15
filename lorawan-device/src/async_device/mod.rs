@@ -27,8 +27,7 @@ pub use embassy_time::EmbassyTimer;
 #[cfg(test)]
 mod test;
 
-use self::radio::RxQuality;
-use core::cmp::min;
+use self::radio::{RxQuality, RxStatus};
 
 /// Type representing a LoRaWAN capable device.
 ///
@@ -349,136 +348,55 @@ where
         frame: &Frame,
         window_delay: u32,
     ) -> Result<mac::Response, Error<R::PhyError>> {
-        // The initial window configuration uses window 1 adjusted by window_delay and radio offset
+        self.radio_buffer.clear();
+
         let rx1_start_delay = self.mac.get_rx_delay(frame, &Window::_1) + window_delay
             - self.radio.get_rx_window_lead_time_ms();
 
-        // XXX
-        let rx1_end_delay = rx1_start_delay + 1000;
+        // RXC
+        let _ = self.between_windows(rx1_start_delay).await?;
+
+        // RX1
+        let rx_config =
+            self.mac.get_rx_config(self.radio.get_rx_window_buffer(), frame, &Window::_1);
+        self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+
+        if let Some(response) = self.rx_listen().await? {
+            return Ok(response);
+        }
 
         let rx2_start_delay = self.mac.get_rx_delay(frame, &Window::_2) + window_delay
             - self.radio.get_rx_window_lead_time_ms();
+
+        // RXC
+        let _ = self.between_windows(rx2_start_delay).await?;
+
+        // RX2
+        let rx_config =
+            self.mac.get_rx_config(self.radio.get_rx_window_buffer(), frame, &Window::_2);
+        self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+
+        if let Some(response) = self.rx_listen().await? {
+            return Ok(response);
+        }
+
+        Ok(self.mac.rx2_complete())
+    }
+
+    async fn rx_listen(&mut self) -> Result<Option<mac::Response>, Error<R::PhyError>> {
+        let response =
+            match self.radio.rx_single(self.radio_buffer.as_mut()).await.map_err(Error::Radio)? {
+                RxStatus::Rx(s, _q) => {
+                    self.radio_buffer.set_pos(s);
+                    match self.mac.handle_rx::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)
+                    {
+                        mac::Response::NoUpdate => None,
+                        r => Some(r),
+                    }
+                }
+                RxStatus::RxTimeout => None,
+            };
         self.radio_buffer.clear();
-        let _ = self.between_windows(rx1_start_delay).await?;
-
-        enum WindowResult {
-            Rx(mac::Response),
-            TimedOut(u32),
-        }
-
-        let window = {
-            // Prepare for RX using correct configuration
-            let rx_config =
-                self.mac.get_rx_config(self.radio.get_rx_window_buffer(), frame, &Window::_1);
-            // Cap window duration so RX2 can start on time
-            let mut window_duration = min(rx1_end_delay, rx2_start_delay);
-
-            // Pass the full radio buffer slice to RX
-            self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
-            let timeout_fut = self.timer.at(window_duration.into());
-            pin_mut!(timeout_fut);
-
-            let mut maybe_timeout_fut = Some(timeout_fut);
-            let mut maybe_result = None;
-            while let Some(timeout_fut) = maybe_timeout_fut.take() {
-                match Self::rx_window(
-                    &mut self.radio,
-                    &mut self.radio_buffer,
-                    window_duration,
-                    timeout_fut,
-                )
-                .await
-                {
-                    RxWindowResponse::Rx(sz, _, timeout_fut) => {
-                        self.radio_buffer.set_pos(sz);
-                        match self
-                            .mac
-                            .handle_rx::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)
-                        {
-                            mac::Response::NoUpdate => {
-                                self.radio_buffer.clear();
-                                maybe_timeout_fut = Some(timeout_fut);
-                            }
-                            r => {
-                                maybe_result = Some(r);
-                                break;
-                            }
-                        }
-                    }
-                    RxWindowResponse::Timeout(w) => {
-                        window_duration = w;
-                    }
-                };
-            }
-            if let Some(r) = maybe_result {
-                WindowResult::Rx(r)
-            } else {
-                WindowResult::TimedOut(window_duration)
-            }
-        };
-
-        match window {
-            // if we received a mac response above, we return early before rx
-            WindowResult::Rx(r) => {
-                self.window_complete().await?;
-                return Ok(r);
-            }
-            // if we didn't receive a mac response, we continue to rx2
-            WindowResult::TimedOut(window_duration) => {
-                let _ = self.between_windows(window_duration).await?;
-            }
-        }
-
-        let response = {
-            // RX2
-            // Prepare for RX using correct configuration
-            let rx_config =
-                self.mac.get_rx_config(self.radio.get_rx_window_buffer(), frame, &Window::_2);
-            // XXX
-            let window_duration = 2000;
-
-            // Pass the full radio buffer slice to RX
-            self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
-            let timeout_fut = self.timer.delay_ms(window_duration.into());
-            pin_mut!(timeout_fut);
-
-            let mut maybe_timeout_fut = Some(timeout_fut);
-            let mut maybe_result = None;
-            while let Some(timeout_fut) = maybe_timeout_fut.take() {
-                match Self::rx_window(
-                    &mut self.radio,
-                    &mut self.radio_buffer,
-                    window_duration,
-                    timeout_fut,
-                )
-                .await
-                {
-                    RxWindowResponse::Rx(sz, _, timeout_fut) => {
-                        self.radio_buffer.set_pos(sz);
-                        match self
-                            .mac
-                            .handle_rx::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)
-                        {
-                            mac::Response::NoUpdate => {
-                                self.radio_buffer.clear();
-                                maybe_timeout_fut = Some(timeout_fut);
-                            }
-                            r => {
-                                self.radio_buffer.clear();
-                                maybe_result = Some(r);
-                                break;
-                            }
-                        }
-                    }
-                    RxWindowResponse::Timeout(_) => (),
-                };
-            }
-            if let Some(r) = maybe_result {
-                r
-            } else {
-                self.mac.rx2_complete()
-            }
-        };
         self.window_complete().await?;
         Ok(response)
     }
