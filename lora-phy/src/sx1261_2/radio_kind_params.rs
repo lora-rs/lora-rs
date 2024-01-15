@@ -45,9 +45,11 @@ impl IrqMask {
 #[allow(dead_code)]
 #[allow(clippy::upper_case_acronyms)]
 pub enum Register {
-    PacketParams = 0x0704,          // packet configuration
-    PayloadLength = 0x0702,         // payload size
-    SynchTimeout = 0x0706,          // recalculated number of symbols
+    PacketParams = 0x0704,  // packet configuration
+    PayloadLength = 0x0702, // payload size
+    /// Number of symbols given as SX126X_REG_LR_SYNCH_TIMEOUT[7:3] * 2 ^ (2*SX126X_REG_LR_SYNCH_TIMEOUT[2:0] + 1)
+    /// Info from SDK (not present in user manual).
+    SynchTimeout = 0x0706,
     Syncword = 0x06C0,              // Syncword values
     LoRaSyncword = 0x0740,          // LoRa Syncword value
     GeneratedRandomNumber = 0x0819, //32-bit generated random number
