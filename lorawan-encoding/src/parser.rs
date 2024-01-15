@@ -36,6 +36,8 @@ use super::maccommands::{ChannelMask, DLSettings, Frequency};
 use super::securityhelpers;
 use super::securityhelpers::generic_array::GenericArray;
 
+use super::packet_length::phy::{join::*, mac::FPORT_LEN, MHDR_LEN, MIC_LEN, PHY_PAYLOAD_MIN_LEN};
+
 #[cfg(feature = "default-crypto")]
 use super::default_crypto::DefaultFactory;
 
@@ -292,7 +294,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> JoinRequestPayload<T, F> {
     }
 
     fn can_build_from(bytes: &[u8]) -> bool {
-        bytes.len() == 23 && MHDR(bytes[0]).mtype() == MType::JoinRequest
+        bytes.len() == JOIN_REQUEST_LEN && MHDR(bytes[0]).mtype() == MType::JoinRequest
     }
 
     /// Gives the APP EUI of the JoinRequest.
@@ -317,7 +319,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> JoinRequestPayload<T, F> {
 
     fn calculate_mic(&self, key: &AES128) -> MIC {
         let d = self.0.as_ref();
-        securityhelpers::calculate_mic(&d[..d.len() - 4], self.1.new_mac(key))
+        securityhelpers::calculate_mic(&d[..d.len() - MIC_LEN], self.1.new_mac(key))
     }
 }
 
@@ -350,7 +352,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
     }
 
     fn can_build_from(bytes: &[u8]) -> bool {
-        (bytes.len() == 17 || bytes.len() == 33) && MHDR(bytes[0]).mtype() == MType::JoinAccept
+        (bytes.len() == JOIN_ACCEPT_LEN || bytes.len() == JOIN_ACCEPT_WITH_CFLIST_LEN)
+            && MHDR(bytes[0]).mtype() == MType::JoinAccept
     }
 
     /// Decrypts the EncryptedJoinAcceptPayload producing a DecryptedJoinAcceptPayload.
@@ -410,7 +413,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
 
     pub fn calculate_mic(&self, key: &AppKey) -> MIC {
         let d = self.0.as_ref();
-        securityhelpers::calculate_mic(&d[..d.len() - 4], self.1.new_mac(&key.0))
+        securityhelpers::calculate_mic(&d[..d.len() - MIC_LEN], self.1.new_mac(&key.0))
     }
 
     /// Computes the network session key for a given device.
@@ -520,38 +523,46 @@ pub enum CfList<'a> {
 impl<T: AsRef<[u8]>, F> DecryptedJoinAcceptPayload<T, F> {
     /// Gives the app nonce of the JoinAccept.
     pub fn app_nonce(&self) -> AppNonce<&[u8]> {
-        AppNonce::new_from_raw(&self.0.as_ref()[1..4])
+        const OFFSET: usize = MHDR_LEN;
+        const END: usize = OFFSET + JOIN_NONCE_LEN;
+        AppNonce::new_from_raw(&self.0.as_ref()[OFFSET..END])
     }
 
     /// Gives the net ID of the JoinAccept.
     pub fn net_id(&self) -> NwkAddr<&[u8]> {
-        NwkAddr::new_from_raw(&self.0.as_ref()[4..7])
+        const OFFSET: usize = MHDR_LEN + JOIN_NONCE_LEN;
+        const END: usize = OFFSET + NET_ID_LEN;
+        NwkAddr::new_from_raw(&self.0.as_ref()[OFFSET..END])
     }
 
     /// Gives the dev address of the JoinAccept.
     pub fn dev_addr(&self) -> DevAddr<&[u8]> {
-        DevAddr::new_from_raw(&self.0.as_ref()[7..11])
+        const OFFSET: usize = MHDR_LEN + JOIN_NONCE_LEN + NET_ID_LEN;
+        const END: usize = OFFSET + DEV_ADDR_LEN;
+        DevAddr::new_from_raw(&self.0.as_ref()[OFFSET..END])
     }
 
     /// Gives the downlink configuration of the JoinAccept.
     pub fn dl_settings(&self) -> DLSettings {
-        DLSettings::new(self.0.as_ref()[11])
+        const OFFSET: usize = MHDR_LEN + JOIN_NONCE_LEN + NET_ID_LEN + DEV_ADDR_LEN;
+        DLSettings::new(self.0.as_ref()[OFFSET])
     }
 
     /// Gives the RX delay of the JoinAccept.
     pub fn rx_delay(&self) -> u8 {
-        self.0.as_ref()[12] & 0x0f
+        const OFFSET: usize =
+            MHDR_LEN + JOIN_NONCE_LEN + NET_ID_LEN + DEV_ADDR_LEN + DL_SETTINGS_LEN;
+        self.0.as_ref()[OFFSET] & 0x0f
     }
 
     /// Gives the channel frequency list of the JoinAccept.
     pub fn c_f_list(&self) -> Option<CfList> {
-        if self.0.as_ref().len() == 17 {
+        if self.0.as_ref().len() == JOIN_ACCEPT_LEN {
             return None;
         }
+
         let d = self.0.as_ref();
-
         let c_f_list_type = d[28];
-
         if c_f_list_type == 0 {
             let res = [
                 Frequency::new_from_raw(&d[13..16]),
@@ -692,7 +703,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> {
 
     fn calculate_mic(&self, key: &AES128, fcnt: u32) -> MIC {
         let d = self.0.as_ref();
-        securityhelpers::calculate_data_mic(&d[..d.len() - 4], self.1.new_mac(key), fcnt)
+        securityhelpers::calculate_data_mic(&d[..d.len() - MIC_LEN], self.1.new_mac(key), fcnt)
     }
 }
 
@@ -743,8 +754,8 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedDataPayload<T, F> 
         }
         let data = self.0.as_mut();
         let len = data.len();
-        let start = 1 + fhdr_length + 1;
-        let end = len - 4;
+        let start = MHDR_LEN + FPORT_LEN + fhdr_length;
+        let end = len - MIC_LEN;
         if start < end {
             securityhelpers::encrypt_frm_data_payload(
                 data,
@@ -900,7 +911,7 @@ fn check_phy_data(bytes: &[u8]) -> Result<(), Error> {
     }
     // the smallest payload is a data payload without fport and FRMPayload
     // which is 12 bytes long.
-    if len < 12 {
+    if len < PHY_PAYLOAD_MIN_LEN {
         Err(Error::InvalidPayload)
     } else {
         Ok(())
