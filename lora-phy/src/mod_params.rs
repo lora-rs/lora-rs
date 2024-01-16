@@ -71,7 +71,7 @@ impl From<RxMode> for RadioMode {
 }
 
 /// Listening mode for LoRaWAN packet detection/reception
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, defmt::Format, PartialEq)]
 pub enum RxMode {
     /// Single shot Rx Mode to listen until packet preamble is detected or RxTimeout occurs.
     /// The device will stay in RX Mode until a packet is received.
@@ -115,7 +115,7 @@ impl PacketParams {
 }
 
 /// Receive duty cycle parameters
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, defmt::Format, PartialEq)]
 #[allow(missing_docs)]
 pub struct DutyCycleParams {
     pub rx_time: u32,    // receive interval

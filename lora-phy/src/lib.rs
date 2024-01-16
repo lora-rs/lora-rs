@@ -21,6 +21,8 @@ pub mod sx1261_2;
 /// Specific implementation to support Semtech Sx127x chips
 pub mod sx1276_7_8_9;
 
+pub use crate::mod_params::RxMode;
+
 pub use embedded_hal_async::delay::DelayNs;
 use interface::*;
 use mod_params::*;
