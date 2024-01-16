@@ -293,7 +293,7 @@ where
 
     async fn window_complete(&mut self) -> Result<(), Error<R::PhyError>> {
         if self.class_c {
-            let rf_config = self.mac.region.get_rxc_config(self.mac.configuration.data_rate);
+            let rf_config = self.mac.get_rxc_config();
             self.radio.setup_rx(rf_config).await.map_err(Error::Radio)
         } else {
             self.radio.low_power().await.map_err(Error::Radio)
@@ -310,7 +310,7 @@ where
             return Ok(None);
         }
         // Class C listen while waiting for the window
-        let rf_config = self.mac.region.get_rxc_config(self.mac.configuration.data_rate);
+        let rf_config = self.mac.get_rxc_config();
         self.radio.setup_rx(rf_config).await.map_err(Error::Radio)?;
         let mut response = None;
         let timeout_fut = self.timer.at(duration.into());
@@ -370,8 +370,7 @@ where
 
         let window = {
             // Prepare for RX using correct configuration
-            let rx_config =
-                self.mac.region.get_rx_config(self.mac.configuration.data_rate, frame, &Window::_1);
+            let rx_config = self.mac.get_rx_config(frame, &Window::_1);
             // Cap window duration so RX2 can start on time
             let mut window_duration = min(rx1_end_delay, rx2_start_delay);
 
@@ -434,8 +433,7 @@ where
         let response = {
             // RX2
             // Prepare for RX using correct configuration
-            let rx_config =
-                self.mac.region.get_rx_config(self.mac.configuration.data_rate, frame, &Window::_2);
+            let rx_config = self.mac.get_rx_config(frame, &Window::_2);
             let window_duration = self.radio.get_rx_window_duration_ms();
 
             // Pass the full radio buffer slice to RX
