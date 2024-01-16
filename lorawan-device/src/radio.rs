@@ -9,6 +9,20 @@ pub struct RfConfig {
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RxMode {
+    Continuous,
+    Single(u16),
+}
+
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct RxConfig {
+    pub rf: RfConfig,
+    pub mode: RxMode,
+}
+
+#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TxConfig {
     pub pw: i8,
     pub rf: RfConfig,

@@ -124,6 +124,10 @@ impl BaseBandModulationParams {
         Self { sf, bw, cr, ldro, t_sym_us }
     }
 
+    pub const fn delay_in_symbols(&self, delay_in_ms: u32) -> u16 {
+        (delay_in_ms * 1000 / self.t_sym_us) as u16
+    }
+
     /// Calculates time on air for a given payload and modulation parameters.
     /// If `preamble` is None, the whole preamble including syncword is excluded from calculation.
     pub const fn time_on_air_us(

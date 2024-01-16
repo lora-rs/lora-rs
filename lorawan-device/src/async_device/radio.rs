@@ -1,4 +1,4 @@
-pub use crate::radio::{RfConfig, RxQuality, TxConfig};
+pub use crate::radio::{RfConfig, RxConfig, RxMode, RxQuality, TxConfig};
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub struct Error<E>(pub E);
@@ -41,7 +41,7 @@ pub trait PhyRxTx: Sized {
     async fn tx(&mut self, config: TxConfig, buf: &[u8]) -> Result<u32, Self::PhyError>;
 
     /// Configures the radio to receive data. This future should not actually await the data itself.
-    async fn setup_rx(&mut self, config: RfConfig) -> Result<(), Self::PhyError>;
+    async fn setup_rx(&mut self, config: RxConfig) -> Result<(), Self::PhyError>;
 
     /// Receive data into the provided buffer with the given transceiver configuration. The returned
     /// future should only complete when RX data have been received. Furthermore, it should be

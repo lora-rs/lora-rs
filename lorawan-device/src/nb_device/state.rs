@@ -255,7 +255,7 @@ impl WaitingForRxWindow {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
                 let (rx_config, window_start) =
-                    mac.get_rx_parameters(&self.frame, &self.window.into());
+                    mac.get_rx_parameters_legacy(&self.frame, &self.window.into());
                 // configure the radio for the RX
                 match radio.handle_event(radio::Event::RxRequest(rx_config)) {
                     Ok(_) => {
