@@ -524,7 +524,36 @@ where
             pkt_params.crc_on as u8,
             pkt_params.iq_inverted as u8,
         ];
-        self.intf.write(&op_code_and_pkt_params, false).await
+        self.intf.write(&op_code_and_pkt_params, false).await?;
+
+        // Optimize Inverted IQ Operation, otherwise packet loss with longer packets might occur.
+        let mut iq_polarity = [0x00u8];
+        self.intf
+            .read(
+                &[
+                    OpCode::ReadRegister.value(),
+                    Register::IQPolarity.addr1(),
+                    Register::IQPolarity.addr2(),
+                    0x00u8,
+                ],
+                &mut iq_polarity,
+            )
+            .await?;
+
+        let reg = if pkt_params.iq_inverted {
+            iq_polarity[0] & (!(1 << 2))
+        } else {
+            iq_polarity[0] | (1 << 2)
+        };
+
+        let op = [
+            OpCode::WriteRegister.value(),
+            Register::IQPolarity.addr1(),
+            Register::IQPolarity.addr2(),
+            reg,
+        ];
+        self.intf.write(&op, false).await?;
+        Ok(())
     }
 
     // Calibrate the image rejection based on the given frequency
@@ -584,7 +613,6 @@ where
 
     async fn do_rx(
         &mut self,
-        rx_pkt_params: &PacketParams,
         duty_cycle_params: Option<&DutyCycleParams>,
         rx_continuous: bool,
         rx_boosted_if_supported: bool,
@@ -620,37 +648,6 @@ where
         self.intf.write(&op_code_and_true_flag, false).await?;
 
         self.set_lora_symbol_num_timeout(symbol_timeout_final).await?;
-
-        // Optimize the Inverted IQ Operation (see DS_SX1261-2_V1.2 datasheet chapter 15.4)
-        let mut iq_polarity = [0x00u8];
-        self.intf
-            .read(
-                &[
-                    OpCode::ReadRegister.value(),
-                    Register::IQPolarity.addr1(),
-                    Register::IQPolarity.addr2(),
-                    0x00u8,
-                ],
-                &mut iq_polarity,
-            )
-            .await?;
-        if rx_pkt_params.iq_inverted {
-            let register_and_iq_polarity = [
-                OpCode::WriteRegister.value(),
-                Register::IQPolarity.addr1(),
-                Register::IQPolarity.addr2(),
-                iq_polarity[0] & (!(1 << 2)),
-            ];
-            self.intf.write(&register_and_iq_polarity, false).await?;
-        } else {
-            let register_and_iq_polarity = [
-                OpCode::WriteRegister.value(),
-                Register::IQPolarity.addr1(),
-                Register::IQPolarity.addr2(),
-                iq_polarity[0] | (1 << 2),
-            ];
-            self.intf.write(&register_and_iq_polarity, false).await?;
-        }
 
         let register_and_rx_gain = [
             OpCode::WriteRegister.value(),
