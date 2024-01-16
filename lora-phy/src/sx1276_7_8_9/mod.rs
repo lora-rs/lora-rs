@@ -500,42 +500,36 @@ where
 
     async fn do_rx(
         &mut self,
-        _rx_mode: RxMode,
+        rx_mode: RxMode,
         duty_cycle_params: Option<&DutyCycleParams>,
-        rx_continuous: bool,
-        rx_boosted_if_supported: bool,
-        symbol_timeout: u16,
+        _rx_continuous: bool,
+        rx_boost: bool,
+        _symbol_timeout: u16,
     ) -> Result<(), RadioError> {
         if let Some(&_duty_cycle) = duty_cycle_params {
             return Err(RadioError::DutyCycleUnsupported);
         }
 
+        let (num_symbols, mode) = match rx_mode {
+            RxMode::Single(ns) => (ns.max(SX127X_MIN_LORA_SYMB_NUM_TIMEOUT), LoRaMode::RxSingle),
+            RxMode::Continuous => (0, LoRaMode::RxContinuous),
+        };
+
         self.intf.iv.enable_rf_switch_rx().await?;
 
-        let final_symbol_timeout = if rx_continuous {
-            0
-        } else {
-            // Modem needs to wait at least 4 symbols to acquire lock
-            symbol_timeout.max(SX127X_MIN_LORA_SYMB_NUM_TIMEOUT)
-        };
-        self.set_lora_symbol_num_timeout(final_symbol_timeout).await?;
+        self.set_lora_symbol_num_timeout(num_symbols).await?;
 
-        let mut lna_gain_final = LnaGain::G1.value();
-        if rx_boosted_if_supported {
-            lna_gain_final = LnaGain::G1.boosted_value();
-        }
-        self.write_register(Register::RegLna, lna_gain_final).await?;
+        let lna_gain = if rx_boost {
+            LnaGain::G1.boosted_value()
+        } else {
+            LnaGain::G1.value()
+        };
+        self.write_register(Register::RegLna, lna_gain).await?;
 
         self.write_register(Register::RegFifoAddrPtr, 0x00u8).await?;
-        self.write_register(Register::RegPayloadLength, 0xffu8).await?; // reset payload length (from original implementation)
+        self.write_register(Register::RegPayloadLength, 0xffu8).await?;
 
-        if rx_continuous {
-            self.write_register(Register::RegOpMode, LoRaMode::RxContinuous.value())
-                .await
-        } else {
-            self.write_register(Register::RegOpMode, LoRaMode::RxSingle.value())
-                .await
-        }
+        self.write_register(Register::RegOpMode, mode.value()).await
     }
 
     async fn get_rx_payload(
