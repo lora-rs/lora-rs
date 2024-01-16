@@ -412,12 +412,12 @@ where
                         self.set_pa_config(0x06, 0x00, DeviceSel::LowPowerPA).await?;
                         tx_params_power = 14;
                     }
-                    14..=11 => {
+                    11..=14 => {
                         self.set_pa_config(0x04, 0x00, DeviceSel::LowPowerPA).await?;
                         tx_params_power = txp as u8;
                     }
                     // 10 and less
-                    10..=LOW_POWER_MIN => {
+                    LOW_POWER_MIN..=10 => {
                         self.set_pa_config(0x01, 0x00, DeviceSel::LowPowerPA).await?;
                         // table indicates 10 dBm => txp = 13, therefore we add 3 to values below 10
                         tx_params_power = txp as u8 + 3;
@@ -454,21 +454,21 @@ where
 
                 // From Table 13-21: PA Operating Modes with Optimal Settings
                 match txp {
-                    HIGH_POWER_MAX..=21 => {
+                    21..=HIGH_POWER_MAX => {
                         self.set_pa_config(0x04, 0x07, DeviceSel::HighPowerPA).await?;
                         tx_params_power = 22;
                     }
-                    20..=18 => {
+                    18..=20 => {
                         self.set_pa_config(0x03, 0x05, DeviceSel::HighPowerPA).await?;
                         // table indicates 20 dBm => txp = 22, therefore we add 2 to this range
                         tx_params_power = txp as u8 + 2;
                     }
-                    17..=15 => {
+                    15..=17 => {
                         self.set_pa_config(0x02, 0x03, DeviceSel::HighPowerPA).await?;
                         // table indicates 17 dBm => txp = 22, therefore we add 5 to this range
                         tx_params_power = txp as u8 + 5;
                     }
-                    14..=HIGH_POWER_MIN => {
+                    HIGH_POWER_MIN..=14 => {
                         self.set_pa_config(0x02, 0x02, DeviceSel::HighPowerPA).await?;
                         // table indicates 14 dBm => txp = 22, therefore we add 8 to this range
                         tx_params_power = txp as u8 + 8;
