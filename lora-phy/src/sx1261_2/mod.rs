@@ -617,34 +617,24 @@ where
     async fn do_rx(
         &mut self,
         rx_mode: RxMode,
-        duty_cycle_params: Option<&DutyCycleParams>,
+        _duty_cycle_params: Option<&DutyCycleParams>,
         _rx_continuous: bool,
         rx_boost: bool,
         _symbol_timeout: u16,
     ) -> Result<(), RadioError> {
-        let (mut num_symbols, timeout, op) = match rx_mode {
-            RxMode::Single(n) => (n, 0, OpCode::SetRx),
-            RxMode::Continuous => (0, 0xffffff, OpCode::SetRx),
-        };
-
-        if let Some(&_duty_cycle) = duty_cycle_params {
-            if timeout == RX_CONTINUOUS_TIMEOUT {
-                return Err(RadioError::DutyCycleRxContinuousUnsupported);
-            } else {
-                num_symbols = 0;
-            }
-        }
-
         self.intf.iv.enable_rf_switch_rx().await?;
 
         // Stop the Rx timer on preamble detection
         let op_code_and_true_flag = [OpCode::SetStopRxTimerOnPreamble.value(), 0x01u8];
         self.intf.write(&op_code_and_true_flag, false).await?;
 
+        let num_symbols = match rx_mode {
+            RxMode::DutyCycle(_) | RxMode::Continuous => 0,
+            RxMode::Single(n) => n,
+        };
         self.set_lora_symbol_num_timeout(num_symbols).await?;
 
         let rx_gain = if rx_boost { 0x96 } else { 0x94 };
-
         let register_and_rx_gain = [
             OpCode::WriteRegister.value(),
             Register::RxGain.addr1(),
@@ -653,27 +643,36 @@ where
         ];
         self.intf.write(&register_and_rx_gain, false).await?;
 
-        match duty_cycle_params {
-            Some(&duty_cycle) => {
-                let op_code_and_duty_cycle = [
+        match rx_mode {
+            RxMode::DutyCycle(args) => {
+                let op = [
                     OpCode::SetRxDutyCycle.value(),
-                    Self::timeout_1(duty_cycle.rx_time),
-                    Self::timeout_2(duty_cycle.rx_time),
-                    Self::timeout_3(duty_cycle.rx_time),
-                    Self::timeout_1(duty_cycle.sleep_time),
-                    Self::timeout_2(duty_cycle.sleep_time),
-                    Self::timeout_3(duty_cycle.sleep_time),
+                    Self::timeout_1(args.rx_time),
+                    Self::timeout_2(args.rx_time),
+                    Self::timeout_3(args.rx_time),
+                    Self::timeout_1(args.sleep_time),
+                    Self::timeout_2(args.sleep_time),
+                    Self::timeout_3(args.sleep_time),
                 ];
-                self.intf.write(&op_code_and_duty_cycle, false).await
+                self.intf.write(&op, false).await
             }
-            None => {
-                let op_code_and_timeout = [
-                    op.value(),
-                    Self::timeout_1(timeout),
-                    Self::timeout_2(timeout),
-                    Self::timeout_3(timeout),
+            RxMode::Single(_) => {
+                let op = [
+                    OpCode::SetRx.value(),
+                    Self::timeout_1(0),
+                    Self::timeout_2(0),
+                    Self::timeout_3(0),
                 ];
-                self.intf.write(&op_code_and_timeout, false).await
+                self.intf.write(&op, false).await
+            }
+            RxMode::Continuous => {
+                let op = [
+                    OpCode::SetRx.value(),
+                    Self::timeout_1(RX_CONTINUOUS_TIMEOUT),
+                    Self::timeout_2(RX_CONTINUOUS_TIMEOUT),
+                    Self::timeout_3(RX_CONTINUOUS_TIMEOUT),
+                ];
+                self.intf.write(&op, false).await
             }
         }
     }

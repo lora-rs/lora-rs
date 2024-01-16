@@ -36,7 +36,6 @@ pub enum RadioError {
     TransmitDoneUnexpected,
     ReceiveDoneUnexpected,
     DutyCycleUnsupported,
-    DutyCycleRxContinuousUnsupported,
     CADUnexpected,
     RngUnsupported,
 }
@@ -62,7 +61,17 @@ pub enum RadioMode {
     ChannelActivityDetection, // channel activity detection mode
 }
 
+impl From<RxMode> for RadioMode {
+    fn from(rxmode: RxMode) -> Self {
+        match rxmode {
+            RxMode::Single(_) | RxMode::Continuous => Self::Receive,
+            RxMode::DutyCycle(_) => Self::ReceiveDutyCycle,
+        }
+    }
+}
+
 /// Listening mode for LoRaWAN packet detection/reception
+#[derive(Clone, Copy, PartialEq)]
 pub enum RxMode {
     /// Single shot Rx Mode to listen until packet preamble is detected or RxTimeout occurs.
     /// The device will stay in RX Mode until a packet is received.
@@ -73,6 +82,8 @@ pub enum RxMode {
     Single(u16),
     /// Continuous Rx mode to listen for incoming packets continuously
     Continuous,
+    /// Receive in Duty Cycle mode (NB! Not supported on sx127x)
+    DutyCycle(DutyCycleParams),
 }
 
 /// Modulation parameters for a send and/or receive communication channel
@@ -104,7 +115,7 @@ impl PacketParams {
 }
 
 /// Receive duty cycle parameters
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 #[allow(missing_docs)]
 pub struct DutyCycleParams {
     pub rx_time: u32,    // receive interval
