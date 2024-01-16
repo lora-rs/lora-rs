@@ -26,19 +26,6 @@ use interface::*;
 use mod_params::*;
 use mod_traits::*;
 
-/// Listening mode for LoRaWAN packet detection/reception
-pub enum RxMode {
-    /// Single shot Rx Mode to listen until packet preamble is detected or RxTimeout occurs.
-    /// The device will stay in RX Mode until a packet is received.
-    /// Preamble length as symbols is configured via following registers:
-    /// sx126x: uses `SetLoRaSymbNumTimeout(0 < n < 255)` + `SetStopRxTimerOnPreamble(1)`
-    /// sx127x: uses `RegSymbTimeout (4 < n < 1023)`
-    // TODO: Single mode with time-based timeout is available on sx126x, but not sx127x
-    Single(u16),
-    /// Continuous Rx mode to listen for incoming packets continuously
-    Continuous,
-}
-
 /// Provides the physical layer API to support LoRa chips
 pub struct LoRa<RK, DLY>
 where
