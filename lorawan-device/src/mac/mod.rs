@@ -22,7 +22,6 @@ pub use otaa::NetworkCredentials;
 
 #[cfg(feature = "async")]
 use crate::async_device;
-
 use crate::nb_device;
 
 pub(crate) mod uplink;
@@ -288,6 +287,14 @@ impl Mac {
             State::Otaa(_) => None,
             State::Unjoined => None,
         }
+    }
+
+    pub(crate) fn get_rx_config(&self, frame: &Frame, window: &Window) -> RfConfig {
+        self.region.get_rx_config(self.configuration.data_rate, frame, window)
+    }
+
+    pub(crate) fn get_rxc_config(&self) -> RfConfig {
+        self.region.get_rxc_config(self.configuration.data_rate)
     }
 }
 
