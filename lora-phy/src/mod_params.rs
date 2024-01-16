@@ -1,5 +1,3 @@
-use core::fmt::Debug;
-
 pub use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 
 /// Errors types reported during LoRa physical layer processing
@@ -50,15 +48,21 @@ pub struct PacketStatus {
 
 /// The state of the radio
 #[derive(Clone, Copy, defmt::Format, PartialEq)]
-#[allow(missing_docs)]
 pub enum RadioMode {
-    Sleep,                    // sleep mode
-    Standby,                  // standby mode
-    FrequencySynthesis,       // frequency synthesis mode
-    Transmit,                 // transmit mode
-    Receive,                  // receive mode
-    ReceiveDutyCycle,         // receive duty cycle mode
-    ChannelActivityDetection, // channel activity detection mode
+    /// Sleep mode
+    Sleep,
+    /// Standby mode
+    Standby,
+    /// Frequency synthesis mode
+    FrequencySynthesis,
+    /// Transmit (TX) mode
+    Transmit,
+    /// Receive (RX) mode
+    Receive,
+    /// Receive duty cycle mode
+    ReceiveDutyCycle,
+    /// Channel activity detection (CAD) mode
+    ChannelActivityDetection,
 }
 
 impl From<RxMode> for RadioMode {
@@ -116,8 +120,9 @@ impl PacketParams {
 
 /// Receive duty cycle parameters
 #[derive(Clone, Copy, defmt::Format, PartialEq)]
-#[allow(missing_docs)]
 pub struct DutyCycleParams {
-    pub rx_time: u32,    // receive interval
-    pub sleep_time: u32, // sleep interval
+    /// receive interval
+    pub rx_time: u32,
+    /// sleep interval
+    pub sleep_time: u32,
 }
