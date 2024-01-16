@@ -3,7 +3,7 @@
 //! decrypting from send and receive buffers.
 
 use crate::{
-    radio::{self, RadioBuffer},
+    radio::{self, RadioBuffer, RfConfig, RxConfig, RxMode},
     region, AppSKey, Downlink, NewSKey,
 };
 use heapless::Vec;
@@ -16,8 +16,8 @@ pub type FcntUp = u32;
 mod session;
 use rand_core::RngCore;
 pub use session::{Session, SessionKeys};
+
 mod otaa;
-use crate::radio::RfConfig;
 pub use otaa::NetworkCredentials;
 
 #[cfg(feature = "async")]
@@ -193,7 +193,21 @@ impl Mac {
     }
 
     /// Gets the radio configuration and timing for a given frame type and window.
-    pub(crate) fn get_rx_parameters(&mut self, frame: &Frame, window: &Window) -> (RfConfig, u32) {
+    pub(crate) fn get_rx_parameters(
+        &mut self,
+        buffer_ms: u32,
+        frame: &Frame,
+        window: &Window,
+    ) -> (RxConfig, u32) {
+        (self.get_rx_config(buffer_ms, frame, window), self.get_rx_delay(frame, window))
+    }
+
+    /// Gets the radio configuration and timing for a given frame type and window.
+    pub(crate) fn get_rx_parameters_legacy(
+        &mut self,
+        frame: &Frame,
+        window: &Window,
+    ) -> (RfConfig, u32) {
         (
             self.region.get_rx_config(self.configuration.data_rate, frame, window),
             self.get_rx_delay(frame, window),
@@ -289,12 +303,21 @@ impl Mac {
         }
     }
 
-    pub(crate) fn get_rx_config(&self, frame: &Frame, window: &Window) -> RfConfig {
-        self.region.get_rx_config(self.configuration.data_rate, frame, window)
+    pub(crate) fn get_rx_config(&self, buffer_ms: u32, frame: &Frame, window: &Window) -> RxConfig {
+        const PREAMBLE_SYMBOLS: u16 = 13; // 12.25
+        let rf = self.region.get_rx_config(self.configuration.data_rate, frame, window);
+        let num_symbols = PREAMBLE_SYMBOLS + rf.bb.delay_in_symbols(buffer_ms);
+        RxConfig {
+            rf: self.region.get_rx_config(self.configuration.data_rate, frame, window),
+            mode: RxMode::Single(num_symbols),
+        }
     }
 
-    pub(crate) fn get_rxc_config(&self) -> RfConfig {
-        self.region.get_rxc_config(self.configuration.data_rate)
+    pub(crate) fn get_rxc_config(&self) -> RxConfig {
+        RxConfig {
+            rf: self.region.get_rxc_config(self.configuration.data_rate),
+            mode: RxMode::Continuous,
+        }
     }
 }
 

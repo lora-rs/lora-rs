@@ -14,7 +14,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 defmt = { version = "0.3" }
-lora-modulation = { version = ">=0.1.2" }
+lora-modulation = { path = "../lora-modulation", version = ">=0.1.2" }
 lorawan-device = { path = "../lorawan-device", version = ">=0.11.0", features = [
     "defmt",
     "async",

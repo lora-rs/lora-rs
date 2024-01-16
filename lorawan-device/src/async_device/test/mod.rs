@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    radio::{RfConfig, RxQuality, TxConfig},
+    radio::{RxQuality, TxConfig},
     region,
     test_util::*,
 };

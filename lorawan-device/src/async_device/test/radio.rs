@@ -1,5 +1,5 @@
 use super::*;
-use crate::async_device::radio::PhyRxTx;
+use crate::async_device::radio::{PhyRxTx, RxConfig};
 use std::sync::Arc;
 use tokio::{
     sync::{mpsc, Mutex},
@@ -23,7 +23,7 @@ enum Msg {
 }
 
 pub struct TestRadio {
-    current_config: Option<RfConfig>,
+    current_config: Option<RxConfig>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
     rx: mpsc::Receiver<Msg>,
 }
@@ -43,7 +43,7 @@ impl PhyRxTx for TestRadio {
         Ok(length as u32)
     }
 
-    async fn setup_rx(&mut self, config: RfConfig) -> Result<(), Self::PhyError> {
+    async fn setup_rx(&mut self, config: RxConfig) -> Result<(), Self::PhyError> {
         self.current_config = Some(config);
         Ok(())
     }
@@ -56,7 +56,7 @@ impl PhyRxTx for TestRadio {
                 // a quick yield to let timer arm
                 time::sleep(time::Duration::from_millis(5)).await;
                 if let Some(config) = &self.current_config {
-                    let length = handler(last_uplink.clone(), *config, rx_buf);
+                    let length = handler(last_uplink.clone(), config.rf, rx_buf);
                     Ok((length, RxQuality::new(-80, 0)))
                 } else {
                     panic!("Trying to rx before settings config!")
@@ -67,11 +67,8 @@ impl PhyRxTx for TestRadio {
 }
 
 impl Timings for TestRadio {
-    fn get_rx_window_offset_ms(&self) -> i32 {
-        0
-    }
-    fn get_rx_window_duration_ms(&self) -> u32 {
-        100
+    fn get_rx_window_lead_time_ms(&self) -> u32 {
+        10
     }
 }
 

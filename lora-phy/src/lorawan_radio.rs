@@ -1,14 +1,15 @@
 #![allow(missing_docs)]
 
-use lorawan_device::async_device::radio::{PhyRxTx, RfConfig, RxQuality, TxConfig};
-use lorawan_device::Timings;
+use lorawan_device::async_device::{
+    radio::{PhyRxTx, RxConfig, RxQuality, TxConfig},
+    Timings,
+};
 
 use super::mod_params::{PacketParams, RadioError};
 use super::mod_traits::RadioKind;
 use super::{DelayNs, LoRa, RxMode};
 
-const DEFAULT_RX_WINDOW_DURATION_MS: u32 = 1050;
-const DEFAULT_RX_WINDOW_OFFSET_MS: i32 = -50;
+const DEFAULT_RX_WINDOW_LEAD_TIME: u32 = 50;
 
 /// LoRa radio using the physical layer API in the external lora-phy crate.
 ///
@@ -21,8 +22,8 @@ where
 {
     pub(crate) lora: LoRa<RK, DLY>,
     rx_pkt_params: Option<PacketParams>,
-    rx_window_offset_ms: i32,
-    rx_window_duration_ms: u32,
+    rx_window_lead_time: u32,
+    rx_window_buffer: u32,
 }
 
 impl<RK, DLY, const P: u8, const G: i8> From<LoRa<RK, DLY>> for LorawanRadio<RK, DLY, P, G>
@@ -34,8 +35,8 @@ where
         Self {
             lora,
             rx_pkt_params: None,
-            rx_window_offset_ms: DEFAULT_RX_WINDOW_OFFSET_MS,
-            rx_window_duration_ms: DEFAULT_RX_WINDOW_DURATION_MS,
+            rx_window_lead_time: DEFAULT_RX_WINDOW_LEAD_TIME,
+            rx_window_buffer: DEFAULT_RX_WINDOW_LEAD_TIME,
         }
     }
 }
@@ -45,11 +46,11 @@ where
     RK: RadioKind,
     DLY: DelayNs,
 {
-    pub fn set_rx_window_offset_ms(&mut self, offset: i32) {
-        self.rx_window_offset_ms = offset;
+    pub fn set_rx_window_lead_time(&mut self, lt: u32) {
+        self.rx_window_lead_time = lt;
     }
-    pub fn set_rx_window_duration_ms(&mut self, duration: u32) {
-        self.rx_window_duration_ms = duration;
+    pub fn set_rx_window_buffer(&mut self, buffer: u32) {
+        self.rx_window_buffer = buffer;
     }
 }
 
@@ -59,11 +60,12 @@ where
     RK: RadioKind,
     DLY: DelayNs,
 {
-    fn get_rx_window_offset_ms(&self) -> i32 {
-        self.rx_window_offset_ms
+    fn get_rx_window_buffer(&self) -> u32 {
+        self.rx_window_lead_time
     }
-    fn get_rx_window_duration_ms(&self) -> u32 {
-        self.rx_window_duration_ms
+
+    fn get_rx_window_lead_time_ms(&self) -> u32 {
+        self.rx_window_lead_time
     }
 }
 
@@ -112,10 +114,13 @@ where
         Ok(0)
     }
 
-    async fn setup_rx(&mut self, config: RfConfig) -> Result<(), Self::PhyError> {
-        let mdltn_params =
-            self.lora
-                .create_modulation_params(config.bb.sf, config.bb.bw, config.bb.cr, config.frequency)?;
+    async fn setup_rx(&mut self, config: RxConfig) -> Result<(), Self::PhyError> {
+        let mdltn_params = self.lora.create_modulation_params(
+            config.rf.bb.sf,
+            config.rf.bb.bw,
+            config.rf.bb.cr,
+            config.rf.frequency,
+        )?;
         let rx_pkt_params = self
             .lora
             .create_rx_packet_params(8, false, 255, true, true, &mdltn_params)?;
