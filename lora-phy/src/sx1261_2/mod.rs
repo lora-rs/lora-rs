@@ -32,6 +32,9 @@ const SX126X_MAX_LORA_SYMB_NUM_TIMEOUT: u8 = 248;
 // Time required for the TCXO to wakeup [ms].
 const BRD_TCXO_WAKEUP_TIME: u32 = 10;
 
+// SetRx timeout argument for enabling continuous mode
+const RX_CONTINUOUS_TIMEOUT: u32 = 0xffffff;
+
 /// Supported SX126x chip variants
 #[derive(Clone, PartialEq)]
 pub enum Sx126xVariant {
@@ -613,48 +616,40 @@ where
 
     async fn do_rx(
         &mut self,
-        _rx_mode: RxMode,
+        rx_mode: RxMode,
         duty_cycle_params: Option<&DutyCycleParams>,
-        rx_continuous: bool,
-        rx_boosted_if_supported: bool,
-        symbol_timeout: u16,
+        _rx_continuous: bool,
+        rx_boost: bool,
+        _symbol_timeout: u16,
     ) -> Result<(), RadioError> {
-        let mut symbol_timeout_final = symbol_timeout;
-        let mut timeout_in_ms_final = 0x00000000u32; // No chip timeout for Rx single mode
+        let (mut num_symbols, timeout, op) = match rx_mode {
+            RxMode::Single(n) => (n, 0, OpCode::SetRx),
+            RxMode::Continuous => (0, 0xffffff, OpCode::SetRx),
+        };
 
         if let Some(&_duty_cycle) = duty_cycle_params {
-            if rx_continuous {
+            if timeout == RX_CONTINUOUS_TIMEOUT {
                 return Err(RadioError::DutyCycleRxContinuousUnsupported);
             } else {
-                symbol_timeout_final = 0;
+                num_symbols = 0;
             }
         }
 
         self.intf.iv.enable_rf_switch_rx().await?;
 
-        // Allow only a symbol timeout, and only for Rx single mode.  A polling timeout, if needed, is provided in process_irq().
-        if rx_continuous {
-            symbol_timeout_final = 0;
-            timeout_in_ms_final = 0x00ffffffu32; // No chip timeout for Rx continuous mode
-        }
-
-        let mut rx_gain_final = 0x94u8;
-        // if Rx boosted, set max LNA gain, increase current by ~2mA for around ~3dB in sensitivity
-        if rx_boosted_if_supported {
-            rx_gain_final = 0x96u8;
-        }
-
-        // stop the Rx timer on preamble detection
+        // Stop the Rx timer on preamble detection
         let op_code_and_true_flag = [OpCode::SetStopRxTimerOnPreamble.value(), 0x01u8];
         self.intf.write(&op_code_and_true_flag, false).await?;
 
-        self.set_lora_symbol_num_timeout(symbol_timeout_final).await?;
+        self.set_lora_symbol_num_timeout(num_symbols).await?;
+
+        let rx_gain = if rx_boost { 0x96 } else { 0x94 };
 
         let register_and_rx_gain = [
             OpCode::WriteRegister.value(),
             Register::RxGain.addr1(),
             Register::RxGain.addr2(),
-            rx_gain_final,
+            rx_gain,
         ];
         self.intf.write(&register_and_rx_gain, false).await?;
 
@@ -673,10 +668,10 @@ where
             }
             None => {
                 let op_code_and_timeout = [
-                    OpCode::SetRx.value(),
-                    Self::timeout_1(timeout_in_ms_final),
-                    Self::timeout_2(timeout_in_ms_final),
-                    Self::timeout_3(timeout_in_ms_final),
+                    op.value(),
+                    Self::timeout_1(timeout),
+                    Self::timeout_2(timeout),
+                    Self::timeout_3(timeout),
                 ];
                 self.intf.write(&op_code_and_timeout, false).await
             }
