@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Implement functionality for continuous wave mode.
 - Support preamble detection allowing LoRaWAN RX1+RX2 reception.
 - Update embedded-hal-async version to 1.0.0.
-- Refactor `prepare_for_rx` args to take in RxMode enum.
+- Refactor `prepare_for_rx` to use RxMode enum and drop now unneeded args
 
 ## [v2.1.2] - 2023-09-25
 

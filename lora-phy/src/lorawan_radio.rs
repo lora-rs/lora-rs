@@ -120,7 +120,7 @@ where
             .lora
             .create_rx_packet_params(8, false, 255, true, true, &mdltn_params)?;
         self.lora
-            .prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params, None, false)
+            .prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params, false)
             .await?;
         self.rx_pkt_params = Some(rx_pkt_params);
         Ok(())

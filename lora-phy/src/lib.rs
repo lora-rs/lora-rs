@@ -235,7 +235,6 @@ where
         listen_mode: RxMode,
         mdltn_params: &ModulationParams,
         rx_pkt_params: &PacketParams,
-        _duty_cycle_params: Option<&DutyCycleParams>,
         rx_boosted_if_supported: bool,
     ) -> Result<(), RadioError> {
         defmt::trace!("RX mode: {}", listen_mode);

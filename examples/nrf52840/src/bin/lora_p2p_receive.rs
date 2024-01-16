@@ -82,7 +82,7 @@ async fn main(_spawner: Spawner) {
     };
 
     match lora
-        .prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params, None, false)
+        .prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params, false)
         .await
     {
         Ok(()) => {}
