@@ -500,6 +500,7 @@ where
 
     async fn do_rx(
         &mut self,
+        _rx_mode: RxMode,
         duty_cycle_params: Option<&DutyCycleParams>,
         rx_continuous: bool,
         rx_boosted_if_supported: bool,
