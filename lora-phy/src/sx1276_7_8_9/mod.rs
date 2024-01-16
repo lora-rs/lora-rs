@@ -498,14 +498,7 @@ where
         self.write_register(Register::RegOpMode, LoRaMode::Tx.value()).await
     }
 
-    async fn do_rx(
-        &mut self,
-        rx_mode: RxMode,
-        _duty_cycle_params: Option<&DutyCycleParams>,
-        _rx_continuous: bool,
-        rx_boost: bool,
-        _symbol_timeout: u16,
-    ) -> Result<(), RadioError> {
+    async fn do_rx(&mut self, rx_mode: RxMode, rx_boost: bool) -> Result<(), RadioError> {
         let (num_symbols, mode) = match rx_mode {
             RxMode::DutyCycle(_) => Err(RadioError::DutyCycleUnsupported),
             RxMode::Single(ns) => Ok((ns.max(SX127X_MIN_LORA_SYMB_NUM_TIMEOUT), LoRaMode::RxSingle)),
