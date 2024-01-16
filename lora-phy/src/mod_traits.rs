@@ -105,7 +105,6 @@ pub trait RadioKind {
     /// Set up to perform a receive operation (single-shot, continuous, or duty cycle)
     async fn do_rx(
         &mut self,
-        rx_pkt_params: &PacketParams,
         duty_cycle_params: Option<&DutyCycleParams>,
         rx_continuous: bool,
         rx_boosted_if_supported: bool,

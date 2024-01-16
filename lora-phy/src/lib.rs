@@ -274,7 +274,6 @@ where
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.radio_kind
             .do_rx(
-                rx_pkt_params,
                 duty_cycle_params,
                 self.rx_continuous,
                 rx_boosted_if_supported,
