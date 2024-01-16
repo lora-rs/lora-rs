@@ -243,6 +243,7 @@ where
         let (rxc, num_symbols) = match listen_mode {
             RxMode::Single(n) => (false, n),
             RxMode::Continuous => (true, 0),
+            RxMode::DutyCycle(_) => (false, 0),
         };
 
         self.rx_continuous = rxc;
@@ -254,10 +255,7 @@ where
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_packet_params(rx_pkt_params).await?;
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
-        self.radio_mode = match duty_cycle_params {
-            Some(&_duty_cycle) => RadioMode::ReceiveDutyCycle,
-            None => RadioMode::Receive,
-        };
+        self.radio_mode = listen_mode.into();
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.radio_kind
             .do_rx(

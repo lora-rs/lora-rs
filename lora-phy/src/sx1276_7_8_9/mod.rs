@@ -501,19 +501,16 @@ where
     async fn do_rx(
         &mut self,
         rx_mode: RxMode,
-        duty_cycle_params: Option<&DutyCycleParams>,
+        _duty_cycle_params: Option<&DutyCycleParams>,
         _rx_continuous: bool,
         rx_boost: bool,
         _symbol_timeout: u16,
     ) -> Result<(), RadioError> {
-        if let Some(&_duty_cycle) = duty_cycle_params {
-            return Err(RadioError::DutyCycleUnsupported);
-        }
-
         let (num_symbols, mode) = match rx_mode {
-            RxMode::Single(ns) => (ns.max(SX127X_MIN_LORA_SYMB_NUM_TIMEOUT), LoRaMode::RxSingle),
-            RxMode::Continuous => (0, LoRaMode::RxContinuous),
-        };
+            RxMode::DutyCycle(_) => Err(RadioError::DutyCycleUnsupported),
+            RxMode::Single(ns) => Ok((ns.max(SX127X_MIN_LORA_SYMB_NUM_TIMEOUT), LoRaMode::RxSingle)),
+            RxMode::Continuous => Ok((0, LoRaMode::RxContinuous)),
+        }?;
 
         self.intf.iv.enable_rf_switch_rx().await?;
 
