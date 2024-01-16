@@ -84,13 +84,12 @@ async fn main(_spawner: Spawner) {
     // See "RM0453 Reference manual STM32WL5x advanced Arm®-based 32-bit MCUs with sub-GHz radio solution" for the best explanation of Rx duty cycle processing.
     match lora
         .prepare_for_rx(
-            RxMode::Continuous,
-            &mdltn_params,
-            &rx_pkt_params,
-            Some(&DutyCycleParams {
+            RxMode::DutyCycle(DutyCycleParams {
                 rx_time: 300_000,    // 300_000 units * 15.625 us/unit = 4.69 s
                 sleep_time: 200_000, // 200_000 units * 15.625 us/unit = 3.13 s
             }),
+            &mdltn_params,
+            &rx_pkt_params,
             false,
         )
         .await
