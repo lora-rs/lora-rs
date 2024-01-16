@@ -614,14 +614,7 @@ where
         self.intf.write(&op_code_and_timeout, false).await
     }
 
-    async fn do_rx(
-        &mut self,
-        rx_mode: RxMode,
-        _duty_cycle_params: Option<&DutyCycleParams>,
-        _rx_continuous: bool,
-        rx_boost: bool,
-        _symbol_timeout: u16,
-    ) -> Result<(), RadioError> {
+    async fn do_rx(&mut self, rx_mode: RxMode, rx_boost: bool) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_rx().await?;
 
         // Stop the Rx timer on preamble detection

@@ -103,14 +103,7 @@ pub trait RadioKind {
     /// Perform a send operation
     async fn do_tx(&mut self, timeout_in_ms: u32) -> Result<(), RadioError>;
     /// Set up to perform a receive operation (single-shot, continuous, or duty cycle)
-    async fn do_rx(
-        &mut self,
-        rx_mode: RxMode,
-        duty_cycle_params: Option<&DutyCycleParams>,
-        rx_continuous: bool,
-        rx_boosted_if_supported: bool,
-        symbol_timeout: u16,
-    ) -> Result<(), RadioError>;
+    async fn do_rx(&mut self, rx_mode: RxMode, rx_boost: bool) -> Result<(), RadioError>;
     /// Get an available packet made available as the result of a receive operation
     async fn get_rx_payload(
         &mut self,

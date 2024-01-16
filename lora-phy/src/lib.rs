@@ -233,23 +233,10 @@ where
         listen_mode: RxMode,
         mdltn_params: &ModulationParams,
         rx_pkt_params: &PacketParams,
-        duty_cycle_params: Option<&DutyCycleParams>,
+        _duty_cycle_params: Option<&DutyCycleParams>,
         rx_boosted_if_supported: bool,
     ) -> Result<(), RadioError> {
-        // Disable polling functionality for RX as we mostly rely on DIO interrupts.
-        // TODO: If someone really wants polling, implement separate poll_irq
-        self.polling_timeout_in_ms = None;
-
-        let (rxc, num_symbols) = match listen_mode {
-            RxMode::Single(n) => (false, n),
-            RxMode::Continuous => (true, 0),
-            RxMode::DutyCycle(_) => (false, 0),
-        };
-
-        self.rx_continuous = rxc;
-
-        defmt::trace!("RX mode: RxC: {}, symbol_timeout: {}", rxc, num_symbols);
-
+        defmt::trace!("RX mode: {}", listen_mode);
         self.prepare_modem(mdltn_params).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
@@ -257,15 +244,7 @@ where
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_mode = listen_mode.into();
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
-        self.radio_kind
-            .do_rx(
-                listen_mode,
-                duty_cycle_params,
-                self.rx_continuous,
-                rx_boosted_if_supported,
-                num_symbols,
-            )
-            .await
+        self.radio_kind.do_rx(listen_mode, rx_boosted_if_supported).await
     }
 
     /// Obtain the results of a read operation
