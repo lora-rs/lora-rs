@@ -4,6 +4,7 @@ use super::mod_params::{PacketParams, RadioError};
 use super::mod_traits::RadioKind;
 use super::{DelayNs, LoRa, RxMode};
 
+use lora_modulation::BaseBandModulationParams;
 use lorawan_device::async_device::{
     radio::{PhyRxTx, RxConfig, RxMode as LorawanRxMode, RxQuality, RxStatus, TxConfig},
     Timings,
@@ -125,7 +126,12 @@ where
             .lora
             .create_rx_packet_params(8, false, 255, true, true, &mdltn_params)?;
         self.lora
-            .prepare_for_rx(config.mode.into(), &mdltn_params, &rx_pkt_params, false)
+            .prepare_for_rx(
+                RxMode::from(config.mode, config.rf.bb),
+                &mdltn_params,
+                &rx_pkt_params,
+                false,
+            )
             .await?;
         self.rx_pkt_params = Some(rx_pkt_params);
         Ok(())
@@ -159,11 +165,15 @@ where
     }
 }
 
-impl From<LorawanRxMode> for RxMode {
-    fn from(mode: LorawanRxMode) -> Self {
+impl RxMode {
+    fn from(mode: LorawanRxMode, bb: BaseBandModulationParams) -> Self {
         match mode {
             LorawanRxMode::Continuous => RxMode::Continuous,
-            LorawanRxMode::Single(symbols) => RxMode::Single(symbols),
+            LorawanRxMode::Single { ms } => {
+                const PREAMBLE_SYMBOLS: u16 = 13; // 12.25
+                let num_symbols = PREAMBLE_SYMBOLS + bb.delay_in_symbols(ms);
+                RxMode::Single(num_symbols)
+            }
         }
     }
 }
