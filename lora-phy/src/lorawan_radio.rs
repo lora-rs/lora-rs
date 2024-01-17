@@ -1,13 +1,12 @@
 #![allow(missing_docs)]
 
-use lorawan_device::async_device::{
-    radio::{PhyRxTx, RxConfig, RxQuality, TxConfig},
-    Timings,
-};
-
 use super::mod_params::{PacketParams, RadioError};
 use super::mod_traits::RadioKind;
 use super::{DelayNs, LoRa, RxMode};
+use lorawan_device::async_device::{
+    radio::{PhyRxTx, RxConfig, RxQuality, RxStatus, TxConfig},
+    Timings,
+};
 
 const DEFAULT_RX_WINDOW_LEAD_TIME: u32 = 50;
 
@@ -131,6 +130,17 @@ where
         Ok(())
     }
 
+    async fn rx_single(&mut self, buf: &mut [u8]) -> Result<RxStatus, Self::PhyError> {
+        if let Some(rx_params) = &self.rx_pkt_params {
+            match self.lora.rx(rx_params, buf).await {
+                Ok((len, q)) => Ok(RxStatus::Rx(len as usize, RxQuality::new(q.rssi, q.snr as i8))),
+                Err(RadioError::ReceiveTimeout) => Ok(RxStatus::RxTimeout),
+                Err(err) => Err(err.into()),
+            }
+        } else {
+            Err(Error::NoRxParams)
+        }
+    }
     async fn rx(&mut self, receiving_buffer: &mut [u8]) -> Result<(usize, RxQuality), Self::PhyError> {
         if let Some(rx_params) = &self.rx_pkt_params {
             match self.lora.rx(rx_params, receiving_buffer).await {

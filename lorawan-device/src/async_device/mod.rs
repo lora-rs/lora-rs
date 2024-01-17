@@ -27,7 +27,7 @@ pub use embassy_time::EmbassyTimer;
 #[cfg(test)]
 mod test;
 
-use crate::radio::RxQuality;
+use self::radio::RxQuality;
 use core::cmp::min;
 
 /// Type representing a LoRaWAN capable device.
