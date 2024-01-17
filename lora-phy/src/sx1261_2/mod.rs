@@ -44,11 +44,11 @@ enum DeviceSel {
 /// Supported SX126x chip variants
 #[derive(Clone, PartialEq)]
 pub enum Sx126xVariant {
-    /// Semtech SX1261 (or STM32WL with Low Power PA only)
+    /// Semtech SX1261 (or STM32WL with Low Power PA only).
     Sx1261,
-    /// Semtech SX1262 (or STM32WL with High Power PA only )
+    /// Semtech SX1262 (or STM32WL with High Power PA only).
     Sx1262,
-    /// STM32WL SoC with power low power and high power PAs available
+    /// STM32WL SoC both high power and lower PAs.
     Stm32wl,
 }
 
@@ -376,11 +376,12 @@ where
             false => RampTime::Ramp200Us, // for instance, on initialization
         };
 
+        const HIGH_POWER_PA_THRESHOLD: i32 = 15;
         let device_select = match self.config.chip {
             Sx126xVariant::Sx1261 => DeviceSel::LowPowerPA,
             Sx126xVariant::Sx1262 => DeviceSel::HighPowerPA,
             Sx126xVariant::Stm32wl => {
-                if output_power <= 15 {
+                if output_power <= HIGH_POWER_PA_THRESHOLD {
                     DeviceSel::LowPowerPA
                 } else {
                     DeviceSel::HighPowerPA
