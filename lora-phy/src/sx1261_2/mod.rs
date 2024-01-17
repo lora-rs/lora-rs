@@ -35,17 +35,21 @@ const BRD_TCXO_WAKEUP_TIME: u32 = 10;
 // SetRx timeout argument for enabling continuous mode
 const RX_CONTINUOUS_TIMEOUT: u32 = 0xffffff;
 
+#[repr(u8)]
+enum DeviceSel {
+    LowPowerPA = 1,
+    HighPowerPA = 0,
+}
+
 /// Supported SX126x chip variants
 #[derive(Clone, PartialEq)]
 pub enum Sx126xVariant {
-    /// Semtech SX1261
+    /// Semtech SX1261 (or STM32WL with Low Power PA only).
     Sx1261,
-    /// Semtech SX1261
+    /// Semtech SX1262 (or STM32WL with High Power PA only).
     Sx1262,
-    /// STM32WL System-On-Chip with SX126x-based sub-GHz radio
-    Stm32wl, // XXX: Drop and switch to board-specific configuration?
-             // STM32 manuals don't really specify which sx126x chip is used.
-             // Original code in set_tx_power_and_ramp_time assumes Sx1262-specific power rates
+    /// STM32WL SoC both high power and lower PAs.
+    Stm32wl,
 }
 
 /// Configuration for SX126x-based boards
@@ -146,14 +150,15 @@ where
         Ok(())
     }
 
-    async fn set_pa_config(
-        &mut self,
-        pa_duty_cycle: u8,
-        hp_max: u8,
-        device_sel: u8,
-        pa_lut: u8,
-    ) -> Result<(), RadioError> {
-        let op_code_and_pa_config = [OpCode::SetPAConfig.value(), pa_duty_cycle, hp_max, device_sel, pa_lut];
+    async fn set_pa_config(&mut self, pa_duty_cycle: u8, hp_max: u8, device_sel: DeviceSel) -> Result<(), RadioError> {
+        const PA_LUT_RESERVED: u8 = 0x01;
+        let op_code_and_pa_config = [
+            OpCode::SetPAConfig.value(),
+            pa_duty_cycle,
+            hp_max,
+            device_sel as u8,
+            PA_LUT_RESERVED,
+        ];
         self.intf.write(&op_code_and_pa_config, false).await
     }
 
@@ -371,94 +376,110 @@ where
             false => RampTime::Ramp200Us, // for instance, on initialization
         };
 
-        // TODO: Switch to match so all chip variants are covered
-        let chip_type = &self.config.chip;
-        if chip_type == &Sx126xVariant::Sx1261 {
-            // Clamp power between [-17, 15] dBm
-            let txp = output_power.min(15).max(-17);
+        const HIGH_POWER_PA_THRESHOLD: i32 = 15;
+        let device_select = match self.config.chip {
+            Sx126xVariant::Sx1261 => DeviceSel::LowPowerPA,
+            Sx126xVariant::Sx1262 => DeviceSel::HighPowerPA,
+            Sx126xVariant::Stm32wl => {
+                if output_power <= HIGH_POWER_PA_THRESHOLD {
+                    DeviceSel::LowPowerPA
+                } else {
+                    DeviceSel::HighPowerPA
+                }
+            }
+        };
 
-            if txp == 15 {
-                if let Some(m_p) = mdltn_params {
-                    if m_p.frequency_in_hz < 400_000_000 {
-                        return Err(RadioError::InvalidOutputPowerForFrequency);
+        match device_select {
+            DeviceSel::LowPowerPA => {
+                const LOW_POWER_MIN: i32 = -17;
+                const LOW_POWER_MAX: i32 = 15;
+                // Clamp power between [-17, 15] dBm
+                let txp = output_power.min(LOW_POWER_MAX).max(LOW_POWER_MIN);
+
+                if txp == 15 {
+                    if let Some(m_p) = mdltn_params {
+                        if m_p.frequency_in_hz < 400_000_000 {
+                            return Err(RadioError::InvalidOutputPowerForFrequency);
+                        }
+                    }
+                }
+
+                // For SX1261:
+                // if f < 400 MHz, paDutyCycle should not be higher than 0x04,
+                // if f > 400 Mhz, paDutyCycle should not be higher than 0x07.
+                // From Table 13-21: PA Operating Modes with Optimal Settings
+                match txp {
+                    LOW_POWER_MAX => {
+                        self.set_pa_config(0x06, 0x00, DeviceSel::LowPowerPA).await?;
+                        tx_params_power = 14;
+                    }
+                    11..=14 => {
+                        self.set_pa_config(0x04, 0x00, DeviceSel::LowPowerPA).await?;
+                        tx_params_power = txp as u8;
+                    }
+                    // 10 and less
+                    LOW_POWER_MIN..=10 => {
+                        self.set_pa_config(0x01, 0x00, DeviceSel::LowPowerPA).await?;
+                        // table indicates 10 dBm => txp = 13, therefore we add 3 to values below 10
+                        tx_params_power = txp as u8 + 3;
+                    }
+                    _ => unreachable!("Invalid output power value for low power PA!"),
+                }
+            }
+            DeviceSel::HighPowerPA => {
+                const HIGH_POWER_MIN: i32 = -9;
+                const HIGH_POWER_MAX: i32 = 22;
+                // Clamp power between [-9, 22] dBm
+                let txp = output_power.min(HIGH_POWER_MAX).max(HIGH_POWER_MIN);
+                // Provide better resistance of the SX1262 Tx to antenna mismatch (see DS_SX1261-2_V1.2 datasheet chapter 15.2)
+                let mut tx_clamp_cfg = [0x00u8];
+                self.intf
+                    .read(
+                        &[
+                            OpCode::ReadRegister.value(),
+                            Register::TxClampCfg.addr1(),
+                            Register::TxClampCfg.addr2(),
+                            0x00u8,
+                        ],
+                        &mut tx_clamp_cfg,
+                    )
+                    .await?;
+                tx_clamp_cfg[0] |= 0x0F << 1;
+                let register_and_tx_clamp_cfg = [
+                    OpCode::WriteRegister.value(),
+                    Register::TxClampCfg.addr1(),
+                    Register::TxClampCfg.addr2(),
+                    tx_clamp_cfg[0],
+                ];
+                self.intf.write(&register_and_tx_clamp_cfg, false).await?;
+
+                // From Table 13-21: PA Operating Modes with Optimal Settings
+                match txp {
+                    21..=HIGH_POWER_MAX => {
+                        self.set_pa_config(0x04, 0x07, DeviceSel::HighPowerPA).await?;
+                        tx_params_power = 22;
+                    }
+                    18..=20 => {
+                        self.set_pa_config(0x03, 0x05, DeviceSel::HighPowerPA).await?;
+                        // table indicates 20 dBm => txp = 22, therefore we add 2 to this range
+                        tx_params_power = txp as u8 + 2;
+                    }
+                    15..=17 => {
+                        self.set_pa_config(0x02, 0x03, DeviceSel::HighPowerPA).await?;
+                        // table indicates 17 dBm => txp = 22, therefore we add 5 to this range
+                        tx_params_power = txp as u8 + 5;
+                    }
+                    HIGH_POWER_MIN..=14 => {
+                        self.set_pa_config(0x02, 0x02, DeviceSel::HighPowerPA).await?;
+                        // table indicates 14 dBm => txp = 22, therefore we add 8 to this range
+                        tx_params_power = txp as u8 + 8;
+                    }
+                    _ => {
+                        unreachable!("Invalid output power value for high power PA!")
                     }
                 }
             }
-
-            // For SX1261:
-            // if f < 400 MHz, paDutyCycle should not be higher than 0x04,
-            // if f > 400 Mhz, paDutyCycle should not be higher than 0x07.
-            // From Table 13-21: PA Operating Modes with Optimal Settings
-            match txp {
-                15 => {
-                    self.set_pa_config(0x06, 0x00, 0x01, 0x01).await?;
-                    tx_params_power = 14;
-                }
-                14 => {
-                    self.set_pa_config(0x04, 0x00, 0x01, 0x01).await?;
-                    tx_params_power = 14;
-                }
-                10 => {
-                    self.set_pa_config(0x01, 0x00, 0x01, 0x01).await?;
-                    tx_params_power = 13;
-                }
-                _ => {
-                    self.set_pa_config(0x04, 0x00, 0x01, 0x01).await?;
-                    tx_params_power = txp as u8;
-                }
-            }
-        } else {
-            // Clamp power between [-9, 22] dBm
-            let txp = output_power.min(22).max(-9);
-            // Provide better resistance of the SX1262 Tx to antenna mismatch (see DS_SX1261-2_V1.2 datasheet chapter 15.2)
-            let mut tx_clamp_cfg = [0x00u8];
-            self.intf
-                .read(
-                    &[
-                        OpCode::ReadRegister.value(),
-                        Register::TxClampCfg.addr1(),
-                        Register::TxClampCfg.addr2(),
-                        0x00u8,
-                    ],
-                    &mut tx_clamp_cfg,
-                )
-                .await?;
-            tx_clamp_cfg[0] |= 0x0F << 1;
-            let register_and_tx_clamp_cfg = [
-                OpCode::WriteRegister.value(),
-                Register::TxClampCfg.addr1(),
-                Register::TxClampCfg.addr2(),
-                tx_clamp_cfg[0],
-            ];
-            self.intf.write(&register_and_tx_clamp_cfg, false).await?;
-
-            // From Table 13-21: PA Operating Modes with Optimal Settings
-            match txp {
-                22 => {
-                    self.set_pa_config(0x04, 0x07, 0x00, 0x01).await?;
-                    tx_params_power = 22;
-                }
-                20 => {
-                    self.set_pa_config(0x03, 0x05, 0x00, 0x01).await?;
-                    tx_params_power = 22;
-                }
-                17 => {
-                    self.set_pa_config(0x02, 0x03, 0x00, 0x01).await?;
-                    tx_params_power = 22;
-                }
-                14 => {
-                    self.set_pa_config(0x02, 0x02, 0x00, 0x01).await?;
-                    tx_params_power = 22;
-                }
-                _ => {
-                    self.set_pa_config(0x04, 0x07, 0x00, 0x01).await?;
-                    tx_params_power = txp as u8;
-                }
-            }
         }
-
-        debug!("tx power = {}", tx_params_power);
-
         let op_code_and_tx_params = [OpCode::SetTxParams.value(), tx_params_power, ramp_time.value()];
         self.intf.write(&op_code_and_tx_params, false).await
     }
