@@ -304,12 +304,9 @@ impl Mac {
     }
 
     pub(crate) fn get_rx_config(&self, buffer_ms: u32, frame: &Frame, window: &Window) -> RxConfig {
-        const PREAMBLE_SYMBOLS: u16 = 13; // 12.25
-        let rf = self.region.get_rx_config(self.configuration.data_rate, frame, window);
-        let num_symbols = PREAMBLE_SYMBOLS + rf.bb.delay_in_symbols(buffer_ms);
         RxConfig {
             rf: self.region.get_rx_config(self.configuration.data_rate, frame, window),
-            mode: RxMode::Single(num_symbols),
+            mode: RxMode::Single { ms: buffer_ms },
         }
     }
 

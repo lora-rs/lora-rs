@@ -82,7 +82,6 @@ where
     }
 
     // Utility functions
-
     async fn add_register_to_retention_list(&mut self, register: Register) -> Result<(), RadioError> {
         let mut buffer = [0x00u8; (1 + (2 * MAX_NUMBER_REGS_IN_RETENTION)) as usize];
 

@@ -11,7 +11,11 @@ pub struct RfConfig {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RxMode {
     Continuous,
-    Single(u16),
+    /// Single shot receive.
+    /// `ms` is buffer time in milliseconds added to the timeout
+    Single {
+        ms: u32,
+    },
 }
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
