@@ -10,7 +10,7 @@ use lorawan::{
     parser::{parse, DataPayload, JoinAcceptPayload, PhyPayload},
 };
 use mac::Session;
-#[cfg(feature = "async")]
+
 use parser::FCtrl;
 use radio::{RfConfig, TxConfig};
 use std::{collections::HashMap, sync::Mutex, vec::Vec};
@@ -169,7 +169,6 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
 }
 
 /// Handle an uplink and respond with two LinkAdrReq on Port 0
-#[cfg(feature = "async")]
 pub fn handle_class_c_uplink_after_join(
     uplink: Option<Uplink>,
     _config: RfConfig,
@@ -257,7 +256,6 @@ pub fn handle_data_uplink_with_link_adr_ans(
     }
 }
 
-#[cfg(feature = "async")]
 pub fn class_c_downlink<const FCNT_DOWN: u32>(
     _uplink: Option<Uplink>,
     _config: RfConfig,

@@ -10,7 +10,7 @@ embassy-time = { version = "0.3.0", features = ["defmt", "defmt-timestamp-uptime
 embassy-nrf = { version = "0.1.0", features = ["defmt", "nrf52840", "time-driver-rtc1", "gpiote", "unstable-pac", "time"] }
 
 lora-phy = { path = "../../lora-phy", features = ["lorawan-radio"] }
-lorawan-device = { path = "../../lorawan-device", default-features = false, features = ["async", "embassy-time", "default-crypto", "defmt"] }
+lorawan-device = { path = "../../lorawan-device", default-features = false, features = ["embassy-time", "default-crypto", "defmt"] }
 lorawan = { path = "../../lorawan-encoding", default-features = false, features = ["default-crypto"] }
 
 defmt = "0.3"

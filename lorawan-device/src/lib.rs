@@ -20,6 +20,8 @@ pub use region::Region;
 #[cfg(test)]
 mod test_util;
 
+pub mod async_device;
+
 pub mod nb_device;
 use nb_device::state::State;
 
@@ -37,11 +39,6 @@ pub use rng::Prng;
 
 mod log;
 
-#[cfg(feature = "async")]
-#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
-pub mod async_device;
-
-#[derive(Debug)]
 /// Provides the application payload and FPort of a downlink message.
 pub struct Downlink {
     pub data: Vec<u8, 256>,
