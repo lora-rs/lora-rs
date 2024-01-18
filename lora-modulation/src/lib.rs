@@ -128,6 +128,10 @@ impl BaseBandModulationParams {
         (delay_in_ms * 1000 / self.t_sym_us) as u16
     }
 
+    pub const fn symbols_to_ms(&self, symbols: u32) -> u32 {
+        (self.t_sym_us * symbols) / 1_000
+    }
+
     /// Calculates time on air for a given payload and modulation parameters.
     /// If `preamble` is None, the whole preamble including syncword is excluded from calculation.
     pub const fn time_on_air_us(
