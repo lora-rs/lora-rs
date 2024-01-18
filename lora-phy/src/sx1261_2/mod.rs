@@ -126,7 +126,7 @@ where
     // Set the number of symbols the radio will wait to detect a reception
     async fn set_lora_symbol_num_timeout(&mut self, symbol_num: u16) -> Result<(), RadioError> {
         let mut exp = 0u8;
-        let mut mant: u8 = symbol_num.min(SX126X_MAX_LORA_SYMB_NUM_TIMEOUT.into()) as u8;
+        let mut mant = ((symbol_num.min(SX126X_MAX_LORA_SYMB_NUM_TIMEOUT.into()) + 1) >> 1) as u8;
         while mant > 31 {
             mant = (mant + 3) >> 2;
             exp += 1;
