@@ -8,6 +8,7 @@ pub use super::{
     region::{self, Region},
     Downlink, JoinMode,
 };
+use crate::log;
 use core::marker::PhantomData;
 use futures::{future::select, future::Either, pin_mut};
 use heapless::Vec;
@@ -309,8 +310,9 @@ where
             return Ok(None);
         }
         // Class C listen while waiting for the window
-        let rf_config = self.mac.get_rxc_config();
-        self.radio.setup_rx(rf_config).await.map_err(Error::Radio)?;
+        let rx_config = self.mac.get_rxc_config();
+        log::debug!("Configuring RXC window with config {}.", rx_config);
+        self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
         let mut response = None;
         let timeout_fut = self.timer.at(duration.into());
         pin_mut!(timeout_fut);
@@ -320,16 +322,19 @@ where
                 .await
             {
                 RxWindowResponse::Rx(sz, _, timeout_fut) => {
+                    log::debug!("RXC window received {} bytes.", sz);
                     self.radio_buffer.set_pos(sz);
                     match self
                         .mac
                         .handle_rxc::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)?
                     {
                         mac::Response::NoUpdate => {
+                            log::debug!("RXC frame was invalid.");
                             self.radio_buffer.clear();
                             maybe_timeout_fut = Some(timeout_fut);
                         }
                         r => {
+                            log::debug!("Valid RXC frame received.");
                             self.radio_buffer.clear();
                             response = Some(r);
                         }
@@ -354,32 +359,37 @@ where
             - self.radio.get_rx_window_lead_time_ms();
 
         // RXC
+        log::debug!("Starting RX1 in {} ms.", rx1_start_delay);
         let _ = self.between_windows(rx1_start_delay).await?;
 
         // RX1
         let rx_config =
             self.mac.get_rx_config(self.radio.get_rx_window_buffer(), frame, &Window::_1);
+        log::debug!("Configuring RX1 window with config {}.", rx_config);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
 
         if let Some(response) = self.rx_listen().await? {
+            log::debug!("RX1 received {}", response);
             return Ok(response);
         }
 
         let rx2_start_delay = self.mac.get_rx_delay(frame, &Window::_2) + window_delay
             - self.radio.get_rx_window_lead_time_ms();
-
+        log::debug!("RX1 did not receive anything. Awaiting RX2 for {} ms.");
         // RXC
         let _ = self.between_windows(rx2_start_delay).await?;
 
         // RX2
         let rx_config =
             self.mac.get_rx_config(self.radio.get_rx_window_buffer(), frame, &Window::_2);
+        log::debug!("Configuring RX2 window with config {}.", rx_config);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
 
         if let Some(response) = self.rx_listen().await? {
+            log::debug!("RX2 received {}", response);
             return Ok(response);
         }
-
+        log::debug!("RX2 did not receive anything.");
         Ok(self.mac.rx2_complete())
     }
 
