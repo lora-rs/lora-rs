@@ -35,6 +35,8 @@ pub use rand_core::RngCore;
 mod rng;
 pub use rng::Prng;
 
+mod log;
+
 #[cfg(feature = "async")]
 #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 pub mod async_device;
