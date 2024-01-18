@@ -26,6 +26,17 @@ let time_on_air = params.time_on_air_us(
 assert_eq!(time_on_air, 144384);
 ```
 
+```rust
+use lora_modulation::{BaseBandModulationParams, SpreadingFactor, Bandwidth, CodingRate};
+
+let symbols = 14;
+let params = BaseBandModulationParams::new(SpreadingFactor::_12, Bandwidth::_125KHz, CodingRate::_4_5);
+let timeout = params.symbols_to_ms(symbols);
+
+// Timeout is 458 ms
+assert_eq!(timeout, 458);
+```
+
 [Latest Version]: https://img.shields.io/crates/v/lora-modulation.svg
 [crates.io]: https://crates.io/crates/lora-modulation
 [Docs]: https://docs.rs/lora-modulation/badge.svg
