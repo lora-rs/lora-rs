@@ -148,7 +148,7 @@ where
             Err(Error::NoRxParams)
         }
     }
-    async fn rx(&mut self, receiving_buffer: &mut [u8]) -> Result<(usize, RxQuality), Self::PhyError> {
+    async fn rx_continuous(&mut self, receiving_buffer: &mut [u8]) -> Result<(usize, RxQuality), Self::PhyError> {
         if let Some(rx_params) = &self.rx_pkt_params {
             match self.lora.rx(rx_params, receiving_buffer).await {
                 Ok((received_len, rx_pkt_status)) => {
@@ -170,6 +170,8 @@ impl RxMode {
         match mode {
             LorawanRxMode::Continuous => RxMode::Continuous,
             LorawanRxMode::Single { ms } => {
+                // Since both sx126x and sx127x have a preamble-based timeout, we translate
+                // the additional millisecond delay into symbols and add it to the amount of preamble symbols.
                 const PREAMBLE_SYMBOLS: u16 = 13; // 12.25
                 let num_symbols = PREAMBLE_SYMBOLS + bb.delay_in_symbols(ms);
                 RxMode::Single(num_symbols)

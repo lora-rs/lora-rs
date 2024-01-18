@@ -48,7 +48,10 @@ impl PhyRxTx for TestRadio {
         Ok(())
     }
 
-    async fn rx(&mut self, rx_buf: &mut [u8]) -> Result<(usize, RxQuality), Self::PhyError> {
+    async fn rx_continuous(
+        &mut self,
+        rx_buf: &mut [u8],
+    ) -> Result<(usize, RxQuality), Self::PhyError> {
         let msg = self.rx.recv().await.unwrap();
         match msg {
             Msg::RxTx(handler) => {

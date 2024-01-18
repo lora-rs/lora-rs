@@ -11,8 +11,8 @@ pub struct RfConfig {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RxMode {
     Continuous,
-    /// Single shot receive.
-    /// `ms` is buffer time in milliseconds added to the timeout
+    /// Single shot receive. Argument `ms` indicates how many milliseconds of extra buffer time should
+    /// be added to the preamble detection timeout.
     Single {
         ms: u32,
     },
