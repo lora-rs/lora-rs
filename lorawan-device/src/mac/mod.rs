@@ -20,7 +20,6 @@ pub use session::{Session, SessionKeys};
 mod otaa;
 pub use otaa::NetworkCredentials;
 
-#[cfg(feature = "async")]
 use crate::async_device;
 use crate::nb_device;
 
@@ -193,16 +192,6 @@ impl Mac {
     }
 
     /// Gets the radio configuration and timing for a given frame type and window.
-    pub(crate) fn get_rx_parameters(
-        &mut self,
-        buffer_ms: u32,
-        frame: &Frame,
-        window: &Window,
-    ) -> (RxConfig, u32) {
-        (self.get_rx_config(buffer_ms, frame, window), self.get_rx_delay(frame, window))
-    }
-
-    /// Gets the radio configuration and timing for a given frame type and window.
     pub(crate) fn get_rx_parameters_legacy(
         &mut self,
         frame: &Frame,
@@ -248,7 +237,6 @@ impl Mac {
     /// Handles a received RF frame during RXC window. Returns None if unparseable, fails decryption,
     /// or fails MIC verification. Upon successful data rx, provides Response::DownlinkReceived.
     /// User must later call `take_downlink()` on the device to get the application data.
-    #[cfg(feature = "async")]
     pub(crate) fn handle_rxc<C: CryptoFactory + Default, const N: usize, const D: usize>(
         &mut self,
         buf: &mut RadioBuffer<N>,
@@ -344,8 +332,6 @@ impl From<Response> for nb_device::Response {
     }
 }
 
-#[cfg(feature = "async")]
-#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 impl TryFrom<Response> for async_device::SendResponse {
     type Error = Error;
 
@@ -362,8 +348,6 @@ impl TryFrom<Response> for async_device::SendResponse {
     }
 }
 
-#[cfg(feature = "async")]
-#[cfg_attr(docsrs, doc(cfg(feature = "async")))]
 impl TryFrom<Response> for async_device::JoinResponse {
     type Error = Error;
 
