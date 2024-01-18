@@ -410,7 +410,7 @@ where
     where
         F: futures::Future<Output = ()> + Sized + Unpin,
     {
-        let rx_fut = radio.rx(rx_buf.as_mut());
+        let rx_fut = radio.rx_continuous(rx_buf.as_mut());
         pin_mut!(rx_fut);
         // Wait until either a RF frame is received or if we've reached window close
         match select(rx_fut, timeout_fut).await {
@@ -434,7 +434,7 @@ where
     pub async fn rxc_listen(&mut self) -> Result<mac::Response, Error<R::PhyError>> {
         loop {
             let (sz, _rx_quality) =
-                self.radio.rx(self.radio_buffer.as_mut()).await.map_err(Error::Radio)?;
+                self.radio.rx_continuous(self.radio_buffer.as_mut()).await.map_err(Error::Radio)?;
             self.radio_buffer.set_pos(sz);
             match self.mac.handle_rxc::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)? {
                 mac::Response::NoUpdate => {
