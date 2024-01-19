@@ -24,3 +24,8 @@ embedded-hal-bus = { version = "0.1.0", features = ["async"]}
 [profile.release]
 debug = 2
 
+[features]
+default = []
+
+## Customize target binary to make it runnable from RAM (ie via teleprobe)
+link-to-ram = []
