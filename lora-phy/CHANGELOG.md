@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Support preamble detection allowing LoRaWAN RX1+RX2 reception.
 - Update embedded-hal-async version to 1.0.0.
 - Refactor `prepare_for_rx` to use RxMode enum and drop now unneeded args
+- Refactor `external-lora-phy` in `lorawan-device` as `lorawan-radio` in `lora-phy` ([#189](https://github.com/lora-rs/lora-rs/pull/189))
+- Refactor `setup_rx` to take in `enum RxMode` and drop previous `timeout_in_seconds` argument ([#207](https://github.com/lora-rs/lora-rs/pull/207))
+- Refactor `do_rx` and lorawan-radio's `setup_for_rx`[#208](https://github.com/lora-rs/lora-rs/pull/208)
+- Refactor sx126x power amplifier control and clarify `Sx126xVariant` implications ([#209](https://github.com/lora-rs/lora-rs/pull/209))
 
 ## [v2.1.2] - 2023-09-25
 
