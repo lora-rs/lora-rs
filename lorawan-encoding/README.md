@@ -12,7 +12,7 @@ LoRaWAN 1.0.2 messages from and to slices of bytes.
 
 ```toml
 [dependencies]
-lorawan = "0.7.0"
+lorawan = "0.8"
 ```
 
 ### Packet generation
