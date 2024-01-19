@@ -375,7 +375,7 @@ where
 
         let rx2_start_delay = self.mac.get_rx_delay(frame, &Window::_2) + window_delay
             - self.radio.get_rx_window_lead_time_ms();
-        log::debug!("RX1 did not receive anything. Awaiting RX2 for {} ms.");
+        log::debug!("RX1 did not receive anything. Awaiting RX2 for {} ms.", rx2_start_delay);
         // RXC
         let _ = self.between_windows(rx2_start_delay).await?;
 
