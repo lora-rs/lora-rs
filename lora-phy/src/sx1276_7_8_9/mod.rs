@@ -23,6 +23,11 @@ const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625; // FXOSC (32 MHz) * 1000000
 const SX127X_MIN_LORA_SYMB_NUM_TIMEOUT: u16 = 4;
 const SX127X_MAX_LORA_SYMB_NUM_TIMEOUT: u16 = 1023;
 
+// Constant values need to compute the RSSI value
+const RSSI_OFFSET_LF: i16 = -164;
+const RSSI_OFFSET_HF: i16 = -157;
+const RF_MID_BAND_THRESH: u32 = 525_000_000;
+
 /// Supported SX127x chip variants
 #[derive(Clone, Copy)]
 pub enum Sx127xVariant {
@@ -544,10 +549,35 @@ where
     }
 
     async fn get_rx_packet_status(&mut self) -> Result<PacketStatus, RadioError> {
-        let rssi_raw = self.read_register(Register::RegPktRssiValue).await?;
-        let rssi = (rssi_raw as i16) - 157i16; // or -164 for low frequency port ???
-        let snr_raw = self.read_register(Register::RegPktRssiValue).await?;
-        let snr = snr_raw as i16;
+        let snr = {
+            let packet_snr = self.read_register(Register::RegPktSnrValue).await?;
+            packet_snr as i8 as i16 / 4
+        };
+
+        let rssi = {
+            let packet_rssi = self.read_register(Register::RegPktRssiValue).await?;
+
+            let frequency_in_hz = {
+                let msb = self.read_register(Register::RegFrfMsb).await? as u32;
+                let mid = self.read_register(Register::RegFrfMid).await? as u32;
+                let lsb = self.read_register(Register::RegFrfLsb).await? as u32;
+                let frf = (msb << 16) + (mid << 8) + lsb;
+                (frf as f64 * FREQUENCY_SYNTHESIZER_STEP) as u32
+            };
+
+            let rssi_offset = if frequency_in_hz > RF_MID_BAND_THRESH {
+                RSSI_OFFSET_HF
+            } else {
+                RSSI_OFFSET_LF
+            };
+
+            if snr >= 0 {
+                rssi_offset + (packet_rssi as f32 * 16.0 / 15.0) as i16
+            } else {
+                rssi_offset + (packet_rssi as i16) + snr
+            }
+        };
+
         Ok(PacketStatus { rssi, snr })
     }
 
