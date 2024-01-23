@@ -91,12 +91,6 @@ impl<R> From<mac::Error> for Error<R> {
     }
 }
 
-// RX1
-enum RxWindowResponse<F: futures::Future<Output = ()> + Sized + Unpin> {
-    Rx(usize, RxQuality, F),
-    Timeout(u32),
-}
-
 impl<R, C, T, const N: usize> Device<R, C, T, rng::Prng, N>
 where
     R: radio::PhyRxTx + Timings,
@@ -309,6 +303,41 @@ where
             self.timer.at(duration.into()).await;
             return Ok(None);
         }
+
+        enum RxcWindowResponse<F: futures::Future<Output = ()> + Sized + Unpin> {
+            Rx(usize, RxQuality, F),
+            Timeout(u32),
+        }
+
+        /// RXC window listen until timeout
+        async fn rxc_listen_until_timeout<F, R, const N: usize>(
+            radio: &mut R,
+            rx_buf: &mut RadioBuffer<N>,
+            window_duration: u32,
+            timeout_fut: F,
+        ) -> RxcWindowResponse<F>
+        where
+            F: futures::Future<Output = ()> + Sized + Unpin,
+            R: radio::PhyRxTx + Timings,
+        {
+            let rx_fut = radio.rx_continuous(rx_buf.as_mut());
+            pin_mut!(rx_fut);
+            // Wait until either a RF frame is received or the timeout future fires
+            match select(rx_fut, timeout_fut).await {
+                Either::Left((r, timeout_fut)) => match r {
+                    Ok((sz, q)) => RxcWindowResponse::Rx(sz, q, timeout_fut),
+                    // Ignore errors or timeouts and wait until the RX2 window is ready.
+                    // Setting timeout to 0 ensures that `window_duration != rx2_start_delay`
+                    _ => {
+                        timeout_fut.await;
+                        RxcWindowResponse::Timeout(0)
+                    }
+                },
+                // Timeout! Prepare for the next window.
+                Either::Right(_) => RxcWindowResponse::Timeout(window_duration),
+            }
+        }
+
         // Class C listen while waiting for the window
         let rx_config = self.mac.get_rxc_config();
         log::debug!("Configuring RXC window with config {}.", rx_config);
@@ -317,11 +346,18 @@ where
         let timeout_fut = self.timer.at(duration.into());
         pin_mut!(timeout_fut);
         let mut maybe_timeout_fut = Some(timeout_fut);
+
+        // Keep processing RF frames until the timeout fires
         while let Some(timeout_fut) = maybe_timeout_fut.take() {
-            match Self::rx_window(&mut self.radio, &mut self.radio_buffer, duration, timeout_fut)
-                .await
+            match rxc_listen_until_timeout(
+                &mut self.radio,
+                &mut self.radio_buffer,
+                duration,
+                timeout_fut,
+            )
+            .await
             {
-                RxWindowResponse::Rx(sz, _, timeout_fut) => {
+                RxcWindowResponse::Rx(sz, _, timeout_fut) => {
                     log::debug!("RXC window received {} bytes.", sz);
                     self.radio_buffer.set_pos(sz);
                     match self
@@ -331,16 +367,19 @@ where
                         mac::Response::NoUpdate => {
                             log::debug!("RXC frame was invalid.");
                             self.radio_buffer.clear();
+                            // we preserve the timeout
                             maybe_timeout_fut = Some(timeout_fut);
                         }
                         r => {
                             log::debug!("Valid RXC frame received.");
                             self.radio_buffer.clear();
                             response = Some(r);
+                            // more than one downlink may be received so we preserve the timeout
+                            maybe_timeout_fut = Some(timeout_fut);
                         }
                     }
                 }
-                RxWindowResponse::Timeout(_) => return Ok(response),
+                RxcWindowResponse::Timeout(_) => return Ok(response),
             };
         }
         Ok(response)
@@ -358,8 +397,8 @@ where
         let rx1_start_delay = self.mac.get_rx_delay(frame, &Window::_1) + window_delay
             - self.radio.get_rx_window_lead_time_ms();
 
-        // RXC
         log::debug!("Starting RX1 in {} ms.", rx1_start_delay);
+        // sleep or RXC
         let _ = self.between_windows(rx1_start_delay).await?;
 
         // RX1
@@ -376,7 +415,7 @@ where
         let rx2_start_delay = self.mac.get_rx_delay(frame, &Window::_2) + window_delay
             - self.radio.get_rx_window_lead_time_ms();
         log::debug!("RX1 did not receive anything. Awaiting RX2 for {} ms.", rx2_start_delay);
-        // RXC
+        // sleep or RXC
         let _ = self.between_windows(rx2_start_delay).await?;
 
         // RX2
@@ -409,34 +448,6 @@ where
         self.radio_buffer.clear();
         self.window_complete().await?;
         Ok(response)
-    }
-
-    async fn rx_window<F>(
-        radio: &mut R,
-        rx_buf: &mut RadioBuffer<N>,
-        window_duration: u32,
-        timeout_fut: F,
-    ) -> RxWindowResponse<F>
-    where
-        F: futures::Future<Output = ()> + Sized + Unpin,
-    {
-        let rx_fut = radio.rx_continuous(rx_buf.as_mut());
-        pin_mut!(rx_fut);
-        // Wait until either a RF frame is received or if we've reached window close
-        match select(rx_fut, timeout_fut).await {
-            // We've received an RF frame
-            Either::Left((r, timeout_fut)) => match r {
-                Ok((sz, q)) => RxWindowResponse::Rx(sz, q, timeout_fut),
-                // Ignore errors or timeouts and wait until the RX2 window is ready.
-                // Setting timeout to 0 ensures that `window_duration != rx2_start_delay`
-                _ => {
-                    timeout_fut.await;
-                    RxWindowResponse::Timeout(0)
-                }
-            },
-            // Timeout! Prepare for the next window.
-            Either::Right(_) => RxWindowResponse::Timeout(window_duration),
-        }
     }
 
     /// When not involved in sending and RX1/RX2 windows, a class C configured device will be
