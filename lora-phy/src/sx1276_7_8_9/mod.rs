@@ -549,6 +549,8 @@ where
     }
 
     async fn get_rx_packet_status(&mut self) -> Result<PacketStatus, RadioError> {
+        // TODO: Fix for sx1272
+
         let snr = {
             let packet_snr = self.read_register(Register::RegPktSnrValue).await?;
             packet_snr as i8 as i16 / 4
