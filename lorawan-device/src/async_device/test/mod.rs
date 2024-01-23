@@ -292,6 +292,8 @@ async fn test_class_c_data_before_rx2() {
     radio.handle_timeout().await;
 
     radio.handle_rxtx(class_c_downlink::<1>).await;
+    // Trigger beginning of RX2
+    timer.fire_most_recent().await;
     // We expect FCntUp 1 up since the test util for Class C setup sends first frame
     // We set FcntDown to 2, since ACK to setup (1) and Class C downlink above (2)
     radio.handle_rxtx(handle_data_uplink_with_link_adr_req::<1, 2>).await;
