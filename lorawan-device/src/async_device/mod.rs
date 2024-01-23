@@ -346,7 +346,8 @@ where
         let timeout_fut = self.timer.at(duration.into());
         pin_mut!(timeout_fut);
         let mut maybe_timeout_fut = Some(timeout_fut);
-        //
+
+        // Keep processing RF frames until the timeout fires
         while let Some(timeout_fut) = maybe_timeout_fut.take() {
             match rxc_listen_until_timeout(
                 &mut self.radio,
