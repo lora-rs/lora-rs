@@ -24,9 +24,9 @@ const SX127X_MIN_LORA_SYMB_NUM_TIMEOUT: u16 = 4;
 const SX127X_MAX_LORA_SYMB_NUM_TIMEOUT: u16 = 1023;
 
 // Constant values need to compute the RSSI value
-const RSSI_OFFSET_LF: i16 = -164;
-const RSSI_OFFSET_HF: i16 = -157;
-const RF_MID_BAND_THRESH: u32 = 525_000_000;
+const SX1276_RSSI_OFFSET_LF: i16 = -164;
+const SX1276_RSSI_OFFSET_HF: i16 = -157;
+const SX1276_RF_MID_BAND_THRESH: u32 = 525_000_000;
 
 /// Supported SX127x chip variants
 #[derive(Clone, Copy)]
@@ -565,10 +565,10 @@ where
                 (frf as f64 * FREQUENCY_SYNTHESIZER_STEP) as u32
             };
 
-            let rssi_offset = if frequency_in_hz > RF_MID_BAND_THRESH {
-                RSSI_OFFSET_HF
+            let rssi_offset = if frequency_in_hz > SX1276_RF_MID_BAND_THRESH {
+                SX1276_RSSI_OFFSET_HF
             } else {
-                RSSI_OFFSET_LF
+                SX1276_RSSI_OFFSET_LF
             };
 
             if snr >= 0 {
