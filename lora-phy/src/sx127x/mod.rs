@@ -1,4 +1,5 @@
 mod radio_kind_params;
+pub use radio_kind_params::{Sx1272, Sx1276};
 
 use defmt::debug;
 use embedded_hal_async::delay::DelayNs;
@@ -29,37 +30,38 @@ const SX1276_RSSI_OFFSET_LF: i16 = -164;
 const SX1276_RSSI_OFFSET_HF: i16 = -157;
 const SX1276_RF_MID_BAND_THRESH: u32 = 525_000_000;
 
-/// Supported SX127x chip variants
-#[derive(Clone, Copy)]
-pub enum Sx127xVariant {
-    /// Semtech SX1272
-    Sx1272,
-    /// Semtech SX1276
-    // TODO: should we add variants for 77, 78 and 79 as well?)
-    Sx1276,
-}
+// /// Supported SX127x chip variants
+// #[derive(Clone, Copy)]
+// pub enum Sx127xVariant {
+//     /// Semtech SX1272
+//     Sx1272,
+//     /// Semtech SX1276
+//     // TODO: should we add variants for 77, 78 and 79 as well?)
+//     Sx1276,
+// }
 
 /// Configuration for SX127x-based boards
-pub struct Config {
+pub struct Config<C: Sx127xVariant> {
     /// LoRa chip used on specific board
-    pub chip: Sx127xVariant,
+    pub chip: C,
     /// Whether board is using crystal oscillator or external clock
     pub tcxo_used: bool,
 }
 
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
-pub struct Sx127x<SPI, IV> {
+pub struct Sx127x<SPI, IV, C: Sx127xVariant + Sized> {
     intf: SpiInterface<SPI, IV>,
-    config: Config,
+    config: Config<C>,
 }
 
-impl<SPI, IV> Sx127x<SPI, IV>
+impl<SPI, IV, C> Sx127x<SPI, IV, C>
 where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
+    C: Sx127xVariant,
 {
     /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
-    pub fn new(spi: SPI, iv: IV, config: Config) -> Self {
+    pub fn new(spi: SPI, iv: IV, config: Config<C>) -> Self {
         let intf = SpiInterface::new(spi, iv);
         Self { intf, config }
     }
@@ -101,91 +103,13 @@ where
     async fn set_ocp(&mut self, ocp_trim: OcpTrim) -> Result<(), RadioError> {
         self.write_register(Register::RegOcp, ocp_trim.value()).await
     }
-
-    /// TODO: tx_boost depends on following:
-    /// a) board configuration
-    /// b) channel selection
-    /// c) other?
-    async fn set_tx_power_sx1272(&mut self, p_out: i32, tx_boost: bool) -> Result<(), RadioError> {
-        // SX1272 has two output pins:
-        // 1) RFO: (-1 to +14 dBm)
-        // 2) PA_BOOST: (+2 to +17 dBm and +5 to 20 +dBm)
-
-        // RegPaConfig - 0x32
-        // [7] - PaSelect (0: RFO, 1: PA_BOOST)
-        // [6:4] - Unused: 0
-        // [3:0] - Output power in dB steps
-
-        // RegPaDac - 0x5a (SX1272)
-        // [7:3] - Reserved (0x10 as default)
-        // [2:0] - PaDac: 0x04 default, 0x07 - enable +20 dBm on PA_BOOST
-
-        // TODO: Shall we also touch OCP settings?
-        if tx_boost {
-            // Deal with two ranges, +17dBm enables extra boost
-            if p_out > 17 {
-                // PA_BOOST out: +5 .. +20 dBm
-                let val = (p_out.min(20).max(5) - 5) as u8 & 0x0f;
-                self.write_register(Register::RegPaConfig, (1 << 7) | val).await?;
-                self.write_register(Register::RegPaDacSX1272, 0x87).await?;
-            } else {
-                // PA_BOOST out: +2 .. +17 dBm
-                let val = (p_out.min(17).max(2) - 2) as u8 & 0x0f;
-                self.write_register(Register::RegPaConfig, (1 << 7) | val).await?;
-                self.write_register(Register::RegPaDacSX1272, 0x84).await?;
-            }
-        } else {
-            // RFO out: -1 to +14 dBm
-            let val = (p_out.min(14).max(-1) + 1) as u8 & 0x0f;
-            self.write_register(Register::RegPaConfig, val).await?;
-            self.write_register(Register::RegPaDacSX1272, 0x84).await?;
-        }
-
-        Ok(())
-    }
-
-    async fn set_tx_power_sx1276(&mut self, p_out: i32, tx_boost: bool) -> Result<(), RadioError> {
-        let pa_reg = Register::RegPaDacSX1276;
-        if tx_boost {
-            // Output via PA_BOOST: [2, 20] dBm
-            let txp = p_out.min(20).max(2);
-
-            // Pout=17-(15-OutputPower)
-            let output_power: i32 = txp - 2;
-
-            if txp > 17 {
-                self.write_register(pa_reg, PaDac::_20DbmOn.value()).await?;
-                self.set_ocp(OcpTrim::_240Ma).await?;
-            } else {
-                self.write_register(pa_reg, PaDac::_20DbmOff.value()).await?;
-                self.set_ocp(OcpTrim::_100Ma).await?;
-            }
-            self.write_register(Register::RegPaConfig, PaConfig::PaBoost.value() | (output_power as u8))
-                .await?;
-        } else {
-            // Clamp output: [-4, 14] dBm
-            let txp = p_out.min(14).max(-4);
-
-            // Pmax=10.8+0.6*MaxPower, where MaxPower is set below as 7 and therefore Pmax is 15
-            // Pout=Pmax-(15-OutputPower)
-            let output_power: i32 = txp;
-
-            self.write_register(pa_reg, PaDac::_20DbmOff.value()).await?;
-            self.set_ocp(OcpTrim::_100Ma).await?;
-            self.write_register(
-                Register::RegPaConfig,
-                PaConfig::MaxPower7NoPaBoost.value() | (output_power as u8),
-            )
-            .await?;
-        }
-        Ok(())
-    }
 }
 
-impl<SPI, IV> RadioKind for Sx127x<SPI, IV>
+impl<SPI, IV, C> RadioKind for Sx127x<SPI, IV, C>
 where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
+    C: Sx127xVariant,
 {
     fn create_modulation_params(
         &self,
@@ -197,7 +121,7 @@ where
         // Parameter validation
         spreading_factor_value(spreading_factor)?;
         coding_rate_value(coding_rate)?;
-        self.config.chip.bandwidth_value(bandwidth)?;
+        C::bandwidth_value(bandwidth)?;
         if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000) {
             return Err(RadioError::InvalidBandwidthForFrequency);
         }
@@ -290,10 +214,7 @@ where
         }
 
         // Configure Tcxo as input
-        let reg = match self.config.chip {
-            Sx127xVariant::Sx1272 => Register::RegTcxoSX1272,
-            Sx127xVariant::Sx1276 => Register::RegTcxoSX1276,
-        };
+        let reg = C::reg_txco();
         self.write_register(reg, TCXO_FOR_OSCILLATOR).await
     }
 
@@ -328,27 +249,14 @@ where
         debug!("tx power = {}", p_out);
 
         // Configure tx power and boost
-        match self.config.chip {
-            Sx127xVariant::Sx1272 => self.set_tx_power_sx1272(p_out, tx_boosted_if_possible).await,
-            Sx127xVariant::Sx1276 => self.set_tx_power_sx1276(p_out, tx_boosted_if_possible).await,
-        }?;
+        C::set_tx_power(self, p_out, tx_boosted_if_possible).await?;
 
         let ramp_time = match is_tx_prep {
             true => RampTime::Ramp40Us,   // for instance, prior to TX or CAD
             false => RampTime::Ramp250Us, // for instance, on initialization
         };
-        // Handle chip-specific differences for RegPaRamp 0x0a:
-        // Sx1272 - default: 0x19
-        // [4]: LowPnTxPllOff - use higher power, lower phase noise PLL
-        //      only when the transmitter is used (default: 1)
-        //      0 - Standard PLL used in Rx mode, Lower PN PLL in Tx
-        //      1 - Standard PLL used in both Tx and Rx modes
-        // Sx1276 - default: 0x09
-        // [4]: reserved (0x00)
-        let val = match self.config.chip {
-            Sx127xVariant::Sx1272 => Ok(ramp_time.value() | (1 << 4)),
-            Sx127xVariant::Sx1276 => Ok(ramp_time.value()),
-        }?;
+
+        let val = C::ramp_value(ramp_time);
         self.write_register(Register::RegPaRamp, val).await
     }
 
@@ -358,7 +266,7 @@ where
 
     async fn set_modulation_params(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         let sf_val = spreading_factor_value(mdltn_params.spreading_factor)?;
-        let bw_val = self.config.chip.bandwidth_value(mdltn_params.bandwidth)?;
+        let bw_val = C::bandwidth_value(mdltn_params.bandwidth)?;
         let coding_rate_denominator_val = coding_rate_denominator_value(mdltn_params.coding_rate)?;
         debug!(
             "sf = {}, bw = {}, cr_denom = {}",
@@ -376,43 +284,7 @@ where
         self.write_register(Register::RegDetectionThreshold, thr).await?;
         // Spreading Factor, Bandwidth, codingrate, ldro
 
-        match self.config.chip {
-            Sx127xVariant::Sx1272 => {
-                let cfg1 = self.read_register(Register::RegModemConfig1).await?;
-                let ldro = mdltn_params.low_data_rate_optimize;
-                let cr_val = coding_rate_value(mdltn_params.coding_rate)?;
-                let val = (cfg1 & 0b110) | (bw_val << 6) | (cr_val << 3) | ldro;
-                self.write_register(Register::RegModemConfig1, val).await?;
-                let cfg2 = self.read_register(Register::RegModemConfig2).await?;
-                let val = (cfg2 & 0b1111) | (sf_val << 4);
-                self.write_register(Register::RegModemConfig2, val).await?;
-                Ok(())
-            }
-            Sx127xVariant::Sx1276 => {
-                let mut config_2 = self.read_register(Register::RegModemConfig2).await?;
-                config_2 = (config_2 & 0x0fu8) | ((sf_val << 4) & 0xf0u8);
-                self.write_register(Register::RegModemConfig2, config_2).await?;
-
-                let mut config_1 = self.read_register(Register::RegModemConfig1).await?;
-                config_1 = (config_1 & 0x0fu8) | (bw_val << 4);
-                self.write_register(Register::RegModemConfig1, config_1).await?;
-
-                let cr = coding_rate_denominator_val - 4;
-                config_1 = self.read_register(Register::RegModemConfig1).await?;
-                config_1 = (config_1 & 0xf1u8) | (cr << 1);
-                self.write_register(Register::RegModemConfig1, config_1).await?;
-
-                let mut ldro_agc_auto_flags = 0x00u8; // LDRO and AGC Auto both off
-                if mdltn_params.low_data_rate_optimize != 0 {
-                    ldro_agc_auto_flags = 0x08u8; // LDRO on and AGC Auto off
-                }
-                let mut config_3 = self.read_register(Register::RegModemConfig3).await?;
-                config_3 = (config_3 & 0xf3u8) | ldro_agc_auto_flags;
-                self.write_register(Register::RegModemConfig3, config_3).await
-            }
-        }?;
-
-        Ok(())
+        C::set_modulation_params(self, mdltn_params).await
     }
 
     async fn set_packet_params(&mut self, pkt_params: &PacketParams) -> Result<(), RadioError> {
@@ -424,38 +296,7 @@ where
         self.write_register(Register::RegPreambleLsb, (pkt_params.preamble_length & 0x00ff) as u8)
             .await?;
 
-        // TODO: Payload length? (Set when pkt_params.implicit_header == true)?
-
-        let modemcfg1 = self.read_register(Register::RegModemConfig1).await?;
-
-        match self.config.chip {
-            Sx127xVariant::Sx1272 => {
-                let hdr = pkt_params.implicit_header as u8;
-                let crc = pkt_params.crc_on as u8;
-
-                let cfg1 = (modemcfg1 & 0b1111_1001) | (hdr << 2) | (crc << 1);
-                self.write_register(Register::RegModemConfig1, cfg1).await?;
-                Ok(())
-            }
-            Sx127xVariant::Sx1276 => {
-                let mut config_1 = modemcfg1;
-                if pkt_params.implicit_header {
-                    config_1 |= 0x01u8;
-                } else {
-                    config_1 &= 0xfeu8;
-                }
-                self.write_register(Register::RegModemConfig1, config_1).await?;
-
-                let mut config_2 = self.read_register(Register::RegModemConfig2).await?;
-                if pkt_params.crc_on {
-                    config_2 |= 0x04u8;
-                } else {
-                    config_2 &= 0xfbu8;
-                }
-                self.write_register(Register::RegModemConfig2, config_2).await?;
-                Ok(())
-            }
-        }?;
+        C::set_packet_params(self, pkt_params).await?;
 
         // IQ inversion:
         // RegInvertiq - [0x33]
@@ -558,24 +399,7 @@ where
         let rssi = {
             let packet_rssi = self.read_register(Register::RegPktRssiValue).await?;
 
-            let rssi_offset = match self.config.chip {
-                Sx127xVariant::Sx1272 => SX1272_RSSI_OFFSET,
-                Sx127xVariant::Sx1276 => {
-                    let frequency_in_hz = {
-                        let msb = self.read_register(Register::RegFrfMsb).await? as u32;
-                        let mid = self.read_register(Register::RegFrfMid).await? as u32;
-                        let lsb = self.read_register(Register::RegFrfLsb).await? as u32;
-                        let frf = (msb << 16) + (mid << 8) + lsb;
-                        (frf as f64 * FREQUENCY_SYNTHESIZER_STEP) as u32
-                    };
-
-                    if frequency_in_hz > SX1276_RF_MID_BAND_THRESH {
-                        SX1276_RSSI_OFFSET_HF
-                    } else {
-                        SX1276_RSSI_OFFSET_LF
-                    }
-                }
-            };
+            let rssi_offset = C::rssi_offset(self).await?;
 
             if snr >= 0 {
                 rssi_offset + (packet_rssi as f32 * 16.0 / 15.0) as i16
@@ -752,19 +576,6 @@ where
     }
     /// Set the LoRa chip into the TxContinuousWave mode
     async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError> {
-        match self.config.chip {
-            Sx127xVariant::Sx1272 => todo!(),
-            Sx127xVariant::Sx1276 => {
-                self.intf.iv.enable_rf_switch_rx().await?;
-                let pa_config = self.read_register(Register::RegPaConfig).await?;
-                let new_pa_config = pa_config | 0b1000_0000;
-                self.write_register(Register::RegPaConfig, new_pa_config).await?;
-                self.write_register(Register::RegOpMode, 0b1100_0011).await?;
-                let modem_config = self.read_register(Register::RegModemConfig2).await?;
-                let new_modem_config = modem_config | 0b0000_1000;
-                self.write_register(Register::RegModemConfig2, new_modem_config).await?;
-            }
-        }
-        Ok(())
+        C::set_tx_continuous_wave_mode(self).await
     }
 }
