@@ -17,9 +17,9 @@ pub mod mod_params;
 /// Traits implemented externally or internally to support control of LoRa chips
 pub mod mod_traits;
 /// Specific implementation to support Semtech Sx126x chips
-pub mod sx1261_2;
+pub mod sx126x;
 /// Specific implementation to support Semtech Sx127x chips
-pub mod sx1276_7_8_9;
+pub mod sx127x;
 
 pub use crate::mod_params::RxMode;
 

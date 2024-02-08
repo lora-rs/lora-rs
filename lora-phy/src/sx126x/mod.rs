@@ -65,12 +65,12 @@ pub struct Config {
 }
 
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
-pub struct SX1261_2<SPI, IV> {
+pub struct Sx126x<SPI, IV> {
     intf: SpiInterface<SPI, IV>,
     config: Config,
 }
 
-impl<SPI, IV> SX1261_2<SPI, IV>
+impl<SPI, IV> Sx126x<SPI, IV>
 where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
@@ -181,7 +181,7 @@ where
     }
 }
 
-impl<SPI, IV> RadioKind for SX1261_2<SPI, IV>
+impl<SPI, IV> RadioKind for Sx126x<SPI, IV>
 where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
@@ -980,7 +980,7 @@ where
     }
 }
 
-impl<SPI, IV> crate::RngRadio for SX1261_2<SPI, IV>
+impl<SPI, IV> crate::RngRadio for Sx126x<SPI, IV>
 where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
