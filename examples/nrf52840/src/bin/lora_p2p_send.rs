@@ -11,9 +11,9 @@ use embassy_nrf::{bind_interrupts, peripherals, spim};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx126xInterfaceVariant;
-use lora_phy::sx1261_2::{Sx126xVariant, TcxoCtrlVoltage, SX1261_2};
+use lora_phy::sx126x::{Sx126xVariant, TcxoCtrlVoltage, Sx126x};
 use lora_phy::LoRa;
-use lora_phy::{mod_params::*, sx1261_2};
+use lora_phy::{mod_params::*, sx126x};
 use {defmt_rtt as _, panic_probe as _};
 
 const LORA_FREQUENCY_IN_HZ: u32 = 903_900_000; // warning: set this appropriately for the region
@@ -38,14 +38,14 @@ async fn main(_spawner: Spawner) {
     let spim = spim::Spim::new(p.TWISPI1, Irqs, p.P1_11, p.P1_13, p.P1_12, spi_config);
     let spi = ExclusiveDevice::new(spim, nss, Delay);
 
-    let config = sx1261_2::Config {
+    let config = sx126x::Config {
         chip: Sx126xVariant::Sx1262,
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
         use_dio2_as_rfswitch: true,
     };
     let iv = GenericSx126xInterfaceVariant::new(reset, dio1, busy, Some(rf_switch_rx), Some(rf_switch_tx)).unwrap();
-    let mut lora = LoRa::new(SX1261_2::new(spi, iv, config), false, Delay).await.unwrap();
+    let mut lora = LoRa::new(Sx126x::new(spi, iv, config), false, Delay).await.unwrap();
 
     let mdltn_params = {
         match lora.create_modulation_params(

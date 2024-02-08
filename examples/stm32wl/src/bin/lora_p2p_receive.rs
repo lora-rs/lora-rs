@@ -13,8 +13,8 @@ use embassy_stm32::gpio::{Level, Output, Pin, Speed};
 use embassy_stm32::spi::Spi;
 use embassy_stm32::time::Hertz;
 use embassy_time::{Delay, Timer};
-use lora_phy::sx1261_2::{Sx126xVariant, TcxoCtrlVoltage, SX1261_2};
-use lora_phy::{mod_params::*, sx1261_2};
+use lora_phy::sx126x::{Sx126xVariant, TcxoCtrlVoltage, Sx126x};
+use lora_phy::{mod_params::*, sx126x};
 use lora_phy::{LoRa, RxMode};
 use {defmt_rtt as _, panic_probe as _};
 
@@ -56,14 +56,14 @@ async fn main(_spawner: Spawner) {
     let spi = Spi::new_subghz(p.SUBGHZSPI, p.DMA1_CH1, p.DMA1_CH2);
     let spi = SubghzSpiDevice(spi);
 
-    let config = sx1261_2::Config {
+    let config = sx126x::Config {
         chip: Sx126xVariant::Stm32wl,
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
         use_dio2_as_rfswitch: true,
     };
     let iv = Stm32wlInterfaceVariant::new(Irqs, None, Some(ctrl2)).unwrap();
-    let mut lora = LoRa::new(SX1261_2::new(spi, iv, config), false, Delay).await.unwrap();
+    let mut lora = LoRa::new(Sx126x::new(spi, iv, config), false, Delay).await.unwrap();
 
     let mut debug_indicator = Output::new(p.PB9, Level::Low, Speed::Low);
     let mut start_indicator = Output::new(p.PB15, Level::Low, Speed::Low);

@@ -15,9 +15,9 @@ use embassy_sync::channel::Channel;
 use embassy_time::{Delay, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx126xInterfaceVariant;
-use lora_phy::sx1261_2::{Sx126xVariant, TcxoCtrlVoltage, SX1261_2};
+use lora_phy::sx126x::{Sx126xVariant, TcxoCtrlVoltage, Sx126x};
 use lora_phy::LoRa;
-use lora_phy::{mod_params::*, sx1261_2};
+use lora_phy::{mod_params::*, sx126x};
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -75,13 +75,13 @@ async fn core1_task(
 ) {
     info!("Hello from core 1");
 
-    let config = sx1261_2::Config {
+    let config = sx126x::Config {
         chip: Sx126xVariant::Sx1262,
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
         use_dio2_as_rfswitch: true,
     };
-    let mut lora = LoRa::new(SX1261_2::new(spi, iv, config), true, Delay).await.unwrap();
+    let mut lora = LoRa::new(Sx126x::new(spi, iv, config), true, Delay).await.unwrap();
 
     let mdltn_params = {
         match lora.create_modulation_params(

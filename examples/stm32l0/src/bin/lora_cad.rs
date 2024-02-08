@@ -11,10 +11,10 @@ use embassy_stm32::spi;
 use embassy_stm32::time::khz;
 use embassy_time::{Delay, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
-use lora_phy::iv::Stm32l0InterfaceVariant;
-use lora_phy::sx1276_7_8_9::{Sx127xVariant, SX1276_7_8_9};
+use lora_phy::iv::GenericSx127xInterfaceVariant;
+use lora_phy::sx127x::{Sx127xVariant, Sx127x};
 use lora_phy::LoRa;
-use lora_phy::{mod_params::*, sx1276_7_8_9};
+use lora_phy::{mod_params::*, sx127x};
 use {defmt_rtt as _, panic_probe as _};
 
 const LORA_FREQUENCY_IN_HZ: u32 = 903_900_000; // warning: set this appropriately for the region
@@ -36,12 +36,12 @@ async fn main(_spawner: Spawner) {
     let spi = spi::Spi::new(p.SPI1, p.PB3, p.PA7, p.PA6, p.DMA1_CH3, p.DMA1_CH2, spi_config);
     let spi = ExclusiveDevice::new(spi, nss, Delay);
 
-    let config = sx1276_7_8_9::Config {
+    let config = sx127x::Config {
         chip: Sx127xVariant::Sx1276,
         tcxo_used: true,
     };
-    let iv = Stm32l0InterfaceVariant::new(reset, irq, None, None).unwrap();
-    let mut lora = LoRa::new(SX1276_7_8_9::new(spi, iv, config), false, Delay)
+    let iv = GenericSx127xInterfaceVariant::new(reset, irq, None, None).unwrap();
+    let mut lora = LoRa::new(Sx127x::new(spi, iv, config), false, Delay)
         .await
         .unwrap();
 
