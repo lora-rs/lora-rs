@@ -1,5 +1,5 @@
 use crate::mod_params::*;
-use crate::sx1276_7_8_9::Sx127xVariant;
+use crate::sx127x::Sx127xVariant;
 
 /// Internal sx127x LoRa modes (signified by most significant bit flag)
 #[derive(Clone, Copy)]
