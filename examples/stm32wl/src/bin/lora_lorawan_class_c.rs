@@ -23,7 +23,7 @@ use embassy_sync::{
 use embassy_time::Delay;
 
 use lora_phy::lorawan_radio::LorawanRadio;
-use lora_phy::sx1261_2::{self, Sx126xVariant, TcxoCtrlVoltage, SX1261_2};
+use lora_phy::sx126x::{self, Sx126xVariant, TcxoCtrlVoltage, Sx126x};
 use lora_phy::LoRa;
 use lorawan_device::async_device::{Device, EmbassyTimer, JoinMode, JoinResponse, SendResponse};
 use lorawan_device::default_crypto::DefaultFactory as Crypto;
@@ -75,14 +75,14 @@ async fn main(spawner: Spawner) {
     let spi = Spi::new_subghz(p.SUBGHZSPI, p.DMA1_CH1, p.DMA1_CH2);
     let spi = SubghzSpiDevice(spi);
 
-    let config = sx1261_2::Config {
+    let config = sx126x::Config {
         chip: Sx126xVariant::Stm32wl,
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
         use_dio2_as_rfswitch: false,
     };
     let iv = Stm32wlInterfaceVariant::new(Irqs, None, Some(ctrl2)).unwrap();
-    let lora = LoRa::new(SX1261_2::new(spi, iv, config), true, Delay).await.unwrap();
+    let lora = LoRa::new(Sx126x::new(spi, iv, config), true, Delay).await.unwrap();
 
     let _lora_task = spawner.spawn(lora_task(lora, Rng::new(p.RNG, Irqs), CHANNEL.receiver()));
 
@@ -92,7 +92,7 @@ async fn main(spawner: Spawner) {
 }
 
 type Stm32wlLoRa<'d> = LoRa<
-    SX1261_2<
+    Sx126x<
         iv::SubghzSpiDevice<Spi<'d, peripherals::SUBGHZSPI, peripherals::DMA1_CH1, peripherals::DMA1_CH2>>,
         Stm32wlInterfaceVariant<Output<'d, AnyPin>>,
     >,

@@ -12,9 +12,9 @@ use embassy_stm32::time::khz;
 use embassy_stm32::{bind_interrupts, peripherals, rng, spi};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
-use lora_phy::iv::Stm32l0InterfaceVariant;
+use lora_phy::iv::GenericSx127xInterfaceVariant;
 use lora_phy::lorawan_radio::LorawanRadio;
-use lora_phy::sx1276_7_8_9::{self, Sx127xVariant, SX1276_7_8_9};
+use lora_phy::sx127x::{self, Sx127xVariant, Sx127x};
 use lora_phy::LoRa;
 use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode};
 use lorawan_device::default_crypto::DefaultFactory as Crypto;
@@ -46,12 +46,12 @@ async fn main(_spawner: Spawner) {
     let spi = spi::Spi::new(p.SPI1, p.PB3, p.PA7, p.PA6, p.DMA1_CH3, p.DMA1_CH2, spi_config);
     let spi = ExclusiveDevice::new(spi, nss, Delay);
 
-    let config = sx1276_7_8_9::Config {
+    let config = sx127x::Config {
         chip: Sx127xVariant::Sx1276,
         tcxo_used: true,
     };
-    let iv = Stm32l0InterfaceVariant::new(reset, irq, None, None).unwrap();
-    let lora = LoRa::new(SX1276_7_8_9::new(spi, iv, config), true, Delay)
+    let iv = GenericSx127xInterfaceVariant::new(reset, irq, None, None).unwrap();
+    let lora = LoRa::new(Sx127x::new(spi, iv, config), true, Delay)
         .await
         .unwrap();
 
