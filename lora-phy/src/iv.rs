@@ -6,15 +6,15 @@ use crate::mod_params::RadioError;
 use crate::mod_params::RadioError::*;
 use crate::mod_traits::InterfaceVariant;
 
-/// Base for the InterfaceVariant implementation for an stm32l0/sx1276 combination
-pub struct Stm32l0InterfaceVariant<CTRL, WAIT> {
+/// Base for the InterfaceVariant implementation for the Sx127x combination
+pub struct GenericSx127xInterfaceVariant<CTRL, WAIT> {
     reset: CTRL,
     irq: WAIT,
     rf_switch_rx: Option<CTRL>,
     rf_switch_tx: Option<CTRL>,
 }
 
-impl<CTRL, WAIT> Stm32l0InterfaceVariant<CTRL, WAIT>
+impl<CTRL, WAIT> GenericSx127xInterfaceVariant<CTRL, WAIT>
 where
     CTRL: OutputPin,
     WAIT: Wait,
@@ -35,7 +35,7 @@ where
     }
 }
 
-impl<CTRL, WAIT> InterfaceVariant for Stm32l0InterfaceVariant<CTRL, WAIT>
+impl<CTRL, WAIT> InterfaceVariant for GenericSx127xInterfaceVariant<CTRL, WAIT>
 where
     CTRL: OutputPin,
     WAIT: Wait,
