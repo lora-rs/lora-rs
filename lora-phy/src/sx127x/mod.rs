@@ -1,5 +1,8 @@
 mod radio_kind_params;
-pub use radio_kind_params::{Sx1272, Sx1276};
+mod sx1272;
+pub use sx1272::Sx1272;
+mod sx1276;
+pub use sx1276::Sx1276;
 
 use defmt::debug;
 use embedded_hal_async::delay::DelayNs;
@@ -29,16 +32,6 @@ const SX1272_RSSI_OFFSET: i16 = -139;
 const SX1276_RSSI_OFFSET_LF: i16 = -164;
 const SX1276_RSSI_OFFSET_HF: i16 = -157;
 const SX1276_RF_MID_BAND_THRESH: u32 = 525_000_000;
-
-// /// Supported SX127x chip variants
-// #[derive(Clone, Copy)]
-// pub enum Sx127xVariant {
-//     /// Semtech SX1272
-//     Sx1272,
-//     /// Semtech SX1276
-//     // TODO: should we add variants for 77, 78 and 79 as well?)
-//     Sx1276,
-// }
 
 /// Configuration for SX127x-based boards
 pub struct Config<C: Sx127xVariant> {
