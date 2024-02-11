@@ -837,146 +837,160 @@ where
 
     /// Process the radio IRQ. Log unexpected interrupts, but only bail out on timeout.
     /// Packets from other devices can cause unexpected interrupts.
-    async fn process_irq(
-        &mut self,
-        radio_mode: RadioMode,
-        rx_continuous: bool,
-        target_rx_state: TargetIrqState,
-        delay: &mut impl DelayNs,
-        polling_timeout_in_ms: Option<u32>,
-        cad_activity_detected: Option<&mut bool>,
-    ) -> Result<TargetIrqState, RadioError> {
-        let mut iteration_guard: u32 = 0;
-        if polling_timeout_in_ms.is_some() {
-            iteration_guard = polling_timeout_in_ms.unwrap();
-            iteration_guard /= 50; // poll for interrupts every 50 ms until polling timeout
-        }
-        let mut i: u32 = 0;
-        loop {
-            if polling_timeout_in_ms.is_some() && (i >= iteration_guard) {
-                return Err(RadioError::PollingTimeout);
-            }
+    // async fn process_irq(
+    //     &mut self,
+    //     radio_mode: RadioMode,
+    //     rx_continuous: bool,
+    //     target_rx_state: TargetIrqState,
+    //     delay: &mut impl DelayNs,
+    //     polling_timeout_in_ms: Option<u32>,
+    //     cad_activity_detected: Option<&mut bool>,
+    // ) -> Result<TargetIrqState, RadioError> {
+    //     let mut iteration_guard: u32 = 0;
+    //     if polling_timeout_in_ms.is_some() {
+    //         iteration_guard = polling_timeout_in_ms.unwrap();
+    //         iteration_guard /= 50; // poll for interrupts every 50 ms until polling timeout
+    //     }
+    //     let mut i: u32 = 0;
+    //     loop {
+    //         if polling_timeout_in_ms.is_some() && (i >= iteration_guard) {
+    //             return Err(RadioError::PollingTimeout);
+    //         }
 
-            debug!("process_irq loop entered");
+    //         debug!("process_irq loop entered");
 
-            // Await IRQ events unless event polling is used.
-            if polling_timeout_in_ms.is_some() {
-                delay.delay_ms(50).await;
-                i += 1;
-            } else {
-                self.intf.iv.await_irq().await?;
-            }
+    //         // Await IRQ events unless event polling is used.
+    //         if polling_timeout_in_ms.is_some() {
+    //             delay.delay_ms(50).await;
+    //             i += 1;
+    //         } else {
+    //             self.intf.iv.await_irq().await?;
+    //         }
 
-            let op_code = [OpCode::GetIrqStatus.value()];
-            let mut irq_status = [0x00u8, 0x00u8];
-            let read_status = self.intf.read_with_status(&op_code, &mut irq_status).await?;
-            let irq_flags = ((irq_status[0] as u16) << 8) | (irq_status[1] as u16);
-            let op_code_and_irq_status = [OpCode::ClrIrqStatus.value(), irq_status[0], irq_status[1]];
-            self.intf.write(&op_code_and_irq_status, false).await?;
+    //         let op_code = [OpCode::GetIrqStatus.value()];
+    //         let mut irq_status = [0x00u8, 0x00u8];
+    //         let read_status = self.intf.read_with_status(&op_code, &mut irq_status).await?;
+    //         let irq_flags = ((irq_status[0] as u16) << 8) | (irq_status[1] as u16);
+    //         let op_code_and_irq_status = [OpCode::ClrIrqStatus.value(), irq_status[0], irq_status[1]];
+    //         self.intf.write(&op_code_and_irq_status, false).await?;
 
-            // Report a read status error for debugging only.  Normal timeouts are sometimes reported as a read status error.
-            if OpStatusErrorMask::is_error(read_status) {
-                debug!(
-                    "process_irq read status error = 0x{:x} in radio mode {}",
-                    read_status, radio_mode
-                );
-            }
+    //         // Report a read status error for debugging only.  Normal timeouts are sometimes reported as a read status error.
+    //         if OpStatusErrorMask::is_error(read_status) {
+    //             debug!(
+    //                 "process_irq read status error = 0x{:x} in radio mode {}",
+    //                 read_status, radio_mode
+    //             );
+    //         }
 
-            debug!(
-                "process_irq satisfied: irq_flags = 0x{:x} in radio mode {}",
-                irq_flags, radio_mode
-            );
+    //         debug!(
+    //             "process_irq satisfied: irq_flags = 0x{:x} in radio mode {}",
+    //             irq_flags, radio_mode
+    //         );
 
-            if (irq_flags & IrqMask::HeaderValid.value()) == IrqMask::HeaderValid.value() {
-                debug!("HeaderValid in radio mode {}", radio_mode);
-            }
-            if (irq_flags & IrqMask::PreambleDetected.value()) == IrqMask::PreambleDetected.value() {
-                debug!("PreambleDetected in radio mode {}", radio_mode);
-            }
-            if (irq_flags & IrqMask::SyncwordValid.value()) == IrqMask::SyncwordValid.value() {
-                debug!("SyncwordValid in radio mode {}", radio_mode);
-            }
+    //         if (irq_flags & IrqMask::HeaderValid.value()) == IrqMask::HeaderValid.value() {
+    //             debug!("HeaderValid in radio mode {}", radio_mode);
+    //         }
+    //         if (irq_flags & IrqMask::PreambleDetected.value()) == IrqMask::PreambleDetected.value() {
+    //             debug!("PreambleDetected in radio mode {}", radio_mode);
+    //         }
+    //         if (irq_flags & IrqMask::SyncwordValid.value()) == IrqMask::SyncwordValid.value() {
+    //             debug!("SyncwordValid in radio mode {}", radio_mode);
+    //         }
 
-            if radio_mode == RadioMode::Transmit {
-                if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
-                    debug!("TxDone in radio mode {}", radio_mode);
-                    return Ok(TargetIrqState::Done);
-                }
-                if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
-                    debug!("RxTxTimeout in radio mode {}", radio_mode);
-                    return Err(RadioError::TransmitTimeout);
-                }
-            } else if (radio_mode == RadioMode::Receive) || (radio_mode == RadioMode::ReceiveDutyCycle) {
-                if (irq_flags & IrqMask::HeaderError.value()) == IrqMask::HeaderError.value() {
-                    debug!("HeaderError in radio mode {}", radio_mode);
-                }
-                if (irq_flags & IrqMask::CRCError.value()) == IrqMask::CRCError.value() {
-                    debug!("CRCError in radio mode {}", radio_mode);
-                }
-                if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
-                    debug!("RxDone in radio mode {}", radio_mode);
-                    if !rx_continuous {
-                        // implicit header mode timeout behavior (see DS_SX1261-2_V1.2 datasheet chapter 15.3)
-                        let register_and_clear = [
-                            OpCode::WriteRegister.value(),
-                            Register::RTCCtrl.addr1(),
-                            Register::RTCCtrl.addr2(),
-                            0x00u8,
-                        ];
-                        self.intf.write(&register_and_clear, false).await?;
+    //         if radio_mode == RadioMode::Transmit {
+    //             if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
+    //                 debug!("TxDone in radio mode {}", radio_mode);
+    //                 return Ok(TargetIrqState::Done);
+    //             }
+    //             if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
+    //                 debug!("RxTxTimeout in radio mode {}", radio_mode);
+    //                 return Err(RadioError::TransmitTimeout);
+    //             }
+    //         } else if (radio_mode == RadioMode::Receive) || (radio_mode == RadioMode::ReceiveDutyCycle) {
+    //             if (irq_flags & IrqMask::HeaderError.value()) == IrqMask::HeaderError.value() {
+    //                 debug!("HeaderError in radio mode {}", radio_mode);
+    //             }
+    //             if (irq_flags & IrqMask::CRCError.value()) == IrqMask::CRCError.value() {
+    //                 debug!("CRCError in radio mode {}", radio_mode);
+    //             }
+    //             if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
+    //                 debug!("RxDone in radio mode {}", radio_mode);
+    //                 if !rx_continuous {
+    //                     // implicit header mode timeout behavior (see DS_SX1261-2_V1.2 datasheet chapter 15.3)
+    //                     let register_and_clear = [
+    //                         OpCode::WriteRegister.value(),
+    //                         Register::RTCCtrl.addr1(),
+    //                         Register::RTCCtrl.addr2(),
+    //                         0x00u8,
+    //                     ];
+    //                     self.intf.write(&register_and_clear, false).await?;
 
-                        let mut evt_clr = [0x00u8];
-                        self.intf
-                            .read(
-                                &[
-                                    OpCode::ReadRegister.value(),
-                                    Register::EvtClr.addr1(),
-                                    Register::EvtClr.addr2(),
-                                    0x00u8,
-                                ],
-                                &mut evt_clr,
-                            )
-                            .await?;
-                        evt_clr[0] |= 1 << 1;
-                        let register_and_evt_clear = [
-                            OpCode::WriteRegister.value(),
-                            Register::EvtClr.addr1(),
-                            Register::EvtClr.addr2(),
-                            evt_clr[0],
-                        ];
-                        self.intf.write(&register_and_evt_clear, false).await?;
-                    }
-                    return Ok(TargetIrqState::Done);
-                }
-                if target_rx_state == TargetIrqState::PreambleReceived
-                    && (IrqMask::PreambleDetected.is_set_in(irq_flags) || IrqMask::HeaderValid.is_set_in(irq_flags))
-                {
-                    return Ok(TargetIrqState::PreambleReceived);
-                }
-                if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
-                    debug!("RxTxTimeout in radio mode {}", radio_mode);
-                    return Err(RadioError::ReceiveTimeout);
-                }
-            } else if radio_mode == RadioMode::ChannelActivityDetection
-                && (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value()
-            {
-                debug!("CADDone in radio mode {}", radio_mode);
-                if cad_activity_detected.is_some() {
-                    *(cad_activity_detected.unwrap()) =
-                        (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
-                }
-                return Ok(TargetIrqState::Done);
-            }
+    //                     let mut evt_clr = [0x00u8];
+    //                     self.intf
+    //                         .read(
+    //                             &[
+    //                                 OpCode::ReadRegister.value(),
+    //                                 Register::EvtClr.addr1(),
+    //                                 Register::EvtClr.addr2(),
+    //                                 0x00u8,
+    //                             ],
+    //                             &mut evt_clr,
+    //                         )
+    //                         .await?;
+    //                     evt_clr[0] |= 1 << 1;
+    //                     let register_and_evt_clear = [
+    //                         OpCode::WriteRegister.value(),
+    //                         Register::EvtClr.addr1(),
+    //                         Register::EvtClr.addr2(),
+    //                         evt_clr[0],
+    //                     ];
+    //                     self.intf.write(&register_and_evt_clear, false).await?;
+    //                 }
+    //                 return Ok(TargetIrqState::Done);
+    //             }
+    //             if target_rx_state == TargetIrqState::PreambleReceived
+    //                 && (IrqMask::PreambleDetected.is_set_in(irq_flags) || IrqMask::HeaderValid.is_set_in(irq_flags))
+    //             {
+    //                 return Ok(TargetIrqState::PreambleReceived);
+    //             }
+    //             if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
+    //                 debug!("RxTxTimeout in radio mode {}", radio_mode);
+    //                 return Err(RadioError::ReceiveTimeout);
+    //             }
+    //         } else if radio_mode == RadioMode::ChannelActivityDetection
+    //             && (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value()
+    //         {
+    //             debug!("CADDone in radio mode {}", radio_mode);
+    //             if cad_activity_detected.is_some() {
+    //                 *(cad_activity_detected.unwrap()) =
+    //                     (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
+    //             }
+    //             return Ok(TargetIrqState::Done);
+    //         }
 
-            // if an interrupt occurred for other than an error or operation completion, loop to wait again
-        }
-    }
+    //         // if an interrupt occurred for other than an error or operation completion, loop to wait again
+    //     }
+    // }
 
     async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_tx().await?;
 
         let op_code = [OpCode::SetTxContinuousWave.value()];
         self.intf.write(&op_code, false).await
+    }
+
+    async fn await_irq(&mut self) -> Result<(), RadioError> {
+        todo!()
+    }
+
+    async fn process_irq_event(
+        &mut self,
+        radio_mode: RadioMode,
+        target_rx_state: Option<TargetIrqState>,
+        cad_activity_detected: Option<&mut bool>,
+        clear_interrupts: bool,
+    ) -> Result<Option<TargetIrqState>, RadioError> {
+        todo!()
     }
 }
 

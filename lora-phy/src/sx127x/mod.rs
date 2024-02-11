@@ -670,86 +670,71 @@ where
         Ok(())
     }
 
-    /// Process the radio IRQ.  Log unexpected interrupts, but only bail out on timeout.  Packets from other devices can cause unexpected interrupts.
-    async fn process_irq(
+    async fn await_irq(&mut self) -> Result<(), RadioError> {
+        self.intf.iv.await_irq().await
+    }
+
+    async fn process_irq_event(
         &mut self,
         radio_mode: RadioMode,
-        _rx_continuous: bool,
-        target_rx_state: TargetIrqState,
-        delay: &mut impl DelayNs,
-        polling_timeout_in_ms: Option<u32>,
+        target_rx_state: Option<TargetIrqState>,
         cad_activity_detected: Option<&mut bool>,
-    ) -> Result<TargetIrqState, RadioError> {
-        let mut iteration_guard: u32 = 0;
-        if polling_timeout_in_ms.is_some() {
-            iteration_guard = polling_timeout_in_ms.unwrap();
-            iteration_guard /= 50; // poll for interrupts every 50 ms until polling timeout
-        }
-        let mut i: u32 = 0;
-        loop {
-            if polling_timeout_in_ms.is_some() && (i >= iteration_guard) {
-                return Err(RadioError::PollingTimeout);
-            }
-
-            debug!("process_irq loop entered");
-
-            // Await IRQ events unless event polling is used.
-            if polling_timeout_in_ms.is_some() {
-                delay.delay_ms(50).await;
-                i += 1;
-            } else {
-                self.intf.iv.await_irq().await?;
-            }
-
-            let irq_flags = self.read_register(Register::RegIrqFlags).await?;
+        clear_interrupts: bool,
+    ) -> Result<Option<TargetIrqState>, RadioError> {
+        let irq_flags = self.read_register(Register::RegIrqFlags).await?;
+        if clear_interrupts {
             self.write_register(Register::RegIrqFlags, 0xffu8).await?; // clear all interrupts
+        }
 
-            debug!(
-                "process_irq: irq_flags = 0b{:08b} in radio mode {}",
-                irq_flags, radio_mode
-            );
-
-            match radio_mode {
-                RadioMode::Transmit => {
-                    if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
-                        debug!("TxDone in radio mode {}", radio_mode);
-                        return Ok(TargetIrqState::Done);
-                    }
+        match radio_mode {
+            RadioMode::Transmit => {
+                if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
+                    debug!("TxDone in radio mode {}", radio_mode);
+                    return Ok(Some(TargetIrqState::Done));
                 }
-                RadioMode::Receive => {
+            }
+            RadioMode::Receive => {
+                if let Some(target_rx_state) = target_rx_state {
                     if target_rx_state == TargetIrqState::PreambleReceived && IrqMask::HeaderValid.is_set_in(irq_flags)
                     {
                         debug!("HeaderValid in radio mode {}", radio_mode);
-                        return Ok(TargetIrqState::PreambleReceived);
+                        return Ok(Some(TargetIrqState::PreambleReceived));
                     }
                     if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
                         debug!("RxDone in radio mode {}", radio_mode);
-                        return Ok(TargetIrqState::Done);
+                        return Ok(Some(TargetIrqState::Done));
                     }
                     if (irq_flags & IrqMask::RxTimeout.value()) == IrqMask::RxTimeout.value() {
                         debug!("RxTimeout in radio mode {}", radio_mode);
                         return Err(RadioError::ReceiveTimeout);
                     }
                 }
-                RadioMode::ChannelActivityDetection => {
-                    if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
-                        debug!("CADDone in radio mode {}", radio_mode);
-                        if cad_activity_detected.is_some() {
-                            *(cad_activity_detected.unwrap()) = (irq_flags & IrqMask::CADActivityDetected.value())
-                                == IrqMask::CADActivityDetected.value();
-                        }
-                        return Ok(TargetIrqState::Done);
-                    }
-                }
-                RadioMode::Sleep | RadioMode::Standby => {
-                    defmt::warn!("IRQ during sleep/standby?");
-                }
-                RadioMode::FrequencySynthesis | RadioMode::ReceiveDutyCycle => todo!(),
             }
+            RadioMode::ChannelActivityDetection => {
+                if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+                    debug!("CADDone in radio mode {}", radio_mode);
+                    // TODO: don't like how we mutate the cad_activity_detected parameter
+                    if let Some(cad_detected_ref) = cad_activity_detected {
+                        // Check if the CAD (Channel Activity Detection) Activity Detected flag is set in irq_flags
+                        let is_cad_activity_detected = (irq_flags & IrqMask::CADActivityDetected.value()) != 0;
 
-            // if an interrupt occurred for other than an error or operation completion, loop to wait again
+                        // Update the referenced value to reflect whether CAD activity was detected
+                        *cad_detected_ref = is_cad_activity_detected;
+                    }
+                    return Ok(Some(TargetIrqState::Done));
+                }
+            }
+            RadioMode::Sleep | RadioMode::Standby => {
+                defmt::warn!("IRQ during sleep/standby?");
+            }
+            RadioMode::FrequencySynthesis | RadioMode::ReceiveDutyCycle => todo!(),
         }
+        debug!("CADDone in radio mode {:?}", radio_mode);
+
+        // If no specific IRQ condition is met, return None
+        Ok(None)
     }
+
     /// Set the LoRa chip into the TxContinuousWave mode
     async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError> {
         match self.config.chip {
