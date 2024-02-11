@@ -713,15 +713,14 @@ where
             RadioMode::ChannelActivityDetection => {
                 if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
                     debug!("CADDone in radio mode {}", radio_mode);
-                    // TODO: don't like how we mutate the cad_activity_detected parameter
-                    if let Some(cad_detected_ref) = cad_activity_detected {
-                        // Check if the CAD (Channel Activity Detection) Activity Detected flag is set in irq_flags
-                        let is_cad_activity_detected = (irq_flags & IrqMask::CADActivityDetected.value()) != 0;
-
-                        // Update the referenced value to reflect whether CAD activity was detected
-                        *cad_detected_ref = is_cad_activity_detected;
+                    if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+                        debug!("CADDone in radio mode {}", radio_mode);
+                        if cad_activity_detected.is_some() {
+                            *(cad_activity_detected.unwrap()) = (irq_flags & IrqMask::CADActivityDetected.value())
+                                == IrqMask::CADActivityDetected.value();
+                        }
+                        return Ok(Some(TargetIrqState::Done));
                     }
-                    return Ok(Some(TargetIrqState::Done));
                 }
             }
             RadioMode::Sleep | RadioMode::Standby => {
