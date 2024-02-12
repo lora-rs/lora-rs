@@ -39,7 +39,6 @@ where
     radio_mode: RadioMode,
     enable_public_network: bool,
     rx_continuous: bool,
-    polling_timeout_in_ms: Option<u32>,
     cold_start: bool,
     calibrate_image: bool,
 }
@@ -57,7 +56,6 @@ where
             radio_mode: RadioMode::Sleep,
             enable_public_network,
             rx_continuous: false,
-            polling_timeout_in_ms: None,
             cold_start: true,
             calibrate_image: true,
         };
@@ -200,14 +198,7 @@ where
         self.radio_kind.do_tx(timeout_in_ms).await?;
         match self
             .radio_kind
-            .process_irq(
-                self.radio_mode,
-                self.rx_continuous,
-                TargetIrqState::Done,
-                &mut self.delay,
-                None,
-                None,
-            )
+            .process_irq(self.radio_mode, self.rx_continuous, TargetIrqState::Done, None)
             .await
         {
             Ok(TargetIrqState::Done) => {
@@ -273,14 +264,7 @@ where
         defmt::trace!("RX: continuous: {}", self.rx_continuous);
         match self
             .radio_kind
-            .process_irq(
-                self.radio_mode,
-                self.rx_continuous,
-                target_rx_state,
-                &mut self.delay,
-                self.polling_timeout_in_ms,
-                None,
-            )
+            .process_irq(self.radio_mode, self.rx_continuous, target_rx_state, None)
             .await
         {
             Ok(actual_state) => match actual_state {
@@ -329,8 +313,6 @@ where
                 self.radio_mode,
                 self.rx_continuous,
                 TargetIrqState::Done,
-                &mut self.delay,
-                None,
                 Some(&mut cad_activity_detected),
             )
             .await

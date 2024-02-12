@@ -676,30 +676,12 @@ where
         radio_mode: RadioMode,
         _rx_continuous: bool,
         target_rx_state: TargetIrqState,
-        delay: &mut impl DelayNs,
-        polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<TargetIrqState, RadioError> {
-        let mut iteration_guard: u32 = 0;
-        if polling_timeout_in_ms.is_some() {
-            iteration_guard = polling_timeout_in_ms.unwrap();
-            iteration_guard /= 50; // poll for interrupts every 50 ms until polling timeout
-        }
-        let mut i: u32 = 0;
         loop {
-            if polling_timeout_in_ms.is_some() && (i >= iteration_guard) {
-                return Err(RadioError::PollingTimeout);
-            }
-
             debug!("process_irq loop entered");
 
-            // Await IRQ events unless event polling is used.
-            if polling_timeout_in_ms.is_some() {
-                delay.delay_ms(50).await;
-                i += 1;
-            } else {
-                self.intf.iv.await_irq().await?;
-            }
+            self.intf.iv.await_irq().await?;
 
             let irq_flags = self.read_register(Register::RegIrqFlags).await?;
             self.write_register(Register::RegIrqFlags, 0xffu8).await?; // clear all interrupts
@@ -746,7 +728,6 @@ where
                 }
                 RadioMode::FrequencySynthesis | RadioMode::ReceiveDutyCycle => todo!(),
             }
-
             // if an interrupt occurred for other than an error or operation completion, loop to wait again
         }
     }
