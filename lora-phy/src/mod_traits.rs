@@ -126,8 +126,6 @@ pub trait RadioKind {
         radio_mode: RadioMode,
         rx_continuous: bool,
         target_rx_state: TargetIrqState,
-        delay: &mut impl DelayNs,
-        polling_timeout_in_ms: Option<u32>,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<TargetIrqState, RadioError>;
     /// Set the LoRa chip into the TxContinuousWave mode
