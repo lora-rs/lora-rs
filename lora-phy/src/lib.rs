@@ -245,34 +245,20 @@ where
         rx_pkt_params: &PacketParams,
         receiving_buffer: &mut [u8],
     ) -> Result<(u8, PacketStatus), RadioError> {
-        let IrqState::RxDone(len, status) = self
-            .rx_until_state(rx_pkt_params, receiving_buffer, TargetIrqState::Done)
-            .await?
-        else {
-            unreachable!();
-        };
-        Ok((len, status))
-    }
-
-    /// Obtain the results of a read operation
-    pub async fn rx_until_state(
-        &mut self,
-        rx_pkt_params: &PacketParams,
-        receiving_buffer: &mut [u8],
-        target_rx_state: TargetIrqState,
-    ) -> Result<IrqState, RadioError> {
         defmt::trace!("RX: continuous: {}", self.rx_continuous);
         match self
             .radio_kind
-            .process_irq(self.radio_mode, self.rx_continuous, target_rx_state, None)
+            .process_irq(self.radio_mode, self.rx_continuous, TargetIrqState::Done, None)
             .await
         {
             Ok(actual_state) => match actual_state {
-                TargetIrqState::PreambleReceived => Ok(IrqState::PreambleReceived),
+                TargetIrqState::PreambleReceived => {
+                    unreachable!()
+                }
                 TargetIrqState::Done => {
                     let received_len = self.radio_kind.get_rx_payload(rx_pkt_params, receiving_buffer).await?;
                     let rx_pkt_status = self.radio_kind.get_rx_packet_status().await?;
-                    Ok(IrqState::RxDone(received_len, rx_pkt_status))
+                    Ok((received_len, rx_pkt_status))
                 }
             },
             Err(err) => {
