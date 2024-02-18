@@ -75,7 +75,7 @@ where
         target_rx_state: TargetIrqState,
     ) -> Result<Option<TargetIrqState>, RadioError> {
         self.radio_kind
-            .process_irq_event(self.radio_mode, Some(target_rx_state), None, false)
+            .process_irq_event(self.radio_mode, Some(target_rx_state), None, self.rx_continuous, false)
             .await
     }
 
@@ -214,7 +214,7 @@ where
         self.wait_for_irq().await?;
         match self
             .radio_kind
-            .process_irq_event(self.radio_mode, None, None, true)
+            .process_irq_event(self.radio_mode, None, None, self.rx_continuous, true)
             .await
         {
             Ok(Some(TargetIrqState::Done | TargetIrqState::PreambleReceived)) => {
@@ -286,7 +286,7 @@ where
 
         match self
             .radio_kind
-            .process_irq_event(self.radio_mode, Some(target_rx_state), None, true)
+            .process_irq_event(self.radio_mode, Some(target_rx_state), None, self.rx_continuous, true)
             .await
         {
             Ok(Some(actual_state)) => match actual_state {
@@ -336,6 +336,7 @@ where
                 self.radio_mode,
                 Some(TargetIrqState::Done),
                 Some(&mut cad_activity_detected),
+                self.rx_continuous,
                 true,
             )
             .await
