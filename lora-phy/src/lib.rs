@@ -39,7 +39,6 @@ where
     radio_mode: RadioMode,
     enable_public_network: bool,
     rx_continuous: bool,
-    polling_timeout_in_ms: Option<u32>,
     cold_start: bool,
     calibrate_image: bool,
 }
@@ -57,7 +56,6 @@ where
             radio_mode: RadioMode::Sleep,
             enable_public_network,
             rx_continuous: false,
-            polling_timeout_in_ms: None,
             cold_start: true,
             calibrate_image: true,
         };
@@ -66,19 +64,9 @@ where
         Ok(lora)
     }
 
-    /// Wait for an IRQ event to occur or poll for it
+    /// Wait for an IRQ event to occur
     pub async fn wait_for_irq(&mut self) -> Result<(), RadioError> {
-        if let Some(_timeout_ms) = self.polling_timeout_in_ms {
-            // let iteration_guard = timeout_ms / 50;
-            // let mut i: u32 = 0;
-            // while i < iteration_guard {
-            //     delay.delay_ms(50).await;
-            //     i += 1;
-            // }
-            Ok(())
-        } else {
-            self.radio_kind.await_irq().await
-        }
+        self.radio_kind.await_irq().await
     }
 
     /// Process an IRQ event and return the new state of the radio
