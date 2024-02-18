@@ -715,7 +715,9 @@ where
                     debug!("CADDone in radio mode {}", radio_mode);
                     if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
                         debug!("CADDone in radio mode {}", radio_mode);
+                        // TODO: don't like how we mutate the cad_activity_detected parameter
                         if cad_activity_detected.is_some() {
+                            // Check if the CAD (Channel Activity Detection) Activity Detected flag is set in irq_flags and then update the reference
                             *(cad_activity_detected.unwrap()) = (irq_flags & IrqMask::CADActivityDetected.value())
                                 == IrqMask::CADActivityDetected.value();
                         }
