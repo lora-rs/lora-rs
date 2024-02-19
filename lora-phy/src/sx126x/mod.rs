@@ -851,7 +851,6 @@ where
     async fn process_irq_event(
         &mut self,
         radio_mode: RadioMode,
-        target_rx_state: Option<TargetIrqState>,
         cad_activity_detected: Option<&mut bool>,
         rx_continuous: bool,
         clear_interrupts: bool,
@@ -940,9 +939,7 @@ where
                     }
                     return Ok(Some(TargetIrqState::Done));
                 }
-                if target_rx_state == Some(TargetIrqState::PreambleReceived)
-                    && (IrqMask::PreambleDetected.is_set_in(irq_flags) || IrqMask::HeaderValid.is_set_in(irq_flags))
-                {
+                if IrqMask::PreambleDetected.is_set_in(irq_flags) || IrqMask::HeaderValid.is_set_in(irq_flags) {
                     return Ok(Some(TargetIrqState::PreambleReceived));
                 }
                 if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {

@@ -677,7 +677,6 @@ where
     async fn process_irq_event(
         &mut self,
         radio_mode: RadioMode,
-        target_rx_state: Option<TargetIrqState>,
         cad_activity_detected: Option<&mut bool>,
         // Not needed for sx127x
         _rx_continuous: bool,
@@ -696,20 +695,17 @@ where
                 }
             }
             RadioMode::Receive => {
-                if let Some(target_rx_state) = target_rx_state {
-                    if target_rx_state == TargetIrqState::PreambleReceived && IrqMask::HeaderValid.is_set_in(irq_flags)
-                    {
-                        debug!("HeaderValid in radio mode {}", radio_mode);
-                        return Ok(Some(TargetIrqState::PreambleReceived));
-                    }
-                    if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
-                        debug!("RxDone in radio mode {}", radio_mode);
-                        return Ok(Some(TargetIrqState::Done));
-                    }
-                    if (irq_flags & IrqMask::RxTimeout.value()) == IrqMask::RxTimeout.value() {
-                        debug!("RxTimeout in radio mode {}", radio_mode);
-                        return Err(RadioError::ReceiveTimeout);
-                    }
+                if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
+                    debug!("RxDone in radio mode {}", radio_mode);
+                    return Ok(Some(TargetIrqState::Done));
+                }
+                if (irq_flags & IrqMask::RxTimeout.value()) == IrqMask::RxTimeout.value() {
+                    debug!("RxTimeout in radio mode {}", radio_mode);
+                    return Err(RadioError::ReceiveTimeout);
+                }
+                if IrqMask::HeaderValid.is_set_in(irq_flags) {
+                    debug!("HeaderValid in radio mode {}", radio_mode);
+                    return Ok(Some(TargetIrqState::PreambleReceived));
                 }
             }
             RadioMode::ChannelActivityDetection => {

@@ -126,7 +126,6 @@ pub trait RadioKind {
     async fn process_irq_event(
         &mut self,
         radio_mode: RadioMode,
-        target_rx_state: Option<TargetIrqState>,
         cad_activity_detected: Option<&mut bool>,
         rx_continuous: bool,
         clear_interrupts: bool,

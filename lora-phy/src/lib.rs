@@ -70,12 +70,9 @@ where
     }
 
     /// Process an IRQ event and return the new state of the radio
-    pub async fn process_irq_event(
-        &mut self,
-        target_rx_state: TargetIrqState,
-    ) -> Result<Option<TargetIrqState>, RadioError> {
+    pub async fn process_irq_event(&mut self) -> Result<Option<TargetIrqState>, RadioError> {
         self.radio_kind
-            .process_irq_event(self.radio_mode, Some(target_rx_state), None, self.rx_continuous, false)
+            .process_irq_event(self.radio_mode, None, self.rx_continuous, false)
             .await
     }
 
@@ -214,7 +211,7 @@ where
         self.wait_for_irq().await?;
         match self
             .radio_kind
-            .process_irq_event(self.radio_mode, None, None, self.rx_continuous, true)
+            .process_irq_event(self.radio_mode, None, self.rx_continuous, true)
             .await
         {
             Ok(Some(TargetIrqState::Done | TargetIrqState::PreambleReceived)) => {
@@ -261,17 +258,15 @@ where
     /// Obtain the results of a read operation
     pub async fn rx(
         &mut self,
-        rx_pkt_params: &PacketParams,
+        packet_params: &PacketParams,
         receiving_buffer: &mut [u8],
     ) -> Result<(u8, PacketStatus), RadioError> {
-        self.wait_for_irq().await?;
-        match self
-            .process_rx_irq(rx_pkt_params, receiving_buffer, TargetIrqState::Done)
-            .await?
-        {
-            IrqState::RxDone(len, status) => Ok((len, status)),
-            // PreambleReceived is not expected here as we passed target_rx_state = TargetIrqState::Done
-            IrqState::PreambleReceived => unreachable!(),
+        loop {
+            self.wait_for_irq().await?;
+            match self.process_rx_irq(packet_params, receiving_buffer).await? {
+                IrqState::PreambleReceived => continue,
+                IrqState::RxDone(len, status) => return Ok((len, status)),
+            }
         }
     }
 
@@ -280,13 +275,12 @@ where
         &mut self,
         rx_pkt_params: &PacketParams,
         receiving_buffer: &mut [u8],
-        target_rx_state: TargetIrqState,
     ) -> Result<IrqState, RadioError> {
         defmt::trace!("RX: continuous: {}", self.rx_continuous);
 
         match self
             .radio_kind
-            .process_irq_event(self.radio_mode, Some(target_rx_state), None, self.rx_continuous, true)
+            .process_irq_event(self.radio_mode, None, self.rx_continuous, true)
             .await
         {
             Ok(Some(actual_state)) => match actual_state {
@@ -334,7 +328,6 @@ where
             .radio_kind
             .process_irq_event(
                 self.radio_mode,
-                Some(TargetIrqState::Done),
                 Some(&mut cad_activity_detected),
                 self.rx_continuous,
                 true,
