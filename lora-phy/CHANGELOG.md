@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Refactor `setup_rx` to take in `enum RxMode` and drop previous `timeout_in_seconds` argument ([#207](https://github.com/lora-rs/lora-rs/pull/207))
 - Refactor `do_rx` and lorawan-radio's `setup_for_rx`[#208](https://github.com/lora-rs/lora-rs/pull/208)
 - Refactor sx126x power amplifier control and clarify `Sx126xVariant` implications ([#209](https://github.com/lora-rs/lora-rs/pull/209))
+- Drop general AsyncRng trait and its implementation in sx126x driver ([#222](https://github.com/lora-rs/lora-rs/pull/227))
 
 ## [v2.1.2] - 2023-09-25
 

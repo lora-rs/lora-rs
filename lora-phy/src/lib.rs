@@ -369,28 +369,3 @@ where
         Ok(())
     }
 }
-
-impl<RK, DLY> AsyncRng for LoRa<RK, DLY>
-where
-    RK: RngRadio,
-    DLY: DelayNs,
-{
-    async fn get_random_number(&mut self) -> Result<u32, RadioError> {
-        self.rx_continuous = false;
-        self.radio_kind.ensure_ready(self.radio_mode).await?;
-        if self.radio_mode != RadioMode::Standby {
-            self.radio_kind.set_standby().await?;
-            self.radio_mode = RadioMode::Standby;
-        }
-        if self.cold_start {
-            self.do_cold_start().await?;
-        }
-
-        let random_number = self.radio_kind.get_random_number().await?;
-
-        self.radio_kind.set_standby().await?;
-        self.radio_mode = RadioMode::Standby;
-
-        Ok(random_number)
-    }
-}
