@@ -131,22 +131,3 @@ pub trait RadioKind {
     /// Set the LoRa chip into the TxContinuousWave mode
     async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError>;
 }
-
-/// Internal trait for specifying that a [`RadioKind`] object has RNG capability.
-pub(crate) trait RngRadio: RadioKind {
-    async fn get_random_number(&mut self) -> Result<u32, RadioError>;
-}
-
-/// If the LoRa chip supports it, provides an async implementation of the onboard RNG. This trait makes no guarantees
-/// with regards to the distribution of the generated random numbers (ie, uniform or Gaussian). If uniformity is
-/// needed, apply necessary software processing.
-pub trait AsyncRng {
-    /// Generate a 32 bit random value.
-    ///
-    /// # Warning
-    ///
-    /// `prepare_for_xxx()` MUST be called after this operation to set modulation and packet parameters (for
-    /// example: xxx = tx, rx, cad).
-    /// Do not set modulation and packet parameters, do a random number generation, then initiate Tx, Rx, or CAD.
-    async fn get_random_number(&mut self) -> Result<u32, RadioError>;
-}
