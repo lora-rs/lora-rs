@@ -316,8 +316,24 @@ where
     }
 
     async fn set_oscillator(&mut self) -> Result<(), RadioError> {
+        // Return early in case our chip is not using TCXO
+        if self.config.tcxo_ctrl.is_none() {
+            return Ok(());
+        }
+
+        // When TCXO is used, XOSC_START_ERR flag is raised at POR or at
+        // wake-up from Sleep mode in cold-start condition. This is an
+        // expected behaviour since chip is not yet aware of being clocked
+        // by TCXO and therefore this should be initially cleared manually.
+        let mut buf = [0u8; 2];
+        let _ = self
+            .intf
+            .read_with_status(&[OpCode::ClearDeviceErrors.value()], &mut buf)
+            .await?;
+
         if let Some(voltage) = self.config.tcxo_ctrl {
-            let timeout = BRD_TCXO_WAKEUP_TIME << 6; // duration allowed for TCXO to reach 32MHz
+            // Each unit is 15.625uS (which is 1/64th ms)
+            let timeout = BRD_TCXO_WAKEUP_TIME << 6;
             let op_code_and_tcxo_control = [
                 OpCode::SetTCXOMode.value(),
                 voltage.value() & 0x07,
@@ -327,7 +343,6 @@ where
             ];
             self.intf.write(&op_code_and_tcxo_control, false).await?;
         }
-
         Ok(())
     }
 
