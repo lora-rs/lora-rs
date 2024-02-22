@@ -343,6 +343,13 @@ where
             ];
             self.intf.write(&op_code_and_tcxo_control, false).await?;
         }
+
+        // Re-run calibration now that chip knows that it's running from TCXO
+        self.intf
+            .write(&[OpCode::Calibrate.value(), 0b0111_1111], false)
+            .await?;
+        self.intf.iv.wait_on_busy().await?;
+
         Ok(())
     }
 
