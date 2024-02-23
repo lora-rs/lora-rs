@@ -188,11 +188,19 @@ where
     IV: InterfaceVariant,
 {
     async fn init_lora(&mut self, is_public_network: bool) -> Result<(), RadioError> {
+        if self.config.tcxo_used {
+            let reg = match self.config.chip {
+                Sx127xVariant::Sx1272 => Register::RegTcxoSX1272,
+                Sx127xVariant::Sx1276 => Register::RegTcxoSX1276,
+            };
+            self.write_register(reg, TCXO_FOR_OSCILLATOR).await?;
+        }
+
         self.set_lora_modem(is_public_network).await?;
-        self.set_oscillator().await?;
         self.set_tx_rx_buffer_base_address(0, 0).await?;
         Ok(())
     }
+
     fn create_modulation_params(
         &self,
         spreading_factor: SpreadingFactor,
@@ -283,19 +291,6 @@ where
             self.write_register(Register::RegSyncWord, LORA_MAC_PRIVATE_SYNCWORD)
                 .await
         }
-    }
-
-    async fn set_oscillator(&mut self) -> Result<(), RadioError> {
-        if !self.config.tcxo_used {
-            return Ok(());
-        }
-
-        // Configure Tcxo as input
-        let reg = match self.config.chip {
-            Sx127xVariant::Sx1272 => Register::RegTcxoSX1272,
-            Sx127xVariant::Sx1276 => Register::RegTcxoSX1276,
-        };
-        self.write_register(reg, TCXO_FOR_OSCILLATOR).await
     }
 
     async fn set_tx_rx_buffer_base_address(
