@@ -192,7 +192,6 @@ where
         self.set_oscillator().await?;
         self.set_regulator_mode().await?;
         self.set_tx_rx_buffer_base_address(0, 0).await?;
-        self.update_retention_list().await?;
         Ok(())
     }
     fn create_modulation_params(
@@ -353,10 +352,6 @@ where
             Sx127xVariant::Sx1276 => Ok(ramp_time.value()),
         }?;
         self.write_register(Register::RegPaRamp, val).await
-    }
-
-    async fn update_retention_list(&mut self) -> Result<(), RadioError> {
-        Ok(())
     }
 
     async fn set_modulation_params(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
