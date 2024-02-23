@@ -88,8 +88,6 @@ pub trait RadioKind {
         tx_boosted_if_possible: bool,
         is_tx_prep: bool,
     ) -> Result<(), RadioError>;
-    /// Update the LoRa chip retention list to support warm starts from sleep
-    async fn update_retention_list(&mut self) -> Result<(), RadioError>;
     /// Set the LoRa chip modulation parameters prior to using a communication channel
     async fn set_modulation_params(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError>;
     /// Set the LoRa chip packet parameters prior to sending or receiving packets

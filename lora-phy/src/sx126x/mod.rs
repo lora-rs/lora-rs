@@ -119,8 +119,13 @@ where
             ];
             self.intf.write_with_payload(&register, &buffer, false).await
         } else {
-            Err(RadioError::RetentionListExceeded)
+            Err(RadioError::InvalidConfiguration)
         }
+    }
+
+    async fn update_retention_list(&mut self) -> Result<(), RadioError> {
+        self.add_register_to_retention_list(Register::RxGain).await?;
+        self.add_register_to_retention_list(Register::TxModulation).await
     }
 
     // Set the number of symbols the radio will wait to detect a reception
@@ -511,11 +516,6 @@ where
         }
         let op_code_and_tx_params = [OpCode::SetTxParams.value(), tx_params_power, ramp_time.value()];
         self.intf.write(&op_code_and_tx_params, false).await
-    }
-
-    async fn update_retention_list(&mut self) -> Result<(), RadioError> {
-        self.add_register_to_retention_list(Register::RxGain).await?;
-        self.add_register_to_retention_list(Register::TxModulation).await
     }
 
     async fn set_modulation_params(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
