@@ -127,16 +127,11 @@ where
     }
 
     async fn do_cold_start(&mut self) -> Result<(), RadioError> {
-        self.radio_kind.init_rf_switch().await?;
-        self.radio_kind.set_lora_modem(self.enable_public_network).await?;
-        self.radio_kind.set_oscillator().await?;
-        self.radio_kind.set_regulator_mode().await?;
-        self.radio_kind.set_tx_rx_buffer_base_address(0, 0).await?;
+        self.radio_kind.init_lora(self.enable_public_network).await?;
         self.radio_kind
             .set_tx_power_and_ramp_time(0, None, false, false)
             .await?;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
-        self.radio_kind.update_retention_list().await?;
         self.cold_start = false;
         self.calibrate_image = true;
         Ok(())

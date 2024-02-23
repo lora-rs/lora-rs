@@ -187,6 +187,15 @@ where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
+    async fn init_lora(&mut self, is_public_network: bool) -> Result<(), RadioError> {
+        self.init_rf_switch().await?;
+        self.set_lora_modem(is_public_network).await?;
+        self.set_oscillator().await?;
+        self.set_regulator_mode().await?;
+        self.set_tx_rx_buffer_base_address(0, 0).await?;
+        self.update_retention_list().await?;
+Ok(())
+    }
     fn create_modulation_params(
         &self,
         spreading_factor: SpreadingFactor,

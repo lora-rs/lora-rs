@@ -40,6 +40,8 @@ pub enum IrqState {
 /// Functions implemented for a specific kind of LoRa chip, called internally by the outward facing
 /// LoRa physical layer API
 pub trait RadioKind {
+    /// Initialize lora radio
+    async fn init_lora(&mut self, is_public_network: bool) -> Result<(), RadioError>;
     /// Create modulation parameters specific to the LoRa chip kind and type
     fn create_modulation_params(
         &self,
