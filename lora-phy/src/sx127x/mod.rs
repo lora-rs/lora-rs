@@ -190,7 +190,6 @@ where
     async fn init_lora(&mut self, is_public_network: bool) -> Result<(), RadioError> {
         self.set_lora_modem(is_public_network).await?;
         self.set_oscillator().await?;
-        self.set_regulator_mode().await?;
         self.set_tx_rx_buffer_base_address(0, 0).await?;
         Ok(())
     }
@@ -297,10 +296,6 @@ where
             Sx127xVariant::Sx1276 => Register::RegTcxoSX1276,
         };
         self.write_register(reg, TCXO_FOR_OSCILLATOR).await
-    }
-
-    async fn set_regulator_mode(&mut self) -> Result<(), RadioError> {
-        Ok(())
     }
 
     async fn set_tx_rx_buffer_base_address(
