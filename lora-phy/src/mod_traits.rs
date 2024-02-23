@@ -64,8 +64,6 @@ pub trait RadioKind {
     async fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), RadioError>;
     /// Ensure the LoRa chip is in the appropriate state to allow operation requests
     async fn ensure_ready(&mut self, mode: RadioMode) -> Result<(), RadioError>;
-    /// Perform any necessary antenna initialization
-    async fn init_rf_switch(&mut self) -> Result<(), RadioError>;
     /// Place the LoRa chip in standby mode
     async fn set_standby(&mut self) -> Result<(), RadioError>;
     /// Place the LoRa chip in power-saving mode
