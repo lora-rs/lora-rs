@@ -235,7 +235,24 @@ where
             self.intf.iv.wait_on_busy().await?;
         }
 
-        self.set_lora_modem(is_public_network).await?;
+        // Enable LoRa packet engine...
+        self.intf
+            .write(&[OpCode::SetPacketType.value(), PacketType::LoRa.value()], false)
+            .await?;
+        let word = match is_public_network {
+            true => u16::to_be_bytes(LORA_MAC_PUBLIC_SYNCWORD),
+            false => u16::to_be_bytes(LORA_MAC_PRIVATE_SYNCWORD),
+        };
+        // ...and network syncword
+        let lora_syncword_set = [
+            OpCode::WriteRegister.value(),
+            Register::LoRaSyncword.addr1(),
+            Register::LoRaSyncword.addr2(),
+            word[0],
+            word[1],
+        ];
+        self.intf.write(&lora_syncword_set, false).await?;
+
         self.set_tx_rx_buffer_base_address(0, 0).await?;
         // Update register list to support warm starts from sleep mode
         self.update_retention_list().await?;
@@ -330,33 +347,6 @@ where
         let op_code_and_sleep_params = [OpCode::SetSleep.value(), sleep_params.value()];
         self.intf.write(&op_code_and_sleep_params, true).await?;
         delay.delay_ms(2).await;
-
-        Ok(())
-    }
-
-    /// Configure the radio for LoRa and a public/private network.
-    async fn set_lora_modem(&mut self, enable_public_network: bool) -> Result<(), RadioError> {
-        let op_code_and_packet_type = [OpCode::SetPacketType.value(), PacketType::LoRa.value()];
-        self.intf.write(&op_code_and_packet_type, false).await?;
-        if enable_public_network {
-            let register_and_syncword = [
-                OpCode::WriteRegister.value(),
-                Register::LoRaSyncword.addr1(),
-                Register::LoRaSyncword.addr2(),
-                ((LORA_MAC_PUBLIC_SYNCWORD >> 8) & 0xFF) as u8,
-                (LORA_MAC_PUBLIC_SYNCWORD & 0xFF) as u8,
-            ];
-            self.intf.write(&register_and_syncword, false).await?;
-        } else {
-            let register_and_syncword = [
-                OpCode::WriteRegister.value(),
-                Register::LoRaSyncword.addr1(),
-                Register::LoRaSyncword.addr2(),
-                ((LORA_MAC_PRIVATE_SYNCWORD >> 8) & 0xFF) as u8,
-                (LORA_MAC_PRIVATE_SYNCWORD & 0xFF) as u8,
-            ];
-            self.intf.write(&register_and_syncword, false).await?;
-        }
 
         Ok(())
     }
