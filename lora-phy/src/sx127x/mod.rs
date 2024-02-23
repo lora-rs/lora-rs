@@ -196,7 +196,13 @@ where
             self.write_register(reg, TCXO_FOR_OSCILLATOR).await?;
         }
 
-        self.set_lora_modem(is_public_network).await?;
+        let syncword = if is_public_network {
+            LORA_MAC_PUBLIC_SYNCWORD
+        } else {
+            LORA_MAC_PRIVATE_SYNCWORD
+        };
+        self.write_register(Register::RegSyncWord, syncword).await?;
+
         self.set_tx_rx_buffer_base_address(0, 0).await?;
         Ok(())
     }
@@ -280,17 +286,6 @@ where
         self.intf.write(&buf, true).await?;
 
         Ok(())
-    }
-
-    /// The sx127x LoRa mode is set when setting a mode while in sleep mode.
-    async fn set_lora_modem(&mut self, enable_public_network: bool) -> Result<(), RadioError> {
-        if enable_public_network {
-            self.write_register(Register::RegSyncWord, LORA_MAC_PUBLIC_SYNCWORD)
-                .await
-        } else {
-            self.write_register(Register::RegSyncWord, LORA_MAC_PRIVATE_SYNCWORD)
-                .await
-        }
     }
 
     async fn set_tx_rx_buffer_base_address(
