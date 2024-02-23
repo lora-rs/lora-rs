@@ -205,8 +205,37 @@ where
             ];
             self.intf.write(&cmd, false).await?;
         }
+
+        // DIO3 acting as TCXO controller (default is DIO3 as IRQ)
+        if let Some(voltage) = self.config.tcxo_ctrl {
+            // When TCXO is used, XOSC_START_ERR flag is raised at POR or at
+            // wake-up from Sleep mode in cold-start condition. This is an
+            // expected behaviour since chip is not yet aware of being clocked
+            // by TCXO and therefore this should be initially cleared manually.
+            let mut buf = [0u8; 2];
+            let _ = self
+                .intf
+                .read_with_status(&[OpCode::ClearDeviceErrors.value()], &mut buf)
+                .await?;
+
+            // Each unit is 15.625uS (which is 1/64th ms)
+            let timeout = BRD_TCXO_WAKEUP_TIME << 6;
+            let op_code_and_tcxo_control = [
+                OpCode::SetTCXOMode.value(),
+                voltage.value() & 0x07,
+                Self::timeout_1(timeout),
+                Self::timeout_2(timeout),
+                Self::timeout_3(timeout),
+            ];
+            self.intf.write(&op_code_and_tcxo_control, false).await?;
+            // Re-run calibration now that chip knows that it's running from TCXO
+            self.intf
+                .write(&[OpCode::Calibrate.value(), 0b0111_1111], false)
+                .await?;
+            self.intf.iv.wait_on_busy().await?;
+        }
+
         self.set_lora_modem(is_public_network).await?;
-        self.set_oscillator().await?;
         self.set_tx_rx_buffer_base_address(0, 0).await?;
         // Update register list to support warm starts from sleep mode
         self.update_retention_list().await?;
@@ -328,44 +357,6 @@ where
             ];
             self.intf.write(&register_and_syncword, false).await?;
         }
-
-        Ok(())
-    }
-
-    async fn set_oscillator(&mut self) -> Result<(), RadioError> {
-        // Return early in case our chip is not using TCXO
-        if self.config.tcxo_ctrl.is_none() {
-            return Ok(());
-        }
-
-        // When TCXO is used, XOSC_START_ERR flag is raised at POR or at
-        // wake-up from Sleep mode in cold-start condition. This is an
-        // expected behaviour since chip is not yet aware of being clocked
-        // by TCXO and therefore this should be initially cleared manually.
-        let mut buf = [0u8; 2];
-        let _ = self
-            .intf
-            .read_with_status(&[OpCode::ClearDeviceErrors.value()], &mut buf)
-            .await?;
-
-        if let Some(voltage) = self.config.tcxo_ctrl {
-            // Each unit is 15.625uS (which is 1/64th ms)
-            let timeout = BRD_TCXO_WAKEUP_TIME << 6;
-            let op_code_and_tcxo_control = [
-                OpCode::SetTCXOMode.value(),
-                voltage.value() & 0x07,
-                Self::timeout_1(timeout),
-                Self::timeout_2(timeout),
-                Self::timeout_3(timeout),
-            ];
-            self.intf.write(&op_code_and_tcxo_control, false).await?;
-        }
-
-        // Re-run calibration now that chip knows that it's running from TCXO
-        self.intf
-            .write(&[OpCode::Calibrate.value(), 0b0111_1111], false)
-            .await?;
-        self.intf.iv.wait_on_busy().await?;
 
         Ok(())
     }

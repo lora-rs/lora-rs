@@ -70,8 +70,6 @@ pub trait RadioKind {
     async fn set_sleep(&mut self, warm_start_if_possible: bool, delay: &mut impl DelayNs) -> Result<(), RadioError>;
     /// Perform operations to set a multi-protocol chip as a LoRa chip
     async fn set_lora_modem(&mut self, enable_public_network: bool) -> Result<(), RadioError>;
-    /// Perform operations to set the LoRa chip oscillator
-    async fn set_oscillator(&mut self) -> Result<(), RadioError>;
     /// Set the LoRa chip send and receive buffer base addresses
     async fn set_tx_rx_buffer_base_address(
         &mut self,
