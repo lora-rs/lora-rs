@@ -56,7 +56,7 @@ pub enum Sx126xVariant {
 pub struct Config {
     /// LoRa chip variant on this board
     pub chip: Sx126xVariant,
-    /// Configuration for TCXO and its voltage selection
+    /// Board is using TCXO (once enabled DIO3 cannot be used as IRQ)
     pub tcxo_ctrl: Option<TcxoCtrlVoltage>,
     /// Whether board is using optional DCDC in addition to LDO
     pub use_dcdc: bool,
@@ -192,7 +192,12 @@ where
     IV: InterfaceVariant,
 {
     async fn init_lora(&mut self, is_public_network: bool) -> Result<(), RadioError> {
-        // DIO2 acting as RF Switch
+        // DC-DC regulator setup (default is LDO)
+        if self.config.use_dcdc {
+            let reg_data = [OpCode::SetRegulatorMode.value(), RegulatorMode::UseDCDC.value()];
+            self.intf.write(&reg_data, false).await?;
+        }
+        // DIO2 acting as RF Switch (default is DIO2 as IRQ)
         if self.config.use_dio2_as_rfswitch {
             let cmd = [
                 OpCode::SetDIO2AsRfSwitchCtrl.value(),
@@ -202,7 +207,6 @@ where
         }
         self.set_lora_modem(is_public_network).await?;
         self.set_oscillator().await?;
-        self.set_regulator_mode().await?;
         self.set_tx_rx_buffer_base_address(0, 0).await?;
         // Update register list to support warm starts from sleep mode
         self.update_retention_list().await?;
@@ -363,16 +367,6 @@ where
             .await?;
         self.intf.iv.wait_on_busy().await?;
 
-        Ok(())
-    }
-
-    async fn set_regulator_mode(&mut self) -> Result<(), RadioError> {
-        // SX1261/2 can use optional DC-DC to reduce power usage,
-        // but this is related to the hardware implementation of the board.
-        if self.config.use_dcdc {
-            let reg_data = [OpCode::SetRegulatorMode.value(), RegulatorMode::UseDCDC.value()];
-            self.intf.write(&reg_data, false).await?;
-        }
         Ok(())
     }
 
