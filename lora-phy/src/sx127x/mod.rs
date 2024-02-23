@@ -188,13 +188,12 @@ where
     IV: InterfaceVariant,
 {
     async fn init_lora(&mut self, is_public_network: bool) -> Result<(), RadioError> {
-        self.init_rf_switch().await?;
         self.set_lora_modem(is_public_network).await?;
         self.set_oscillator().await?;
         self.set_regulator_mode().await?;
         self.set_tx_rx_buffer_base_address(0, 0).await?;
         self.update_retention_list().await?;
-Ok(())
+        Ok(())
     }
     fn create_modulation_params(
         &self,
@@ -258,11 +257,6 @@ Ok(())
     }
 
     async fn ensure_ready(&mut self, _mode: RadioMode) -> Result<(), RadioError> {
-        Ok(())
-    }
-
-    // Use DIO2 to control an RF Switch
-    async fn init_rf_switch(&mut self) -> Result<(), RadioError> {
         Ok(())
     }
 

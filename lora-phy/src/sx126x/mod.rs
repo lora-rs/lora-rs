@@ -187,11 +187,19 @@ where
     IV: InterfaceVariant,
 {
     async fn init_lora(&mut self, is_public_network: bool) -> Result<(), RadioError> {
-        self.init_rf_switch().await?;
+        // DIO2 acting as RF Switch
+        if self.config.use_dio2_as_rfswitch {
+            let cmd = [
+                OpCode::SetDIO2AsRfSwitchCtrl.value(),
+                self.config.use_dio2_as_rfswitch as u8,
+            ];
+            self.intf.write(&cmd, false).await?;
+        }
         self.set_lora_modem(is_public_network).await?;
         self.set_oscillator().await?;
         self.set_regulator_mode().await?;
         self.set_tx_rx_buffer_base_address(0, 0).await?;
+        // Update register list to support warm starts from sleep mode
         self.update_retention_list().await?;
         Ok(())
     }
@@ -264,16 +272,6 @@ where
         } else {
             self.intf.iv.wait_on_busy().await?;
         }
-        Ok(())
-    }
-
-    // Use DIO2 to control an RF Switch, depending on the board type.
-    async fn init_rf_switch(&mut self) -> Result<(), RadioError> {
-        let reg_data = [
-            OpCode::SetDIO2AsRfSwitchCtrl.value(),
-            self.config.use_dio2_as_rfswitch as u8,
-        ];
-        self.intf.write(&reg_data, false).await?;
         Ok(())
     }
 
