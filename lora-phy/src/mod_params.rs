@@ -14,7 +14,6 @@ pub enum RadioError {
     DIO1,
     InvalidConfiguration,
     OpError(u8),
-    InvalidBaseAddress(usize, usize),
     PayloadSizeUnexpected(usize),
     PayloadSizeMismatch(usize, usize),
     UnavailableSpreadingFactor,

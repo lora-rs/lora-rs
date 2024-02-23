@@ -253,7 +253,6 @@ where
         ];
         self.intf.write(&lora_syncword_set, false).await?;
 
-        self.set_tx_rx_buffer_base_address(0, 0).await?;
         // Update register list to support warm starts from sleep mode
         self.update_retention_list().await?;
         Ok(())
@@ -349,22 +348,6 @@ where
         delay.delay_ms(2).await;
 
         Ok(())
-    }
-
-    async fn set_tx_rx_buffer_base_address(
-        &mut self,
-        tx_base_addr: usize,
-        rx_base_addr: usize,
-    ) -> Result<(), RadioError> {
-        if tx_base_addr > 255 || rx_base_addr > 255 {
-            return Err(RadioError::InvalidBaseAddress(tx_base_addr, rx_base_addr));
-        }
-        let op_code_and_base_addrs = [
-            OpCode::SetBufferBaseAddress.value(),
-            tx_base_addr as u8,
-            rx_base_addr as u8,
-        ];
-        self.intf.write(&op_code_and_base_addrs, false).await
     }
 
     // Set parameters associated with power for a send operation. Currently, over current protection (OCP) uses the default set automatically after set_pa_config()
@@ -623,8 +606,12 @@ where
     }
 
     async fn set_payload(&mut self, payload: &[u8]) -> Result<(), RadioError> {
-        let op_code_and_offset = [OpCode::WriteBuffer.value(), 0x00u8];
-        self.intf.write_with_payload(&op_code_and_offset, payload, false).await
+        // Set FIFO tx/rx buffer base addresses 0
+        let op_cmd = [OpCode::SetBufferBaseAddress.value(), 0u8, 0u8];
+        self.intf.write(&op_cmd, false).await?;
+
+        let op_cmd = [OpCode::WriteBuffer.value(), 0x00u8];
+        self.intf.write_with_payload(&op_cmd, payload, false).await
     }
 
     async fn do_tx(&mut self, timeout_in_ms: u32) -> Result<(), RadioError> {

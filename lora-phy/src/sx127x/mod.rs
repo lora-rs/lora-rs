@@ -203,7 +203,9 @@ where
         };
         self.write_register(Register::RegSyncWord, syncword).await?;
 
-        self.set_tx_rx_buffer_base_address(0, 0).await?;
+        // Set FIFO Tx base address to 0 (it defaults to 0x80)
+        // FIFO Rx base register is 0 by default.
+        self.write_register(Register::RegFifoTxBaseAddr, 0u8).await?;
         Ok(())
     }
     fn create_modulation_params(
@@ -285,18 +287,6 @@ where
         self.intf.write(&buf, true).await?;
 
         Ok(())
-    }
-
-    async fn set_tx_rx_buffer_base_address(
-        &mut self,
-        tx_base_addr: usize,
-        rx_base_addr: usize,
-    ) -> Result<(), RadioError> {
-        if tx_base_addr > 255 || rx_base_addr > 255 {
-            return Err(RadioError::InvalidBaseAddress(tx_base_addr, rx_base_addr));
-        }
-        self.write_register(Register::RegFifoTxBaseAddr, 0x00u8).await?;
-        self.write_register(Register::RegFifoRxBaseAddr, 0x00u8).await
     }
 
     // Set parameters associated with power for a send operation.

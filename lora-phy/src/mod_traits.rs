@@ -68,12 +68,6 @@ pub trait RadioKind {
     async fn set_standby(&mut self) -> Result<(), RadioError>;
     /// Place the LoRa chip in power-saving mode
     async fn set_sleep(&mut self, warm_start_if_possible: bool, delay: &mut impl DelayNs) -> Result<(), RadioError>;
-    /// Set the LoRa chip send and receive buffer base addresses
-    async fn set_tx_rx_buffer_base_address(
-        &mut self,
-        tx_base_addr: usize,
-        rx_base_addr: usize,
-    ) -> Result<(), RadioError>;
     /// Perform any necessary LoRa chip power setup prior to a send operation
     async fn set_tx_power_and_ramp_time(
         &mut self,
