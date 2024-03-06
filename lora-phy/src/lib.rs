@@ -142,6 +142,11 @@ where
         Ok(())
     }
 
+    /// Place the LoRa physical layer in standby mode
+    pub async fn enter_standby(&mut self) -> Result<(), RadioError> {
+        self.radio_kind.set_standby().await
+    }
+
     /// Place the LoRa physical layer in low power mode, specifying cold or warm start (if the Semtech chip supports it)
     pub async fn sleep(&mut self, warm_start_if_possible: bool) -> Result<(), RadioError> {
         if self.radio_mode != RadioMode::Sleep {
