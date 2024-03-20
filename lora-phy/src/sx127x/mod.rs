@@ -731,4 +731,66 @@ where
         }
         Ok(())
     }
+
+    async fn await_irq(&mut self) -> Result<(), RadioError> {
+        self.intf.iv.await_irq().await
+    }
+
+    /// Process the radio IRQ. Log unexpected interrupts.
+    /// Packets from other devices can cause unexpected interrupts.
+    async fn process_irq_event(
+        &mut self,
+        radio_mode: RadioMode,
+        cad_activity_detected: Option<&mut bool>,
+        // Not needed for sx127x
+        _rx_continuous: bool,
+        clear_interrupts: bool,
+    ) -> Result<Option<TargetIrqState>, RadioError> {
+        let irq_flags = self.read_register(Register::RegIrqFlags).await?;
+        if clear_interrupts {
+            self.write_register(Register::RegIrqFlags, 0xffu8).await?; // clear all interrupts
+        }
+
+        match radio_mode {
+            RadioMode::Transmit => {
+                if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
+                    debug!("TxDone in radio mode {}", radio_mode);
+                    return Ok(Some(TargetIrqState::Done));
+                }
+            }
+            RadioMode::Receive => {
+                if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
+                    debug!("RxDone in radio mode {}", radio_mode);
+                    return Ok(Some(TargetIrqState::Done));
+                }
+                if (irq_flags & IrqMask::RxTimeout.value()) == IrqMask::RxTimeout.value() {
+                    debug!("RxTimeout in radio mode {}", radio_mode);
+                    return Err(RadioError::ReceiveTimeout);
+                }
+                if IrqMask::HeaderValid.is_set_in(irq_flags) {
+                    debug!("HeaderValid in radio mode {}", radio_mode);
+                    return Ok(Some(TargetIrqState::PreambleReceived));
+                }
+            }
+            RadioMode::ChannelActivityDetection => {
+                if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+                    debug!("CADDone in radio mode {}", radio_mode);
+                    // TODO: don't like how we mutate the cad_activity_detected parameter
+                    if cad_activity_detected.is_some() {
+                        // Check if the CAD (Channel Activity Detection) Activity Detected flag is set in irq_flags and then update the reference
+                        *(cad_activity_detected.unwrap()) =
+                            (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
+                    }
+                    return Ok(Some(TargetIrqState::Done));
+                }
+            }
+            RadioMode::Sleep | RadioMode::Standby => {
+                defmt::warn!("IRQ during sleep/standby?");
+            }
+            RadioMode::FrequencySynthesis | RadioMode::ReceiveDutyCycle => todo!(),
+        }
+
+        // If no specific IRQ condition is met, return None
+        Ok(None)
+    }
 }
