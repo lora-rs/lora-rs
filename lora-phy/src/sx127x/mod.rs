@@ -653,67 +653,6 @@ where
         Ok(())
     }
 
-    /// Process the radio IRQ.  Log unexpected interrupts, but only bail out on timeout.  Packets from other devices can cause unexpected interrupts.
-    async fn process_irq(
-        &mut self,
-        radio_mode: RadioMode,
-        _rx_continuous: bool,
-        target_rx_state: TargetIrqState,
-        cad_activity_detected: Option<&mut bool>,
-    ) -> Result<TargetIrqState, RadioError> {
-        loop {
-            debug!("process_irq loop entered");
-
-            self.intf.iv.await_irq().await?;
-
-            let irq_flags = self.read_register(Register::RegIrqFlags).await?;
-            self.write_register(Register::RegIrqFlags, 0xffu8).await?; // clear all interrupts
-
-            debug!(
-                "process_irq: irq_flags = 0b{:08b} in radio mode {}",
-                irq_flags, radio_mode
-            );
-
-            match radio_mode {
-                RadioMode::Transmit => {
-                    if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
-                        debug!("TxDone in radio mode {}", radio_mode);
-                        return Ok(TargetIrqState::Done);
-                    }
-                }
-                RadioMode::Receive => {
-                    if target_rx_state == TargetIrqState::PreambleReceived && IrqMask::HeaderValid.is_set_in(irq_flags)
-                    {
-                        debug!("HeaderValid in radio mode {}", radio_mode);
-                        return Ok(TargetIrqState::PreambleReceived);
-                    }
-                    if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
-                        debug!("RxDone in radio mode {}", radio_mode);
-                        return Ok(TargetIrqState::Done);
-                    }
-                    if (irq_flags & IrqMask::RxTimeout.value()) == IrqMask::RxTimeout.value() {
-                        debug!("RxTimeout in radio mode {}", radio_mode);
-                        return Err(RadioError::ReceiveTimeout);
-                    }
-                }
-                RadioMode::ChannelActivityDetection => {
-                    if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
-                        debug!("CADDone in radio mode {}", radio_mode);
-                        if cad_activity_detected.is_some() {
-                            *(cad_activity_detected.unwrap()) = (irq_flags & IrqMask::CADActivityDetected.value())
-                                == IrqMask::CADActivityDetected.value();
-                        }
-                        return Ok(TargetIrqState::Done);
-                    }
-                }
-                RadioMode::Sleep | RadioMode::Standby => {
-                    defmt::warn!("IRQ during sleep/standby?");
-                }
-                RadioMode::FrequencySynthesis | RadioMode::ReceiveDutyCycle => todo!(),
-            }
-            // if an interrupt occurred for other than an error or operation completion, loop to wait again
-        }
-    }
     /// Set the LoRa chip into the TxContinuousWave mode
     async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError> {
         match self.config.chip {

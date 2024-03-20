@@ -112,14 +112,6 @@ pub trait RadioKind {
     ) -> Result<(), RadioError>;
     /// Set the LoRa chip to provide notification of specific events based on radio state
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError>;
-    /// Process LoRa chip notifications of events
-    async fn process_irq(
-        &mut self,
-        radio_mode: RadioMode,
-        rx_continuous: bool,
-        target_rx_state: TargetIrqState,
-        cad_activity_detected: Option<&mut bool>,
-    ) -> Result<TargetIrqState, RadioError>;
     /// Set the LoRa chip into the TxContinuousWave mode
     async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError>;
 
