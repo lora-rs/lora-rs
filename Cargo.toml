@@ -5,6 +5,7 @@ members = [
     "lorawan-macros",
     "lora-modulation",
     "lora-phy",
+    "smtc-modem-cores",
 ]
 exclude = [
     "examples/nrf52840",
