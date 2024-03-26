@@ -7,10 +7,7 @@
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
 pub extern crate std;
-
 use crate::parser::*;
-
-const INT_TO_HEX_MAP: &[u8] = b"0123456789abcdef";
 
 macro_rules! fixed_len_struct_impl_to_string {
     (
@@ -19,15 +16,11 @@ macro_rules! fixed_len_struct_impl_to_string {
     ) => {
         impl<T: AsRef<[u8]>> std::string::ToString for $type<T> {
             fn to_string(&self) -> std::string::String {
-                let mut res = std::vec::Vec::new();
-                let data = self.as_ref();
-                res.extend_from_slice(&[0; 2 * $size]);
-                for i in 0..$size {
-                    res[2 * i] = INT_TO_HEX_MAP[(data[i] >> 4) as usize];
-                    res[2 * i + 1] = INT_TO_HEX_MAP[(data[i] & 0x0f) as usize];
-                }
-
-                unsafe { std::string::String::from_utf8_unchecked(res) }
+                let mut res = std::string::String::with_capacity($size * 2);
+                res.extend(std::iter::repeat('0').take($size * 2));
+                let slice = unsafe { &mut res.as_bytes_mut() };
+                hex::encode_to_slice(self.as_ref(), slice).unwrap();
+                res
             }
         }
     };
