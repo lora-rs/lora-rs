@@ -31,8 +31,13 @@ macro_rules! lorawan_key {
             }
         }
 
-        };
-    }
+        impl AsRef<[u8]> for $type {
+            fn as_ref(&self) -> &[u8] {
+                &self.0 .0
+            }
+        }
+    };
+}
 
 lorawan_key!(
     /// AppKey should be entered in MSB format. For example, if your LNS provides a AppKey of
@@ -70,6 +75,12 @@ macro_rules! lorawan_eui {
         impl From<$type> for EUI64<[u8; 8]> {
             fn from(key: $type) -> Self {
                 key.0
+            }
+        }
+
+        impl AsRef<[u8]> for $type {
+            fn as_ref(&self) -> &[u8] {
+                &self.0.as_ref()
             }
         }
     };
