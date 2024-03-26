@@ -131,9 +131,11 @@ mod tests {
         type Error = Error;
     }
     impl embedded_hal::spi::SpiDevice for TestSpi {
-        fn write(&mut self, data: &[u8]) -> Result<(), Self::Error> {
-            self.data.extend_from_slice(data);
-            Ok(())
+        fn transaction(
+            &mut self,
+            _operations: &mut [Operation<'_, u8>],
+        ) -> Result<(), Self::Error> {
+            todo!()
         }
 
         fn read(&mut self, data: &mut [u8]) -> Result<(), Self::Error> {
@@ -141,11 +143,9 @@ mod tests {
             Ok(())
         }
 
-        fn transaction(
-            &mut self,
-            _operations: &mut [Operation<'_, u8>],
-        ) -> Result<(), Self::Error> {
-            todo!()
+        fn write(&mut self, data: &[u8]) -> Result<(), Self::Error> {
+            self.data.extend_from_slice(data);
+            Ok(())
         }
         fn transfer(&mut self, _read: &mut [u8], _write: &[u8]) -> Result<(), Self::Error> {
             todo!()

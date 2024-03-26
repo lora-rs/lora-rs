@@ -1,8 +1,8 @@
 [package]
 name = "smtc-modem-cores"
-version = "0.1.3"
+version = "0.1.0"
 authors = ["Louis Thiery <thiery.louis@gmail.com>"]
-edition = "2018"
+edition = "2021"
 categories = [
     "embedded",
     "hardware-support",
@@ -13,10 +13,6 @@ readme = "README.md"
 description = "Rust Wrapper SX12xx"
 
 [dependencies]
-smtc-modem-cores-sys = { path = "smtc-modem-cores-sys", version = "0.1.0" }
-libm = "0.1.4"
-heapless = "0.5.4"
-as-slice = "*"
+smtc-modem-cores-sys = { path = "smtc-modem-cores-sys", version = "0.1" }
 thiserror = "1"
 embedded-hal = "1"
-
