@@ -28,9 +28,10 @@ harness = false
 
 [features]
 default = ["full"]
-full = ["with-to-string", "with-downlink", "default-crypto"]
+full = ["with-to-string", "with-from-str", "with-downlink", "default-crypto"]
 default-crypto = ["aes", "cmac"]
 with-to-string = ["hex"]
+with-from-str = ["hex"]
 with-downlink = []
 serde = ["dep:serde"]
 defmt = ["dep:defmt"]

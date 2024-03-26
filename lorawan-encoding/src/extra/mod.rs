@@ -9,5 +9,5 @@
 pub extern crate std;
 
 pub mod hasher;
-#[cfg(feature = "with-to-string")]
-pub mod to_string;
+#[cfg(any(feature = "with-to-string", feature = "with-from-str"))]
+pub mod string;

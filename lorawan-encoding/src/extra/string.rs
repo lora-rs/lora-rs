@@ -7,10 +7,10 @@
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
 pub extern crate std;
-use crate::parser::*;
 use crate::keys::*;
+use crate::parser::*;
 
-macro_rules! fixed_len_struct_impl_to_string_msb {
+macro_rules! fixed_len_struct_impl_string_msb {
     (
         $type:ident,$size:expr;
     ) => {
@@ -21,6 +21,14 @@ macro_rules! fixed_len_struct_impl_to_string_msb {
                 let slice = unsafe { &mut res.as_bytes_mut() };
                 hex::encode_to_slice(self.as_ref(), slice).unwrap();
                 res
+            }
+        }
+
+        impl From<&str> for $type {
+            fn from(s: &str) -> Self {
+                let mut res = [0; $size];
+                hex::decode_to_slice(s.as_bytes(), &mut res).unwrap();
+                Self::from(res)
             }
         }
     };
@@ -36,10 +44,18 @@ macro_rules! fixed_len_struct_impl_to_string_msb {
                 res
             }
         }
+
+        impl From<&str> for $type<[u8; $size]> {
+            fn from(s: &str) -> Self {
+                let mut res = [0; $size];
+                hex::decode_to_slice(s.as_bytes(), &mut res).unwrap();
+                Self::from(res)
+            }
+        }
     };
 }
 
-macro_rules! fixed_len_struct_impl_to_string_lsb {
+macro_rules! fixed_len_struct_impl_string_lsb {
     (
         $type:ident,$size:expr;
     ) => {
@@ -49,55 +65,62 @@ macro_rules! fixed_len_struct_impl_to_string_lsb {
                 res.extend(std::iter::repeat('0').take($size * 2));
                 let slice = unsafe { &mut res.as_bytes_mut() };
                 self.as_ref().iter().rev().enumerate().for_each(|(i, b)| {
-                    hex::encode_to_slice(&[*b], &mut slice[i*2..i*2+2]).unwrap();
+                    hex::encode_to_slice(&[*b], &mut slice[i * 2..i * 2 + 2]).unwrap();
                 });
                 res
+            }
+        }
+
+        impl From<&str> for $type {
+            fn from(s: &str) -> Self {
+                let mut res = [0; $size];
+                hex::decode_to_slice(s.as_bytes(), &mut res).unwrap();
+                res.reverse();
+                Self::from(res)
             }
         }
     };
 }
 
-fixed_len_struct_impl_to_string_msb! {
+fixed_len_struct_impl_string_msb! {
     EUI64[8];
 }
 
-fixed_len_struct_impl_to_string_msb! {
+fixed_len_struct_impl_string_msb! {
     DevNonce[2];
 }
 
-fixed_len_struct_impl_to_string_msb! {
+fixed_len_struct_impl_string_msb! {
     AppNonce[3];
 }
 
-fixed_len_struct_impl_to_string_msb! {
+fixed_len_struct_impl_string_msb! {
     DevAddr[4];
 }
 
-fixed_len_struct_impl_to_string_msb! {
+fixed_len_struct_impl_string_msb! {
     NwkAddr[3];
 }
 
-fixed_len_struct_impl_to_string_msb! {
+fixed_len_struct_impl_string_msb! {
     AppKey, 16;
 }
 
-fixed_len_struct_impl_to_string_msb! {
+fixed_len_struct_impl_string_msb! {
     NewSKey, 16;
 }
 
-fixed_len_struct_impl_to_string_msb! {
+fixed_len_struct_impl_string_msb! {
     AppSKey, 16;
 }
 
-fixed_len_struct_impl_to_string_lsb! {
+fixed_len_struct_impl_string_lsb! {
     DevEui, 8;
 }
 
-fixed_len_struct_impl_to_string_lsb! {
+fixed_len_struct_impl_string_lsb! {
     AppEui, 8;
 }
-
-
 
 #[cfg(test)]
 mod test {
@@ -106,13 +129,34 @@ mod test {
 
     #[test]
     fn test_appskey_to_string() {
-        let appskey = AppSKey::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+        let appskey = AppSKey::from([
+            0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD,
+            0xEE, 0xFF,
+        ]);
         assert_eq!(appskey.to_string(), "00112233445566778899aabbccddeeff");
+    }
+
+    #[test]
+    fn test_appskey_from_str() {
+        let appskey = AppSKey::from("00112233445566778899aabbccddeeff");
+        assert_eq!(
+            appskey,
+            AppSKey::from([
+                0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD,
+                0xEE, 0xFF
+            ])
+        );
     }
 
     #[test]
     fn test_deveui_to_string() {
         let deveui = DevEui::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]);
         assert_eq!(deveui.to_string(), "7766554433221100");
+    }
+
+    #[test]
+    fn test_deveui_from_str() {
+        let deveui = DevEui::from("7766554433221100");
+        assert_eq!(deveui, DevEui::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77]));
     }
 }
