@@ -40,7 +40,6 @@ macro_rules! lorawan_key {
 }
 
 lorawan_key!(
-
     /// You can construct AppKey from a hex-encoded MSB string or bytes in MSB format.
     ///
     /// Typically, an LNS will provide it in a string format such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.

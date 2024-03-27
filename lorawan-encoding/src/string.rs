@@ -165,4 +165,16 @@ mod test {
         let deveui = DevEui::from_str("123456789abcdef0").unwrap();
         assert_eq!(deveui, DevEui::from([0xf0, 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12]));
     }
+
+    #[test]
+    fn test_deveui_from_small_str() {
+        let result = DevEui::from_str("123456789abcd");
+        assert_eq!(result, Err(FromHexError::OddLength));
+    }
+
+    #[test]
+    fn test_deveui_from_large_str() {
+        let result = DevEui::from_str("123456789abcdef000");
+        assert_eq!(result, Err(FromHexError::InvalidStringLength));
+    }
 }
