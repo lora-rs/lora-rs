@@ -41,8 +41,9 @@ macro_rules! lorawan_key {
 
 lorawan_key!(
 
-    /// You can construct AppKey from a byte array or a string. Typically, an LNS will provide it
-    /// in a string format such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
+    /// You can construct AppKey from a hex-encoded MSB string or bytes in MSB format.
+    ///
+    /// Typically, an LNS will provide it in a string format such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
     ///
     /// To create from a string:
     /// ```
@@ -59,8 +60,9 @@ lorawan_key!(
     pub struct AppKey(AES128);
 );
 lorawan_key!(
-    /// You can construct NewSKey from a byte array or a string. Typically, an LNS will provide it
-    /// in a string format such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
+    /// You can construct NewSKey from a hex-encoded MSB string or bytes in MSB format.
+    ///
+    /// Typically, an LNS will provide it in a string format such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
     ///
     /// To create from a string:
     /// ```
@@ -77,8 +79,9 @@ lorawan_key!(
     pub struct NewSKey(AES128);
 );
 lorawan_key!(
-    /// You can construct AppSKey from a byte array or a string. Typically, an LNS will provide it
-    /// in a string format such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
+    /// You can construct AppSKey from a hex-encoded MSB string or bytes in MSB format.
+    ///
+    /// Typically, an LNS will provide it in a string format such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
     ///
     /// To create from a string:
     /// ```
@@ -127,8 +130,9 @@ macro_rules! lorawan_eui {
 }
 
 lorawan_eui!(
-    /// You can construct DevEui from a byte array or a string. Typically, an LNS will provide it
-    /// in a string format such as: `00:11:22:33:44:55:66:77`.
+    /// You can construct DevEui from a hex-encoded MSB string or bytes in LSB format.
+    ///
+    /// Typically, an LNS will provide it in a string format such as: `00:11:22:33:44:55:66:77`.
     ///
     /// To create from a string:
     /// ```
@@ -145,8 +149,9 @@ lorawan_eui!(
     pub struct DevEui(EUI64<[u8; 8]>);
 );
 lorawan_eui!(
-    /// You can construct AppEui from a byte array or a string. Typically, an LNS will provide it
-    /// in a string format such as: `00:11:22:33:44:55:66:77`.
+    /// You can construct AppEui from a hex-encoded MSB string or bytes in LSB format.
+    ///
+    /// Typically, an LNS will provide it in a string format such as: `00:11:22:33:44:55:66:77`.
     ///
     /// To create from a string:
     /// ```
