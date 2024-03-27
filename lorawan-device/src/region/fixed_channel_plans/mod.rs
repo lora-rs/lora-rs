@@ -5,10 +5,14 @@ use lorawan::maccommands::ChannelMask;
 mod join_channels;
 use join_channels::JoinChannels;
 
+#[cfg(feature = "region-au915")]
 mod au915;
+#[cfg(feature = "region-us915")]
 mod us915;
 
+#[cfg(feature = "region-au915")]
 pub use au915::AU915;
+#[cfg(feature = "region-us915")]
 pub use us915::US915;
 
 seq_macro::seq!(

@@ -38,7 +38,17 @@ lazy_static = "1"
 lorawan = { version = "0.8", path = "../lorawan-encoding" }
 
 [features]
-default = []
+default = ["all-regions"]
+all-regions = ["region-as923-1", "region-as923-2", "region-as923-3", "region-as923-4", "region-au915", "region-eu433", "region-eu868", "region-in865", "region-us915"]
+region-as923-1 = []
+region-as923-2 = []
+region-as923-3 = []
+region-as923-4 = []
+region-au915 = []
+region-eu433 = []
+region-eu868 = []
+region-in865 = []
+region-us915 = []
 
 ## Provide an `async_device::Timer` impl based on `embassy-time`.
 embassy-time = ["dep:embassy-time"]
