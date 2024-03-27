@@ -1,17 +1,33 @@
 use super::*;
 use core::marker::PhantomData;
 
+#[cfg(any(
+    feature = "region-as923-1",
+    feature = "region-as923-2",
+    feature = "region-as923-3",
+    feature = "region-as923-4"
+))]
 mod as923;
+#[cfg(feature = "region-eu433")]
 mod eu433;
+#[cfg(feature = "region-eu868")]
 mod eu868;
+#[cfg(feature = "region-in865")]
 mod in865;
 
+#[cfg(feature = "region-as923-1")]
 pub(crate) use as923::AS923_1;
+#[cfg(feature = "region-as923-2")]
 pub(crate) use as923::AS923_2;
+#[cfg(feature = "region-as923-3")]
 pub(crate) use as923::AS923_3;
+#[cfg(feature = "region-as923-4")]
 pub(crate) use as923::AS923_4;
+#[cfg(feature = "region-eu433")]
 pub(crate) use eu433::EU433;
+#[cfg(feature = "region-eu868")]
 pub(crate) use eu868::EU868;
+#[cfg(feature = "region-in865")]
 pub(crate) use in865::IN865;
 
 #[derive(Default, Clone)]

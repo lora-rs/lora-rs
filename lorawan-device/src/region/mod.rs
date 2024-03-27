@@ -8,18 +8,52 @@ pub(crate) mod constants;
 pub(crate) use crate::radio::*;
 use constants::*;
 
+#[cfg(not(any(
+    feature = "region-as923-1",
+    feature = "region-as923-2",
+    feature = "region-as923-3",
+    feature = "region-as923-4",
+    feature = "region-eu433",
+    feature = "region-eu868",
+    feature = "region-in865",
+    feature = "region-au915",
+    feature = "region-us915"
+)))]
+compile_error!("You must enable at least one region! eg: `region-eu868`, `region-us915`...");
+
+#[cfg(any(
+    feature = "region-as923-1",
+    feature = "region-as923-2",
+    feature = "region-as923-3",
+    feature = "region-as923-4",
+    feature = "region-eu433",
+    feature = "region-eu868",
+    feature = "region-in865"
+))]
+mod dynamic_channel_plans;
+#[cfg(feature = "region-as923-1")]
 pub(crate) use dynamic_channel_plans::AS923_1;
+#[cfg(feature = "region-as923-2")]
 pub(crate) use dynamic_channel_plans::AS923_2;
+#[cfg(feature = "region-as923-3")]
 pub(crate) use dynamic_channel_plans::AS923_3;
+#[cfg(feature = "region-as923-4")]
 pub(crate) use dynamic_channel_plans::AS923_4;
+#[cfg(feature = "region-eu433")]
 pub(crate) use dynamic_channel_plans::EU433;
+#[cfg(feature = "region-eu868")]
 pub(crate) use dynamic_channel_plans::EU868;
+#[cfg(feature = "region-in865")]
 pub(crate) use dynamic_channel_plans::IN865;
 
-mod dynamic_channel_plans;
+#[cfg(any(feature = "region-us915", feature = "region-au915"))]
 mod fixed_channel_plans;
-
-pub use fixed_channel_plans::{Subband, AU915, US915};
+#[cfg(any(feature = "region-us915", feature = "region-au915"))]
+pub use fixed_channel_plans::Subband;
+#[cfg(feature = "region-au915")]
+pub use fixed_channel_plans::AU915;
+#[cfg(feature = "region-us915")]
+pub use fixed_channel_plans::US915;
 
 pub(crate) trait ChannelRegion<const D: usize> {
     fn datarates() -> &'static [Option<Datarate>; D];
@@ -65,42 +99,71 @@ seq_macro::seq!(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Regions supported by this crate: AS923_1, AS923_2, AS923_3, AS923_4, AU915, EU868, EU433, IN865, US915.
+/// Each region is individually feature-gated (eg: `region-eu868`), however, by default, all regions are enabled.
+///
 pub enum Region {
+    #[cfg(feature = "region-as923-1")]
     AS923_1,
+    #[cfg(feature = "region-as923-2")]
     AS923_2,
+    #[cfg(feature = "region-as923-3")]
     AS923_3,
+    #[cfg(feature = "region-as923-4")]
     AS923_4,
+    #[cfg(feature = "region-au915")]
     AU915,
+    #[cfg(feature = "region-eu868")]
     EU868,
+    #[cfg(feature = "region-eu433")]
     EU433,
+    #[cfg(feature = "region-in865")]
     IN865,
+    #[cfg(feature = "region-us915")]
     US915,
 }
 
 #[derive(Clone)]
 enum State {
+    #[cfg(feature = "region-as923-1")]
     AS923_1(AS923_1),
+    #[cfg(feature = "region-as923-2")]
     AS923_2(AS923_2),
+    #[cfg(feature = "region-as923-3")]
     AS923_3(AS923_3),
+    #[cfg(feature = "region-as923-4")]
     AS923_4(AS923_4),
+    #[cfg(feature = "region-au915")]
     AU915(AU915),
+    #[cfg(feature = "region-eu868")]
     EU868(EU868),
+    #[cfg(feature = "region-eu433")]
     EU433(EU433),
+    #[cfg(feature = "region-in865")]
     IN865(IN865),
+    #[cfg(feature = "region-us915")]
     US915(US915),
 }
 
 impl State {
     pub fn new(region: Region) -> State {
         match region {
+            #[cfg(feature = "region-as923-1")]
             Region::AS923_1 => State::AS923_1(AS923_1::default()),
+            #[cfg(feature = "region-as923-2")]
             Region::AS923_2 => State::AS923_2(AS923_2::default()),
+            #[cfg(feature = "region-as923-3")]
             Region::AS923_3 => State::AS923_3(AS923_3::default()),
+            #[cfg(feature = "region-as923-4")]
             Region::AS923_4 => State::AS923_4(AS923_4::default()),
+            #[cfg(feature = "region-au915")]
             Region::AU915 => State::AU915(AU915::default()),
+            #[cfg(feature = "region-eu868")]
             Region::EU868 => State::EU868(EU868::default()),
+            #[cfg(feature = "region-eu433")]
             Region::EU433 => State::EU433(EU433::default()),
+            #[cfg(feature = "region-in865")]
             Region::IN865 => State::IN865(IN865::default()),
+            #[cfg(feature = "region-us915")]
             Region::US915 => State::US915(US915::default()),
         }
     }
@@ -108,14 +171,23 @@ impl State {
     #[allow(dead_code)]
     pub fn region(&self) -> Region {
         match self {
+            #[cfg(feature = "region-as923-1")]
             Self::AS923_1(_) => Region::AS923_1,
+            #[cfg(feature = "region-as923-2")]
             Self::AS923_2(_) => Region::AS923_2,
+            #[cfg(feature = "region-as923-3")]
             Self::AS923_3(_) => Region::AS923_3,
+            #[cfg(feature = "region-as923-4")]
             Self::AS923_4(_) => Region::AS923_4,
+            #[cfg(feature = "region-au915")]
             Self::AU915(_) => Region::AU915,
+            #[cfg(feature = "region-eu433")]
             Self::EU433(_) => Region::EU433,
+            #[cfg(feature = "region-eu868")]
             Self::EU868(_) => Region::EU868,
+            #[cfg(feature = "region-in865")]
             Self::IN865(_) => Region::IN865,
+            #[cfg(feature = "region-us915")]
             Self::US915(_) => Region::US915,
         }
     }
@@ -132,27 +204,45 @@ pub(crate) struct Datarate {
 macro_rules! mut_region_dispatch {
   ($s:expr, $t:tt) => {
       match &mut $s.state {
+        #[cfg(feature = "region-as923-1")]
         State::AS923_1(state) => state.$t(),
+        #[cfg(feature = "region-as923-2")]
         State::AS923_2(state) => state.$t(),
+        #[cfg(feature = "region-as923-3")]
         State::AS923_3(state) => state.$t(),
+        #[cfg(feature = "region-as923-4")]
         State::AS923_4(state) => state.$t(),
+        #[cfg(feature = "region-au915")]
         State::AU915(state) => state.0.$t(),
+        #[cfg(feature = "region-eu868")]
         State::EU868(state) => state.$t(),
+        #[cfg(feature = "region-eu433")]
         State::EU433(state) => state.$t(),
+        #[cfg(feature = "region-in865")]
         State::IN865(state) => state.$t(),
+        #[cfg(feature = "region-us915")]
         State::US915(state) => state.0.$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
       match &mut $s.state {
+        #[cfg(feature = "region-as923-1")]
         State::AS923_1(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-as923-2")]
         State::AS923_2(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-as923-3")]
         State::AS923_3(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-as923-4")]
         State::AS923_4(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-au915")]
         State::AU915(state) => state.0.$t($($arg)*),
+        #[cfg(feature = "region-eu868")]
         State::EU868(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-eu433")]
         State::EU433(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-in865")]
         State::IN865(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-us915")]
         State::US915(state) => state.0.$t($($arg)*),
     }
   };
@@ -161,27 +251,45 @@ macro_rules! mut_region_dispatch {
 macro_rules! region_dispatch {
   ($s:expr, $t:tt) => {
       match &$s.state {
+        #[cfg(feature = "region-as923-1")]
         State::AS923_1(state) => state.$t(),
+        #[cfg(feature = "region-as923-2")]
         State::AS923_2(state) => state.$t(),
+        #[cfg(feature = "region-as923-3")]
         State::AS923_3(state) => state.$t(),
+        #[cfg(feature = "region-as923-4")]
         State::AS923_4(state) => state.$t(),
+        #[cfg(feature = "region-au915")]
         State::AU915(state) => state.0.$t(),
+        #[cfg(feature = "region-eu868")]
         State::EU868(state) => state.$t(),
+        #[cfg(feature = "region-eu433")]
         State::EU433(state) => state.$t(),
+        #[cfg(feature = "region-in865")]
         State::IN865(state) => state.$t(),
+        #[cfg(feature = "region-us915")]
         State::US915(state) => state.0.$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
       match &$s.state {
+        #[cfg(feature = "region-as923-1")]
         State::AS923_1(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-as923-2")]
         State::AS923_2(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-as923-3")]
         State::AS923_3(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-as923-4")]
         State::AS923_4(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-au915")]
         State::AU915(state) => state.0.$t($($arg)*),
+        #[cfg(feature = "region-eu868")]
         State::EU868(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-eu433")]
         State::EU433(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-in865")]
         State::IN865(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-us915")]
         State::US915(state) => state.0.$t($($arg)*),
     }
   };
@@ -190,27 +298,45 @@ macro_rules! region_dispatch {
 macro_rules! region_static_dispatch {
   ($s:expr, $t:tt) => {
       match &$s.state {
+        #[cfg(feature = "region-as923-1")]
         State::AS923_1(_) => dynamic_channel_plans::AS923_1::$t(),
+        #[cfg(feature = "region-as923-2")]
         State::AS923_2(_) => dynamic_channel_plans::AS923_2::$t(),
+        #[cfg(feature = "region-as923-3")]
         State::AS923_3(_) => dynamic_channel_plans::AS923_3::$t(),
+        #[cfg(feature = "region-as923-4")]
         State::AS923_4(_) => dynamic_channel_plans::AS923_4::$t(),
+        #[cfg(feature = "region-au915")]
         State::AU915(_) => fixed_channel_plans::AU915::$t(),
+        #[cfg(feature = "region-eu868")]
         State::EU868(_) => dynamic_channel_plans::EU868::$t(),
+        #[cfg(feature = "region-eu433")]
         State::EU433(_) => dynamic_channel_plans::EU433::$t(),
+        #[cfg(feature = "region-in865")]
         State::IN865(_) => dynamic_channel_plans::IN865::$t(),
+        #[cfg(feature = "region-us915")]
         State::US915(_) => fixed_channel_plans::US915::$t(),
     }
   };
   ($s:expr, $t:tt, $($arg:tt)*) => {
       match &$s.state {
+        #[cfg(feature = "region-as923-1")]
         State::AS923_1(_) => dynamic_channel_plans::AS923_1::$t($($arg)*),
+        #[cfg(feature = "region-as923-2")]
         State::AS923_2(_) => dynamic_channel_plans::AS923_2::$t($($arg)*),
+        #[cfg(feature = "region-as923-3")]
         State::AS923_3(_) => dynamic_channel_plans::AS923_3::$t($($arg)*),
+        #[cfg(feature = "region-as923-4")]
         State::AS923_4(_) => dynamic_channel_plans::AS923_4::$t($($arg)*),
+        #[cfg(feature = "region-au915")]
         State::AU915(_) => fixed_channel_plans::AU915::$t($($arg)*),
+        #[cfg(feature = "region-eu868")]
         State::EU868(_) => dynamic_channel_plans::EU868::$t($($arg)*),
+        #[cfg(feature = "region-eu433")]
         State::EU433(_) => dynamic_channel_plans::EU433::$t($($arg)*),
+        #[cfg(feature = "region-in865")]
         State::IN865(_) => dynamic_channel_plans::IN865::$t($($arg)*),
+        #[cfg(feature = "region-us915")]
         State::US915(_) => fixed_channel_plans::US915::$t($($arg)*),
     }
   };
@@ -348,14 +474,24 @@ macro_rules! from_region {
     };
 }
 
-from_region!(US915);
-from_region!(EU868);
-from_region!(EU433);
-from_region!(AU915);
+#[cfg(feature = "region-as923-1")]
 from_region!(AS923_1);
+#[cfg(feature = "region-as923-2")]
 from_region!(AS923_2);
+#[cfg(feature = "region-as923-3")]
 from_region!(AS923_3);
+#[cfg(feature = "region-as923-4")]
 from_region!(AS923_4);
+#[cfg(feature = "region-in865")]
+from_region!(IN865);
+#[cfg(feature = "region-au915")]
+from_region!(AU915);
+#[cfg(feature = "region-eu868")]
+from_region!(EU868);
+#[cfg(feature = "region-eu433")]
+from_region!(EU433);
+#[cfg(feature = "region-us915")]
+from_region!(US915);
 
 use lorawan::parser::DecryptedJoinAcceptPayload;
 

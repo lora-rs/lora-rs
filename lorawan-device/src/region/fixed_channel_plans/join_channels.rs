@@ -205,8 +205,10 @@ macro_rules! impl_join_bias {
     };
 }
 
-impl_join_bias!(US915);
+#[cfg(feature = "region-au915")]
 impl_join_bias!(AU915);
+#[cfg(feature = "region-us915")]
+impl_join_bias!(US915);
 
 #[cfg(test)]
 mod test {
