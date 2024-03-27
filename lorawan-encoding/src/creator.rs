@@ -13,19 +13,16 @@
 use super::keys;
 use super::keys::{AppKey, AppSKey, CryptoFactory, NewSKey};
 use super::maccommandcreator;
-use super::maccommands::{mac_commands_len, SerializableMacCommand};
-#[cfg(feature = "with-downlink")]
-use super::maccommands::{DLSettings, Frequency};
+use super::maccommands::{mac_commands_len, DLSettings, Frequency, SerializableMacCommand};
 use super::parser;
 use super::securityhelpers;
 
 #[cfg(feature = "default-crypto")]
 use super::default_crypto::DefaultFactory;
 
-#[cfg(feature = "with-downlink")]
 use super::keys::Decrypter;
 
-#[cfg(any(feature = "with-downlink", feature = "default-crypto"))]
+#[cfg(feature = "default-crypto")]
 use aes::cipher::generic_array::GenericArray;
 
 #[cfg(feature = "default-crypto")]
@@ -45,7 +42,6 @@ const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
 /// JoinAcceptCreator serves for creating binary representation of Physical
 /// Payload of JoinAccept.
-#[cfg(feature = "with-downlink")]
 #[derive(Default)]
 pub struct JoinAcceptCreator<D, F> {
     data: D,
@@ -54,7 +50,6 @@ pub struct JoinAcceptCreator<D, F> {
     factory: F,
 }
 
-#[cfg(feature = "with-downlink")]
 impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     /// Creates a well initialized JoinAcceptCreator with specific data and crypto functions.
     ///
