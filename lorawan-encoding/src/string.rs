@@ -1,14 +1,8 @@
-// Copyright (c) 2020 Ivaylo Petrov
-//
-// Licensed under the MIT license <LICENSE-MIT or
-// http://opensource.org/licenses/MIT>, at your option. This file may not be
-// copied, modified, or distributed except according to those terms.
-//
-// author: Ivaylo Petrov <ivajloip@gmail.com>
-#[cfg(feature = "with-to-string")]
-pub extern crate std;
 use crate::keys::*;
 use crate::parser::*;
+
+#[cfg(feature = "with-to-string")]
+pub extern crate std;
 
 macro_rules! fixed_len_struct_impl_to_string_msb {
     (
