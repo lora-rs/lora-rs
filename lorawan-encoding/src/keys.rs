@@ -31,22 +31,69 @@ macro_rules! lorawan_key {
             }
         }
 
-        };
-    }
+        impl AsRef<[u8]> for $type {
+            fn as_ref(&self) -> &[u8] {
+                &self.0 .0
+            }
+        }
+    };
+}
 
 lorawan_key!(
-    /// AppKey should be entered in MSB format. For example, if your LNS provides a AppKey of
-    /// `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`, you should enter it as `AppKey([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF])`.
+    /// You can construct AppKey from a hex-encoded MSB string or bytes in MSB format.
+    ///
+    /// Typically, a LNS will provide it in a string format such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
+    ///
+    /// To create from a string:
+    /// ```
+    /// use lorawan::keys::AppKey;
+    /// use core::str::FromStr;
+    ///let appkey = AppKey::from_str("00112233445566778899aabbccddeeff").unwrap();
+    /// ```
+    ///
+    /// To create from a byte array, you should enter the bytes in MSB format:
+    /// ```
+    /// use lorawan::keys::AppKey;
+    /// let appkey = AppKey::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+    /// ```
     pub struct AppKey(AES128);
 );
 lorawan_key!(
-    /// NwkSKey should be entered in MSB format. For example, if your LNS provides a NwkSKey of
-    /// `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`, you should enter it as `NwkSKey([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF])`.
+    /// You can construct NewSKey from a hex-encoded MSB string or bytes in MSB format.
+    ///
+    /// Typically, a LNS will provide a hex-encoded MSB string such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
+    ///
+    /// To create from a string:
+    /// ```
+    /// use lorawan::keys::NewSKey;
+    /// use core::str::FromStr;
+    /// let newskey = NewSKey::from_str("00112233445566778899aabbccddeeff").unwrap();
+    /// ```
+    ///
+    /// To create from a byte array, you should enter the bytes in MSB format:
+    /// ```
+    /// use lorawan::keys::NewSKey;
+    /// let newskey = NewSKey::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+    /// ```
     pub struct NewSKey(AES128);
 );
 lorawan_key!(
-    /// AppSKey should be entered in MSB format. For example, if your LNS provides a AppSKey of
-    /// `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`, you should enter it as `AppSKey([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF])`.
+    /// You can construct AppSKey from a hex-encoded MSB string or bytes in MSB format.
+    ///
+    /// Typically, a LNS will provide a hex-encoded MSB string format such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
+    ///
+    /// To create from a string:
+    /// ```
+    /// use lorawan::keys::AppSKey;
+    /// use core::str::FromStr;
+    /// let appskey = AppSKey::from_str("00112233445566778899aabbccddeeff").unwrap();
+    /// ```
+    ///
+    /// To create from a byte array, you should enter the bytes in MSB format:
+    /// ```
+    /// use lorawan::keys::AppSKey;
+    /// let appskey = AppSKey::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+    /// ```
     pub struct AppSKey(AES128);
 );
 
@@ -72,17 +119,51 @@ macro_rules! lorawan_eui {
                 key.0
             }
         }
+
+        impl AsRef<[u8]> for $type {
+            fn as_ref(&self) -> &[u8] {
+                &self.0.as_ref()
+            }
+        }
     };
 }
 
 lorawan_eui!(
-    /// DevEui should be entered in LSB format. For example, if your LNS provides a DevEui of
-    /// `00:11:22:33:44:55:66:77`, you should enter it as `DevEui([0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00])`.
+    /// You can construct DevEui from a hex-encoded MSB string or bytes in LSB format.
+    ///
+    /// Typically, a LNS will provide a hex-encoded MSB string such as: `00:11:22:33:44:55:66:77`.
+    ///
+    /// To create from a string:
+    /// ```
+    /// use lorawan::keys::DevEui;
+    /// use core::str::FromStr;
+    /// let dev_eui = DevEui::from_str("0011223344556677").unwrap();
+    /// ```
+    ///
+    /// To create from a byte array, you should enter the bytes in LSB format:
+    /// ```
+    /// use lorawan::keys::DevEui;
+    /// let dev_eui = DevEui::from([0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00]);
+    /// ```
     pub struct DevEui(EUI64<[u8; 8]>);
 );
 lorawan_eui!(
-    /// AppEui should be entered in LSB format. For example, if your LNS provides a AppEui of
-    /// `00:11:22:33:44:55:66:77`, you should enter it as `AppEui([0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00])`.
+    /// You can construct AppEui from a hex-encoded MSB string or bytes in LSB format.
+    ///
+    /// Typically, a LNS will provide a hex-encoded MSB string such as: `00:11:22:33:44:55:66:77`.
+    ///
+    /// To create from a string:
+    /// ```
+    /// use lorawan::keys::AppEui;
+    /// use core::str::FromStr;
+    /// let app_eui = AppEui::from_str("0011223344556677").unwrap();
+    /// ```
+    ///
+    /// To create from a byte array, you should enter the bytes in LSB format:
+    /// ```
+    /// use lorawan::keys::AppEui;
+    /// let app_eui = AppEui::from([0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 0x00]);
+    /// ```
     pub struct AppEui(EUI64<[u8; 8]>);
 );
 
