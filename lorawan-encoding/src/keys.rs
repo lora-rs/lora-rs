@@ -42,6 +42,7 @@ macro_rules! lorawan_key {
 lorawan_key!(
     /// AppKey should be entered in MSB format. For example, if your LNS provides a AppKey of
     /// `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`, you should enter it as `AppKey([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF])`.
+    /// Alternatively, you can use the from_str method
     pub struct AppKey(AES128);
 );
 lorawan_key!(

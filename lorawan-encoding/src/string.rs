@@ -4,15 +4,19 @@ use crate::parser::*;
 #[cfg(feature = "with-to-string")]
 pub extern crate std;
 
+pub use hex::FromHexError;
+
 macro_rules! fixed_len_struct_impl_to_string_msb {
     (
         $type:ident,$size:expr;
     ) => {
-        impl From<&str> for $type {
-            fn from(s: &str) -> Self {
+        impl core::str::FromStr for $type {
+            type Err = FromHexError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
                 let mut res = [0; $size];
-                hex::decode_to_slice(s.as_bytes(), &mut res).unwrap();
-                Self::from(res)
+                hex::decode_to_slice(s.as_bytes(), &mut res)?;
+                Ok(Self::from(res))
             }
         }
 
@@ -30,11 +34,13 @@ macro_rules! fixed_len_struct_impl_to_string_msb {
     (
         $type:ident[$size:expr];
     ) => {
-        impl From<&str> for $type<[u8; $size]> {
-            fn from(s: &str) -> Self {
+        impl core::str::FromStr for $type<[u8; $size]> {
+            type Err = FromHexError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
                 let mut res = [0; $size];
-                hex::decode_to_slice(s.as_bytes(), &mut res).unwrap();
-                Self::from(res)
+                hex::decode_to_slice(s.as_bytes(), &mut res)?;
+                Ok(Self::from(res))
             }
         }
 
@@ -55,12 +61,14 @@ macro_rules! fixed_len_struct_impl_string_lsb {
     (
         $type:ident,$size:expr;
     ) => {
-        impl From<&str> for $type {
-            fn from(s: &str) -> Self {
+        impl core::str::FromStr for $type {
+            type Err = FromHexError;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
                 let mut res = [0; $size];
-                hex::decode_to_slice(s.as_bytes(), &mut res).unwrap();
+                hex::decode_to_slice(s.as_bytes(), &mut res)?;
                 res.reverse();
-                Self::from(res)
+                Ok(Self::from(res))
             }
         }
 
@@ -123,6 +131,7 @@ fixed_len_struct_impl_string_lsb! {
 mod test {
     use super::*;
     use crate::extra::std::string::ToString;
+    use core::str::FromStr;
 
     #[test]
     fn test_appskey_to_string() {
@@ -135,7 +144,7 @@ mod test {
 
     #[test]
     fn test_appskey_from_str() {
-        let appskey = AppSKey::from("00112233445566778899aabbccddeeff");
+        let appskey = AppSKey::from_str("00112233445566778899aabbccddeeff").unwrap();
         assert_eq!(
             appskey,
             AppSKey::from([
@@ -153,7 +162,7 @@ mod test {
 
     #[test]
     fn test_deveui_from_str() {
-        let deveui = DevEui::from("123456789abcdef0");
+        let deveui = DevEui::from_str("123456789abcdef0").unwrap();
         assert_eq!(deveui, DevEui::from([0xf0, 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12]));
     }
 }
