@@ -13,7 +13,7 @@ readme = "README.md"
 aes = { version = "0.8", optional = true }
 cmac = { version = "0.7", optional = true }
 generic-array = "0"
-hex = { version = "0", default-features = false, optional = true}
+hex = { version = "0", default-features = false }
 defmt = { version = "0.3", optional = true }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true}
 
@@ -28,10 +28,9 @@ harness = false
 
 [features]
 default = ["full"]
-full = ["with-to-string", "with-from-str", "with-downlink", "default-crypto"]
+full = ["with-to-string", "with-downlink", "default-crypto"]
 default-crypto = ["aes", "cmac"]
-with-to-string = ["hex"]
-with-from-str = ["hex"]
+with-to-string = []
 with-downlink = []
 serde = ["dep:serde"]
 defmt = ["dep:defmt"]
