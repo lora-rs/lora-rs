@@ -12,7 +12,7 @@ use embassy_stm32::time::khz;
 use embassy_time::{Delay, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx127xInterfaceVariant;
-use lora_phy::sx127x::{Sx127xVariant, Sx127x};
+use lora_phy::sx127x::{Sx1276, Sx127x};
 use lora_phy::{mod_params::*, sx127x};
 use lora_phy::{LoRa, RxMode};
 use {defmt_rtt as _, panic_probe as _};
@@ -37,7 +37,7 @@ async fn main(_spawner: Spawner) {
     let spi = ExclusiveDevice::new(spi, nss, Delay);
 
     let config = sx127x::Config {
-        chip: Sx127xVariant::Sx1276,
+        chip: Sx1276,
         tcxo_used: true,
     };
     let iv = GenericSx127xInterfaceVariant::new(reset, irq, None, None).unwrap();
