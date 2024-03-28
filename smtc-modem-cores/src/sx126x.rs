@@ -1,10 +1,6 @@
 use smtc_modem_cores_sys::{
-    sx126x_set_sleep, sx126x_sleep_cfgs_e_SX126X_SLEEP_CFG_COLD_START,
-    sx126x_sleep_cfgs_e_SX126X_SLEEP_CFG_WARM_START, sx126x_status_e_SX126X_STATUS_ERROR,
-    sx126x_status_e_SX126X_STATUS_OK, sx126x_status_e_SX126X_STATUS_UNKNOWN_VALUE,
-    sx126x_status_e_SX126X_STATUS_UNSUPPORTED_FEATURE, sx126x_status_t,
+    sx126x_set_sleep, sx126x_sleep_cfgs_e, sx126x_status_e, sx126x_status_t,
 };
-use std::convert::TryFrom;
 use std::ffi;
 
 pub struct Context<S: embedded_hal::spi::SpiDevice> {
@@ -26,26 +22,24 @@ pub enum Error {
 
 pub type Result<T = ()> = std::result::Result<T, Error>;
 
-impl TryFrom<u32> for Status {
-    type Error = Error;
-    fn try_from(value: u32) -> Result<Status> {
+impl From<sx126x_status_e> for Status {
+    fn from(value: sx126x_status_e) -> Status {
         match value {
-            sx126x_status_e_SX126X_STATUS_OK => Ok(Status::Ok),
-            sx126x_status_e_SX126X_STATUS_UNSUPPORTED_FEATURE => Ok(Status::UnSupportedFeature),
-            sx126x_status_e_SX126X_STATUS_UNKNOWN_VALUE => Ok(Status::UnknownValue),
-            sx126x_status_e_SX126X_STATUS_ERROR => Ok(Status::Error),
-            v => Err(Error::InvalidStatusValue(v)),
+            sx126x_status_e::SX126X_STATUS_OK => Status::Ok,
+            sx126x_status_e::SX126X_STATUS_UNSUPPORTED_FEATURE => Status::UnSupportedFeature,
+            sx126x_status_e::SX126X_STATUS_UNKNOWN_VALUE => Status::UnknownValue,
+            sx126x_status_e::SX126X_STATUS_ERROR => Status::Error,
         }
     }
 }
 
-impl From<Status> for u32 {
-    fn from(status: Status) -> u32 {
+impl From<Status> for sx126x_status_e {
+    fn from(status: Status) -> sx126x_status_e {
         match status {
-            Status::Ok => sx126x_status_e_SX126X_STATUS_OK,
-            Status::UnSupportedFeature => sx126x_status_e_SX126X_STATUS_UNSUPPORTED_FEATURE,
-            Status::UnknownValue => sx126x_status_e_SX126X_STATUS_UNKNOWN_VALUE,
-            Status::Error => sx126x_status_e_SX126X_STATUS_ERROR,
+            Status::Ok => sx126x_status_e::SX126X_STATUS_OK,
+            Status::UnSupportedFeature => sx126x_status_e::SX126X_STATUS_UNSUPPORTED_FEATURE,
+            Status::UnknownValue => sx126x_status_e::SX126X_STATUS_UNKNOWN_VALUE,
+            Status::Error => sx126x_status_e::SX126X_STATUS_ERROR,
         }
     }
 }
@@ -55,11 +49,11 @@ pub enum SleepCfg {
     WarmStart,
 }
 
-impl From<SleepCfg> for u32 {
-    fn from(cfg: SleepCfg) -> u32 {
+impl From<SleepCfg> for sx126x_sleep_cfgs_e {
+    fn from(cfg: SleepCfg) -> sx126x_sleep_cfgs_e {
         match cfg {
-            SleepCfg::ColdStart => sx126x_sleep_cfgs_e_SX126X_SLEEP_CFG_COLD_START,
-            SleepCfg::WarmStart => sx126x_sleep_cfgs_e_SX126X_SLEEP_CFG_WARM_START,
+            SleepCfg::ColdStart => sx126x_sleep_cfgs_e::SX126X_SLEEP_CFG_COLD_START,
+            SleepCfg::WarmStart => sx126x_sleep_cfgs_e::SX126X_SLEEP_CFG_WARM_START,
         }
     }
 }
@@ -87,9 +81,13 @@ pub unsafe extern "C" fn sx126x_hal_write_generic<S: embedded_hal::spi::SpiDevic
 ) -> sx126x_status_t {
     let context = unsafe { &mut *(context as *mut Context<S>) };
     let slice = unsafe { std::slice::from_raw_parts(command, command_length as usize) };
-    context.spi.write(slice).unwrap();
+    if context.spi.write(slice).is_err() {
+        return sx126x_status_t::SX126X_STATUS_ERROR;
+    }
     let slice = unsafe { std::slice::from_raw_parts(data, data_length as usize) };
-    context.spi.write(slice).unwrap();
+    if context.spi.write(slice).is_err() {
+        return sx126x_status_t::SX126X_STATUS_ERROR;
+    }
     Status::Ok.into()
 }
 
