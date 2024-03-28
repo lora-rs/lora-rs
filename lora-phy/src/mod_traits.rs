@@ -40,6 +40,8 @@ pub enum IrqState {
 /// Functions implemented for a specific kind of LoRa chip, called internally by the outward facing
 /// LoRa physical layer API
 pub trait RadioKind {
+    /// Initialize radio
+    async fn init(&mut self, is_public_network: bool) -> Result<(), RadioError>;
     /// Create modulation parameters specific to the LoRa chip kind and type
     fn create_modulation_params(
         &self,
@@ -62,24 +64,10 @@ pub trait RadioKind {
     async fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), RadioError>;
     /// Ensure the LoRa chip is in the appropriate state to allow operation requests
     async fn ensure_ready(&mut self, mode: RadioMode) -> Result<(), RadioError>;
-    /// Perform any necessary antenna initialization
-    async fn init_rf_switch(&mut self) -> Result<(), RadioError>;
     /// Place the LoRa chip in standby mode
     async fn set_standby(&mut self) -> Result<(), RadioError>;
     /// Place the LoRa chip in power-saving mode
     async fn set_sleep(&mut self, warm_start_if_possible: bool, delay: &mut impl DelayNs) -> Result<(), RadioError>;
-    /// Perform operations to set a multi-protocol chip as a LoRa chip
-    async fn set_lora_modem(&mut self, enable_public_network: bool) -> Result<(), RadioError>;
-    /// Perform operations to set the LoRa chip oscillator
-    async fn set_oscillator(&mut self) -> Result<(), RadioError>;
-    /// Set the LoRa chip voltage regulator mode
-    async fn set_regulator_mode(&mut self) -> Result<(), RadioError>;
-    /// Set the LoRa chip send and receive buffer base addresses
-    async fn set_tx_rx_buffer_base_address(
-        &mut self,
-        tx_base_addr: usize,
-        rx_base_addr: usize,
-    ) -> Result<(), RadioError>;
     /// Perform any necessary LoRa chip power setup prior to a send operation
     async fn set_tx_power_and_ramp_time(
         &mut self,
@@ -88,8 +76,6 @@ pub trait RadioKind {
         tx_boosted_if_possible: bool,
         is_tx_prep: bool,
     ) -> Result<(), RadioError>;
-    /// Update the LoRa chip retention list to support warm starts from sleep
-    async fn update_retention_list(&mut self) -> Result<(), RadioError>;
     /// Set the LoRa chip modulation parameters prior to using a communication channel
     async fn set_modulation_params(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError>;
     /// Set the LoRa chip packet parameters prior to sending or receiving packets

@@ -187,6 +187,27 @@ where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
+    async fn init(&mut self, is_public_network: bool) -> Result<(), RadioError> {
+        if self.config.tcxo_used {
+            let reg = match self.config.chip {
+                Sx127xVariant::Sx1272 => Register::RegTcxoSX1272,
+                Sx127xVariant::Sx1276 => Register::RegTcxoSX1276,
+            };
+            self.write_register(reg, TCXO_FOR_OSCILLATOR).await?;
+        }
+
+        let syncword = if is_public_network {
+            LORA_MAC_PUBLIC_SYNCWORD
+        } else {
+            LORA_MAC_PRIVATE_SYNCWORD
+        };
+        self.write_register(Register::RegSyncWord, syncword).await?;
+
+        // Set FIFO Tx base address to 0 (it defaults to 0x80)
+        // FIFO Rx base register is 0 by default.
+        self.write_register(Register::RegFifoTxBaseAddr, 0u8).await?;
+        Ok(())
+    }
     fn create_modulation_params(
         &self,
         spreading_factor: SpreadingFactor,
@@ -252,11 +273,6 @@ where
         Ok(())
     }
 
-    // Use DIO2 to control an RF Switch
-    async fn init_rf_switch(&mut self) -> Result<(), RadioError> {
-        Ok(())
-    }
-
     async fn set_standby(&mut self) -> Result<(), RadioError> {
         self.write_register(Register::RegOpMode, LoRaMode::Standby.value())
             .await?;
@@ -271,46 +287,6 @@ where
         self.intf.write(&buf, true).await?;
 
         Ok(())
-    }
-
-    /// The sx127x LoRa mode is set when setting a mode while in sleep mode.
-    async fn set_lora_modem(&mut self, enable_public_network: bool) -> Result<(), RadioError> {
-        if enable_public_network {
-            self.write_register(Register::RegSyncWord, LORA_MAC_PUBLIC_SYNCWORD)
-                .await
-        } else {
-            self.write_register(Register::RegSyncWord, LORA_MAC_PRIVATE_SYNCWORD)
-                .await
-        }
-    }
-
-    async fn set_oscillator(&mut self) -> Result<(), RadioError> {
-        if !self.config.tcxo_used {
-            return Ok(());
-        }
-
-        // Configure Tcxo as input
-        let reg = match self.config.chip {
-            Sx127xVariant::Sx1272 => Register::RegTcxoSX1272,
-            Sx127xVariant::Sx1276 => Register::RegTcxoSX1276,
-        };
-        self.write_register(reg, TCXO_FOR_OSCILLATOR).await
-    }
-
-    async fn set_regulator_mode(&mut self) -> Result<(), RadioError> {
-        Ok(())
-    }
-
-    async fn set_tx_rx_buffer_base_address(
-        &mut self,
-        tx_base_addr: usize,
-        rx_base_addr: usize,
-    ) -> Result<(), RadioError> {
-        if tx_base_addr > 255 || rx_base_addr > 255 {
-            return Err(RadioError::InvalidBaseAddress(tx_base_addr, rx_base_addr));
-        }
-        self.write_register(Register::RegFifoTxBaseAddr, 0x00u8).await?;
-        self.write_register(Register::RegFifoRxBaseAddr, 0x00u8).await
     }
 
     // Set parameters associated with power for a send operation.
@@ -350,10 +326,6 @@ where
             Sx127xVariant::Sx1276 => Ok(ramp_time.value()),
         }?;
         self.write_register(Register::RegPaRamp, val).await
-    }
-
-    async fn update_retention_list(&mut self) -> Result<(), RadioError> {
-        Ok(())
     }
 
     async fn set_modulation_params(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {

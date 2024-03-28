@@ -56,7 +56,7 @@ pub enum Sx126xVariant {
 pub struct Config {
     /// LoRa chip variant on this board
     pub chip: Sx126xVariant,
-    /// Configuration for TCXO and its voltage selection
+    /// Board is using TCXO (once enabled DIO3 cannot be used as IRQ)
     pub tcxo_ctrl: Option<TcxoCtrlVoltage>,
     /// Whether board is using optional DCDC in addition to LDO
     pub use_dcdc: bool,
@@ -119,8 +119,13 @@ where
             ];
             self.intf.write_with_payload(&register, &buffer, false).await
         } else {
-            Err(RadioError::RetentionListExceeded)
+            Err(RadioError::InvalidConfiguration)
         }
+    }
+
+    async fn update_retention_list(&mut self) -> Result<(), RadioError> {
+        self.add_register_to_retention_list(Register::RxGain).await?;
+        self.add_register_to_retention_list(Register::TxModulation).await
     }
 
     // Set the number of symbols the radio will wait to detect a reception
@@ -186,6 +191,73 @@ where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
+    async fn init(&mut self, is_public_network: bool) -> Result<(), RadioError> {
+        // DC-DC regulator setup (default is LDO)
+        if self.config.use_dcdc {
+            let reg_data = [OpCode::SetRegulatorMode.value(), RegulatorMode::UseDCDC.value()];
+            self.intf.write(&reg_data, false).await?;
+        }
+        // DIO2 acting as RF Switch (default is DIO2 as IRQ)
+        if self.config.use_dio2_as_rfswitch {
+            let cmd = [
+                OpCode::SetDIO2AsRfSwitchCtrl.value(),
+                self.config.use_dio2_as_rfswitch as u8,
+            ];
+            self.intf.write(&cmd, false).await?;
+        }
+
+        // DIO3 acting as TCXO controller (default is DIO3 as IRQ)
+        if let Some(voltage) = self.config.tcxo_ctrl {
+            // When TCXO is used, XOSC_START_ERR flag is raised at POR or at
+            // wake-up from Sleep mode in cold-start condition. This is an
+            // expected behaviour since chip is not yet aware of being clocked
+            // by TCXO and therefore this should be initially cleared manually.
+            let mut buf = [0u8; 2];
+            let _ = self
+                .intf
+                .read_with_status(&[OpCode::ClearDeviceErrors.value()], &mut buf)
+                .await?;
+
+            // Each unit is 15.625uS (which is 1/64th ms)
+            let timeout = BRD_TCXO_WAKEUP_TIME << 6;
+            let op_code_and_tcxo_control = [
+                OpCode::SetTCXOMode.value(),
+                voltage.value() & 0x07,
+                Self::timeout_1(timeout),
+                Self::timeout_2(timeout),
+                Self::timeout_3(timeout),
+            ];
+            self.intf.write(&op_code_and_tcxo_control, false).await?;
+            // Re-run calibration now that chip knows that it's running from TCXO
+            self.intf
+                .write(&[OpCode::Calibrate.value(), 0b0111_1111], false)
+                .await?;
+            self.intf.iv.wait_on_busy().await?;
+        }
+
+        // Enable LoRa packet engine...
+        self.intf
+            .write(&[OpCode::SetPacketType.value(), PacketType::LoRa.value()], false)
+            .await?;
+        let word = match is_public_network {
+            true => u16::to_be_bytes(LORA_MAC_PUBLIC_SYNCWORD),
+            false => u16::to_be_bytes(LORA_MAC_PRIVATE_SYNCWORD),
+        };
+        // ...and network syncword
+        let lora_syncword_set = [
+            OpCode::WriteRegister.value(),
+            Register::LoRaSyncword.addr1(),
+            Register::LoRaSyncword.addr2(),
+            word[0],
+            word[1],
+        ];
+        self.intf.write(&lora_syncword_set, false).await?;
+
+        // Update register list to support warm starts from sleep mode
+        self.update_retention_list().await?;
+        Ok(())
+    }
+
     fn create_modulation_params(
         &self,
         spreading_factor: SpreadingFactor,
@@ -257,16 +329,6 @@ where
         Ok(())
     }
 
-    // Use DIO2 to control an RF Switch, depending on the board type.
-    async fn init_rf_switch(&mut self) -> Result<(), RadioError> {
-        let reg_data = [
-            OpCode::SetDIO2AsRfSwitchCtrl.value(),
-            self.config.use_dio2_as_rfswitch as u8,
-        ];
-        self.intf.write(&reg_data, false).await?;
-        Ok(())
-    }
-
     // Use standby mode RC (not XOSC).
     async fn set_standby(&mut self) -> Result<(), RadioError> {
         let op_code_and_standby_mode = [OpCode::SetStandby.value(), StandbyMode::RC.value()];
@@ -286,97 +348,6 @@ where
         delay.delay_ms(2).await;
 
         Ok(())
-    }
-
-    /// Configure the radio for LoRa and a public/private network.
-    async fn set_lora_modem(&mut self, enable_public_network: bool) -> Result<(), RadioError> {
-        let op_code_and_packet_type = [OpCode::SetPacketType.value(), PacketType::LoRa.value()];
-        self.intf.write(&op_code_and_packet_type, false).await?;
-        if enable_public_network {
-            let register_and_syncword = [
-                OpCode::WriteRegister.value(),
-                Register::LoRaSyncword.addr1(),
-                Register::LoRaSyncword.addr2(),
-                ((LORA_MAC_PUBLIC_SYNCWORD >> 8) & 0xFF) as u8,
-                (LORA_MAC_PUBLIC_SYNCWORD & 0xFF) as u8,
-            ];
-            self.intf.write(&register_and_syncword, false).await?;
-        } else {
-            let register_and_syncword = [
-                OpCode::WriteRegister.value(),
-                Register::LoRaSyncword.addr1(),
-                Register::LoRaSyncword.addr2(),
-                ((LORA_MAC_PRIVATE_SYNCWORD >> 8) & 0xFF) as u8,
-                (LORA_MAC_PRIVATE_SYNCWORD & 0xFF) as u8,
-            ];
-            self.intf.write(&register_and_syncword, false).await?;
-        }
-
-        Ok(())
-    }
-
-    async fn set_oscillator(&mut self) -> Result<(), RadioError> {
-        // Return early in case our chip is not using TCXO
-        if self.config.tcxo_ctrl.is_none() {
-            return Ok(());
-        }
-
-        // When TCXO is used, XOSC_START_ERR flag is raised at POR or at
-        // wake-up from Sleep mode in cold-start condition. This is an
-        // expected behaviour since chip is not yet aware of being clocked
-        // by TCXO and therefore this should be initially cleared manually.
-        let mut buf = [0u8; 2];
-        let _ = self
-            .intf
-            .read_with_status(&[OpCode::ClearDeviceErrors.value()], &mut buf)
-            .await?;
-
-        if let Some(voltage) = self.config.tcxo_ctrl {
-            // Each unit is 15.625uS (which is 1/64th ms)
-            let timeout = BRD_TCXO_WAKEUP_TIME << 6;
-            let op_code_and_tcxo_control = [
-                OpCode::SetTCXOMode.value(),
-                voltage.value() & 0x07,
-                Self::timeout_1(timeout),
-                Self::timeout_2(timeout),
-                Self::timeout_3(timeout),
-            ];
-            self.intf.write(&op_code_and_tcxo_control, false).await?;
-        }
-
-        // Re-run calibration now that chip knows that it's running from TCXO
-        self.intf
-            .write(&[OpCode::Calibrate.value(), 0b0111_1111], false)
-            .await?;
-        self.intf.iv.wait_on_busy().await?;
-
-        Ok(())
-    }
-
-    async fn set_regulator_mode(&mut self) -> Result<(), RadioError> {
-        // SX1261/2 can use optional DC-DC to reduce power usage,
-        // but this is related to the hardware implementation of the board.
-        if self.config.use_dcdc {
-            let reg_data = [OpCode::SetRegulatorMode.value(), RegulatorMode::UseDCDC.value()];
-            self.intf.write(&reg_data, false).await?;
-        }
-        Ok(())
-    }
-
-    async fn set_tx_rx_buffer_base_address(
-        &mut self,
-        tx_base_addr: usize,
-        rx_base_addr: usize,
-    ) -> Result<(), RadioError> {
-        if tx_base_addr > 255 || rx_base_addr > 255 {
-            return Err(RadioError::InvalidBaseAddress(tx_base_addr, rx_base_addr));
-        }
-        let op_code_and_base_addrs = [
-            OpCode::SetBufferBaseAddress.value(),
-            tx_base_addr as u8,
-            rx_base_addr as u8,
-        ];
-        self.intf.write(&op_code_and_base_addrs, false).await
     }
 
     // Set parameters associated with power for a send operation. Currently, over current protection (OCP) uses the default set automatically after set_pa_config()
@@ -503,11 +474,6 @@ where
         }
         let op_code_and_tx_params = [OpCode::SetTxParams.value(), tx_params_power, ramp_time.value()];
         self.intf.write(&op_code_and_tx_params, false).await
-    }
-
-    async fn update_retention_list(&mut self) -> Result<(), RadioError> {
-        self.add_register_to_retention_list(Register::RxGain).await?;
-        self.add_register_to_retention_list(Register::TxModulation).await
     }
 
     async fn set_modulation_params(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
@@ -640,8 +606,12 @@ where
     }
 
     async fn set_payload(&mut self, payload: &[u8]) -> Result<(), RadioError> {
-        let op_code_and_offset = [OpCode::WriteBuffer.value(), 0x00u8];
-        self.intf.write_with_payload(&op_code_and_offset, payload, false).await
+        // Set FIFO tx/rx buffer base addresses 0
+        let op_cmd = [OpCode::SetBufferBaseAddress.value(), 0u8, 0u8];
+        self.intf.write(&op_cmd, false).await?;
+
+        let op_cmd = [OpCode::WriteBuffer.value(), 0x00u8];
+        self.intf.write_with_payload(&op_cmd, payload, false).await
     }
 
     async fn do_tx(&mut self, timeout_in_ms: u32) -> Result<(), RadioError> {
