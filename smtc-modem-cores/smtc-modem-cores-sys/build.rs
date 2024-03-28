@@ -21,7 +21,10 @@ fn main() {
         .header("SWL2001/lbm_lib/smtc_modem_core/radio_drivers/sx126x_driver/src/sx126x.h")
         .clang_arg(format!("-I{}/include", dst.display()))
         .trust_clang_mangling(false)
-        .allowlist_type("sx126x_status_t")
+        .allowlist_type("sx126x_status_e")
+        .rustified_enum("sx126x_status_e")
+        .allowlist_type("sx126x_sleep_cfgs_e")
+        .rustified_enum("sx126x_sleep_cfgs_e")
         .allowlist_function("sx126x_set_sleep")
         .generate()
         .expect("Failed to generate sx12xx bindings!");
