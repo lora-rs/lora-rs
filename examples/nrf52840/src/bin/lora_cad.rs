@@ -11,7 +11,7 @@ use embassy_nrf::{bind_interrupts, peripherals, spim};
 use embassy_time::{Delay, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx126xInterfaceVariant;
-use lora_phy::sx126x::{Sx126xVariant, TcxoCtrlVoltage, Sx126x};
+use lora_phy::sx126x::{Sx126x, Sx126xVariant, TcxoCtrlVoltage};
 use lora_phy::LoRa;
 use lora_phy::{mod_params::*, sx126x};
 use {defmt_rtt as _, panic_probe as _};

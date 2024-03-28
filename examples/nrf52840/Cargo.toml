@@ -26,6 +26,7 @@ debug = 2
 
 [features]
 default = []
-
-## Customize target binary to make it runnable from RAM (ie via teleprobe)
+## Customize target binary to make it runnable from RAM
 link-to-ram = []
+# Add teleprobe specific hooks to code
+teleprobe = ["link-to-ram"]
