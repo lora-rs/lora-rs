@@ -77,7 +77,7 @@ impl Register {
     }
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[allow(dead_code)]
 pub enum OpCode {
     GetStatus = 0xC0,
@@ -121,6 +121,13 @@ pub enum OpCode {
     SetDIO2AsRfSwitchCtrl = 0x9d,
     SetStopRxTimerOnPreamble = 0x9F,
     SetLoRaSymbTimeout = 0xA0,
+}
+
+#[cfg(test)]
+impl From<usize> for OpCode {
+    fn from(value: usize) -> Self {
+        unsafe { core::mem::transmute(value as u8) }
+    }
 }
 
 impl OpCode {

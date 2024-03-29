@@ -1,10 +1,9 @@
-use smtc_modem_cores_sys::{
-    sx126x_set_sleep, sx126x_sleep_cfgs_e, sx126x_status_e, sx126x_status_t,
-};
+pub use smtc_modem_cores_sys::sx126x_status_e;
+use smtc_modem_cores_sys::{sx126x_set_sleep, sx126x_sleep_cfgs_e};
 use std::ffi;
 
-pub struct Context<S: embedded_hal::spi::SpiDevice> {
-    spi: S,
+pub struct Context<I> {
+    pub inner: I,
 }
 
 pub enum Status {
@@ -58,9 +57,9 @@ impl From<SleepCfg> for sx126x_sleep_cfgs_e {
     }
 }
 
-impl<S: embedded_hal::spi::SpiDevice> Context<S> {
-    pub fn new(spi: S) -> Self {
-        Self { spi }
+impl<I> Context<I> {
+    pub fn new(inner: I) -> Self {
+        Self { inner }
     }
 
     pub fn set_sleep(&self, cfg: SleepCfg) {
@@ -78,15 +77,15 @@ pub unsafe extern "C" fn sx126x_hal_write_generic<S: embedded_hal::spi::SpiDevic
     command_length: u16,
     data: *const u8,
     data_length: u16,
-) -> sx126x_status_t {
+) -> sx126x_status_e {
     let context = unsafe { &mut *(context as *mut Context<S>) };
     let slice = unsafe { std::slice::from_raw_parts(command, command_length as usize) };
-    if context.spi.write(slice).is_err() {
-        return sx126x_status_t::SX126X_STATUS_ERROR;
+    if context.inner.write(slice).is_err() {
+        return sx126x_status_e::SX126X_STATUS_ERROR;
     }
     let slice = unsafe { std::slice::from_raw_parts(data, data_length as usize) };
-    if context.spi.write(slice).is_err() {
-        return sx126x_status_t::SX126X_STATUS_ERROR;
+    if context.inner.write(slice).is_err() {
+        return sx126x_status_e::SX126X_STATUS_ERROR;
     }
     Status::Ok.into()
 }
@@ -98,12 +97,12 @@ macro_rules! concrete_export {
     ($s:tt) => {
         #[no_mangle]
         pub extern "C" fn sx126x_hal_write(
-            context: *const ffi::c_void,
+            context: *const core::ffi::c_void,
             command: *const u8,
             command_length: u16,
             data: *const u8,
             data_length: u16,
-        ) -> sx126x_status_t {
+        ) -> smtc_modem_cores_sys::sx126x_status_t {
             unsafe {
                 sx126x_hal_write_generic::<$s>(context, command, command_length, data, data_length)
             }
