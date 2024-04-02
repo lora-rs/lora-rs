@@ -38,7 +38,6 @@ where
     delay: DLY,
     radio_mode: RadioMode,
     enable_public_network: bool,
-    rx_continuous: bool,
     cold_start: bool,
     calibrate_image: bool,
 }
@@ -55,7 +54,6 @@ where
             delay,
             radio_mode: RadioMode::Sleep,
             enable_public_network,
-            rx_continuous: false,
             cold_start: true,
             calibrate_image: true,
         };
@@ -122,7 +120,6 @@ where
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         self.radio_kind.set_standby().await?;
         self.radio_mode = RadioMode::Standby;
-        self.rx_continuous = false;
         self.do_cold_start().await
     }
 
@@ -164,8 +161,6 @@ where
         output_power: i32,
         tx_boosted_if_possible: bool,
     ) -> Result<(), RadioError> {
-        self.rx_continuous = false;
-
         self.prepare_modem(mdltn_params).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
@@ -182,7 +177,6 @@ where
         buffer: &[u8],
         timeout_in_ms: u32,
     ) -> Result<(), RadioError> {
-        self.rx_continuous = false;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;
@@ -198,7 +192,7 @@ where
         self.radio_kind.do_tx(timeout_in_ms).await?;
         match self
             .radio_kind
-            .process_irq(self.radio_mode, self.rx_continuous, TargetIrqState::Done, None)
+            .process_irq(self.radio_mode, false, TargetIrqState::Done, None)
             .await
         {
             Ok(TargetIrqState::Done) => {
@@ -223,32 +217,37 @@ where
     /// TODO: Allow DutyCycle as well?
     pub async fn prepare_for_rx(
         &mut self,
-        listen_mode: RxMode,
         mdltn_params: &ModulationParams,
         rx_pkt_params: &PacketParams,
-        rx_boosted_if_supported: bool,
     ) -> Result<(), RadioError> {
-        defmt::trace!("RX mode: {}", listen_mode);
         self.prepare_modem(mdltn_params).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_packet_params(rx_pkt_params).await?;
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
-        self.radio_mode = listen_mode.into();
-        self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
-        self.radio_kind.do_rx(listen_mode, rx_boosted_if_supported).await
+        Ok(())
     }
 
     /// Obtain the results of a read operation
     pub async fn rx(
         &mut self,
+        listen_mode: RxMode,
         rx_pkt_params: &PacketParams,
+        rx_boosted_if_supported: bool,
         receiving_buffer: &mut [u8],
     ) -> Result<(u8, PacketStatus), RadioError> {
-        defmt::trace!("RX: continuous: {}", self.rx_continuous);
+        self.radio_mode = listen_mode.into();
+        self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
+        self.radio_kind.do_rx(listen_mode, rx_boosted_if_supported).await?;
+        defmt::trace!("RX mode: {}", listen_mode);
         match self
             .radio_kind
-            .process_irq(self.radio_mode, self.rx_continuous, TargetIrqState::Done, None)
+            .process_irq(
+                self.radio_mode,
+                RxMode::Continuous == listen_mode,
+                TargetIrqState::Done,
+                None,
+            )
             .await
         {
             Ok(actual_state) => match actual_state {
@@ -263,7 +262,7 @@ where
             },
             Err(err) => {
                 // if in rx continuous mode, allow the caller to determine whether to keep receiving
-                if !self.rx_continuous {
+                if RxMode::Continuous != listen_mode {
                     self.radio_kind.ensure_ready(self.radio_mode).await?;
                     self.radio_kind.set_standby().await?;
                     self.radio_mode = RadioMode::Standby;
@@ -279,8 +278,6 @@ where
         mdltn_params: &ModulationParams,
         rx_boosted_if_supported: bool,
     ) -> Result<(), RadioError> {
-        self.rx_continuous = false;
-
         self.prepare_modem(mdltn_params).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
@@ -297,7 +294,7 @@ where
             .radio_kind
             .process_irq(
                 self.radio_mode,
-                self.rx_continuous,
+                false,
                 TargetIrqState::Done,
                 Some(&mut cad_activity_detected),
             )
@@ -325,8 +322,6 @@ where
         output_power: i32,
         tx_boosted_if_possible: bool,
     ) -> Result<(), RadioError> {
-        self.rx_continuous = false;
-
         self.prepare_modem(mdltn_params).await?;
 
         let tx_pkt_params = self
@@ -338,7 +333,6 @@ where
             .set_tx_power_and_ramp_time(output_power, Some(mdltn_params), tx_boosted_if_possible, true)
             .await?;
 
-        self.rx_continuous = false;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;
