@@ -62,6 +62,8 @@ pub struct Config {
     pub use_dcdc: bool,
     /// Whether board is using DIO2 as RF switch (true) or as an IRQ
     pub use_dio2_as_rfswitch: bool,
+    /// Whether to boost receive
+    pub rx_boost: bool,
 }
 
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
@@ -377,7 +379,6 @@ where
         &mut self,
         output_power: i32,
         mdltn_params: Option<&ModulationParams>,
-        _tx_boosted_if_possible: bool,
         is_tx_prep: bool,
     ) -> Result<(), RadioError> {
         let tx_params_power;
@@ -640,7 +641,7 @@ where
         self.intf.write(&op_code_and_timeout, false).await
     }
 
-    async fn do_rx(&mut self, rx_mode: RxMode, rx_boost: bool) -> Result<(), RadioError> {
+    async fn do_rx(&mut self, rx_mode: RxMode) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_rx().await?;
 
         // Stop the Rx timer on preamble detection
@@ -653,7 +654,7 @@ where
         };
         self.set_lora_symbol_num_timeout(num_symbols).await?;
 
-        let rx_gain = if rx_boost { 0x96 } else { 0x94 };
+        let rx_gain = if self.config.rx_boost { 0x96 } else { 0x94 };
         let register_and_rx_gain = [
             OpCode::WriteRegister.value(),
             Register::RxGain.addr1(),
@@ -759,16 +760,12 @@ where
         Ok(PacketStatus { rssi, snr })
     }
 
-    async fn do_cad(
-        &mut self,
-        mdltn_params: &ModulationParams,
-        rx_boosted_if_supported: bool,
-    ) -> Result<(), RadioError> {
+    async fn do_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_rx().await?;
 
         let mut rx_gain_final = 0x94u8;
         // if Rx boosted, set max LNA gain, increase current by ~2mA for around ~3dB in sensitivity
-        if rx_boosted_if_supported {
+        if self.config.rx_boost {
             rx_gain_final = 0x96u8;
         }
 

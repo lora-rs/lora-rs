@@ -14,7 +14,7 @@ use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx127xInterfaceVariant;
 use lora_phy::lorawan_radio::LorawanRadio;
-use lora_phy::sx127x::{self, Sx127xVariant, Sx127x};
+use lora_phy::sx127x::{self, Sx127x, Sx127xVariant};
 use lora_phy::LoRa;
 use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode};
 use lorawan_device::default_crypto::DefaultFactory as Crypto;
@@ -49,11 +49,11 @@ async fn main(_spawner: Spawner) {
     let config = sx127x::Config {
         chip: Sx127xVariant::Sx1276,
         tcxo_used: true,
+        rx_boost: false,
+        tx_boost: false,
     };
     let iv = GenericSx127xInterfaceVariant::new(reset, irq, None, None).unwrap();
-    let lora = LoRa::new(Sx127x::new(spi, iv, config), true, Delay)
-        .await
-        .unwrap();
+    let lora = LoRa::new(Sx127x::new(spi, iv, config), true, Delay).await.unwrap();
 
     let radio: LorawanRadio<_, _, MAX_TX_POWER> = lora.into();
     let region: region::Configuration = region::Configuration::new(LORAWAN_REGION);
