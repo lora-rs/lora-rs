@@ -115,7 +115,7 @@ pub trait RadioKind {
     /// Set the LoRa chip into the TxContinuousWave mode
     async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError>;
 
-    /// Await for an IRQ event
+    /// Await for an IRQ event. This is droppable and thus safe to use in a select branch.
     async fn await_irq(&mut self) -> Result<(), RadioError>;
     /// Process LoRa radio IRQs
     async fn process_irq_event(
