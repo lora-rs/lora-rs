@@ -24,6 +24,9 @@ jobs:
         with:
           access_token: ${{ github.token }}
 
+      - name: Setup Cache
+        uses: Swatinem/rust-cache@v2
+
       - name: Check formatting
         run: cargo fmt  -- --check
 
