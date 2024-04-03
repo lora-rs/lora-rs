@@ -15,7 +15,7 @@ use embassy_stm32::time::Hertz;
 use embassy_stm32::{bind_interrupts, peripherals};
 use embassy_time::Delay;
 use lora_phy::lorawan_radio::LorawanRadio;
-use lora_phy::sx126x::{self, Sx126xVariant, TcxoCtrlVoltage, Sx126x};
+use lora_phy::sx126x::{self, Sx126x, Sx126xVariant, TcxoCtrlVoltage};
 use lora_phy::LoRa;
 use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode};
 use lorawan_device::default_crypto::DefaultFactory as Crypto;
@@ -68,6 +68,7 @@ async fn main(_spawner: Spawner) {
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
         use_dio2_as_rfswitch: true,
+        rx_boost: false,
     };
     let iv = Stm32wlInterfaceVariant::new(Irqs, None, Some(ctrl2)).unwrap();
     let lora = LoRa::new(Sx126x::new(spi, iv, config), true, Delay).await.unwrap();

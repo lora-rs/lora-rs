@@ -59,6 +59,7 @@ async fn main(_spawner: Spawner) {
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
         use_dio2_as_rfswitch: true,
+        rx_boost: false,
     };
     let iv = GenericSx126xInterfaceVariant::new(reset, dio1, busy, Some(rf_switch_rx), Some(rf_switch_tx)).unwrap();
     let lora = LoRa::new(Sx126x::new(spi, iv, config), true, Delay).await.unwrap();

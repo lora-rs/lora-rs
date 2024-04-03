@@ -15,7 +15,7 @@ use embassy_sync::channel::Channel;
 use embassy_time::{Delay, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx126xInterfaceVariant;
-use lora_phy::sx126x::{Sx126xVariant, TcxoCtrlVoltage, Sx126x};
+use lora_phy::sx126x::{Sx126x, Sx126xVariant, TcxoCtrlVoltage};
 use lora_phy::LoRa;
 use lora_phy::{mod_params::*, sx126x};
 use static_cell::StaticCell;
@@ -80,6 +80,7 @@ async fn core1_task(
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
         use_dio2_as_rfswitch: true,
+        rx_boost: false,
     };
     let mut lora = LoRa::new(Sx126x::new(spi, iv, config), true, Delay).await.unwrap();
 
@@ -110,7 +111,7 @@ async fn core1_task(
 
     loop {
         let buffer: [u8; 3] = CHANNEL.receive().await;
-        match lora.prepare_for_tx(&mdltn_params, 20, false).await {
+        match lora.prepare_for_tx(&mdltn_params, 20).await {
             Ok(()) => {}
             Err(err) => {
                 info!("Radio error = {}", err);

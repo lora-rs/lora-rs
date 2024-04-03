@@ -135,9 +135,7 @@ where
 
     async fn do_cold_start(&mut self) -> Result<(), RadioError> {
         self.radio_kind.init_lora(self.enable_public_network).await?;
-        self.radio_kind
-            .set_tx_power_and_ramp_time(0, None, false, false)
-            .await?;
+        self.radio_kind.set_tx_power_and_ramp_time(0, None, false).await?;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.cold_start = false;
         self.calibrate_image = true;
@@ -169,13 +167,12 @@ where
         &mut self,
         mdltn_params: &ModulationParams,
         output_power: i32,
-        tx_boosted_if_possible: bool,
     ) -> Result<(), RadioError> {
         self.prepare_modem(mdltn_params).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind
-            .set_tx_power_and_ramp_time(output_power, Some(mdltn_params), tx_boosted_if_possible, true)
+            .set_tx_power_and_ramp_time(output_power, Some(mdltn_params), true)
             .await
     }
 
@@ -230,7 +227,6 @@ where
         listen_mode: RxMode,
         mdltn_params: &ModulationParams,
         rx_pkt_params: &PacketParams,
-        rx_boosted_if_supported: bool,
     ) -> Result<(), RadioError> {
         defmt::trace!("RX mode: {}", listen_mode);
         self.prepare_modem(mdltn_params).await?;
@@ -240,7 +236,7 @@ where
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_mode = listen_mode.into();
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
-        self.radio_kind.do_rx(listen_mode, rx_boosted_if_supported).await
+        self.radio_kind.do_rx(listen_mode).await
     }
 
     /// Obtain the results of a read operation
@@ -287,18 +283,14 @@ where
     }
 
     /// Prepare the Semtech chip for a channel activity detection operation and initiate the operation
-    pub async fn prepare_for_cad(
-        &mut self,
-        mdltn_params: &ModulationParams,
-        rx_boosted_if_supported: bool,
-    ) -> Result<(), RadioError> {
+    pub async fn prepare_for_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         self.prepare_modem(mdltn_params).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_mode = RadioMode::ChannelActivityDetection;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
-        self.radio_kind.do_cad(mdltn_params, rx_boosted_if_supported).await
+        self.radio_kind.do_cad(mdltn_params).await
     }
 
     /// Obtain the results of a channel activity detection operation
@@ -329,7 +321,6 @@ where
         &mut self,
         mdltn_params: &ModulationParams,
         output_power: i32,
-        tx_boosted_if_possible: bool,
     ) -> Result<(), RadioError> {
         self.prepare_modem(mdltn_params).await?;
 
@@ -339,7 +330,7 @@ where
         self.radio_kind.set_packet_params(&tx_pkt_params).await?;
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind
-            .set_tx_power_and_ramp_time(output_power, Some(mdltn_params), tx_boosted_if_possible, true)
+            .set_tx_power_and_ramp_time(output_power, Some(mdltn_params), true)
             .await?;
 
         self.radio_kind.ensure_ready(self.radio_mode).await?;

@@ -79,7 +79,6 @@ pub trait RadioKind {
         &mut self,
         output_power: i32,
         mdltn_params: Option<&ModulationParams>,
-        tx_boosted_if_possible: bool,
         is_tx_prep: bool,
     ) -> Result<(), RadioError>;
     /// Set the LoRa chip modulation parameters prior to using a communication channel
@@ -95,7 +94,7 @@ pub trait RadioKind {
     /// Perform a send operation
     async fn do_tx(&mut self, timeout_in_ms: u32) -> Result<(), RadioError>;
     /// Set up to perform a receive operation (single-shot, continuous, or duty cycle)
-    async fn do_rx(&mut self, rx_mode: RxMode, rx_boost: bool) -> Result<(), RadioError>;
+    async fn do_rx(&mut self, rx_mode: RxMode) -> Result<(), RadioError>;
     /// Get an available packet made available as the result of a receive operation
     async fn get_rx_payload(
         &mut self,
@@ -105,11 +104,7 @@ pub trait RadioKind {
     /// Get the RSSI and SNR for the packet made available as the result of a receive operation
     async fn get_rx_packet_status(&mut self) -> Result<PacketStatus, RadioError>;
     /// Perform a channel activity detection operation
-    async fn do_cad(
-        &mut self,
-        mdltn_params: &ModulationParams,
-        rx_boosted_if_supported: bool,
-    ) -> Result<(), RadioError>;
+    async fn do_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError>;
     /// Set the LoRa chip to provide notification of specific events based on radio state
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError>;
     /// Set the LoRa chip into the TxContinuousWave mode

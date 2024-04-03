@@ -106,9 +106,7 @@ where
             .lora
             .create_tx_packet_params(8, false, true, false, &mdltn_params)?;
 
-        // TODO: 3rd argument (boost_if_possible) shouldn't be exposed, as it depends
-        // on physical board layout. Needs to be eventually handled from lora-phy side.
-        self.lora.prepare_for_tx(&mdltn_params, config.pw.into(), false).await?;
+        self.lora.prepare_for_tx(&mdltn_params, config.pw.into()).await?;
         self.lora
             .tx(&mdltn_params, &mut tx_pkt_params, buffer, 0xffffff)
             .await?;
@@ -126,12 +124,7 @@ where
             .lora
             .create_rx_packet_params(8, false, 255, true, true, &mdltn_params)?;
         self.lora
-            .prepare_for_rx(
-                RxMode::from(config.mode, config.rf.bb),
-                &mdltn_params,
-                &rx_pkt_params,
-                false,
-            )
+            .prepare_for_rx(RxMode::from(config.mode, config.rf.bb), &mdltn_params, &rx_pkt_params)
             .await?;
         self.rx_pkt_params = Some(rx_pkt_params);
         Ok(())

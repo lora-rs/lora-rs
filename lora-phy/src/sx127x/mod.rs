@@ -45,6 +45,10 @@ pub struct Config {
     pub chip: Sx127xVariant,
     /// Whether board is using crystal oscillator or external clock
     pub tcxo_used: bool,
+    /// Whether to boost transmit
+    pub tx_boost: bool,
+    /// Whether to boost receive
+    pub rx_boost: bool,
 }
 
 /// Base for the RadioKind implementation for the LoRa chip kind and board type
@@ -309,15 +313,14 @@ where
         &mut self,
         p_out: i32,
         _mdltn_params: Option<&ModulationParams>,
-        tx_boosted_if_possible: bool,
         is_tx_prep: bool,
     ) -> Result<(), RadioError> {
         debug!("tx power = {}", p_out);
 
         // Configure tx power and boost
         match self.config.chip {
-            Sx127xVariant::Sx1272 => self.set_tx_power_sx1272(p_out, tx_boosted_if_possible).await,
-            Sx127xVariant::Sx1276 => self.set_tx_power_sx1276(p_out, tx_boosted_if_possible).await,
+            Sx127xVariant::Sx1272 => self.set_tx_power_sx1272(p_out, self.config.tx_boost).await,
+            Sx127xVariant::Sx1276 => self.set_tx_power_sx1276(p_out, self.config.tx_boost).await,
         }?;
 
         let ramp_time = match is_tx_prep {
@@ -487,7 +490,7 @@ where
         self.write_register(Register::RegOpMode, LoRaMode::Tx.value()).await
     }
 
-    async fn do_rx(&mut self, rx_mode: RxMode, rx_boost: bool) -> Result<(), RadioError> {
+    async fn do_rx(&mut self, rx_mode: RxMode) -> Result<(), RadioError> {
         let (num_symbols, mode) = match rx_mode {
             RxMode::DutyCycle(_) => Err(RadioError::DutyCycleUnsupported),
             RxMode::Single(ns) => Ok((ns.max(SX127X_MIN_LORA_SYMB_NUM_TIMEOUT), LoRaMode::RxSingle)),
@@ -498,7 +501,7 @@ where
 
         self.set_lora_symbol_num_timeout(num_symbols).await?;
 
-        let lna_gain = if rx_boost {
+        let lna_gain = if self.config.rx_boost {
             LnaGain::G1.boosted_value()
         } else {
             LnaGain::G1.value()
@@ -570,15 +573,11 @@ where
         Ok(PacketStatus { rssi, snr })
     }
 
-    async fn do_cad(
-        &mut self,
-        _mdltn_params: &ModulationParams,
-        rx_boosted_if_supported: bool,
-    ) -> Result<(), RadioError> {
+    async fn do_cad(&mut self, _mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_rx().await?;
 
         let mut lna_gain_final = LnaGain::G1.value();
-        if rx_boosted_if_supported {
+        if self.config.rx_boost {
             lna_gain_final = LnaGain::G1.boosted_value();
         }
         self.write_register(Register::RegLna, lna_gain_final).await?;

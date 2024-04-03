@@ -12,7 +12,7 @@ use embassy_stm32::time::khz;
 use embassy_time::{Delay, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx127xInterfaceVariant;
-use lora_phy::sx127x::{Sx127xVariant, Sx127x};
+use lora_phy::sx127x::{Sx127x, Sx127xVariant};
 use lora_phy::LoRa;
 use lora_phy::{mod_params::*, sx127x};
 use {defmt_rtt as _, panic_probe as _};
@@ -39,11 +39,11 @@ async fn main(_spawner: Spawner) {
     let config = sx127x::Config {
         chip: Sx127xVariant::Sx1276,
         tcxo_used: true,
+        rx_boost: true,
+        tx_boost: false,
     };
     let iv = GenericSx127xInterfaceVariant::new(reset, irq, None, None).unwrap();
-    let mut lora = LoRa::new(Sx127x::new(spi, iv, config), false, Delay)
-        .await
-        .unwrap();
+    let mut lora = LoRa::new(Sx127x::new(spi, iv, config), false, Delay).await.unwrap();
 
     let mut debug_indicator = Output::new(p.PB5, Level::Low, Speed::Low);
     let mut start_indicator = Output::new(p.PB6, Level::Low, Speed::Low);
@@ -67,7 +67,7 @@ async fn main(_spawner: Spawner) {
         }
     };
 
-    match lora.prepare_for_cad(&mdltn_params, true).await {
+    match lora.prepare_for_cad(&mdltn_params).await {
         Ok(()) => {}
         Err(err) => {
             info!("Radio error = {}", err);
