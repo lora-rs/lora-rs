@@ -851,8 +851,11 @@ where
         self.intf.iv.await_irq().await
     }
 
-    /// Process the radio IRQ. Log unexpected interrupts.
-    /// Packets from other devices can cause unexpected interrupts.
+    /// Process the radio IRQ. Log unexpected interrupts. Packets from other
+    /// devices can cause unexpected interrupts.
+    ///
+    /// NB! Do not await this future in a select branch as interrupting it
+    /// mid-flow could cause radio lock up.
     async fn process_irq_event(
         &mut self,
         radio_mode: RadioMode,
