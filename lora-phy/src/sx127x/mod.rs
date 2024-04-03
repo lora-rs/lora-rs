@@ -604,7 +604,7 @@ where
 
                 self.write_register(Register::RegIrqFlags, 0x00u8).await?;
             }
-            Some(RadioMode::Receive) => {
+            Some(RadioMode::Rx(_)) => {
                 self.write_register(
                     Register::RegIrqFlagsMask,
                     IrqMask::All.value()
@@ -681,7 +681,7 @@ where
                         return Ok(TargetIrqState::Done);
                     }
                 }
-                RadioMode::Receive => {
+                RadioMode::Rx(_) => {
                     if target_rx_state == TargetIrqState::PreambleReceived && IrqMask::HeaderValid.is_set_in(irq_flags)
                     {
                         debug!("HeaderValid in radio mode {}", radio_mode);
@@ -709,7 +709,7 @@ where
                 RadioMode::Sleep | RadioMode::Standby => {
                     defmt::warn!("IRQ during sleep/standby?");
                 }
-                RadioMode::FrequencySynthesis | RadioMode::ReceiveDutyCycle => todo!(),
+                RadioMode::FrequencySynthesis => todo!(),
             }
             // if an interrupt occurred for other than an error or operation completion, loop to wait again
         }
