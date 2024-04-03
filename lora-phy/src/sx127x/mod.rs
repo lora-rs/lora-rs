@@ -45,7 +45,8 @@ pub struct Config {
     pub chip: Sx127xVariant,
     /// Whether board is using crystal oscillator or external clock
     pub tcxo_used: bool,
-    /// Whether to boost transmit
+    /// Whether to use PA_BOOST for transmit instead of RFO (sx1272) or RFO_LF (sx1276).
+    /// NB! Depends on board layout.
     pub tx_boost: bool,
     /// Whether to boost receive
     pub rx_boost: bool,
