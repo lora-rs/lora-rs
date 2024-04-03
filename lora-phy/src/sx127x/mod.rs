@@ -604,7 +604,7 @@ where
 
                 self.write_register(Register::RegIrqFlags, 0x00u8).await?;
             }
-            Some(RadioMode::Receive) => {
+            Some(RadioMode::Receive(_)) => {
                 self.write_register(
                     Register::RegIrqFlagsMask,
                     IrqMask::All.value()
@@ -700,7 +700,7 @@ where
                     return Ok(Some(TargetIrqState::Done));
                 }
             }
-            RadioMode::Receive => {
+            RadioMode::Receive(RxMode::Continuous) | RadioMode::Receive(RxMode::Single(_)) => {
                 if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
                     debug!("RxDone in radio mode {}", radio_mode);
                     return Ok(Some(TargetIrqState::Done));
@@ -729,7 +729,8 @@ where
             RadioMode::Sleep | RadioMode::Standby => {
                 defmt::warn!("IRQ during sleep/standby?");
             }
-            RadioMode::FrequencySynthesis | RadioMode::ReceiveDutyCycle => todo!(),
+            RadioMode::FrequencySynthesis => todo!(),
+            RadioMode::Receive(RxMode::DutyCycle(_)) => todo!(),
         }
 
         // If no specific IRQ condition is met, return None
