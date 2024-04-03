@@ -48,19 +48,14 @@ pub enum RadioMode {
     /// Transmit (TX) mode
     Transmit,
     /// Receive (RX) mode
-    Receive,
-    /// Receive duty cycle mode
-    ReceiveDutyCycle,
+    Receive(RxMode),
     /// Channel activity detection (CAD) mode
     ChannelActivityDetection,
 }
 
 impl From<RxMode> for RadioMode {
-    fn from(rxmode: RxMode) -> Self {
-        match rxmode {
-            RxMode::Single(_) | RxMode::Continuous => Self::Receive,
-            RxMode::DutyCycle(_) => Self::ReceiveDutyCycle,
-        }
+    fn from(rx_mode: RxMode) -> Self {
+        RadioMode::Receive(rx_mode)
     }
 }
 

@@ -321,11 +321,12 @@ where
 
     // Wakeup the radio if it is in Sleep or ReceiveDutyCycle mode; otherwise, ensure it is not busy.
     async fn ensure_ready(&mut self, mode: RadioMode) -> Result<(), RadioError> {
-        if mode == RadioMode::Sleep || mode == RadioMode::ReceiveDutyCycle {
-            let op_code_and_null = [OpCode::GetStatus.value(), 0x00u8];
-            self.intf.write(&op_code_and_null, false).await?;
-        } else {
-            self.intf.iv.wait_on_busy().await?;
+        match mode {
+            RadioMode::Sleep | RadioMode::Receive(RxMode::DutyCycle(_)) => {
+                let op_code_and_null = [OpCode::GetStatus.value(), 0x00u8];
+                self.intf.write(&op_code_and_null, false).await?;
+            }
+            _ => self.intf.iv.wait_on_busy().await?,
         }
         Ok(())
     }
@@ -815,7 +816,7 @@ where
                 irq_mask = IrqMask::TxDone.value() | IrqMask::RxTxTimeout.value();
                 dio1_mask = IrqMask::TxDone.value() | IrqMask::RxTxTimeout.value();
             }
-            Some(RadioMode::Receive) | Some(RadioMode::ReceiveDutyCycle) => {
+            Some(RadioMode::Receive(_)) => {
                 irq_mask = IrqMask::All.value();
                 dio1_mask = IrqMask::All.value();
             }
@@ -905,7 +906,7 @@ where
                     return Err(RadioError::TransmitTimeout);
                 }
             }
-            RadioMode::Receive | RadioMode::ReceiveDutyCycle => {
+            RadioMode::Receive(_) => {
                 if (irq_flags & IrqMask::HeaderError.value()) == IrqMask::HeaderError.value() {
                     debug!("HeaderError in radio mode {}", radio_mode);
                 }
