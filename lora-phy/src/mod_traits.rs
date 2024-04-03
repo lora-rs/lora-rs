@@ -122,7 +122,6 @@ pub trait RadioKind {
         &mut self,
         radio_mode: RadioMode,
         cad_activity_detected: Option<&mut bool>,
-        rx_continuous: bool,
         clear_interrupts: bool,
     ) -> Result<Option<TargetIrqState>, RadioError>;
 }

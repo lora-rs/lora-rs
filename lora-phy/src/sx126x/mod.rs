@@ -861,7 +861,6 @@ where
         &mut self,
         radio_mode: RadioMode,
         cad_activity_detected: Option<&mut bool>,
-        rx_continuous: bool,
         clear_interrupts: bool,
     ) -> Result<Option<TargetIrqState>, RadioError> {
         let op_code = [OpCode::GetIrqStatus.value()];
@@ -906,7 +905,7 @@ where
                     return Err(RadioError::TransmitTimeout);
                 }
             }
-            RadioMode::Receive(_) => {
+            RadioMode::Receive(rx_mode) => {
                 if (irq_flags & IrqMask::HeaderError.value()) == IrqMask::HeaderError.value() {
                     debug!("HeaderError in radio mode {}", radio_mode);
                 }
@@ -915,7 +914,7 @@ where
                 }
                 if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
                     debug!("RxDone in radio mode {}", radio_mode);
-                    if !rx_continuous {
+                    if rx_mode != RxMode::Continuous {
                         // implicit header mode timeout behavior (see DS_SX1261-2_V1.2 datasheet chapter 15.3)
                         let register_and_clear = [
                             OpCode::WriteRegister.value(),

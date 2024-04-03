@@ -684,8 +684,6 @@ where
         &mut self,
         radio_mode: RadioMode,
         cad_activity_detected: Option<&mut bool>,
-        // Not needed for sx127x
-        _rx_continuous: bool,
         clear_interrupts: bool,
     ) -> Result<Option<TargetIrqState>, RadioError> {
         let irq_flags = self.read_register(Register::RegIrqFlags).await?;
