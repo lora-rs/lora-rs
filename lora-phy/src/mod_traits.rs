@@ -21,20 +21,11 @@ pub trait InterfaceVariant {
 
 /// Specifies an IRQ processing state to run the loop to
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum TargetIrqState {
+pub enum IrqState {
     /// Runs the loop until after the preamble has been received
     PreambleReceived,
     /// Runs the loop until the operation is fully complete
     Done,
-}
-
-/// An actual operation state, including some details where necessary
-#[derive(Clone, Copy)]
-pub enum IrqState {
-    /// Preamble has been received
-    PreambleReceived,
-    /// The RX operation is complete
-    RxDone(u8, PacketStatus),
 }
 
 /// Functions implemented for a specific kind of LoRa chip, called internally by the outward facing
@@ -118,5 +109,5 @@ pub trait RadioKind {
         radio_mode: RadioMode,
         cad_activity_detected: Option<&mut bool>,
         clear_interrupts: bool,
-    ) -> Result<Option<TargetIrqState>, RadioError>;
+    ) -> Result<Option<IrqState>, RadioError>;
 }
