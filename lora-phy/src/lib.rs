@@ -68,7 +68,7 @@ where
     }
 
     /// Process an IRQ event and return the new state of the radio
-    pub async fn process_irq_event(&mut self) -> Result<Option<TargetIrqState>, RadioError> {
+    pub async fn process_irq_event(&mut self) -> Result<Option<IrqState>, RadioError> {
         self.radio_kind.process_irq_event(self.radio_mode, None, false).await
     }
 
@@ -195,21 +195,20 @@ where
     pub async fn tx(&mut self) -> Result<(), RadioError> {
         if let RadioMode::Transmit = self.radio_mode {
             self.radio_kind.do_tx().await?;
-            self.wait_for_irq().await?;
-            match self.radio_kind.process_irq_event(self.radio_mode, None, true).await {
-                Ok(Some(TargetIrqState::Done | TargetIrqState::PreambleReceived)) => {
-                    self.radio_mode = RadioMode::Standby;
-                    Ok(())
-                }
-                Ok(None) => {
-                    self.radio_mode = RadioMode::Standby;
-                    Ok(())
-                }
-                Err(err) => {
-                    self.radio_kind.ensure_ready(self.radio_mode).await?;
-                    self.radio_kind.set_standby().await?;
-                    self.radio_mode = RadioMode::Standby;
-                    Err(err)
+            loop {
+                self.wait_for_irq().await?;
+                match self.radio_kind.process_irq_event(self.radio_mode, None, true).await {
+                    Ok(Some(IrqState::Done | IrqState::PreambleReceived)) => {
+                        self.radio_mode = RadioMode::Standby;
+                        return Ok(());
+                    }
+                    Ok(None) => continue,
+                    Err(err) => {
+                        self.radio_kind.ensure_ready(self.radio_mode).await?;
+                        self.radio_kind.set_standby().await?;
+                        self.radio_mode = RadioMode::Standby;
+                        return Err(err);
+                    }
                 }
             }
         } else {
@@ -250,41 +249,29 @@ where
             self.radio_kind.do_rx(listen_mode).await?;
             loop {
                 self.wait_for_irq().await?;
-                match self.process_rx_irq(packet_params, receiving_buffer).await? {
-                    IrqState::PreambleReceived => continue,
-                    IrqState::RxDone(len, status) => return Ok((len, status)),
+                match self.radio_kind.process_irq_event(self.radio_mode, None, true).await {
+                    Ok(Some(actual_state)) => match actual_state {
+                        IrqState::PreambleReceived => continue,
+                        IrqState::Done => {
+                            let received_len = self.radio_kind.get_rx_payload(packet_params, receiving_buffer).await?;
+                            let rx_pkt_status = self.radio_kind.get_rx_packet_status().await?;
+                            return Ok((received_len, rx_pkt_status));
+                        }
+                    },
+                    Ok(None) => continue,
+                    Err(err) => {
+                        // if in rx continuous mode, allow the caller to determine whether to keep receiving
+                        if self.radio_mode != RadioMode::Receive(RxMode::Continuous) {
+                            self.radio_kind.ensure_ready(self.radio_mode).await?;
+                            self.radio_kind.set_standby().await?;
+                            self.radio_mode = RadioMode::Standby;
+                        }
+                        return Err(err);
+                    }
                 }
             }
         } else {
             Err(RadioError::InvalidRadioMode)
-        }
-    }
-
-    /// Process/interpret the interrupts of a receive operation
-    pub async fn process_rx_irq(
-        &mut self,
-        rx_pkt_params: &PacketParams,
-        receiving_buffer: &mut [u8],
-    ) -> Result<IrqState, RadioError> {
-        match self.radio_kind.process_irq_event(self.radio_mode, None, true).await {
-            Ok(Some(actual_state)) => match actual_state {
-                TargetIrqState::PreambleReceived => Ok(IrqState::PreambleReceived),
-                TargetIrqState::Done => {
-                    let received_len = self.radio_kind.get_rx_payload(rx_pkt_params, receiving_buffer).await?;
-                    let rx_pkt_status = self.radio_kind.get_rx_packet_status().await?;
-                    Ok(IrqState::RxDone(received_len, rx_pkt_status))
-                }
-            },
-            Ok(None) => Err(RadioError::Irq),
-            Err(err) => {
-                // if in rx continuous mode, allow the caller to determine whether to keep receiving
-                if self.radio_mode != RadioMode::Receive(RxMode::Continuous) {
-                    self.radio_kind.ensure_ready(self.radio_mode).await?;
-                    self.radio_kind.set_standby().await?;
-                    self.radio_mode = RadioMode::Standby;
-                }
-                Err(err)
-            }
         }
     }
 
@@ -309,7 +296,7 @@ where
                 .process_irq_event(self.radio_mode, Some(&mut cad_activity_detected), true)
                 .await
             {
-                Ok(Some(TargetIrqState::Done)) => Ok(cad_activity_detected),
+                Ok(Some(IrqState::Done)) => Ok(cad_activity_detected),
                 Err(err) => {
                     self.radio_kind.ensure_ready(self.radio_mode).await?;
                     self.radio_kind.set_standby().await?;

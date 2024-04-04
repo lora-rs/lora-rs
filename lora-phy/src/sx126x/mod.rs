@@ -7,7 +7,7 @@ pub use radio_kind_params::TcxoCtrlVoltage;
 use radio_kind_params::*;
 
 use crate::mod_params::*;
-use crate::mod_traits::TargetIrqState;
+use crate::mod_traits::IrqState;
 use crate::{InterfaceVariant, RadioKind, SpiInterface};
 
 // Syncwords for public and private networks
@@ -860,7 +860,7 @@ where
         radio_mode: RadioMode,
         cad_activity_detected: Option<&mut bool>,
         clear_interrupts: bool,
-    ) -> Result<Option<TargetIrqState>, RadioError> {
+    ) -> Result<Option<IrqState>, RadioError> {
         let op_code = [OpCode::GetIrqStatus.value()];
         let mut irq_status = [0x00u8, 0x00u8];
         // Assuming intf.read_with_status is an existing async method that reads the IRQ status.
@@ -897,7 +897,7 @@ where
         match radio_mode {
             RadioMode::Transmit => {
                 if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
-                    return Ok(Some(TargetIrqState::Done));
+                    return Ok(Some(IrqState::Done));
                 }
                 if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
                     return Err(RadioError::TransmitTimeout);
@@ -943,10 +943,10 @@ where
                         ];
                         self.intf.write(&register_and_evt_clear, false).await?;
                     }
-                    return Ok(Some(TargetIrqState::Done));
+                    return Ok(Some(IrqState::Done));
                 }
                 if IrqMask::PreambleDetected.is_set_in(irq_flags) || IrqMask::HeaderValid.is_set_in(irq_flags) {
-                    return Ok(Some(TargetIrqState::PreambleReceived));
+                    return Ok(Some(IrqState::PreambleReceived));
                 }
                 if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
                     return Err(RadioError::ReceiveTimeout);
@@ -958,7 +958,7 @@ where
                         *detected =
                             (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
                     }
-                    return Ok(Some(TargetIrqState::Done));
+                    return Ok(Some(IrqState::Done));
                 }
             }
             RadioMode::Sleep | RadioMode::Standby => {
