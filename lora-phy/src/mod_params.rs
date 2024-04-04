@@ -13,6 +13,7 @@ pub enum RadioError {
     Irq,
     DIO1,
     InvalidConfiguration,
+    InvalidRadioMode,
     OpError(u8),
     InvalidBaseAddress(usize, usize),
     PayloadSizeUnexpected(usize),
