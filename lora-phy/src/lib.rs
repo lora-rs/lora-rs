@@ -166,24 +166,16 @@ where
     pub async fn prepare_for_tx(
         &mut self,
         mdltn_params: &ModulationParams,
+        tx_pkt_params: &mut PacketParams,
         output_power: i32,
+        buffer: &[u8],
     ) -> Result<(), RadioError> {
         self.prepare_modem(mdltn_params).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind
             .set_tx_power_and_ramp_time(output_power, Some(mdltn_params), true)
-            .await
-    }
-
-    /// Execute a send operation
-    pub async fn tx(
-        &mut self,
-        mdltn_params: &ModulationParams,
-        tx_pkt_params: &mut PacketParams,
-        buffer: &[u8],
-        timeout_in_ms: u32,
-    ) -> Result<(), RadioError> {
+            .await?;
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;
@@ -196,23 +188,32 @@ where
         self.radio_kind.set_payload(buffer).await?;
         self.radio_mode = RadioMode::Transmit;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
-        self.radio_kind.do_tx(timeout_in_ms).await?;
-        self.wait_for_irq().await?;
-        match self.radio_kind.process_irq_event(self.radio_mode, None, true).await {
-            Ok(Some(TargetIrqState::Done | TargetIrqState::PreambleReceived)) => {
-                self.radio_mode = RadioMode::Standby;
-                Ok(())
+        Ok(())
+    }
+
+    /// Execute a send operation
+    pub async fn tx(&mut self, timeout_in_ms: u32) -> Result<(), RadioError> {
+        if let RadioMode::Transmit = self.radio_mode {
+            self.radio_kind.do_tx(timeout_in_ms).await?;
+            self.wait_for_irq().await?;
+            match self.radio_kind.process_irq_event(self.radio_mode, None, true).await {
+                Ok(Some(TargetIrqState::Done | TargetIrqState::PreambleReceived)) => {
+                    self.radio_mode = RadioMode::Standby;
+                    Ok(())
+                }
+                Ok(None) => {
+                    self.radio_mode = RadioMode::Standby;
+                    Ok(())
+                }
+                Err(err) => {
+                    self.radio_kind.ensure_ready(self.radio_mode).await?;
+                    self.radio_kind.set_standby().await?;
+                    self.radio_mode = RadioMode::Standby;
+                    Err(err)
+                }
             }
-            Ok(None) => {
-                self.radio_mode = RadioMode::Standby;
-                Ok(())
-            }
-            Err(err) => {
-                self.radio_kind.ensure_ready(self.radio_mode).await?;
-                self.radio_kind.set_standby().await?;
-                self.radio_mode = RadioMode::Standby;
-                Err(err)
-            }
+        } else {
+            Err(RadioError::InvalidRadioMode)
         }
     }
 
@@ -236,21 +237,26 @@ where
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_mode = listen_mode.into();
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
-        self.radio_kind.do_rx(listen_mode).await
+        Ok(())
     }
 
-    /// Obtain the results of a read operation
+    /// Start receiving and wait for result
     pub async fn rx(
         &mut self,
         packet_params: &PacketParams,
         receiving_buffer: &mut [u8],
     ) -> Result<(u8, PacketStatus), RadioError> {
-        loop {
-            self.wait_for_irq().await?;
-            match self.process_rx_irq(packet_params, receiving_buffer).await? {
-                IrqState::PreambleReceived => continue,
-                IrqState::RxDone(len, status) => return Ok((len, status)),
+        if let RadioMode::Receive(listen_mode) = self.radio_mode {
+            self.radio_kind.do_rx(listen_mode).await?;
+            loop {
+                self.wait_for_irq().await?;
+                match self.process_rx_irq(packet_params, receiving_buffer).await? {
+                    IrqState::PreambleReceived => continue,
+                    IrqState::RxDone(len, status) => return Ok((len, status)),
+                }
             }
+        } else {
+            Err(RadioError::InvalidRadioMode)
         }
     }
 
@@ -282,7 +288,7 @@ where
         }
     }
 
-    /// Prepare the Semtech chip for a channel activity detection operation and initiate the operation
+    /// Prepare the Semtech chip for a channel activity detection operation
     pub async fn prepare_for_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         self.prepare_modem(mdltn_params).await?;
 
@@ -290,25 +296,30 @@ where
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
         self.radio_mode = RadioMode::ChannelActivityDetection;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
-        self.radio_kind.do_cad(mdltn_params).await
+        Ok(())
     }
 
-    /// Obtain the results of a channel activity detection operation
-    pub async fn cad(&mut self) -> Result<bool, RadioError> {
-        let mut cad_activity_detected = false;
-        match self
-            .radio_kind
-            .process_irq_event(self.radio_mode, Some(&mut cad_activity_detected), true)
-            .await
-        {
-            Ok(Some(TargetIrqState::Done)) => Ok(cad_activity_detected),
-            Err(err) => {
-                self.radio_kind.ensure_ready(self.radio_mode).await?;
-                self.radio_kind.set_standby().await?;
-                self.radio_mode = RadioMode::Standby;
-                Err(err)
+    /// Start channel activity detection operation and return the result
+    pub async fn cad(&mut self, mdltn_params: &ModulationParams) -> Result<bool, RadioError> {
+        if self.radio_mode == RadioMode::ChannelActivityDetection {
+            self.radio_kind.do_cad(mdltn_params).await?;
+            let mut cad_activity_detected = false;
+            match self
+                .radio_kind
+                .process_irq_event(self.radio_mode, Some(&mut cad_activity_detected), true)
+                .await
+            {
+                Ok(Some(TargetIrqState::Done)) => Ok(cad_activity_detected),
+                Err(err) => {
+                    self.radio_kind.ensure_ready(self.radio_mode).await?;
+                    self.radio_kind.set_standby().await?;
+                    self.radio_mode = RadioMode::Standby;
+                    Err(err)
+                }
+                Ok(_) => unreachable!(),
             }
-            Ok(_) => unreachable!(),
+        } else {
+            Err(RadioError::InvalidRadioMode)
         }
     }
 

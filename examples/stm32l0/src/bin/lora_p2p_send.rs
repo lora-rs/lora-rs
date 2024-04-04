@@ -70,7 +70,12 @@ async fn main(_spawner: Spawner) {
         }
     };
 
-    match lora.prepare_for_tx(&mdltn_params, 17).await {
+    let buffer = [0x01u8, 0x02u8, 0x03u8];
+
+    match lora
+        .prepare_for_tx(&mdltn_params, &mut tx_pkt_params, 20, &buffer)
+        .await
+    {
         Ok(()) => {}
         Err(err) => {
             info!("Radio error = {}", err);
@@ -78,8 +83,7 @@ async fn main(_spawner: Spawner) {
         }
     };
 
-    let buffer = [0x01u8, 0x02u8, 0x03u8];
-    match lora.tx(&mdltn_params, &mut tx_pkt_params, &buffer, 0xffffff).await {
+    match lora.tx(0xffffff).await {
         Ok(()) => {
             info!("TX DONE");
         }

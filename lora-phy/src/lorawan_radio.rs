@@ -106,10 +106,10 @@ where
             .lora
             .create_tx_packet_params(8, false, true, false, &mdltn_params)?;
 
-        self.lora.prepare_for_tx(&mdltn_params, config.pw.into()).await?;
         self.lora
-            .tx(&mdltn_params, &mut tx_pkt_params, buffer, 0xffffff)
+            .prepare_for_tx(&mdltn_params, &mut tx_pkt_params, config.pw.into(), buffer)
             .await?;
+        self.lora.tx(0xffffff).await?;
         Ok(0)
     }
 
