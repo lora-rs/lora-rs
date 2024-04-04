@@ -75,7 +75,7 @@ async fn main(_spawner: Spawner) {
         }
     };
 
-    match lora.cad().await {
+    match lora.cad(&mdltn_params).await {
         Ok(cad_activity_detected) => {
             if cad_activity_detected {
                 info!("cad successful with activity detected")

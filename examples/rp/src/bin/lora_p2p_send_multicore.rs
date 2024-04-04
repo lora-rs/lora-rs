@@ -111,7 +111,10 @@ async fn core1_task(
 
     loop {
         let buffer: [u8; 3] = CHANNEL.receive().await;
-        match lora.prepare_for_tx(&mdltn_params, 20).await {
+        match lora
+            .prepare_for_tx(&mdltn_params, &mut tx_pkt_params, 20, &buffer)
+            .await
+        {
             Ok(()) => {}
             Err(err) => {
                 info!("Radio error = {}", err);
@@ -119,7 +122,7 @@ async fn core1_task(
             }
         };
 
-        match lora.tx(&mdltn_params, &mut tx_pkt_params, &buffer, 0xffffff).await {
+        match lora.tx(0xffffff).await {
             Ok(()) => {
                 info!("TX DONE");
             }
