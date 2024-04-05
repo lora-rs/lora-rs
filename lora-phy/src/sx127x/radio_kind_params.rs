@@ -1,5 +1,44 @@
 use crate::mod_params::*;
-use crate::sx127x::Sx127xVariant;
+use crate::mod_traits::InterfaceVariant;
+use crate::sx127x::Sx127x;
+use embedded_hal_async::spi::SpiDevice;
+
+pub trait Sx127xVariant {
+    fn bandwidth_value(bw: Bandwidth) -> Result<u8, RadioError>;
+    fn reg_txco() -> Register;
+    async fn set_tx_power<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
+        radio: &mut Sx127x<SPI, IV, Self>,
+        p_out: i32,
+        tx_boost: bool,
+    ) -> Result<(), RadioError>
+    where
+        Self: Sized;
+    fn ramp_value(ramp_time: RampTime) -> u8;
+
+    async fn set_modulation_params<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
+        radio: &mut Sx127x<SPI, IV, Self>,
+        mdltn_params: &ModulationParams,
+    ) -> Result<(), RadioError>
+    where
+        Self: Sized;
+    async fn set_packet_params<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
+        radio: &mut Sx127x<SPI, IV, Self>,
+        pkt_params: &PacketParams,
+    ) -> Result<(), RadioError>
+    where
+        Self: Sized;
+
+    async fn rssi_offset<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
+        radio: &mut Sx127x<SPI, IV, Self>,
+    ) -> Result<i16, RadioError>
+    where
+        Self: Sized;
+    async fn set_tx_continuous_wave_mode<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
+        radio: &mut Sx127x<SPI, IV, Self>,
+    ) -> Result<(), RadioError>
+    where
+        Self: Sized;
+}
 
 /// Internal sx127x LoRa modes (signified by most significant bit flag)
 #[derive(Clone, Copy)]
@@ -279,40 +318,6 @@ pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, R
         SpreadingFactor::_10 => Ok(0x0A),
         SpreadingFactor::_11 => Ok(0x0B),
         SpreadingFactor::_12 => Ok(0x0C),
-    }
-}
-
-impl Sx127xVariant {
-    /// Convert bandwidth to chip-specific register value
-    pub fn bandwidth_value(self, bw: Bandwidth) -> Result<u8, RadioError> {
-        match self {
-            Sx127xVariant::Sx1272 => bw_sx1272(bw),
-            Sx127xVariant::Sx1276 => bw_sx1276(bw),
-        }
-    }
-}
-
-fn bw_sx1272(bw: Bandwidth) -> Result<u8, RadioError> {
-    match bw {
-        Bandwidth::_125KHz => Ok(0x00),
-        Bandwidth::_250KHz => Ok(0x01),
-        Bandwidth::_500KHz => Ok(0x02),
-        _ => Err(RadioError::UnavailableBandwidth),
-    }
-}
-
-fn bw_sx1276(bw: Bandwidth) -> Result<u8, RadioError> {
-    match bw {
-        Bandwidth::_7KHz => Ok(0x00),
-        Bandwidth::_10KHz => Ok(0x01),
-        Bandwidth::_15KHz => Ok(0x02),
-        Bandwidth::_20KHz => Ok(0x03),
-        Bandwidth::_31KHz => Ok(0x04),
-        Bandwidth::_41KHz => Ok(0x05),
-        Bandwidth::_62KHz => Ok(0x06),
-        Bandwidth::_125KHz => Ok(0x07),
-        Bandwidth::_250KHz => Ok(0x08),
-        Bandwidth::_500KHz => Ok(0x09),
     }
 }
 
