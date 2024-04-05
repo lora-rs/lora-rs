@@ -86,7 +86,7 @@ async fn main(_spawner: Spawner) {
         }
     };
 
-    match lora.tx(0xffffff).await {
+    match lora.tx().await {
         Ok(()) => {
             info!("TX DONE");
         }

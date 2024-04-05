@@ -192,9 +192,9 @@ where
     }
 
     /// Execute a send operation
-    pub async fn tx(&mut self, timeout_in_ms: u32) -> Result<(), RadioError> {
+    pub async fn tx(&mut self) -> Result<(), RadioError> {
         if let RadioMode::Transmit = self.radio_mode {
-            self.radio_kind.do_tx(timeout_in_ms).await?;
+            self.radio_kind.do_tx().await?;
             self.wait_for_irq().await?;
             match self.radio_kind.process_irq_event(self.radio_mode, None, true).await {
                 Ok(Some(TargetIrqState::Done | TargetIrqState::PreambleReceived)) => {
