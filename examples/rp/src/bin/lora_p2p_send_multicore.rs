@@ -122,7 +122,7 @@ async fn core1_task(
             }
         };
 
-        match lora.tx(0xffffff).await {
+        match lora.tx().await {
             Ok(()) => {
                 info!("TX DONE");
             }

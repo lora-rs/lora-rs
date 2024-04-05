@@ -109,7 +109,7 @@ where
         self.lora
             .prepare_for_tx(&mdltn_params, &mut tx_pkt_params, config.pw.into(), buffer)
             .await?;
-        self.lora.tx(0xffffff).await?;
+        self.lora.tx().await?;
         Ok(0)
     }
 

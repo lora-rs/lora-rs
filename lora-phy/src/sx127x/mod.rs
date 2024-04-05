@@ -485,7 +485,7 @@ where
             .await
     }
 
-    async fn do_tx(&mut self, _timeout_in_ms: u32) -> Result<(), RadioError> {
+    async fn do_tx(&mut self) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_tx().await?;
 
         self.write_register(Register::RegOpMode, LoRaMode::Tx.value()).await

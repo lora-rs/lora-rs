@@ -91,8 +91,8 @@ pub trait RadioKind {
     async fn set_channel(&mut self, frequency_in_hz: u32) -> Result<(), RadioError>;
     /// Set a payload for a subsequent send operation
     async fn set_payload(&mut self, payload: &[u8]) -> Result<(), RadioError>;
-    /// Perform a send operation
-    async fn do_tx(&mut self, timeout_in_ms: u32) -> Result<(), RadioError>;
+    /// Perform a transmit operation
+    async fn do_tx(&mut self) -> Result<(), RadioError>;
     /// Set up to perform a receive operation (single-shot, continuous, or duty cycle)
     async fn do_rx(&mut self, rx_mode: RxMode) -> Result<(), RadioError>;
     /// Get an available packet made available as the result of a receive operation

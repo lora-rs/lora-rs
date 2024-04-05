@@ -629,16 +629,17 @@ where
         self.intf.write_with_payload(&op_code_and_offset, payload, false).await
     }
 
-    async fn do_tx(&mut self, timeout_in_ms: u32) -> Result<(), RadioError> {
+    async fn do_tx(&mut self) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_tx().await?;
 
-        let op_code_and_timeout = [
+        // Disable timeout
+        let cmd = [
             OpCode::SetTx.value(),
-            Self::timeout_1(timeout_in_ms),
-            Self::timeout_2(timeout_in_ms),
-            Self::timeout_3(timeout_in_ms),
+            Self::timeout_1(0),
+            Self::timeout_2(0),
+            Self::timeout_3(0),
         ];
-        self.intf.write(&op_code_and_timeout, false).await
+        self.intf.write(&cmd, false).await
     }
 
     async fn do_rx(&mut self, rx_mode: RxMode) -> Result<(), RadioError> {
