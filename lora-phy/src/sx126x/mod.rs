@@ -867,7 +867,7 @@ where
         let read_status = self.intf.read_with_status(&op_code, &mut irq_status).await?;
         let irq_flags = ((irq_status[0] as u16) << 8) | (irq_status[1] as u16);
 
-        if clear_interrupts {
+        if clear_interrupts && irq_flags != 0 {
             let op_code_and_irq_status = [OpCode::ClrIrqStatus.value(), irq_status[0], irq_status[1]];
             self.intf.write(&op_code_and_irq_status, false).await?;
         }
