@@ -15,7 +15,7 @@ use embassy_stm32::time::Hertz;
 use embassy_stm32::{bind_interrupts, peripherals};
 use embassy_time::Delay;
 use lora_phy::lorawan_radio::LorawanRadio;
-use lora_phy::sx126x::{self, Sx126x, Sx126xVariant, TcxoCtrlVoltage};
+use lora_phy::sx126x::{self, Stm32wl, Sx126x, TcxoCtrlVoltage};
 use lora_phy::LoRa;
 use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode};
 use lorawan_device::default_crypto::DefaultFactory as Crypto;
@@ -64,10 +64,11 @@ async fn main(_spawner: Spawner) {
     let spi = SubghzSpiDevice(spi);
 
     let config = sx126x::Config {
-        chip: Sx126xVariant::Stm32wl,
+        chip: Stm32wl {
+            use_high_power_pa: true,
+        },
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
-        use_dio2_as_rfswitch: true,
         rx_boost: false,
     };
     let iv = Stm32wlInterfaceVariant::new(Irqs, None, Some(ctrl2)).unwrap();

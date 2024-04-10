@@ -15,7 +15,7 @@ use embassy_sync::channel::Channel;
 use embassy_time::{Delay, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx126xInterfaceVariant;
-use lora_phy::sx126x::{Sx126x, Sx126xVariant, TcxoCtrlVoltage};
+use lora_phy::sx126x::{Sx1262, Sx126x, TcxoCtrlVoltage};
 use lora_phy::LoRa;
 use lora_phy::{mod_params::*, sx126x};
 use static_cell::StaticCell;
@@ -76,10 +76,9 @@ async fn core1_task(
     info!("Hello from core 1");
 
     let config = sx126x::Config {
-        chip: Sx126xVariant::Sx1262,
+        chip: Sx1262,
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
-        use_dio2_as_rfswitch: true,
         rx_boost: false,
     };
     let mut lora = LoRa::new(Sx126x::new(spi, iv, config), true, Delay).await.unwrap();
