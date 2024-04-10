@@ -11,7 +11,7 @@ use embassy_rp::spi::{Config, Spi};
 use embassy_time::{Delay, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx126xInterfaceVariant;
-use lora_phy::sx126x::{Sx126x, Sx126xVariant, TcxoCtrlVoltage};
+use lora_phy::sx126x::{Sx1262, Sx126x, TcxoCtrlVoltage};
 use lora_phy::{mod_params::*, sx126x};
 use lora_phy::{LoRa, RxMode};
 use {defmt_rtt as _, panic_probe as _};
@@ -39,10 +39,9 @@ async fn main(_spawner: Spawner) {
     let spi = ExclusiveDevice::new(spi, nss, Delay);
 
     let config = sx126x::Config {
-        chip: Sx126xVariant::Sx1262,
+        chip: Sx1262,
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
-        use_dio2_as_rfswitch: true,
         rx_boost: false,
     };
     let iv = GenericSx126xInterfaceVariant::new(reset, dio1, busy, None, None).unwrap();

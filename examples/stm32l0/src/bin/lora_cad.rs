@@ -12,7 +12,7 @@ use embassy_stm32::time::khz;
 use embassy_time::{Delay, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx127xInterfaceVariant;
-use lora_phy::sx127x::{Sx127x, Sx1276};
+use lora_phy::sx127x::{Sx1276, Sx127x};
 use lora_phy::LoRa;
 use lora_phy::{mod_params::*, sx127x};
 use {defmt_rtt as _, panic_probe as _};
