@@ -290,6 +290,7 @@ where
     pub async fn cad(&mut self, mdltn_params: &ModulationParams) -> Result<bool, RadioError> {
         if self.radio_mode == RadioMode::ChannelActivityDetection {
             self.radio_kind.do_cad(mdltn_params).await?;
+            self.wait_for_irq().await?;
             let mut cad_activity_detected = false;
             match self
                 .radio_kind
