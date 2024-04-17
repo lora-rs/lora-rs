@@ -275,6 +275,17 @@ where
         }
     }
 
+    /// Start listening to a given frequency
+    pub async fn listen(&mut self, frequency_in_hz: u32) -> Result<(), RadioError> {
+        self.prepare_modem(frequency_in_hz).await?;
+
+        self.radio_kind.set_channel(frequency_in_hz).await?;
+        self.radio_mode = RadioMode::Listen;
+        self.radio_kind.do_rx(RxMode::Continuous).await?;
+
+        Ok(())
+    }
+
     /// Get the current rssi
     pub async fn get_rssi(&mut self) -> Result<i16, RadioError> {
         self.radio_kind.get_rssi().await

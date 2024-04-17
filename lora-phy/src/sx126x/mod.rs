@@ -946,8 +946,8 @@ where
                     return Ok(Some(IrqState::Done));
                 }
             }
-            RadioMode::Sleep | RadioMode::Standby => {
-                defmt::warn!("IRQ during sleep/standby?");
+            RadioMode::Sleep | RadioMode::Standby | RadioMode::Listen => {
+                defmt::warn!("IRQ during sleep/standby/listen?");
             }
             RadioMode::FrequencySynthesis => todo!(),
         }
