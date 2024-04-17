@@ -275,6 +275,11 @@ where
         }
     }
 
+    /// Get the current rssi
+    pub async fn get_rssi(&mut self) -> Result<i16, RadioError> {
+        self.radio_kind.get_rssi().await
+    }
+
     /// Prepare the Semtech chip for a channel activity detection operation
     pub async fn prepare_for_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         self.prepare_modem(mdltn_params).await?;
