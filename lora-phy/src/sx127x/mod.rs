@@ -392,6 +392,12 @@ where
         Ok(PacketStatus { rssi, snr })
     }
 
+    async fn get_rssi(&mut self) -> Result<i16, RadioError> {
+        let rssi_value = self.read_register(Register::RegRssiValue).await?;
+        let rssi_offset = C::rssi_offset(self).await?;
+        Ok(rssi_offset + rssi_value as i16)
+    }
+
     async fn do_cad(&mut self, _mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_rx().await?;
 
