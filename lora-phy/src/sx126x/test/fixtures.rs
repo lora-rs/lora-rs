@@ -84,6 +84,7 @@ pub fn get_sx126x() -> Sx126x<TestFixture, DummyVariant> {
             tcxo_ctrl: None,
             use_dcdc: false,
             use_dio2_as_rfswitch: false,
+            rx_boost: true,
         },
     )
 }
