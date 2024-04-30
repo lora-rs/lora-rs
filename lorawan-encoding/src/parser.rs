@@ -882,8 +882,15 @@ where
     F: CryptoFactory,
 {
     let bytes = data.as_ref();
-    check_phy_data(bytes)?;
-    match MHDR(bytes[0]).mtype() {
+    // Enough data for payload (bare minimum without fport and FRMPayload)?
+    if bytes.len() < PHY_PAYLOAD_MIN_LEN {
+        return Err(Error::InvalidPayload);
+    }
+    let mhdr = MHDR(bytes[0]);
+    if mhdr.major() != Major::LoRaWANR1 {
+        return Err(Error::UnsupportedMajorVersion);
+    }
+    match mhdr.mtype() {
         MType::JoinRequest => {
             Ok(PhyPayload::JoinRequest(JoinRequestPayload::new_with_factory(data, factory)?))
         }
@@ -897,24 +904,6 @@ where
             EncryptedDataPayload::new_with_factory(data, factory)?,
         ))),
         _ => Err(Error::InvalidMessageType),
-    }
-}
-
-fn check_phy_data(bytes: &[u8]) -> Result<(), Error> {
-    let len = bytes.len();
-    if len == 0 {
-        return Err(Error::InvalidPayload);
-    }
-    let mhdr = MHDR(bytes[0]);
-    if mhdr.major() != Major::LoRaWANR1 {
-        return Err(Error::UnsupportedMajorVersion);
-    }
-    // the smallest payload is a data payload without fport and FRMPayload
-    // which is 12 bytes long.
-    if len < PHY_PAYLOAD_MIN_LEN {
-        Err(Error::InvalidPayload)
-    } else {
-        Ok(())
     }
 }
 
