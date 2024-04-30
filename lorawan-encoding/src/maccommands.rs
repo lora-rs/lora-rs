@@ -23,7 +23,7 @@ pub trait SerializableMacCommand {
     fn payload_len(&self) -> usize;
 }
 
-/// Calculates the len in bytes of a sequence of mac commands, including th CIDs.
+/// Calculates length in bytes of a sequence of MAC commands, including CIDs.
 pub fn mac_commands_len(cmds: &[&dyn SerializableMacCommand]) -> usize {
     cmds.iter().map(|mc| mc.payload_len() + 1).sum()
 }
@@ -46,7 +46,7 @@ macro_rules! mac_cmd_zero_len {
                     $type()
                 }
 
-                /// dupliciate fn to be compatible with the mac_cmds macro
+                /// Duplicate fn to be compatible with the mac_cmds macro
                 pub fn new_from_raw(_: &[u8]) ->$type {
                     $type()
                 }
@@ -61,7 +61,7 @@ macro_rules! mac_cmd_zero_len {
                     $uplink
                 }
 
-                /// Length of the empty payload.
+                /// Length of empty payload.
                 pub const fn len() -> usize {
                     0
                 }
@@ -88,7 +88,7 @@ macro_rules! mac_cmds {
             pub struct $type<'a>(pub(crate) &'a [u8]);
 
             impl<'a> $type<'a> {
-                /// Creates a new instance of the mac command if there is enought data.
+                /// Creates a new instance of the MAC command if there is enought data.
                 pub fn new(data: &'a [u8]) -> Result<$type<'a>, Error> {
                     if data.len() != $size {
                         Err(Error::BufferTooShort)
@@ -96,8 +96,8 @@ macro_rules! mac_cmds {
                         Ok($type(&data))
                     }
                 }
-                /// Constructs a new instance of the mac command from the provided data,
-                /// without verifying the data length
+                /// Constructs a new instance of the MAC command from the provided data,
+                /// without verifying the data length.
                 ///
                 /// Improper use of this method could lead to panic during runtime!
                 pub fn new_from_raw(data: &'a [u8]) ->$type<'a> {
@@ -164,7 +164,7 @@ macro_rules! mac_cmds_enum {
                 }
             }
 
-            /// Get a referece to the data.
+            /// Get reference to the data.
             pub fn bytes(&self) -> &[u8] {
                 match *self {
                     $(
@@ -395,9 +395,9 @@ macro_rules! create_value_reader_fn {
     )
 }
 
-/// Parses bytes to uplink mac commands if possible.
+/// Parses bytes to uplink MAC commands if possible.
 ///
-/// Could return error if some values are out of range or the payload does not end at mac command
+/// Could return error if some values are out of range or the payload does not end at MAC command
 /// boundry.
 /// # Argument
 ///
@@ -413,9 +413,9 @@ macro_rules! create_value_reader_fn {
 pub fn parse_uplink_mac_commands(data: &[u8]) -> MacCommandIterator<UplinkMacCommand> {
     MacCommandIterator::new(data)
 }
-/// Parses bytes to downlink mac commands if possible.
+/// Parses bytes to downlink MAC commands if possible.
 ///
-/// Could return error if some values are out of range or the payload does not end at mac command
+/// Could return error if some values are out of range or the payload does not end at MAC command
 /// boundry.
 /// # Argument
 ///
@@ -432,7 +432,7 @@ pub fn parse_downlink_mac_commands(data: &[u8]) -> MacCommandIterator<DownlinkMa
     MacCommandIterator::new(data)
 }
 
-/// Implementation of iterator for mac commands.
+/// Implementation of iterator for MAC commands.
 pub struct MacCommandIterator<'a, T> {
     pub(crate) data: &'a [u8],
     pub(crate) index: usize,
