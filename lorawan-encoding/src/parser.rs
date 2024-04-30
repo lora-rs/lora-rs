@@ -488,7 +488,7 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     ) -> AES128 {
         let cipher = self.1.new_enc(key);
 
-        // note: AppNonce is 24 bit, NetId is 24 bit, DevNonce is 16 bit
+        // note: AppNonce is 24 bits, NetId is 24 bits, DevNonce is 16 bits
         let app_nonce = self.app_nonce();
         let nwk_addr = self.net_id();
         let (app_nonce_arr, nwk_addr_arr, dev_nonce_arr) =
@@ -916,7 +916,7 @@ impl MHDR {
         MHDR(byte)
     }
 
-    /// Gives the type of message that PhyPayload is carrying.
+    /// Type of message PhyPayload is carrying.
     pub fn mtype(&self) -> MType {
         match self.0 >> 5 {
             0 => MType::JoinRequest,
@@ -930,7 +930,7 @@ impl MHDR {
         }
     }
 
-    /// Gives the version of LoRaWAN payload format.
+    /// Version of LoRaWAN payload format.
     pub fn major(&self) -> Major {
         if self.0.trailing_zeros() >= 2 {
             Major::LoRaWANR1
@@ -967,12 +967,12 @@ pub enum Major {
 }
 
 fixed_len_struct! {
-    /// EUI64 represents a 64 bit EUI.
+    /// EUI64 represents a 64-bit EUI.
     struct EUI64[8];
 }
 
 fixed_len_struct! {
-    /// DevNonce represents a 16 bit device nonce.
+    /// DevNonce represents a 16-bit device nonce.
     struct DevNonce[2];
 }
 
@@ -989,12 +989,12 @@ impl From<u16> for DevNonce<[u8; 2]> {
 }
 
 fixed_len_struct! {
-    /// AppNonce represents a 24 bit network server nonce.
+    /// AppNonce represents a 24-bit network server nonce.
     struct AppNonce[3];
 }
 
 fixed_len_struct! {
-    /// DevAddr represents a 32 bit device address.
+    /// DevAddr represents a 32-bit device address.
     struct DevAddr[4];
 }
 
@@ -1021,7 +1021,7 @@ impl From<u32> for DevAddr<[u8; 4]> {
 }
 
 fixed_len_struct! {
-    /// NwkAddr represents a 24 bit network address.
+    /// NwkAddr represents a 24-bit network address.
     struct NwkAddr[3];
 }
 
