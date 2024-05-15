@@ -30,6 +30,6 @@ macro_rules! info {
 pub(crate) use info;
 
 macro_rules! error {
-    ($($arg:expr),*) => (log::nut_log!(error, $($arg),*));
+    ($($arg:expr),*) => (log::llog!(error, $($arg),*));
 }
 pub(crate) use error;
