@@ -17,6 +17,17 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Refactor `do_rx` and lorawan-radio's `setup_for_rx`[#208](https://github.com/lora-rs/lora-rs/pull/208)
 - Refactor sx126x power amplifier control and clarify `Sx126xVariant` implications ([#209](https://github.com/lora-rs/lora-rs/pull/209))
 - Drop general AsyncRng trait and its implementation in sx126x driver ([#222](https://github.com/lora-rs/lora-rs/pull/227))
+- Drop IRQ polling from `process_irq` and rely on IRQ pins exclusively ([#223](https://github.com/lora-rs/lora-rs/pull/223))
+- sx126x: recalibrate when TCXO enabled ([#228](https://github.com/lora-rs/lora-rs/pull/228))
+- Simplify RadioKind traits ([#229](https://github.com/lora-rs/lora-rs/pull/229))
+- Add `set_standby` to public `LoRa` interface ([#230](https://github.com/lora-rs/lora-rs/pull/230))
+- Refactor IRQ handling such that `wait_for_irq` is droppable (ie: for use in select branches) ([#231](https://github.com/lora-rs/lora-rs/pull/231))
+- Refactor internal Rx state to use `RxMode` enum ([#242](https://github.com/lora-rs/lora-rs/pull/242))
+- Modify `prepare_for_rx` and `rx` to enabled tighter timings ([#245](https://github.com/lora-rs/lora-rs/pull/245))
+- Remove `timeout_in_ms` from `tx` ([#246](https://github.com/lora-rs/lora-rs/pull/246))
+- Allow `process_irq_event` to continue on RFU ([#247](https://github.com/lora-rs/lora-rs/pull/247))
+- Make Sx126x ([#249](https://github.com/lora-rs/lora-rs/pull/249)) and Sx127x ([#248](https://github.com/lora-rs/lora-rs/pull/248)) variants trait based rather than enum 
+- Call `wait_for_irq` before `process_irq_event` in `LoRa::cad` ([#250](https://github.com/lora-rs/lora-rs/pull/250))
 
 ## [v2.1.2] - 2023-09-25
 
