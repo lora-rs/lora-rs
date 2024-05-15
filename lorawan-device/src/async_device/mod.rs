@@ -304,6 +304,7 @@ where
             return Ok(None);
         }
 
+        #[allow(unused)]
         enum RxcWindowResponse<F: futures::Future<Output = ()> + Sized + Unpin> {
             Rx(usize, RxQuality, F),
             Timeout(u32),

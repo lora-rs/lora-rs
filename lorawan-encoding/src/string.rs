@@ -21,13 +21,13 @@ macro_rules! fixed_len_struct_impl_to_string_msb {
         }
 
         #[cfg(feature = "with-to-string")]
-        impl std::string::ToString for $type {
-            fn to_string(&self) -> std::string::String {
+        impl core::fmt::Display for $type {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 let mut res = std::string::String::with_capacity($size * 2);
                 res.extend(std::iter::repeat('-').take($size * 2));
                 let slice = unsafe { &mut res.as_bytes_mut() };
                 hex::encode_to_slice(self.as_ref(), slice).unwrap();
-                res
+                write!(f, "{}", res)
             }
         }
     };
@@ -45,13 +45,16 @@ macro_rules! fixed_len_struct_impl_to_string_msb {
         }
 
         #[cfg(feature = "with-to-string")]
-        impl<T: AsRef<[u8]>> std::string::ToString for $type<T> {
-            fn to_string(&self) -> std::string::String {
+        impl<T: AsRef<[u8]>> core::fmt::Display for $type<T> {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                // initialize the return string with the correct size and fill it with '-'
                 let mut res = std::string::String::with_capacity($size * 2);
                 res.extend(std::iter::repeat('-').take($size * 2));
+
+                // get the string as bytes so that we can call hex::encode_to_slice directly
                 let slice = unsafe { &mut res.as_bytes_mut() };
                 hex::encode_to_slice(self.as_ref(), slice).unwrap();
-                res
+                write!(f, "{}", res)
             }
         }
     };
@@ -73,15 +76,15 @@ macro_rules! fixed_len_struct_impl_string_lsb {
         }
 
         #[cfg(feature = "with-to-string")]
-        impl std::string::ToString for $type {
-            fn to_string(&self) -> std::string::String {
+        impl core::fmt::Display for $type {
+            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 let mut res = std::string::String::with_capacity($size * 2);
                 res.extend(std::iter::repeat('0').take($size * 2));
                 let slice = unsafe { &mut res.as_bytes_mut() };
                 self.as_ref().iter().rev().enumerate().for_each(|(i, b)| {
                     hex::encode_to_slice(&[*b], &mut slice[i * 2..i * 2 + 2]).unwrap();
                 });
-                res
+                write!(f, "{}", res)
             }
         }
     };
