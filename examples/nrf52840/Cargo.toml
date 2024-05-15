@@ -11,7 +11,6 @@ embassy-nrf = { version = "0.1.0", features = ["defmt", "nrf52840", "time-driver
 
 lora-phy = { path = "../../lora-phy", features = ["lorawan-radio"] }
 lorawan-device = { path = "../../lorawan-device", default-features = false, features = ["embassy-time", "default-crypto", "defmt"] }
-lorawan = { path = "../../lorawan-encoding", default-features = false, features = ["default-crypto"] }
 
 defmt = "0.3"
 defmt-rtt = "0.4"
