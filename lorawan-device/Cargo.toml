@@ -1,6 +1,6 @@
 [package]
 name = "lorawan-device"
-version = "0.12.0"
+version = "0.12.1"
 authors = ["Louis Thiery <thiery.louis@gmail.com>", "Ulf Lilleengen <lulf@redhat.com>"]
 edition = "2021"
 categories = [
