@@ -7,7 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## [v0.12.1]
 
 - Allow multilple RXC frames during RXC window ([#217](https://github.com/lora-rs/lora-rs/pull/217))
-- Individually feature-gate all regions 
+- Individually feature-gate all regions ([#216](https://github.com/lora-rs/lora-rs/pull/236))
+- Fix log macro for error ([commit](https://github.com/lora-rs/lora-rs/pull/256/commits/99cb10b77baf0f1c51ae97b1830a80b4873864e1))
 
 ## [v0.12.0]
 
