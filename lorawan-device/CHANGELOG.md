@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v0.12.1]
+
+- Allow multilple RXC frames during RXC window ([#217](https://github.com/lora-rs/lora-rs/pull/217))
+- Individually feature-gate all regions 
+
 ## [v0.12.0]
 
 - Fixes bug related to FCntUp and confirmed uplink ([#182](https://github.com/lora-rs/lora-rs/pull/182))
