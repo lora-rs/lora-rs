@@ -4,6 +4,7 @@ use core::marker::PhantomData;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     UnknownMacCommand,
+    BufferTooShortForCid(u8),
     BufferTooShort,
     InvalidIndex,
     InvalidDataRateRange,
@@ -66,6 +67,7 @@ macro_rules! mac_cmd_zero_len {
         )*
     }
 }
+pub(crate) use mac_cmd_zero_len;
 
 macro_rules! mac_cmds {
     (
@@ -83,7 +85,7 @@ macro_rules! mac_cmds {
                 /// Creates a new instance of the MAC command if there is enought data.
                 pub fn new(data: &'a [u8]) -> Result<$type<'a>, Error> {
                     if data.len() != $size {
-                        Err(Error::BufferTooShort)
+                        Err(Error::BufferTooShortForCid($cid))
                     } else {
                         Ok($type(&data))
                     }
@@ -120,6 +122,7 @@ macro_rules! mac_cmds {
         )*
     }
 }
+pub(crate) use mac_cmds;
 
 macro_rules! mac_cmds_enum {
     (
@@ -228,6 +231,8 @@ macro_rules! mac_cmds_enum {
         }
     }
 }
+pub(crate) use mac_cmds_enum;
+
 mac_cmds_enum! {
     pub enum DownlinkMacCommand<'a> {
         LinkCheckAns(LinkCheckAnsPayload<'a>)
