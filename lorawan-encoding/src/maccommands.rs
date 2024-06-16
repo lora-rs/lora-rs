@@ -66,6 +66,7 @@ macro_rules! mac_cmd_zero_len {
         )*
     }
 }
+pub(crate) use mac_cmd_zero_len;
 
 macro_rules! mac_cmds {
     (
@@ -120,6 +121,7 @@ macro_rules! mac_cmds {
         )*
     }
 }
+pub(crate) use mac_cmds;
 
 macro_rules! mac_cmds_enum {
     (
@@ -228,6 +230,8 @@ macro_rules! mac_cmds_enum {
         }
     }
 }
+pub(crate) use mac_cmds_enum;
+
 mac_cmds_enum! {
     pub enum DownlinkMacCommand<'a> {
         LinkCheckAns(LinkCheckAnsPayload<'a>)

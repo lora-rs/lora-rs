@@ -21,3 +21,4 @@ pub mod extra;
 pub mod default_crypto;
 
 mod securityhelpers;
+pub mod multicast;
