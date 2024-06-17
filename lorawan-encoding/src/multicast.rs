@@ -1,6 +1,5 @@
 use crate::{
-    maccommands::{mac_cmd_zero_len, mac_cmds,
-                  Error}
+    maccommands::{mac_cmd_zero_len, mac_cmds}
 };
 
 pub enum DownlinkMulticastMsg<'a> {
@@ -96,5 +95,66 @@ impl<'a> McGroupStatusAnsPayload<'a> {
 
     pub fn bytes(&self) -> &[u8] {
         self.0
+    }
+}
+
+enum Error {
+    BufferTooShort,
+    UnknownCommand,
+}
+
+
+pub struct DownlinkMulticastMsgIterator<'a> {
+    data: &'a [u8],
+    index: usize,
+}
+
+impl<'a> DownlinkMulticastMsgIterator<'a> {
+    pub fn new(data: &'a [u8]) -> Self {
+        DownlinkMulticastMsgIterator { data, index: 0 }
+    }
+}
+
+impl<'a> Iterator for DownlinkMulticastMsgIterator<'a> {
+    type Item = Result<(DownlinkMulticastMsg<'a>, usize), Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.data.len() {
+            return None;
+        }
+
+        let cid = self.data[self.index];
+        self.index += 1;
+
+        let (msg, len) = match cid {
+            0x00 => {
+                let payload = PackageVersionReqPayload::new_from_raw(&self.data[self.index..]);
+                (DownlinkMulticastMsg::PackageVersionReq(payload), payload.len())
+            },
+            0x01 => {
+                let payload = McGroupStatusReqPayload::new(&self.data[self.index..])?;
+                (DownlinkMulticastMsg::McGroupStatusReq(payload), payload.len())
+            },
+            0x02 => {
+                let payload = McGroupSetupReqPayload::new(&self.data[self.index..])?;
+                (DownlinkMulticastMsg::McGroupSetupReq(payload), payload.len())
+            },
+            0x03 => {
+                let payload = McGroupDeleteReqPayload::new(&self.data[self.index..])?;
+                (DownlinkMulticastMsg::McGroupDeleteReq(payload), payload.len())
+            },
+            0x04 => {
+                let payload = McClassCSessionReqPayload::new(&self.data[self.index..])?;
+                (DownlinkMulticastMsg::McClassCSessionReq(payload), payload.len())
+            },
+            0x05 => {
+                let payload = McClassBSessionReqPayload::new(&self.data[self.index..])?;
+                (DownlinkMulticastMsg::McClassBSessionReq(payload), payload.len())
+            },
+            _ => return Some(Err(Error::UnknownCommand)),
+        };
+
+        self.index += len;
+        Some(Ok((msg, len)))
     }
 }
