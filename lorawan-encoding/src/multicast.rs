@@ -1,6 +1,4 @@
-use crate::{
-    maccommands::{mac_cmd_zero_len, mac_cmds}
-};
+use crate::maccommands::{mac_cmd_zero_len, mac_cmds};
 
 pub enum DownlinkMulticastMsg<'a> {
     PackageVersionReq(PackageVersionReqPayload),
@@ -64,15 +62,15 @@ mac_cmds! {
 pub struct McGroupStatusAnsPayload<'a>(pub(crate) &'a [u8]);
 impl<'a> McGroupStatusAnsPayload<'a> {
     pub fn new(data: &'a [u8]) -> Result<McGroupStatusAnsPayload<'a>, Error> {
-        if data.len() < 1 {
-            return Err(Error::BufferTooShort);
+        if data.is_empty() {
+            return Err(Error::BufferTooShortForCid(Self::cid()));
         }
 
         let status = data[0];
         let required_len = McGroupStatusAnsPayload::required_len(status);
 
         if data.len() < required_len {
-            return Err(Error::BufferTooShort);
+            return Err(Error::BufferTooShortForCid(Self::cid()));
         }
 
         Ok(McGroupStatusAnsPayload(&data[0..required_len]))
@@ -86,8 +84,7 @@ impl<'a> McGroupStatusAnsPayload<'a> {
         // | RFU | NbTotalGroups | AnsGroupMask |
         // |  1  |       3       |      4       |
         let nb_total_groups = (status >> 4) & 0x07; // Extract NbTotalGroups from status
-        let required_len = 1 + nb_total_groups as usize * 5; // Each group adds 5 bytes
-        required_len
+        1 + nb_total_groups as usize * 5 // Each group adds 5 bytes
     }
 
     pub const fn cid() -> u8 {
@@ -98,20 +95,15 @@ impl<'a> McGroupStatusAnsPayload<'a> {
         true
     }
 
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
     pub fn bytes(&self) -> &[u8] {
         self.0
     }
 }
 
 pub enum Error {
-    BufferTooShort,
+    BufferTooShortForCid(u8),
     UnknownCommand,
 }
-
 
 pub struct DownlinkMulticastMsgIterator<'a> {
     data: &'a [u8],
@@ -121,6 +113,14 @@ pub struct DownlinkMulticastMsgIterator<'a> {
 impl<'a> DownlinkMulticastMsgIterator<'a> {
     pub fn new(data: &'a [u8]) -> Self {
         DownlinkMulticastMsgIterator { data, index: 0 }
+    }
+
+    fn early_return_if_too_short(&self, cid: u8, len: usize) -> Result<(), Error> {
+        if self.index + len > self.data.len() {
+            Err(Error::BufferTooShortForCid(cid))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -138,34 +138,61 @@ impl<'a> Iterator for DownlinkMulticastMsgIterator<'a> {
         let (msg, len) = match cid {
             0x00 => {
                 let len = PackageVersionReqPayload::len();
-                let payload = PackageVersionReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                if let Err(e) = self.early_return_if_too_short(0x00, len) {
+                    return Some(Err(e));
+                }
+                let payload = PackageVersionReqPayload::new_from_raw(
+                    &self.data[self.index..self.index + len],
+                );
                 (DownlinkMulticastMsg::PackageVersionReq(payload), len)
-            },
+            }
             0x01 => {
                 let len = McGroupStatusReqPayload::len();
-                let payload = McGroupStatusReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                if let Err(e) = self.early_return_if_too_short(0x01, len) {
+                    return Some(Err(e));
+                }
+                let payload =
+                    McGroupStatusReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
                 (DownlinkMulticastMsg::McGroupStatusReq(payload), len)
-            },
+            }
             0x02 => {
                 let len = McGroupSetupReqPayload::len();
-                let payload = McGroupSetupReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                if let Err(e) = self.early_return_if_too_short(0x02, len) {
+                    return Some(Err(e));
+                }
+                let payload =
+                    McGroupSetupReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
                 (DownlinkMulticastMsg::McGroupSetupReq(payload), len)
-            },
+            }
             0x03 => {
                 let len = McGroupDeleteReqPayload::len();
-                let payload = McGroupDeleteReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                if let Err(e) = self.early_return_if_too_short(0x03, len) {
+                    return Some(Err(e));
+                }
+                let payload =
+                    McGroupDeleteReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
                 (DownlinkMulticastMsg::McGroupDeleteReq(payload), len)
-            },
+            }
             0x04 => {
                 let len = McClassCSessionReqPayload::len();
-                let payload = McClassCSessionReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                if let Err(e) = self.early_return_if_too_short(0x04, len) {
+                    return Some(Err(e));
+                }
+                let payload = McClassCSessionReqPayload::new_from_raw(
+                    &self.data[self.index..self.index + len],
+                );
                 (DownlinkMulticastMsg::McClassCSessionReq(payload), len)
-            },
+            }
             0x05 => {
                 let len = McClassBSessionReqPayload::len();
-                let payload = McClassBSessionReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                if let Err(e) = self.early_return_if_too_short(0x05, len) {
+                    return Some(Err(e));
+                }
+                let payload = McClassBSessionReqPayload::new_from_raw(
+                    &self.data[self.index..self.index + len],
+                );
                 (DownlinkMulticastMsg::McClassBSessionReq(payload), len)
-            },
+            }
             _ => return Some(Err(Error::UnknownCommand)),
         };
         self.index += len;
@@ -181,6 +208,14 @@ pub struct UplinkMulticastMsgIterator<'a> {
 impl<'a> UplinkMulticastMsgIterator<'a> {
     pub fn new(data: &'a [u8]) -> Self {
         UplinkMulticastMsgIterator { data, index: 0 }
+    }
+
+    fn early_return_if_too_short(&self, cid: u8, len: usize) -> Result<(), Error> {
+        if self.index + len > self.data.len() {
+            Err(Error::BufferTooShortForCid(cid))
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -198,35 +233,62 @@ impl<'a> Iterator for UplinkMulticastMsgIterator<'a> {
         let (msg, len) = match cid {
             0x00 => {
                 let len = PackageVersionAnsPayload::len();
-                let payload = PackageVersionAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                if let Err(e) = self.early_return_if_too_short(0x00, len) {
+                    return Some(Err(e));
+                }
+                let payload = PackageVersionAnsPayload::new_from_raw(
+                    &self.data[self.index..self.index + len],
+                );
                 (UplinkMulticastMsg::PackageVersionAns(payload), len)
-            },
+            }
             0x01 => {
                 // peek at first byte to determine length as this is a variable length message
                 let len = McGroupStatusAnsPayload::required_len(self.data[self.index]);
-                let payload = McGroupStatusAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                if let Err(e) = self.early_return_if_too_short(0x01, len) {
+                    return Some(Err(e));
+                }
+                let payload =
+                    McGroupStatusAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
                 (UplinkMulticastMsg::McGroupStatusAns(payload), len)
-            },
+            }
             0x02 => {
                 let len = McGroupSetupAnsPayload::len();
-                let payload = McGroupSetupAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                if let Err(e) = self.early_return_if_too_short(0x02, len) {
+                    return Some(Err(e));
+                }
+                let payload =
+                    McGroupSetupAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
                 (UplinkMulticastMsg::McGroupSetupAns(payload), len)
-            },
+            }
             0x03 => {
                 let len = McGroupDeleteAnsPayload::len();
-                let payload = McGroupDeleteAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                if let Err(e) = self.early_return_if_too_short(0x03, len) {
+                    return Some(Err(e));
+                }
+                let payload =
+                    McGroupDeleteAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
                 (UplinkMulticastMsg::McGroupDeleteAns(payload), len)
-            },
+            }
             0x04 => {
                 let len = McClassCSessionAnsPayload::len();
-                let payload = McClassCSessionAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                if let Err(e) = self.early_return_if_too_short(0x04, len) {
+                    return Some(Err(e));
+                }
+                let payload = McClassCSessionAnsPayload::new_from_raw(
+                    &self.data[self.index..self.index + len],
+                );
                 (UplinkMulticastMsg::McClassCSessionAns(payload), len)
-            },
+            }
             0x05 => {
                 let len = McClassBSessionAnsPayload::len();
-                let payload = McClassBSessionAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                if let Err(e) = self.early_return_if_too_short(0x05, len) {
+                    return Some(Err(e));
+                }
+                let payload = McClassBSessionAnsPayload::new_from_raw(
+                    &self.data[self.index..self.index + len],
+                );
                 (UplinkMulticastMsg::McClassBSessionAns(payload), len)
-            },
+            }
             _ => return Some(Err(Error::UnknownCommand)),
         };
         self.index += len;

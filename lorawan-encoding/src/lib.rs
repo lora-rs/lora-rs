@@ -20,5 +20,5 @@ pub mod extra;
 #[cfg_attr(docsrs, doc(cfg(feature = "default-crypto")))]
 pub mod default_crypto;
 
-mod securityhelpers;
 pub mod multicast;
+mod securityhelpers;

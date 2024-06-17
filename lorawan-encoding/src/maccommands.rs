@@ -4,6 +4,7 @@ use core::marker::PhantomData;
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
     UnknownMacCommand,
+    BufferTooShortForCid(u8),
     BufferTooShort,
     InvalidIndex,
     InvalidDataRateRange,
@@ -84,7 +85,7 @@ macro_rules! mac_cmds {
                 /// Creates a new instance of the MAC command if there is enought data.
                 pub fn new(data: &'a [u8]) -> Result<$type<'a>, Error> {
                     if data.len() != $size {
-                        Err(Error::BufferTooShort)
+                        Err(Error::BufferTooShortForCid($cid))
                     } else {
                         Ok($type(&data))
                     }
