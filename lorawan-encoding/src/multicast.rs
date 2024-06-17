@@ -69,16 +69,25 @@ impl<'a> McGroupStatusAnsPayload<'a> {
         }
 
         let status = data[0];
-        // | RFU | NbTotalGroups | AnsGroupMask |
-        // |  1  |       3       |      4       |
-        let nb_total_groups = (status >> 4) & 0x07; // Extract NbTotalGroups from status
-        let required_len = 1 + nb_total_groups as usize * 5; // Each group adds 5 bytes
+        let required_len = McGroupStatusAnsPayload::required_len(status);
 
         if data.len() < required_len {
             return Err(Error::BufferTooShort);
         }
 
         Ok(McGroupStatusAnsPayload(&data[0..required_len]))
+    }
+
+    pub fn new_from_raw(data: &'a [u8]) -> McGroupStatusAnsPayload<'a> {
+        McGroupStatusAnsPayload(data)
+    }
+
+    pub fn required_len(status: u8) -> usize {
+        // | RFU | NbTotalGroups | AnsGroupMask |
+        // |  1  |       3       |      4       |
+        let nb_total_groups = (status >> 4) & 0x07; // Extract NbTotalGroups from status
+        let required_len = 1 + nb_total_groups as usize * 5; // Each group adds 5 bytes
+        required_len
     }
 
     pub const fn cid() -> u8 {
@@ -98,7 +107,7 @@ impl<'a> McGroupStatusAnsPayload<'a> {
     }
 }
 
-enum Error {
+pub enum Error {
     BufferTooShort,
     UnknownCommand,
 }
@@ -116,7 +125,7 @@ impl<'a> DownlinkMulticastMsgIterator<'a> {
 }
 
 impl<'a> Iterator for DownlinkMulticastMsgIterator<'a> {
-    type Item = Result<(DownlinkMulticastMsg<'a>, usize), Error>;
+    type Item = Result<DownlinkMulticastMsg<'a>, Error>;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index >= self.data.len() {
@@ -128,33 +137,99 @@ impl<'a> Iterator for DownlinkMulticastMsgIterator<'a> {
 
         let (msg, len) = match cid {
             0x00 => {
-                let payload = PackageVersionReqPayload::new_from_raw(&self.data[self.index..]);
-                (DownlinkMulticastMsg::PackageVersionReq(payload), payload.len())
+                let len = PackageVersionReqPayload::len();
+                let payload = PackageVersionReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                (DownlinkMulticastMsg::PackageVersionReq(payload), len)
             },
             0x01 => {
-                let payload = McGroupStatusReqPayload::new(&self.data[self.index..])?;
-                (DownlinkMulticastMsg::McGroupStatusReq(payload), payload.len())
+                let len = McGroupStatusReqPayload::len();
+                let payload = McGroupStatusReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                (DownlinkMulticastMsg::McGroupStatusReq(payload), len)
             },
             0x02 => {
-                let payload = McGroupSetupReqPayload::new(&self.data[self.index..])?;
-                (DownlinkMulticastMsg::McGroupSetupReq(payload), payload.len())
+                let len = McGroupSetupReqPayload::len();
+                let payload = McGroupSetupReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                (DownlinkMulticastMsg::McGroupSetupReq(payload), len)
             },
             0x03 => {
-                let payload = McGroupDeleteReqPayload::new(&self.data[self.index..])?;
-                (DownlinkMulticastMsg::McGroupDeleteReq(payload), payload.len())
+                let len = McGroupDeleteReqPayload::len();
+                let payload = McGroupDeleteReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                (DownlinkMulticastMsg::McGroupDeleteReq(payload), len)
             },
             0x04 => {
-                let payload = McClassCSessionReqPayload::new(&self.data[self.index..])?;
-                (DownlinkMulticastMsg::McClassCSessionReq(payload), payload.len())
+                let len = McClassCSessionReqPayload::len();
+                let payload = McClassCSessionReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                (DownlinkMulticastMsg::McClassCSessionReq(payload), len)
             },
             0x05 => {
-                let payload = McClassBSessionReqPayload::new(&self.data[self.index..])?;
-                (DownlinkMulticastMsg::McClassBSessionReq(payload), payload.len())
+                let len = McClassBSessionReqPayload::len();
+                let payload = McClassBSessionReqPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                (DownlinkMulticastMsg::McClassBSessionReq(payload), len)
             },
             _ => return Some(Err(Error::UnknownCommand)),
         };
-
         self.index += len;
-        Some(Ok((msg, len)))
+        Some(Ok(msg))
+    }
+}
+
+pub struct UplinkMulticastMsgIterator<'a> {
+    data: &'a [u8],
+    index: usize,
+}
+
+impl<'a> UplinkMulticastMsgIterator<'a> {
+    pub fn new(data: &'a [u8]) -> Self {
+        UplinkMulticastMsgIterator { data, index: 0 }
+    }
+}
+
+impl<'a> Iterator for UplinkMulticastMsgIterator<'a> {
+    type Item = Result<UplinkMulticastMsg<'a>, Error>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index >= self.data.len() {
+            return None;
+        }
+
+        let cid = self.data[self.index];
+        self.index += 1;
+
+        let (msg, len) = match cid {
+            0x00 => {
+                let len = PackageVersionAnsPayload::len();
+                let payload = PackageVersionAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                (UplinkMulticastMsg::PackageVersionAns(payload), len)
+            },
+            0x01 => {
+                // peek at first byte to determine length as this is a variable length message
+                let len = McGroupStatusAnsPayload::required_len(self.data[self.index]);
+                let payload = McGroupStatusAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                (UplinkMulticastMsg::McGroupStatusAns(payload), len)
+            },
+            0x02 => {
+                let len = McGroupSetupAnsPayload::len();
+                let payload = McGroupSetupAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                (UplinkMulticastMsg::McGroupSetupAns(payload), len)
+            },
+            0x03 => {
+                let len = McGroupDeleteAnsPayload::len();
+                let payload = McGroupDeleteAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                (UplinkMulticastMsg::McGroupDeleteAns(payload), len)
+            },
+            0x04 => {
+                let len = McClassCSessionAnsPayload::len();
+                let payload = McClassCSessionAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                (UplinkMulticastMsg::McClassCSessionAns(payload), len)
+            },
+            0x05 => {
+                let len = McClassBSessionAnsPayload::len();
+                let payload = McClassBSessionAnsPayload::new_from_raw(&self.data[self.index..self.index + len]);
+                (UplinkMulticastMsg::McClassBSessionAns(payload), len)
+            },
+            _ => return Some(Err(Error::UnknownCommand)),
+        };
+        self.index += len;
+        Some(Ok(msg))
     }
 }
