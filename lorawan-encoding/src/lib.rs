@@ -25,5 +25,5 @@ pub mod extra;
 #[cfg(feature = "default-crypto")]
 pub mod default_crypto;
 
-mod securityhelpers;
 pub mod multicast;
+mod securityhelpers;
