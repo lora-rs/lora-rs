@@ -743,7 +743,14 @@ where
     }
 
     async fn get_rssi(&mut self) -> Result<i16, RadioError> {
-        todo!()
+        let op_code = [OpCode::GetRSSIInst.value()];
+        let mut response = [0x00u8; 1];
+        let read_status = self.intf.read_with_status(&op_code, &mut response).await?;
+        if OpStatusErrorMask::is_error(read_status) {
+            return Err(RadioError::OpError(read_status));
+        }
+        let rssi = ((-(response[0] as i32)) >> 1) as i16;
+        Ok(rssi)
     }
 
     async fn do_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {

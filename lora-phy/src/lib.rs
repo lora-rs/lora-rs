@@ -280,6 +280,16 @@ where
         self.prepare_modem(frequency_in_hz).await?;
 
         self.radio_kind.set_channel(frequency_in_hz).await?;
+        let modulation_params = self
+            .radio_kind
+            .create_modulation_params(
+                SpreadingFactor::_5,
+                Bandwidth::_500KHz,
+                CodingRate::_4_5,
+                frequency_in_hz,
+            )
+            .unwrap();
+        self.radio_kind.set_modulation_params(&modulation_params).await?;
         self.radio_mode = RadioMode::Listen;
         self.radio_kind.do_rx(RxMode::Continuous).await?;
 
