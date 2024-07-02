@@ -386,7 +386,7 @@ where
                 const LOW_POWER_MIN: i32 = -17;
                 const LOW_POWER_MAX: i32 = 15;
                 // Clamp power between [-17, 15] dBm
-                let txp = output_power.min(LOW_POWER_MAX).max(LOW_POWER_MIN);
+                let txp = output_power.clamp(LOW_POWER_MIN, LOW_POWER_MAX);
 
                 if txp == 15 {
                     if let Some(m_p) = mdltn_params {
@@ -422,7 +422,7 @@ where
                 const HIGH_POWER_MIN: i32 = -9;
                 const HIGH_POWER_MAX: i32 = 22;
                 // Clamp power between [-9, 22] dBm
-                let txp = output_power.min(HIGH_POWER_MAX).max(HIGH_POWER_MIN);
+                let txp = output_power.clamp(HIGH_POWER_MIN, HIGH_POWER_MAX);
                 // Provide better resistance of the SX1262 Tx to antenna mismatch (see DS_SX1261-2_V1.2 datasheet chapter 15.2)
                 let mut tx_clamp_cfg = [0x00u8];
                 self.intf
@@ -742,6 +742,17 @@ where
         Ok(PacketStatus { rssi, snr })
     }
 
+    async fn get_rssi(&mut self) -> Result<i16, RadioError> {
+        let op_code = [OpCode::GetRSSIInst.value()];
+        let mut response = [0x00u8; 1];
+        let read_status = self.intf.read_with_status(&op_code, &mut response).await?;
+        if OpStatusErrorMask::is_error(read_status) {
+            return Err(RadioError::OpError(read_status));
+        }
+        let rssi = ((-(response[0] as i32)) >> 1) as i16;
+        Ok(rssi)
+    }
+
     async fn do_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_rx().await?;
 
@@ -942,8 +953,8 @@ where
                     return Ok(Some(IrqState::Done));
                 }
             }
-            RadioMode::Sleep | RadioMode::Standby => {
-                defmt::warn!("IRQ during sleep/standby?");
+            RadioMode::Sleep | RadioMode::Standby | RadioMode::Listen => {
+                defmt::warn!("IRQ during sleep/standby/listen?");
             }
             RadioMode::FrequencySynthesis => todo!(),
         }
