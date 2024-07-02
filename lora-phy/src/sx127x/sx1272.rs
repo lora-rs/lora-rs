@@ -45,18 +45,18 @@ impl Sx127xVariant for Sx1272 {
             // Deal with two ranges, +17dBm enables extra boost
             if p_out > 17 {
                 // PA_BOOST out: +5 .. +20 dBm
-                let val = (p_out.min(20).max(5) - 5) as u8 & 0x0f;
+                let val = (p_out.clamp(5, 20) - 5) as u8 & 0x0f;
                 radio.write_register(Register::RegPaConfig, (1 << 7) | val).await?;
                 radio.write_register(Register::RegPaDacSX1272, 0x87).await?;
             } else {
                 // PA_BOOST out: +2 .. +17 dBm
-                let val = (p_out.min(17).max(2) - 2) as u8 & 0x0f;
+                let val = (p_out.clamp(2, 17) - 2) as u8 & 0x0f;
                 radio.write_register(Register::RegPaConfig, (1 << 7) | val).await?;
                 radio.write_register(Register::RegPaDacSX1272, 0x84).await?;
             }
         } else {
             // RFO out: -1 to +14 dBm
-            let val = (p_out.min(14).max(-1) + 1) as u8 & 0x0f;
+            let val = (p_out.clamp(-1, 14) + 1) as u8 & 0x0f;
             radio.write_register(Register::RegPaConfig, val).await?;
             radio.write_register(Register::RegPaDacSX1272, 0x84).await?;
         }
