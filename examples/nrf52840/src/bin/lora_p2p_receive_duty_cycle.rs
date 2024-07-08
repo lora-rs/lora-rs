@@ -29,7 +29,7 @@ async fn main(_spawner: Spawner) {
     let nss = Output::new(p.P1_10.degrade(), Level::High, OutputDrive::Standard);
     let reset = Output::new(p.P1_06.degrade(), Level::High, OutputDrive::Standard);
     let dio1 = Input::new(p.P1_15.degrade(), Pull::Down);
-    let busy = Input::new(p.P1_14.degrade(), Pull::Down);
+    let busy = Input::new(p.P1_14.degrade(), Pull::None);
     let rf_switch_rx = Output::new(p.P1_05.degrade(), Level::Low, OutputDrive::Standard);
     let rf_switch_tx = Output::new(p.P1_07.degrade(), Level::Low, OutputDrive::Standard);
 
