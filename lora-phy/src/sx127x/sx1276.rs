@@ -40,7 +40,7 @@ impl Sx127xVariant for Sx1276 {
         let pa_reg = Register::RegPaDacSX1276;
         if tx_boost {
             // Output via PA_BOOST: [2, 20] dBm
-            let txp = p_out.min(20).max(2);
+            let txp = p_out.clamp(2, 20);
 
             // Pout=17-(15-OutputPower)
             let output_power: i32 = txp - 2;
@@ -57,7 +57,7 @@ impl Sx127xVariant for Sx1276 {
                 .await?;
         } else {
             // Clamp output: [-4, 14] dBm
-            let txp = p_out.min(14).max(-4);
+            let txp = p_out.clamp(-4, 14);
 
             // Pmax=10.8+0.6*MaxPower, where MaxPower is set below as 7 and therefore Pmax is 15
             // Pout=Pmax-(15-OutputPower)
