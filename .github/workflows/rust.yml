@@ -29,6 +29,12 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: true
+          workspaces: |
+            .
+            examples/nrf52840
+            examples/rp
+            examples/stm32l0
+            examples/stm32wl
 
       # Format and Clippy steps are executed in separate 'check' workflow
       - name: Build
