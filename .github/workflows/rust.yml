@@ -15,6 +15,7 @@ env:
 
 jobs:
   build:
+    name: Build and run tests and build-test examples
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,13 +27,10 @@ jobs:
 
       - name: Setup Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
 
-      - name: Check formatting
-        run: cargo fmt  -- --check
-
-      - name: Clippy
-        run: cargo clippy --tests --all-features -- -Dclippy::all
-
+      # Format and Clippy steps are executed in separate 'check' workflow
       - name: Build
         run: cargo build --all-features --all --verbose
 
@@ -58,3 +56,23 @@ jobs:
         run: |
           cd examples/stm32wl
           cargo build --release
+
+  checks:
+    name: Formatting checks and Clippy linter run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cancel previous runs
+        uses: styfle/cancel-workflow-action@0.5.0
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Setup Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt  -- --check
+
+      - name: Clippy
+        run: cargo clippy --tests --all-features -- -Dclippy::all
