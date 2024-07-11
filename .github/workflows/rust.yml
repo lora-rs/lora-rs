@@ -68,6 +68,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          components: clippy, rustfmt
+          override: true
 
       - name: Cancel previous runs
         uses: styfle/cancel-workflow-action@0.12.1
@@ -78,7 +84,12 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check formatting
-        run: cargo fmt  -- --check
+        run: cargo +stable fmt  -- --check
 
       - name: Clippy
-        run: cargo clippy --tests --all-features -- -Dclippy::all
+        run: cargo +stable clippy --tests --all-features -- -Dclippy::all
+
+      - name: Docs
+        env:
+          RUSTDOCFLAGS: --cfg docsrs
+        run: cargo +nightly doc --all-features
