@@ -8,6 +8,7 @@
 
 //! This module implements LoRaWAN packet handling and parsing.
 #![no_std]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(clippy::upper_case_acronyms)]
 #![doc = include_str!("../README.md")]
 
@@ -23,6 +24,7 @@ pub mod string;
 pub mod extra;
 
 #[cfg(feature = "default-crypto")]
+#[cfg_attr(docsrs, doc(cfg(feature = "default-crypto")))]
 pub mod default_crypto;
 
 mod securityhelpers;

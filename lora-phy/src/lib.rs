@@ -1,8 +1,8 @@
 #![no_std]
 #![allow(async_fn_in_trait)]
 #![warn(missing_docs)]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
-
 #[cfg(feature = "lorawan-radio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "lorawan-radio")))]
 /// Provides an implementation of the async LoRaWAN device trait.
