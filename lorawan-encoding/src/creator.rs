@@ -22,8 +22,7 @@ use super::default_crypto::DefaultFactory;
 
 use super::keys::Decrypter;
 
-#[cfg(feature = "default-crypto")]
-use aes::cipher::generic_array::GenericArray;
+use generic_array::GenericArray;
 
 #[cfg(feature = "default-crypto")]
 use aes::cipher::generic_array::typenum::U256;
