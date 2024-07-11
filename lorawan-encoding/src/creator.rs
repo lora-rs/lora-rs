@@ -193,7 +193,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     }
 }
 
-#[cfg(feature = "default-crypto,with-downlink")]
+#[cfg(feature = "default-crypto")]
 impl JoinAcceptCreator<[u8; 33], DefaultFactory> {
     /// Creates a well initialized JoinAcceptCreator.
     ///
@@ -209,8 +209,8 @@ impl JoinAcceptCreator<[u8; 33], DefaultFactory> {
     /// phy.set_dl_settings(2);
     /// phy.set_rx_delay(1);
     /// let mut freqs: Vec<lorawan::maccommands::Frequency> = Vec::new();
-    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap()).unwrap();
-    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()).unwrap();
+    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap());
+    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap());
     /// phy.set_c_f_list(freqs);
     /// let payload = phy.build(&key).unwrap();
     /// ```
