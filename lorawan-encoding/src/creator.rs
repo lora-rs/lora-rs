@@ -10,8 +10,7 @@
 //!
 //! See [JoinAcceptCreator.new](struct.JoinAcceptCreator.html#method.new) for an example.
 
-use super::keys;
-use super::keys::{AppKey, AppSKey, CryptoFactory, NewSKey};
+use super::keys::{AppKey, AppSKey, CryptoFactory, Decrypter, NewSKey, AES128};
 use super::maccommandcreator;
 use super::maccommands::{mac_commands_len, DLSettings, Frequency, SerializableMacCommand};
 use super::parser;
@@ -19,8 +18,6 @@ use super::securityhelpers;
 
 #[cfg(feature = "default-crypto")]
 use super::default_crypto::DefaultFactory;
-
-use super::keys::Decrypter;
 
 use generic_array::GenericArray;
 
@@ -160,7 +157,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     /// # Argument
     ///
     /// * key - the key to be used for encryption and setting the MIC.
-    pub fn build(&mut self, key: &keys::AES128) -> Result<&[u8], Error> {
+    pub fn build(&mut self, key: &AES128) -> Result<&[u8], Error> {
         let required_len = if self.with_c_f_list {
             33
         } else {
@@ -175,7 +172,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
         Ok(self.data.as_mut())
     }
 
-    fn encrypt_payload(&mut self, key: &keys::AES128) {
+    fn encrypt_payload(&mut self, key: &AES128) {
         let d = if self.with_c_f_list {
             self.data.as_mut()
         } else {
@@ -220,7 +217,7 @@ impl JoinAcceptCreator<[u8; 33], DefaultFactory> {
     }
 }
 
-fn set_mic<F: CryptoFactory>(data: &mut [u8], key: &keys::AES128, factory: &F) {
+fn set_mic<F: CryptoFactory>(data: &mut [u8], key: &AES128, factory: &F) {
     let len = data.len();
     let mic = securityhelpers::calculate_mic(&data[..len - 4], factory.new_mac(key));
 
