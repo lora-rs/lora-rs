@@ -9,6 +9,10 @@ license = "MIT"
 keywords = ["lorawan", "iot", "lpwan", "parser", "lightweight"]
 readme = "README.md"
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 [dependencies]
 aes = { version = "0.8", optional = true }
 cmac = { version = "0.7", optional = true }
