@@ -1,6 +1,9 @@
 #![no_std]
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+
+//! ## Feature flags
+#![doc = document_features::document_features!(feature_label = r#"<span class="stab portability"><code>{feature}</code></span>"#)]
 #![doc = include_str!("../README.md")]
 
 #[cfg(feature = "lorawan-radio")]
