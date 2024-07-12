@@ -60,14 +60,13 @@ Example InterfaceVariant implementations:
 For developers wishing to add support for new LoRa chips or enhance support for existing chips:
 
 - <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/mod_traits.rs">the RadioKind trait</a>, which must be implemented for each kind of LoRa chip for access through the lora-phy crate API;
-- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/interface.rs">the interface implementation</a>, which captures the three key read/write operations allowing control of the LoRa chip from this crate through either opcode or register operations.
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/interface.rs">the interface implementation</a>, which captures the main read/write operations allowing control of the LoRa chip from this crate through either opcode or register operations.
 
 Example RadioKind implementations and ancillary information:
 
-- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/sx1261_2">the Sx1261/2 radio kind</a>;
-- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/sx1276_7_8_9">the Sx1276/7/8/9 radio kind</a>.
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/sx126x">the Sx126x radio kind supporting sx1261 and sx1262 radios</a>;
+- <a href="https://github.com/lora-rs/lora-rs/blob/main/lora-phy/src/sx127x">the Sx127x radio kind supporting sx1272 and sx1276 radios</a>.
 
 ## LoRa board-specific support
 
 Board-specific configuration can be handled via the chip driver specific Config struct.
-
