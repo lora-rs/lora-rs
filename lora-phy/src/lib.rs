@@ -1,5 +1,4 @@
 #![no_std]
-#![allow(async_fn_in_trait)]
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
