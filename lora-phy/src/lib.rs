@@ -275,19 +275,16 @@ where
         }
     }
 
-    /// Start listening to a given frequency
-    pub async fn listen(&mut self, frequency_in_hz: u32) -> Result<(), RadioError> {
+    /// Start listening to a given frequency and bandwidth
+    pub async fn listen(&mut self, frequency_in_hz: u32, bandwidth: Bandwidth) -> Result<(), RadioError> {
         self.prepare_modem(frequency_in_hz).await?;
 
         self.radio_kind.set_channel(frequency_in_hz).await?;
+        // We need to set the bandwidth, otherwise sx126x doesn't return reasonable RSSI results
+        // All other params are irrelevant with regard to listening to measure RSSI.
         let modulation_params = self
             .radio_kind
-            .create_modulation_params(
-                SpreadingFactor::_5,
-                Bandwidth::_500KHz,
-                CodingRate::_4_5,
-                frequency_in_hz,
-            )
+            .create_modulation_params(SpreadingFactor::_7, bandwidth, CodingRate::_4_5, frequency_in_hz)
             .unwrap();
         self.radio_kind.set_modulation_params(&modulation_params).await?;
         self.radio_mode = RadioMode::Listen;

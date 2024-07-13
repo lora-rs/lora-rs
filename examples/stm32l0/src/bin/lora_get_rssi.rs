@@ -45,7 +45,7 @@ async fn main(_spawner: Spawner) {
     let iv = GenericSx127xInterfaceVariant::new(reset, irq, None, None).unwrap();
     let mut lora = LoRa::new(Sx127x::new(spi, iv, config), false, Delay).await.unwrap();
 
-    match lora.listen(LORA_FREQUENCY_IN_HZ).await {
+    match lora.listen(LORA_FREQUENCY_IN_HZ, Bandwidth::_500KHz).await {
         Ok(()) => {}
         Err(err) => {
             info!("Radio error = {}", err);

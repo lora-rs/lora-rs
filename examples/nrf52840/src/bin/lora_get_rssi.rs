@@ -51,7 +51,7 @@ async fn main(_spawner: Spawner) {
     let mut rssi_above_threshold = Output::new(p.P1_03, Level::Low, OutputDrive::Standard);
     let mut rssi_below_threshold = Output::new(p.P1_04, Level::Low, OutputDrive::Standard);
 
-    match lora.listen(LORA_FREQUENCY_IN_HZ).await {
+    match lora.listen(LORA_FREQUENCY_IN_HZ, Bandwidth::_500KHz).await {
         Ok(()) => {
             info!("Listen")
         }
