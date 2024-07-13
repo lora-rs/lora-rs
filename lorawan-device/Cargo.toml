@@ -3,6 +3,7 @@ name = "lorawan-device"
 version = "0.12.1"
 authors = ["Louis Thiery <thiery.louis@gmail.com>", "Ulf Lilleengen <lulf@redhat.com>"]
 edition = "2021"
+rust-version = "1.75"
 categories = [
     "embedded",
     "hardware-support",
