@@ -41,6 +41,19 @@ lorawan = { version = "0.8", path = "../lorawan-encoding" }
 [features]
 default = ["all-regions"]
 all-regions = ["region-as923-1", "region-as923-2", "region-as923-3", "region-as923-4", "region-au915", "region-eu433", "region-eu868", "region-in865", "region-us915"]
+
+## Use pure Rust implementations of [`AES`](https://docs.rs/aes/latest/aes/) and [`CMAC`](https://docs.rs/cmac/latest/cmac/) for the LoRaWAN crypto layer.
+default-crypto = ["lorawan/default-crypto"]
+
+## Use [`defmt`](https://docs.rs/defmt/latest/defmt/) for logging.
+defmt = ["dep:defmt", "lorawan/defmt", "lora-modulation/defmt"]
+
+## Provide an `async_device::Timer` impl based on `embassy-time`.
+embassy-time = ["dep:embassy-time"]
+
+## Enable [`serde`](https://docs.rs/serde/latest/serde/) serialization/deserialization for data structures.
+serde = ["dep:serde", "lorawan/serde"]
+
 ## Enable support for AS923-1 region (by default all regions are enabled).
 region-as923-1 = []
 ## Enable support for AS923-2 region (by default all regions are enabled).
@@ -60,14 +73,3 @@ region-in865 = []
 ## Enable support for US915 region (by default all regions are enabled).
 region-us915 = []
 
-## Provide an `async_device::Timer` impl based on `embassy-time`.
-embassy-time = ["dep:embassy-time"]
-
-## Use [`defmt`](https://docs.rs/defmt/latest/defmt/) for logging.
-defmt = ["dep:defmt", "lorawan/defmt", "lora-modulation/defmt"]
-
-## Enable [`serde`](https://docs.rs/serde/latest/serde/) serialization/deserialization for data structures.
-serde = ["dep:serde", "lorawan/serde"]
-
-## Use pure Rust implementations of [`AES`](https://docs.rs/aes/latest/aes/) and [`CMAC`](https://docs.rs/cmac/latest/cmac/) for the LoRaWAN crypto layer.
-default-crypto = ["lorawan/default-crypto"]
