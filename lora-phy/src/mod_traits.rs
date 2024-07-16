@@ -4,6 +4,7 @@ use crate::mod_params::*;
 
 /// Functions implemented for an embedded framework for an MCU/LoRa chip combination
 /// to allow this crate to control the LoRa chip.
+#[allow(async_fn_in_trait)]
 pub trait InterfaceVariant {
     /// Reset the LoRa chip
     async fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), RadioError>;
@@ -30,6 +31,7 @@ pub enum IrqState {
 
 /// Functions implemented for a specific kind of LoRa chip, called internally by the outward facing
 /// LoRa physical layer API
+#[allow(async_fn_in_trait)]
 pub trait RadioKind {
     /// Initialize lora radio
     async fn init_lora(&mut self, is_public_network: bool) -> Result<(), RadioError>;

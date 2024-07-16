@@ -3,6 +3,7 @@ use crate::mod_traits::InterfaceVariant;
 use crate::sx127x::Sx127x;
 use embedded_hal_async::spi::SpiDevice;
 
+#[allow(async_fn_in_trait)]
 pub trait Sx127xVariant {
     fn bandwidth_value(bw: Bandwidth) -> Result<u8, RadioError>;
     fn reg_txco() -> Register;
