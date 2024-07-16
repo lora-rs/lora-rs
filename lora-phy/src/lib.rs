@@ -126,7 +126,7 @@ where
         )
     }
 
-    /// Initialize a Semtech chip as the radio for LoRa physical layer communications
+    /// Initialize the radio for LoRa physical layer communications
     pub async fn init(&mut self) -> Result<(), RadioError> {
         self.cold_start = true;
         self.radio_kind.reset(&mut self.delay).await?;
@@ -150,7 +150,7 @@ where
         self.radio_kind.set_standby().await
     }
 
-    /// Place the LoRa physical layer in low power mode, specifying cold or warm start (if the Semtech chip supports it)
+    /// Place the LoRa physical layer in low power mode, specifying cold or warm start (if chip supports it)
     pub async fn sleep(&mut self, warm_start_if_possible: bool) -> Result<(), RadioError> {
         if self.radio_mode != RadioMode::Sleep {
             self.radio_kind.ensure_ready(self.radio_mode).await?;
@@ -165,7 +165,7 @@ where
         Ok(())
     }
 
-    /// Prepare the Semtech chip for a send operation
+    /// Prepare the radio for a send operation
     pub async fn prepare_for_tx(
         &mut self,
         mdltn_params: &ModulationParams,
@@ -219,13 +219,7 @@ where
         }
     }
 
-    /// Prepare radio to receive a frame in either single or continuous packet mode.
-    /// Notes:
-    /// * sx126x SetRx(0 < timeout < MAX) will listen util LoRa packet header is detected,
-    ///   therefore we only use 0 (Single Mode) and MAX (continuous) values.
-    ///
-    /// TODO: Find a way to express timeout for sx126x, allowing waiting for packet upto 262s
-    /// TODO: Allow DutyCycle as well?
+    /// Prepare the radio for a receive operation
     pub async fn prepare_for_rx(
         &mut self,
         listen_mode: RxMode,
@@ -279,7 +273,7 @@ where
         }
     }
 
-    /// Prepare the Semtech chip for a channel activity detection operation
+    /// Prepare the radio for a channel activity detection (CAD) operation
     pub async fn prepare_for_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         self.prepare_modem(mdltn_params).await?;
 
@@ -290,7 +284,7 @@ where
         Ok(())
     }
 
-    /// Start channel activity detection operation and return the result
+    /// Start channel activity detection (CAD) operation and return the result
     pub async fn cad(&mut self, mdltn_params: &ModulationParams) -> Result<bool, RadioError> {
         if self.radio_mode == RadioMode::ChannelActivityDetection {
             self.radio_kind.do_cad(mdltn_params).await?;
