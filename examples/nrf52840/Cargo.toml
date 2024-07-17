@@ -24,8 +24,19 @@ embedded-hal-bus = { version = "0.1.0", features = ["async"]}
 debug = 2
 
 [features]
-default = []
+default = ["region-eu868"]
 ## Customize target binary to make it runnable from RAM
 link-to-ram = []
 # Add teleprobe specific hooks to code
 teleprobe = ["link-to-ram"]
+
+# Size optimization (TODO: Update code to allow other regions)
+# region-as923-1 = ["lorawan-device/region-as923-1"]
+# region-as923-2 = ["lorawan-device/region-as923-2"]
+# region-as923-3 = ["lorawan-device/region-as923-3"]
+# region-as923-4 = ["lorawan-device/region-as923-4"]
+# region-au915 = ["lorawan-device/region-au915"]
+# region-eu433 = ["lorawan-device/region-eu433"]
+region-eu868 = ["lorawan-device/region-eu868"]
+# region-in865 = ["lorawan-device/region-in865"]
+# region-us915 = ["lorawan-device/region-us915"]
