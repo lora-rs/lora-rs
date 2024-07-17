@@ -11,7 +11,7 @@ embassy-executor = { version = "0.5.0", features = ["arch-cortex-m", "executor-t
 embassy-time = { version = "0.3.0", features = ["defmt", "defmt-timestamp-uptime"] }
 
 lora-phy = { path = "../../lora-phy", features = ["lorawan-radio"] }
-lorawan-device = { path = "../../lorawan-device", default-features = false, features = ["embassy-time", "default-crypto", "defmt"] }
+lorawan-device = { path = "../../lorawan-device", features = ["embassy-time", "default-crypto", "defmt"] }
 
 defmt = "0.3"
 defmt-rtt = "0.4"
