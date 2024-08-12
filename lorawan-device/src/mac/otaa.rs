@@ -16,7 +16,7 @@ pub(crate) struct Otaa {
     network_credentials: NetworkCredentials,
 }
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct NetworkCredentials {
     deveui: DevEui,
     appeui: AppEui,
