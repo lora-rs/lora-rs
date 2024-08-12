@@ -1,4 +1,4 @@
-use lora_modulation::BaseBandModulationParams;
+pub use lora_modulation::BaseBandModulationParams;
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
