@@ -36,7 +36,6 @@ embassy-time = { version = "0.3.0", optional = true }
 tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}
 rand = { version = "0", features = ["getrandom"] }
 lazy_static = "1"
-lorawan = { version = "0.8", path = "../lorawan-encoding" }
 
 [features]
 default = ["all-regions"]
