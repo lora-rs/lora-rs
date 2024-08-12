@@ -1,10 +1,3 @@
-// Copyright (c) 2017-2020 Ivaylo Petrov
-//
-// Licensed under the MIT license <LICENSE-MIT or
-// http://opensource.org/licenses/MIT>, at your option. This file may not be
-// copied, modified, or distributed except according to those terms.
-//
-// author: Ivaylo Petrov <ivajloip@gmail.com>
 use super::parser::EUI64;
 use super::securityhelpers::generic_array::{typenum::U16, GenericArray};
 
