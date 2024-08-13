@@ -1,6 +1,5 @@
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-#![allow(async_fn_in_trait)]
 
 //! ## Feature flags
 #![doc = document_features::document_features!(feature_label = r#"<span class="stab portability"><code>{feature}</code></span>"#)]
@@ -27,6 +26,7 @@ use nb_device::state::State;
 
 use core::marker::PhantomData;
 #[cfg(feature = "default-crypto")]
+#[cfg_attr(docsrs, doc(cfg(feature = "default-crypto")))]
 pub use lorawan::default_crypto;
 pub use lorawan::{
     keys::{AppEui, AppKey, AppSKey, CryptoFactory, DevEui, NewSKey},

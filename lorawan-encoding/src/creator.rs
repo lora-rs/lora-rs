@@ -1,17 +1,8 @@
-// Copyright (c) 2017-2020 Ivaylo Petrov
-//
-// Licensed under the MIT license <LICENSE-MIT or
-// http://opensource.org/licenses/MIT>, at your option. This file may not be
-// copied, modified, or distributed except according to those terms.
-//
-// author: Ivaylo Petrov <ivajloip@gmail.com>
-
 //! Provides types and methods for creating LoRaWAN payloads.
 //!
 //! See [JoinAcceptCreator.new](struct.JoinAcceptCreator.html#method.new) for an example.
 
-use super::keys;
-use super::keys::{AppKey, AppSKey, CryptoFactory, NewSKey};
+use super::keys::{AppKey, AppSKey, CryptoFactory, Decrypter, NewSKey, AES128};
 use super::maccommandcreator;
 use super::maccommands::{mac_commands_len, DLSettings, Frequency, SerializableMacCommand};
 use super::parser;
@@ -20,10 +11,7 @@ use super::securityhelpers;
 #[cfg(feature = "default-crypto")]
 use super::default_crypto::DefaultFactory;
 
-use super::keys::Decrypter;
-
-#[cfg(feature = "default-crypto")]
-use aes::cipher::generic_array::GenericArray;
+use generic_array::GenericArray;
 
 #[cfg(feature = "default-crypto")]
 use aes::cipher::generic_array::typenum::U256;
@@ -161,7 +149,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     /// # Argument
     ///
     /// * key - the key to be used for encryption and setting the MIC.
-    pub fn build(&mut self, key: &keys::AES128) -> Result<&[u8], Error> {
+    pub fn build(&mut self, key: &AES128) -> Result<&[u8], Error> {
         let required_len = if self.with_c_f_list {
             33
         } else {
@@ -176,7 +164,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
         Ok(self.data.as_mut())
     }
 
-    fn encrypt_payload(&mut self, key: &keys::AES128) {
+    fn encrypt_payload(&mut self, key: &AES128) {
         let d = if self.with_c_f_list {
             self.data.as_mut()
         } else {
@@ -193,7 +181,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     }
 }
 
-#[cfg(feature = "default-crypto,with-downlink")]
+#[cfg(feature = "default-crypto")]
 impl JoinAcceptCreator<[u8; 33], DefaultFactory> {
     /// Creates a well initialized JoinAcceptCreator.
     ///
@@ -209,8 +197,8 @@ impl JoinAcceptCreator<[u8; 33], DefaultFactory> {
     /// phy.set_dl_settings(2);
     /// phy.set_rx_delay(1);
     /// let mut freqs: Vec<lorawan::maccommands::Frequency> = Vec::new();
-    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap()).unwrap();
-    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()).unwrap();
+    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap());
+    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap());
     /// phy.set_c_f_list(freqs);
     /// let payload = phy.build(&key).unwrap();
     /// ```
@@ -221,7 +209,7 @@ impl JoinAcceptCreator<[u8; 33], DefaultFactory> {
     }
 }
 
-fn set_mic<F: CryptoFactory>(data: &mut [u8], key: &keys::AES128, factory: &F) {
+fn set_mic<F: CryptoFactory>(data: &mut [u8], key: &AES128, factory: &F) {
     let len = data.len();
     let mic = securityhelpers::calculate_mic(&data[..len - 4], factory.new_mac(key));
 

@@ -37,7 +37,7 @@ use self::radio::{RxQuality, RxStatus};
 /// - T: An asynchronous timer implementation
 /// - C: A CryptoFactory implementation
 /// - RNG: A random number generator implementation. An external RNG may be provided, or you may use a builtin PRNG by
-/// providing a random seed
+///   providing a random seed
 /// - N: The size of the radio buffer. Generally, this should be set to 256 to support the largest possible LoRa frames.
 /// - D: The amount of downlinks that may be buffered. This is used to support Class C operation. See below for more.
 ///

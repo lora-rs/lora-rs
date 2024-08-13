@@ -1,12 +1,13 @@
 [package]
 name = "lora-phy"
-version = "3.0.1-alpha.0"
+version = "3.0.1"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/embassy-rs/lora-phy"
 categories = ["embedded", "no-std", "asynchronous"]
 keywords = ["lora", "radio", "embedded-hal-async", "iot", "semtech"]
 description = "A LoRa physical layer implementation enabling utilization of a range of MCU/LoRa board combinations within embedded frameworks supporting embedded-hal-async."
+rust-version = "1.75"
 
 [package.metadata.docs.rs]
 all-features = true
@@ -15,13 +16,14 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 defmt = { version = "0.3" }
 lora-modulation = { path = "../lora-modulation", version = ">=0.1.2" }
-lorawan-device = { path = "../lorawan-device", version = "0.12", features = [
+lorawan-device = { path = "../lorawan-device", default-features = false, version = "0.12", features = [
     "defmt",
 ], optional = true }
 num-traits = { version = "0.2", default-features = false }
 embedded-hal = { version = "1" }
 embedded-hal-async = { version = "1" }
+document-features = "0.2.8"
 
 [features]
+## Async LoRaWAN Rx/Tx interface implementation
 lorawan-radio = ["dep:lorawan-device"]
-

@@ -16,6 +16,7 @@ pub enum RxStatus {
 
 /// An asynchronous timer that allows the state machine to await
 /// between RX windows.
+#[allow(async_fn_in_trait)]
 pub trait Timer {
     fn reset(&mut self);
 
@@ -27,6 +28,7 @@ pub trait Timer {
 }
 
 /// An asynchronous radio implementation that can transmit and receive data.
+#[allow(async_fn_in_trait)]
 pub trait PhyRxTx: Sized {
     #[cfg(feature = "defmt")]
     type PhyError: defmt::Format;

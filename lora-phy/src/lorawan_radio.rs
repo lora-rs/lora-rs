@@ -12,10 +12,10 @@ use lorawan_device::async_device::{
 
 const DEFAULT_RX_WINDOW_LEAD_TIME: u32 = 50;
 
-/// LoRa radio using the physical layer API in the external lora-phy crate.
+/// LoRaWAN radio implementation.
 ///
-/// The const generic P is the max power the radio may be instructed to transmit at. The const
-/// generic G is the antenna gain and board loss in dBi.
+/// The const generic P is the max power the radio may be instructed to transmit at.
+/// The const generic G is the antenna gain and board loss in dBi.
 pub struct LorawanRadio<RK, DLY, const P: u8, const G: i8 = 0>
 where
     RK: RadioKind,
@@ -55,7 +55,7 @@ where
     }
 }
 
-/// Provide the timing values for boards supported by the external lora-phy crate
+/// Provide the timing values
 impl<RK, DLY, const P: u8, const G: i8> Timings for LorawanRadio<RK, DLY, P, G>
 where
     RK: RadioKind,
@@ -82,8 +82,7 @@ impl From<RadioError> for Error {
     }
 }
 
-/// Provide the LoRa physical layer rx/tx interface for boards supported by the external lora-phy
-/// crate
+/// Provide the LoRa physical layer rx/tx interface
 impl<RK, DLY, const P: u8, const G: i8> PhyRxTx for LorawanRadio<RK, DLY, P, G>
 where
     RK: RadioKind,

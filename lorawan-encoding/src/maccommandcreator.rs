@@ -1,11 +1,3 @@
-// Copyright (c) 2018-2020 Ivaylo Petrov
-//
-// Licensed under the MIT license <LICENSE-MIT or
-// http://opensource.org/licenses/MIT>, at your option. This file may not be
-// copied, modified, or distributed except according to those terms.
-//
-// Author: Ivaylo Petrov <ivajloip@gmail.com>
-
 use super::maccommands::*;
 
 #[derive(Debug, PartialEq)]
@@ -147,8 +139,8 @@ impl LinkCheckAnsCreator {
     ///
     /// # Argument
     ///
-    /// * margin - margin  in  dB. The value is relative to the demodulation floor. The value 255
-    /// is reserved.
+    /// * margin - margin in dB. The value is relative to the demodulation
+    ///   floor. The value 255 is reserved.
     pub fn set_margin(&mut self, margin: u8) -> &mut Self {
         self.data[1] = margin;
 
@@ -160,8 +152,8 @@ impl LinkCheckAnsCreator {
     /// # Argument
     ///
     /// * gateway_count - the number of gateways that received the LinkCheckReq.
-    pub fn set_gateway_count(&mut self, gw_cnt: u8) -> &mut Self {
-        self.data[2] = gw_cnt;
+    pub fn set_gateway_count(&mut self, gateway_count: u8) -> &mut Self {
+        self.data[2] = gateway_count;
 
         self
     }
@@ -207,7 +199,7 @@ impl LinkADRReqCreator {
         Ok(self)
     }
 
-    /// Sets the tx power of the LinkADRReq to the provided value.
+    /// Sets the TX power of the LinkADRReq to the provided value.
     ///
     /// # Argument
     ///
@@ -226,8 +218,8 @@ impl LinkADRReqCreator {
     ///
     /// # Argument
     ///
-    /// * channel_mask - instance of maccommands::ChannelMask or anything that can be converted
-    /// into it.
+    /// * channel_mask - instance of maccommands::ChannelMask or anything that
+    ///   can be converted into it.
     pub fn set_channel_mask<T: Into<ChannelMask<2>>>(&mut self, channel_mask: T) -> &mut Self {
         let converted = channel_mask.into();
         self.data[2] = converted.as_ref()[0];
@@ -240,8 +232,8 @@ impl LinkADRReqCreator {
     ///
     /// # Argument
     ///
-    /// * redundancy - instance of maccommands::Redundancy or anything that can be converted
-    /// into it.
+    /// * redundancy - instance of maccommands::Redundancy or anything that can
+    ///   be converted into it.
     pub fn set_redundancy<T: Into<Redundancy>>(&mut self, redundancy: T) -> &mut Self {
         let converted = redundancy.into();
         self.data[4] = converted.raw_value();
@@ -275,7 +267,7 @@ impl LinkADRAnsCreator {
     ///
     /// # Argument
     ///
-    /// * ack - true meaning that the channel mask was acceptable or false otherwise.
+    /// * ack - true when channel mask was acceptable or false otherwise.
     pub fn set_channel_mask_ack(&mut self, ack: bool) -> &mut Self {
         self.data[1] &= 0xfe;
         self.data[1] |= ack as u8;
@@ -287,7 +279,7 @@ impl LinkADRAnsCreator {
     ///
     /// # Argument
     ///
-    /// * ack - true meaning that the data rate was acceptable or false otherwise.
+    /// * ack - true when data rate was acceptable or false otherwise.
     pub fn set_data_rate_ack(&mut self, ack: bool) -> &mut Self {
         self.data[1] &= 0xfd;
         self.data[1] |= (ack as u8) << 1;
@@ -295,11 +287,11 @@ impl LinkADRAnsCreator {
         self
     }
 
-    /// Sets the tx power acknowledgement of the LinkADRAns to the provided value.
+    /// Sets the TX power acknowledgement of the LinkADRAns to the provided value.
     ///
     /// # Argument
     ///
-    /// * ack - true meaning that the tx power was acceptable or false otherwise.
+    /// * ack - true when TX power was acceptable or false otherwise.
     pub fn set_tx_power_ack(&mut self, ack: bool) -> &mut Self {
         self.data[1] &= 0xfb;
         self.data[1] |= (ack as u8) << 2;
@@ -329,8 +321,8 @@ impl DutyCycleReqCreator {
     ///
     /// # Argument
     ///
-    /// * max_duty_cycle - the value used to determine the aggregated duty cycle using the formula
-    /// `1 / (2 ** max_duty_cycle)`.
+    /// * max_duty_cycle - the value used to determine the aggregated duty cycle
+    ///   using the formula `1 / (2 ** max_duty_cycle)`.
     pub fn set_max_duty_cycle(&mut self, max_duty_cycle: u8) -> Result<&mut Self, Error> {
         self.data[1] = max_duty_cycle;
 
@@ -376,8 +368,8 @@ impl RXParamSetupReqCreator {
     ///
     /// # Argument
     ///
-    /// * dl_settings - instance of maccommands::DLSettings or anything that can be converted
-    /// into it.
+    /// * dl_settings - instance of maccommands::DLSettings or anything that can
+    ///   be converted into it.
     pub fn set_dl_settings<T: Into<DLSettings>>(&mut self, dl_settings: T) -> &mut Self {
         let converted = dl_settings.into();
         self.data[1] = converted.raw_value();
@@ -389,8 +381,8 @@ impl RXParamSetupReqCreator {
     ///
     /// # Argument
     ///
-    /// * frequency - instance of maccommands::Frequency or anything that can be converted
-    /// into it.
+    /// * frequency - instance of maccommands::Frequency or anything that can be
+    ///   converted into it.
     pub fn set_frequency<'a, T: Into<Frequency<'a>>>(&mut self, frequency: T) -> &mut Self {
         let converted = frequency.into();
         self.data[2..5].copy_from_slice(converted.as_ref());
@@ -424,7 +416,7 @@ impl RXParamSetupAnsCreator {
     ///
     /// # Argument
     ///
-    /// * ack - true meaning that the channel was acceptable or false otherwise.
+    /// * ack - true when channel was acceptable or false otherwise.
     pub fn set_channel_ack(&mut self, ack: bool) -> &mut Self {
         self.data[1] &= 0xfe;
         self.data[1] |= ack as u8;
@@ -436,7 +428,7 @@ impl RXParamSetupAnsCreator {
     ///
     /// # Argument
     ///
-    /// * ack - true meaning that the rx2 data rate was acceptable or false otherwise.
+    /// * ack - true when RX2 data rate was acceptable or false otherwise.
     pub fn set_rx2_data_rate_ack(&mut self, ack: bool) -> &mut Self {
         self.data[1] &= 0xfd;
         self.data[1] |= (ack as u8) << 1;
@@ -448,7 +440,7 @@ impl RXParamSetupAnsCreator {
     ///
     /// # Argument
     ///
-    /// * ack - true meaning that the rx1 data rate offset was acceptable or false otherwise.
+    /// * ack - true when RX1 data rate offset was acceptable or false otherwise.
     pub fn set_rx1_data_rate_offset_ack(&mut self, ack: bool) -> &mut Self {
         self.data[1] &= 0xfb;
         self.data[1] |= (ack as u8) << 2;
@@ -492,9 +484,10 @@ impl DevStatusAnsCreator {
     ///
     /// # Argument
     ///
-    /// * battery - the value to be used as the battery level. 0 means external enery source,
-    /// 1 and 254 are the smallest and biggest values of normal battery reading, while 255
-    /// indicates that the device failed to measure its battery level.
+    /// * battery - value to be used as the battery level. 0 means external
+    ///   energy source, 1 and 254 are the minimum and maximum values of normal
+    ///   battery reading, while 255 indicates that the device failed to measure
+    ///   its battery level.
     pub fn set_battery(&mut self, battery: u8) -> &mut Self {
         self.data[1] = battery;
 
@@ -552,8 +545,8 @@ impl NewChannelReqCreator {
     ///
     /// # Argument
     ///
-    /// * frequency - instance of maccommands::Frequency or anything that can be converted
-    /// into it.
+    /// * frequency - instance of maccommands::Frequency or anything that can
+    ///   be converted into it.
     pub fn set_frequency<'a, T: Into<Frequency<'a>>>(&mut self, frequency: T) -> &mut Self {
         let converted = frequency.into();
         self.data[2..5].copy_from_slice(converted.as_ref());
@@ -565,8 +558,8 @@ impl NewChannelReqCreator {
     ///
     /// # Argument
     ///
-    /// * data_rate_range - instance of maccommands::DataRateRange or anything that can be converted
-    /// into it.
+    /// * data_rate_range - instance of maccommands::DataRateRange or anything
+    ///   that can be converted into it.
     pub fn set_data_rate_range<T: Into<DataRateRange>>(&mut self, data_rate_range: T) -> &mut Self {
         self.data[5] = data_rate_range.into().raw_value();
 
@@ -598,7 +591,7 @@ impl NewChannelAnsCreator {
     ///
     /// # Argument
     ///
-    /// * ack - true meaning that the channel frequency was acceptable or false otherwise.
+    /// * ack - true when channel frequency was acceptable or false otherwise.
     pub fn set_channel_frequency_ack(&mut self, ack: bool) -> &mut Self {
         self.data[1] &= 0xfe;
         self.data[1] |= ack as u8;
@@ -610,7 +603,7 @@ impl NewChannelAnsCreator {
     ///
     /// # Argument
     ///
-    /// * ack - true meaning that the data rate range was acceptable or false otherwise.
+    /// * ack - true when data rate range was acceptable or false otherwise.
     pub fn set_data_rate_range_ack(&mut self, ack: bool) -> &mut Self {
         self.data[1] &= 0xfd;
         self.data[1] |= (ack as u8) << 1;
@@ -728,7 +721,7 @@ impl DlChannelAnsCreator {
     ///
     /// # Argument
     ///
-    /// * ack - true meaning that the channel frequency was acceptable or false otherwise.
+    /// * ack - true when channel frequency was acceptable or false otherwise.
     pub fn set_channel_frequency_ack(&mut self, ack: bool) -> &mut Self {
         self.data[1] &= 0xfe;
         self.data[1] |= ack as u8;
@@ -740,7 +733,7 @@ impl DlChannelAnsCreator {
     ///
     /// # Argument
     ///
-    /// * ack - true meaning that the data rate range was acceptable or false otherwise.
+    /// * ack - true when data rate range was acceptable or false otherwise.
     pub fn set_uplink_frequency_exists_ack(&mut self, ack: bool) -> &mut Self {
         self.data[1] &= 0xfd;
         self.data[1] |= (ack as u8) << 1;

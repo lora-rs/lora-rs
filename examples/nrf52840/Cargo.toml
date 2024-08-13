@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 embassy-executor = { version = "0.5.0", features = ["arch-cortex-m", "executor-thread", "defmt", "integrated-timers"] }
-embassy-time = { version = "0.3.0", features = ["defmt", "defmt-timestamp-uptime"] }
+embassy-time = { version = "0.3.1", features = ["defmt", "defmt-timestamp-uptime"] }
 embassy-nrf = { version = "0.1.0", features = ["defmt", "nrf52840", "time-driver-rtc1", "gpiote", "unstable-pac", "time"] }
 
 lora-phy = { path = "../../lora-phy", features = ["lorawan-radio"] }
@@ -16,16 +16,27 @@ defmt = "0.3"
 defmt-rtt = "0.4"
 panic-probe = { version = "0.3", features = ["print-defmt"] }
 
-cortex-m = { version = "0.7.6", features = ["inline-asm", "critical-section-single-core"] }
-cortex-m-rt = "0.7.0"
+cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
+cortex-m-rt = "0.7.3"
 embedded-hal-bus = { version = "0.1.0", features = ["async"]}
 
 [profile.release]
 debug = 2
 
 [features]
-default = []
+default = ["region-eu868"]
 ## Customize target binary to make it runnable from RAM
 link-to-ram = []
 # Add teleprobe specific hooks to code
 teleprobe = ["link-to-ram"]
+
+# Size optimization (TODO: Update code to allow other regions)
+# region-as923-1 = ["lorawan-device/region-as923-1"]
+# region-as923-2 = ["lorawan-device/region-as923-2"]
+# region-as923-3 = ["lorawan-device/region-as923-3"]
+# region-as923-4 = ["lorawan-device/region-as923-4"]
+# region-au915 = ["lorawan-device/region-au915"]
+# region-eu433 = ["lorawan-device/region-eu433"]
+region-eu868 = ["lorawan-device/region-eu868"]
+# region-in865 = ["lorawan-device/region-in865"]
+# region-us915 = ["lorawan-device/region-us915"]

@@ -15,24 +15,28 @@ env:
 
 jobs:
   build:
+    name: Build and run tests and build-test examples
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Cancel previous runs
-        uses: styfle/cancel-workflow-action@0.5.0
+        uses: styfle/cancel-workflow-action@0.12.1
         with:
           access_token: ${{ github.token }}
 
       - name: Setup Cache
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
+          workspaces: |
+            .
+            examples/nrf52840
+            examples/rp
+            examples/stm32l0
+            examples/stm32wl
 
-      - name: Check formatting
-        run: cargo fmt  -- --check
-
-      - name: Clippy
-        run: cargo clippy --tests --all-features -- -Dclippy::all
-
+      # Format and Clippy steps are executed in separate 'check' workflow
       - name: Build
         run: cargo build --all-features --all --verbose
 
@@ -58,3 +62,34 @@ jobs:
         run: |
           cd examples/stm32wl
           cargo build --release
+
+  checks:
+    name: Formatting checks and Clippy linter run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          components: clippy, rustfmt
+          override: true
+
+      - name: Cancel previous runs
+        uses: styfle/cancel-workflow-action@0.12.1
+        with:
+          access_token: ${{ github.token }}
+
+      - name: Setup Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo +stable fmt  -- --check
+
+      - name: Clippy
+        run: cargo +stable clippy --tests --all-features -- -Dclippy::all
+
+      - name: Docs
+        env:
+          RUSTDOCFLAGS: --cfg docsrs
+        run: cargo +nightly doc --all-features

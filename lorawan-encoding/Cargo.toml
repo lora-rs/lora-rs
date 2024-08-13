@@ -1,6 +1,6 @@
 [package]
 name = "lorawan"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2021"
 authors = ["Ivaylo Petrov <ivajloip@gmail.com>"]
 description = "Crate lorawan provides structures and tools for reading and writing LoRaWAN messages from and to a slice of bytes."
@@ -8,6 +8,10 @@ repository = "https://github.com/lora-rs/lora-rs"
 license = "MIT"
 keywords = ["lorawan", "iot", "lpwan", "parser", "lightweight"]
 readme = "README.md"
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 aes = { version = "0.8", optional = true }
