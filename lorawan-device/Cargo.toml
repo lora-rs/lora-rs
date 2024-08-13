@@ -36,6 +36,8 @@ embassy-time = { version = "0.3.0", optional = true }
 tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}
 rand = { version = "0", features = ["getrandom"] }
 lazy_static = "1"
+# Pull in lorawan/default-crypto which is required for tests
+lorawan = { path = "../lorawan-encoding", features = ["default-crypto"] }
 
 [features]
 default = ["all-regions"]
@@ -71,4 +73,3 @@ region-eu868 = []
 region-in865 = []
 ## Enable support for US915 region (by default all regions are enabled).
 region-us915 = []
-
