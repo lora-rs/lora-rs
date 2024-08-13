@@ -44,7 +44,7 @@ pub trait PhyRxTx {
 
     // we require mutability so we may decrypt in place
     fn get_received_packet(&mut self) -> &mut [u8];
-    fn handle_event(&mut self, event: Event<Self>) -> Result<Response<Self>, Self::PhyError>
+    fn handle_event(&mut self, event: Event<'_, Self>) -> Result<Response<Self>, Self::PhyError>
     where
         Self: Sized;
 }

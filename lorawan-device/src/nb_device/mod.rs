@@ -97,7 +97,7 @@ where
         self.shared.downlink.pop()
     }
 
-    pub fn handle_event(&mut self, event: Event<R>) -> Result<Response, Error<R>> {
+    pub fn handle_event(&mut self, event: Event<'_, R>) -> Result<Response, Error<R>> {
         let (new_state, result) = self.state.handle_event::<R, C, RNG, N, D>(
             &mut self.shared.mac,
             &mut self.shared.radio,

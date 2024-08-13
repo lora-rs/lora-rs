@@ -114,7 +114,7 @@ impl State {
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
-        event: Event<R>,
+        event: Event<'_, R>,
     ) -> (Self, Result<Response, super::Error<R>>) {
         match self {
             State::Idle(s) => s.handle_event::<R, C, RNG, N>(mac, radio, rng, buf, event),
@@ -140,7 +140,7 @@ impl Idle {
         radio: &mut R,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
-        event: Event<R>,
+        event: Event<'_, R>,
     ) -> (State, Result<Response, super::Error<R>>) {
         enum IntermediateResponse<R: radio::PhyRxTx> {
             RadioTx((Frame, radio::TxConfig, u32)),
@@ -170,7 +170,7 @@ impl Idle {
         match response {
             IntermediateResponse::EarlyReturn(response) => (State::Idle(self), response),
             IntermediateResponse::RadioTx((frame, tx_config, fcnt_up)) => {
-                let event: radio::Event<R> =
+                let event: radio::Event<'_, R> =
                     radio::Event::TxRequest(tx_config, buf.as_ref_for_read());
                 match radio.handle_event(event) {
                     Ok(response) => {
@@ -206,7 +206,7 @@ impl SendingData {
         self,
         mac: &mut Mac,
         radio: &mut R,
-        event: Event<R>,
+        event: Event<'_, R>,
     ) -> (State, Result<Response, super::Error<R>>) {
         match event {
             // we are waiting for the async tx to complete
@@ -249,7 +249,7 @@ impl WaitingForRxWindow {
         self,
         mac: &mut Mac,
         radio: &mut R,
-        event: Event<R>,
+        event: Event<'_, R>,
     ) -> (State, Result<Response, super::Error<R>>) {
         match event {
             // we are waiting for a Timeout
@@ -320,7 +320,7 @@ impl WaitingForRx {
         mac: &mut Mac,
         radio: &mut R,
         buf: &mut RadioBuffer<N>,
-        event: Event<R>,
+        event: Event<'_, R>,
         dl: &mut Vec<Downlink, D>,
     ) -> (State, Result<Response, super::Error<R>>) {
         match event {
