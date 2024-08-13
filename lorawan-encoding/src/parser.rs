@@ -134,7 +134,7 @@ pub enum PhyPayload<T, F> {
 
 #[cfg(feature = "defmt")]
 impl<T: defmt::Format, F> defmt::Format for PhyPayload<T, F> {
-    fn format(&self, f: defmt::Formatter) {
+    fn format(&self, f: defmt::Formatter<'_>) {
         match self {
             PhyPayload::JoinRequest(r) => {
                 defmt::write!(f, "JoinRequestPayload({})", r.0);
@@ -548,7 +548,7 @@ impl<T: AsRef<[u8]>, F> DecryptedJoinAcceptPayload<T, F> {
     }
 
     /// Gives the channel frequency list of the JoinAccept.
-    pub fn c_f_list(&self) -> Option<CfList> {
+    pub fn c_f_list(&self) -> Option<CfList<'_>> {
         if self.0.as_ref().len() == JOIN_ACCEPT_LEN {
             return None;
         }
@@ -603,7 +603,7 @@ pub trait DataHeader {
     fn as_data_bytes(&self) -> &[u8];
 
     /// Gives the FHDR of the DataPayload.
-    fn fhdr(&self) -> FHDR {
+    fn fhdr(&self) -> FHDR<'_> {
         FHDR::new_from_raw(&self.as_data_bytes()[1..(1 + self.fhdr_length())], self.is_uplink())
     }
 
@@ -801,7 +801,7 @@ impl<T> DecryptedDataPayload<T> {
 
 #[cfg(feature = "defmt")]
 impl<T: AsRef<[u8]>> defmt::Format for DecryptedDataPayload<T> {
-    fn format(&self, fmt: defmt::Formatter) {
+    fn format(&self, fmt: defmt::Formatter<'_>) {
         defmt::write!(fmt, "DecryptedDataPayload {{ {:?} }}", self.0.as_ref())
     }
 }
@@ -815,7 +815,7 @@ impl<T: AsRef<[u8]>> DataHeader for DecryptedDataPayload<T> {
 impl<T: AsRef<[u8]>> DecryptedDataPayload<T> {
     /// Returns FRMPayload that can represent either application payload or mac commands if fport
     /// is 0.
-    pub fn frm_payload(&self) -> FRMPayload {
+    pub fn frm_payload(&self) -> FRMPayload<'_> {
         let data = self.as_data_bytes();
         let len = data.len();
         let fhdr_length = self.fhdr_length();
@@ -1022,11 +1022,11 @@ fixed_len_struct! {
 pub struct FHDR<'a>(&'a [u8], bool);
 
 impl<'a> FHDR<'a> {
-    pub fn new_from_raw(bytes: &'a [u8], uplink: bool) -> FHDR {
+    pub fn new_from_raw(bytes: &'a [u8], uplink: bool) -> FHDR<'_> {
         FHDR(bytes, uplink)
     }
 
-    pub fn new(bytes: &'a [u8], uplink: bool) -> Option<FHDR> {
+    pub fn new(bytes: &'a [u8], uplink: bool) -> Option<FHDR<'_>> {
         let data_len = bytes.len();
         if data_len < 7 {
             return None;
