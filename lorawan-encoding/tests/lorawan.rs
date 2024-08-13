@@ -592,7 +592,6 @@ fn test_validate_join_request_mic_when_not_ok() {
 
 #[test]
 #[cfg(feature = "default-crypto")]
-#[ignore] // TODO: figure out what's wrong...
 fn test_join_accept_creator() {
     let mut phy = JoinAcceptCreator::new();
     let key = AES128(app_key());
