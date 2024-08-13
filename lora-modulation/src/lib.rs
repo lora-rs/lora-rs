@@ -1,3 +1,4 @@
+#![deny(rust_2018_idioms)]
 #![cfg_attr(not(test), no_std)]
 #![doc = include_str!("../README.md")]
 
