@@ -56,7 +56,7 @@ impl PhyRxTx for TestRadio {
         &mut self.buffer[..self.buffer_index]
     }
 
-    fn handle_event(&mut self, event: Event<Self>) -> Result<Response<Self>, Self::PhyError>
+    fn handle_event(&mut self, event: Event<'_, Self>) -> Result<Response<Self>, Self::PhyError>
     where
         Self: Sized,
     {

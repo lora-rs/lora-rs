@@ -72,7 +72,7 @@ impl Uplink {
         self.rx_delay_ans.add();
     }
 
-    pub fn get_cmds(&mut self, macs: &mut Vec<UplinkMacCommand, 8>) {
+    pub fn get_cmds(&mut self, macs: &mut Vec<UplinkMacCommand<'_>, 8>) {
         for _ in 0..self.adr_ans.get() {
             macs.push(UplinkMacCommand::LinkADRAns(LinkADRAnsPayload::new(&[0x07]).unwrap()))
                 .unwrap();

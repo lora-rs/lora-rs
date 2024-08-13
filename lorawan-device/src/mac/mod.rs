@@ -52,7 +52,7 @@ impl Configuration {
         &mut self,
         region: &mut region::Configuration,
         uplink: &mut uplink::Uplink,
-        cmds: lorawan::maccommands::MacCommandIterator<DownlinkMacCommand>,
+        cmds: lorawan::maccommands::MacCommandIterator<'_, DownlinkMacCommand<'_>>,
     ) {
         use uplink::MacAnsTrait;
         for cmd in cmds {
@@ -163,7 +163,7 @@ impl Mac {
         &mut self,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
-        send_data: &SendData,
+        send_data: &SendData<'_>,
     ) -> Result<(radio::TxConfig, FcntUp)> {
         let fcnt = match &mut self.state {
             State::Joined(ref mut session) => Ok(session.prepare_buffer::<C, N>(send_data, buf)),

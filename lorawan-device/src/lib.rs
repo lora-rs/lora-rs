@@ -1,3 +1,4 @@
+#![deny(rust_2018_idioms)]
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
@@ -47,7 +48,7 @@ pub struct Downlink {
 
 #[cfg(feature = "defmt")]
 impl defmt::Format for Downlink {
-    fn format(&self, f: defmt::Formatter) {
+    fn format(&self, f: defmt::Formatter<'_>) {
         defmt::write!(f, "Downlink {{ fport: {}, data: ", self.fport,);
 
         for byte in self.data.iter() {

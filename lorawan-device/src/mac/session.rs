@@ -124,13 +124,15 @@ impl Session {
                         configuration.handle_downlink_macs(
                             region,
                             &mut self.uplink,
-                            MacCommandIterator::<DownlinkMacCommand>::new(decrypted.fhdr().data()),
+                            MacCommandIterator::<DownlinkMacCommand<'_>>::new(
+                                decrypted.fhdr().data(),
+                            ),
                         );
                         if let FRMPayload::MACCommands(mac_cmds) = decrypted.frm_payload() {
                             configuration.handle_downlink_macs(
                                 region,
                                 &mut self.uplink,
-                                MacCommandIterator::<DownlinkMacCommand>::new(mac_cmds.data()),
+                                MacCommandIterator::<DownlinkMacCommand<'_>>::new(mac_cmds.data()),
                             );
                         }
                     }
@@ -179,7 +181,7 @@ impl Session {
 
     pub(crate) fn prepare_buffer<C: CryptoFactory + Default, const N: usize>(
         &mut self,
-        data: &SendData,
+        data: &SendData<'_>,
         tx_buffer: &mut RadioBuffer<N>,
     ) -> FcntUp {
         tx_buffer.clear();

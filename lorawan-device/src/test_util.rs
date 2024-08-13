@@ -228,8 +228,8 @@ pub fn handle_data_uplink_with_link_adr_ans(
             let uplink =
                 data.decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt).unwrap();
             let fhdr = uplink.fhdr();
-            let mac_cmds: Vec<UplinkMacCommand> =
-                MacCommandIterator::<UplinkMacCommand>::new(fhdr.data()).collect();
+            let mac_cmds: Vec<UplinkMacCommand<'_>> =
+                MacCommandIterator::<UplinkMacCommand<'_>>::new(fhdr.data()).collect();
 
             assert_eq!(mac_cmds.len(), 2);
             assert!(matches!(mac_cmds[0], UplinkMacCommand::LinkADRAns(_)));
