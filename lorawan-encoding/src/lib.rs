@@ -1,5 +1,6 @@
 //! This module implements LoRaWAN packet handling and parsing.
 #![no_std]
+#![deny(rust_2018_idioms)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(clippy::upper_case_acronyms)]
 #![doc = include_str!("../README.md")]
