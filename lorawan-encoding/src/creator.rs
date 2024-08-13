@@ -161,7 +161,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
         if !self.encrypted {
             self.encrypt_payload(key);
         }
-        Ok(self.data.as_mut())
+        Ok(&self.data.as_mut()[0..required_len])
     }
 
     fn encrypt_payload(&mut self, key: &AES128) {
