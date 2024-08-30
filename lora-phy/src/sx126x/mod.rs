@@ -926,11 +926,11 @@ where
                     }
                     return Ok(Some(IrqState::Done));
                 }
-                if IrqMask::PreambleDetected.is_set_in(irq_flags) || IrqMask::HeaderValid.is_set_in(irq_flags) {
-                    return Ok(Some(IrqState::PreambleReceived));
-                }
                 if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
                     return Err(RadioError::ReceiveTimeout);
+                }
+                if IrqMask::PreambleDetected.is_set_in(irq_flags) || IrqMask::HeaderValid.is_set_in(irq_flags) {
+                    return Ok(Some(IrqState::PreambleReceived));
                 }
             }
             RadioMode::ChannelActivityDetection => {
