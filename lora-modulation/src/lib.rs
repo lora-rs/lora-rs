@@ -4,7 +4,7 @@
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Channel width. Lower values increase time on air, but may be able to find clear frequencies.
 pub enum Bandwidth {
     _7KHz,
@@ -44,7 +44,7 @@ impl From<Bandwidth> for u32 {
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Controls the chirp rate. Lower values are slower bandwidth (longer time on air), but more robust.
 pub enum SpreadingFactor {
     _5,
@@ -80,7 +80,7 @@ impl From<SpreadingFactor> for u32 {
 
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Controls the forward error correction. Higher values are more robust, but reduces the ratio
 /// of actual data in transmissions.
 pub enum CodingRate {
