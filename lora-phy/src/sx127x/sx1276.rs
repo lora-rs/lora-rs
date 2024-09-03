@@ -4,7 +4,7 @@ use crate::sx127x::radio_kind_params::{
     coding_rate_denominator_value, spreading_factor_value, OcpTrim, PaConfig, PaDac, RampTime, Register, Sx127xVariant,
 };
 use crate::sx127x::{
-    Sx127x, FREQUENCY_SYNTHESIZER_STEP, SX1276_RF_MID_BAND_THRESH, SX1276_RSSI_OFFSET_HF, SX1276_RSSI_OFFSET_LF,
+    pll_step_to_freq, Sx127x, SX1276_RF_MID_BAND_THRESH, SX1276_RSSI_OFFSET_HF, SX1276_RSSI_OFFSET_LF,
 };
 use embedded_hal_async::spi::SpiDevice;
 use lora_modulation::Bandwidth;
@@ -141,8 +141,8 @@ impl Sx127xVariant for Sx1276 {
             let msb = radio.read_register(Register::RegFrfMsb).await? as u32;
             let mid = radio.read_register(Register::RegFrfMid).await? as u32;
             let lsb = radio.read_register(Register::RegFrfLsb).await? as u32;
-            let frf = (msb << 16) + (mid << 8) + lsb;
-            (frf as f64 * FREQUENCY_SYNTHESIZER_STEP) as u32
+
+            pll_step_to_freq((msb << 16) + (mid << 8) + lsb)
         };
 
         if frequency_in_hz > SX1276_RF_MID_BAND_THRESH {
