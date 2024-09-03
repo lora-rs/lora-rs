@@ -43,7 +43,7 @@ lorawan = { path = "../lorawan-encoding", default-features = false, features = [
 ] }
 
 [features]
-default = ["all-regions"]
+default = ["all-regions", "multicast"]
 all-regions = [
     "region-as923-1",
     "region-as923-2",
@@ -61,6 +61,9 @@ default-crypto = ["lorawan/default-crypto"]
 
 ## Use [`defmt`](https://docs.rs/defmt/latest/defmt/) for logging.
 defmt-03 = ["dep:defmt", "lorawan/defmt-03", "lora-modulation/defmt-03"]
+
+# Enable multicast sessions on the device.
+multicast = []
 
 ## Provide an `async_device::Timer` impl based on `embassy-time`.
 embassy-time = ["dep:embassy-time"]
