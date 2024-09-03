@@ -36,8 +36,9 @@ const SCALE: u32 = 8;
 const STEP_SCALED: u32 = 32_000_000 >> (19 - SCALE);
 
 fn freq_to_pll_step(freq_in_hz: u32) -> u32 {
-    // NB! This works well at full MHz level, though there
-    // are small differences when delving into 0.1MHz level
+    // We can use simplified integer formula which gives the same
+    // value for whole and half Mhz values ((i.e. 868.0, 868.5, 869, ...)
+    // `(freq_in_hz as f64 / 61.03515625) as u32`
     (freq_in_hz / STEP_SCALED) << SCALE
 }
 
@@ -556,12 +557,17 @@ where
 mod tests {
     use super::*;
 
+    // FXOSC[32 MHz] * 1000000 (Hz/MHz) / 524288 (2^19)
+    const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625;
+
     #[test]
     fn pll_step_freq_u32_vs_f64() {
-        // Test whether our frequency -> pll_step and vice versa are good enough
-        const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625;
-        for freq in 137..=1020 {
-            let f = freq * 1_000_000;
+        // Simplified integer calculation converges with floating
+        // point formula for full and half megahertz values
+        const D: u32 = 2;
+        for freq in D * 137..=(D * 1020) {
+            let f = freq * (1_000_000 / D);
+
             let pll = freq_to_pll_step(f);
             assert_eq!(pll, (f as f64 / FREQUENCY_SYNTHESIZER_STEP) as u32);
             assert_eq!(pll_step_to_freq(pll), f);
