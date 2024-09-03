@@ -138,6 +138,7 @@ impl Sx127xVariant for Sx1276 {
         radio: &mut Sx127x<SPI, IV, Self>,
     ) -> Result<i16, RadioError> {
         let frequency_in_hz = {
+            // TODO: Keep frequency in radio settings?
             let msb = radio.read_register(Register::RegFrfMsb).await? as u32;
             let mid = radio.read_register(Register::RegFrfMid).await? as u32;
             let lsb = radio.read_register(Register::RegFrfLsb).await? as u32;
