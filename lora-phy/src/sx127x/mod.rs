@@ -20,9 +20,6 @@ const LORA_MAC_PRIVATE_SYNCWORD: u8 = 0x12; // corresponds to sx126x 0x1424
 // TCXO flag
 const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
 
-// Frequency synthesizer step for frequency calculation (Hz)
-const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625; // FXOSC (32 MHz) * 1000000 (Hz/MHz) / 524288 (2^19)
-
 // Limits for preamble detection window in single reception mode
 const SX127X_MIN_LORA_SYMB_NUM_TIMEOUT: u16 = 4;
 const SX127X_MAX_LORA_SYMB_NUM_TIMEOUT: u16 = 1023;
@@ -32,6 +29,21 @@ const SX1272_RSSI_OFFSET: i16 = -139;
 const SX1276_RSSI_OFFSET_LF: i16 = -164;
 const SX1276_RSSI_OFFSET_HF: i16 = -157;
 const SX1276_RF_MID_BAND_THRESH: u32 = 525_000_000;
+
+// Frequency synthesizer step for frequency calculation (Hz)
+// FXOSC (32 MHz) * 1000000 (Hz/MHz) / 524288 (2^19)
+const SCALE: u32 = 8;
+const STEP_SCALED: u32 = 32_000_000 >> (19 - SCALE);
+
+fn freq_to_pll_step(freq_in_hz: u32) -> u32 {
+    // NB! This works well at full MHz level, though there
+    // are small differences when delving into 0.1MHz level
+    (freq_in_hz / STEP_SCALED) << SCALE
+}
+
+fn pll_step_to_freq(pll_step: u32) -> u32 {
+    (pll_step >> SCALE) * STEP_SCALED
+}
 
 /// Configuration for SX127x-based boards
 pub struct Config<C: Sx127xVariant> {
@@ -304,7 +316,7 @@ where
 
     async fn set_channel(&mut self, frequency_in_hz: u32) -> Result<(), RadioError> {
         debug!("channel = {}", frequency_in_hz);
-        let frf = (frequency_in_hz as f64 / FREQUENCY_SYNTHESIZER_STEP) as u32;
+        let frf = freq_to_pll_step(frequency_in_hz);
         self.write_register(Register::RegFrfMsb, ((frf & 0x00FF0000) >> 16) as u8)
             .await?;
         self.write_register(Register::RegFrfMid, ((frf & 0x0000FF00) >> 8) as u8)
@@ -537,5 +549,22 @@ where
     /// Set the LoRa chip into the TxContinuousWave mode
     async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError> {
         C::set_tx_continuous_wave_mode(self).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pll_step_freq_u32_vs_f64() {
+        // Test whether our frequency -> pll_step and vice versa are good enough
+        const FREQUENCY_SYNTHESIZER_STEP: f64 = 61.03515625;
+        for freq in 137..=1020 {
+            let f = freq * 1_000_000;
+            let pll = freq_to_pll_step(f);
+            assert_eq!(pll, (f as f64 / FREQUENCY_SYNTHESIZER_STEP) as u32);
+            assert_eq!(pll_step_to_freq(pll), f);
+        }
     }
 }
