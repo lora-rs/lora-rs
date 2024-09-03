@@ -865,33 +865,33 @@ where
             irq_flags, radio_mode
         );
 
-        if (irq_flags & IrqMask::HeaderValid.value()) == IrqMask::HeaderValid.value() {
+        if IrqMask::HeaderValid.is_set(irq_flags) {
             debug!("HeaderValid in radio mode {}", radio_mode);
         }
-        if (irq_flags & IrqMask::PreambleDetected.value()) == IrqMask::PreambleDetected.value() {
+        if IrqMask::PreambleDetected.is_set(irq_flags) {
             debug!("PreambleDetected in radio mode {}", radio_mode);
         }
-        if (irq_flags & IrqMask::SyncwordValid.value()) == IrqMask::SyncwordValid.value() {
+        if IrqMask::SyncwordValid.is_set(irq_flags) {
             debug!("SyncwordValid in radio mode {}", radio_mode);
         }
 
         match radio_mode {
             RadioMode::Transmit => {
-                if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
+                if IrqMask::TxDone.is_set(irq_flags) {
                     return Ok(Some(IrqState::Done));
                 }
-                if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
+                if IrqMask::RxTxTimeout.is_set(irq_flags) {
                     return Err(RadioError::TransmitTimeout);
                 }
             }
             RadioMode::Receive(rx_mode) => {
-                if (irq_flags & IrqMask::HeaderError.value()) == IrqMask::HeaderError.value() {
+                if IrqMask::HeaderError.is_set(irq_flags) {
                     debug!("HeaderError in radio mode {}", radio_mode);
                 }
-                if (irq_flags & IrqMask::CRCError.value()) == IrqMask::CRCError.value() {
+                if IrqMask::CRCError.is_set(irq_flags) {
                     debug!("CRCError in radio mode {}", radio_mode);
                 }
-                if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
+                if IrqMask::RxDone.is_set(irq_flags) {
                     debug!("RxDone in radio mode {}", radio_mode);
                     if rx_mode != RxMode::Continuous {
                         // implicit header mode timeout behavior (see DS_SX1261-2_V1.2 datasheet chapter 15.3)
@@ -926,18 +926,17 @@ where
                     }
                     return Ok(Some(IrqState::Done));
                 }
-                if (irq_flags & IrqMask::RxTxTimeout.value()) == IrqMask::RxTxTimeout.value() {
+                if IrqMask::RxTxTimeout.is_set(irq_flags) {
                     return Err(RadioError::ReceiveTimeout);
                 }
-                if IrqMask::PreambleDetected.is_set_in(irq_flags) || IrqMask::HeaderValid.is_set_in(irq_flags) {
+                if IrqMask::PreambleDetected.is_set(irq_flags) || IrqMask::HeaderValid.is_set(irq_flags) {
                     return Ok(Some(IrqState::PreambleReceived));
                 }
             }
             RadioMode::ChannelActivityDetection => {
-                if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+                if IrqMask::CADDone.is_set(irq_flags) {
                     if let Some(detected) = cad_activity_detected {
-                        *detected =
-                            (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
+                        *detected = IrqMask::CADDone.is_set(irq_flags);
                     }
                     return Ok(Some(IrqState::Done));
                 }
