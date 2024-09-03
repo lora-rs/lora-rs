@@ -36,7 +36,7 @@ impl IrqMask {
         self as u16
     }
 
-    pub fn is_set_in(self, mask: u16) -> bool {
+    pub fn is_set(self, mask: u16) -> bool {
         self.value() & mask == self.value()
     }
 }
