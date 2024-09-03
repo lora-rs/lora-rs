@@ -25,6 +25,9 @@ use crate::nb_device;
 
 pub(crate) mod uplink;
 
+#[cfg(feature = "multicast")]
+pub(crate) mod multicast;
+
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum Frame {
     Join,
@@ -80,6 +83,8 @@ pub(crate) struct Mac {
     pub region: region::Configuration,
     board_eirp: BoardEirp,
     state: State,
+    #[cfg(feature = "multicast")]
+    pub multicast: multicast::Multicast,
 }
 
 struct BoardEirp {
@@ -122,6 +127,8 @@ impl Mac {
                 join_accept_delay1: region::constants::JOIN_ACCEPT_DELAY1,
                 join_accept_delay2: region::constants::JOIN_ACCEPT_DELAY2,
             },
+            #[cfg(feature = "multicast")]
+            multicast: multicast::Multicast::new(),
         }
     }
 
@@ -216,6 +223,8 @@ impl Mac {
             State::Joined(ref mut session) => session.handle_rx::<C, N, D>(
                 &mut self.region,
                 &mut self.configuration,
+                #[cfg(feature = "multicast")]
+                &mut self.multicast,
                 buf,
                 dl,
                 false,
@@ -246,6 +255,8 @@ impl Mac {
             State::Joined(ref mut session) => Ok(session.handle_rx::<C, N, D>(
                 &mut self.region,
                 &mut self.configuration,
+                #[cfg(feature = "multicast")]
+                &mut self.multicast,
                 buf,
                 dl,
                 true,

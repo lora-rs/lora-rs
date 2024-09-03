@@ -56,6 +56,7 @@ macro_rules! fixed_len_struct {
         pub struct $type<T: AsRef<[u8]>>(T);
 
         impl<T: AsRef<[u8]>> $type<T> {
+            #[allow(dead_code)]
             fn new_from_raw(bytes: T) -> $type<T> {
                 $type(bytes)
             }
@@ -1013,6 +1014,29 @@ impl From<u32> for DevAddr<[u8; 4]> {
 }
 
 fixed_len_struct! {
+    /// MulticastAddr represents a 32-bit multicast address.
+    struct MulticastAddr[4];
+}
+
+impl From<MulticastAddr<[u8; 4]>> for u32 {
+    fn from(v: MulticastAddr<[u8; 4]>) -> Self {
+        u32::from_be_bytes(v.0)
+    }
+}
+
+impl From<u32> for MulticastAddr<[u8; 4]> {
+    fn from(v: u32) -> Self {
+        Self::from(v.to_be_bytes())
+    }
+}
+
+impl From<DevAddr<[u8; 4]>> for MulticastAddr<[u8; 4]> {
+    fn from(v: DevAddr<[u8; 4]>) -> Self {
+        MulticastAddr(v.0)
+    }
+}
+
+fixed_len_struct! {
     /// NwkAddr represents a 24-bit network address.
     struct NwkAddr[3];
 }
@@ -1040,6 +1064,11 @@ impl<'a> FHDR<'a> {
     /// Gives the device address associated with the given payload.
     pub fn dev_addr(&self) -> DevAddr<&'a [u8]> {
         DevAddr::new_from_raw(&self.0[0..4])
+    }
+
+    /// Gives the multicast address associated with the given payload.
+    pub fn mc_addr(&self) -> MulticastAddr<&'a [u8]> {
+        MulticastAddr::new_from_raw(&self.0[0..4])
     }
 
     /// Gives the FCtrl associated with the given payload.

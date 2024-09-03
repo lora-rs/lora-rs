@@ -1,8 +1,6 @@
 //! LoRaWAN device which uses async-await for driving the protocol state against pin and timer events,
 //! allowing for asynchronous radio implementations. Requires the `async` feature.
-use super::mac::Mac;
-
-use super::mac::{self, Frame, Window};
+use super::mac::{self, Frame, Mac, Window};
 pub use super::{
     mac::{NetworkCredentials, SendData, Session},
     region::{self, Region},
@@ -24,6 +22,12 @@ pub mod radio;
 mod embassy_time;
 #[cfg(feature = "embassy-time")]
 pub use embassy_time::EmbassyTimer;
+
+#[cfg(feature = "multicast")]
+pub use lorawan::{
+    keys::{AppSKey, NewSKey},
+    parser::MulticastAddr,
+};
 
 #[cfg(test)]
 mod test;
@@ -176,6 +180,20 @@ where
     /// uplink is sent to the LNS.
     pub fn enable_class_c(&mut self) {
         self.class_c = true;
+    }
+
+    #[cfg(feature = "multicast")]
+    pub fn set_multicast_port(&mut self, port: u8) {
+        self.mac.multicast.set_port(port);
+    }
+    #[cfg(feature = "multicast")]
+    pub fn set_multicast(
+        &mut self,
+        multicast_addr: MulticastAddr<[u8; 4]>,
+        newskey: NewSKey,
+        appskey: AppSKey,
+    ) -> core::result::Result<(), mac::multicast::Error> {
+        self.mac.multicast.add_session(multicast_addr, newskey, appskey)
     }
 
     /// Disables Class C behavior. Note that an uplink must be set for the radio to disable

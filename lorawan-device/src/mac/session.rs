@@ -96,6 +96,8 @@ impl Session {
         &mut self,
         region: &mut region::Configuration,
         configuration: &mut super::Configuration,
+        #[cfg(feature = "multicast")]
+        multicast: &mut super::multicast::Multicast,
         rx: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
         ignore_mac: bool,
@@ -103,6 +105,52 @@ impl Session {
         if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
             lorawan_parse(rx.as_mut_for_read(), C::default())
         {
+            #[cfg(feature = "multicast")]
+            {
+                if let Some(port) = encrypted_data.f_port() {
+                    println!("Port: {}", port);
+                    if port == multicast.port() {
+                        let mc_addr = encrypted_data.fhdr().mc_addr();
+                        if let Some(session) = multicast.matching_session(mc_addr) {
+                            println!("Found matching sesesion: {:?}", session);
+
+                            let fcnt = encrypted_data.fhdr().fcnt() as u32;
+                            if encrypted_data.validate_mic(session.newskey().inner(), fcnt)
+                                && (fcnt > session.fcnt_down || fcnt == 0)
+                            {
+                                return {
+                                    session.fcnt_down = fcnt;
+                                    // We can safely unwrap here because we already validated the MIC
+                                    let decrypted = encrypted_data
+                                        .decrypt(
+                                            Some(self.newskey().inner()),
+                                            Some(self.appskey().inner()),
+                                            self.fcnt_down,
+                                        )
+                                        .unwrap();
+                                    if session.fcnt_down == 0xFFFF_FFFF {
+                                        // if the FCnt is used up, the session has expired
+                                        Response::SessionExpired
+                                    } else {
+                                        if let (Some(fport), FRMPayload::Data(data)) =
+                                            (decrypted.f_port(), decrypted.frm_payload())
+                                        {
+                                            // heapless Vec from slice fails only if slice is too large.
+                                            // A data FRM payload will never exceed 256 bytes.
+                                            let data = Vec::from_slice(data).unwrap();
+                                            // TODO: propagate error type when heapless vec is full?
+                                            let _ = dl.push(Downlink { data, fport });
+                                        }
+                                        Response::DownlinkReceived(fcnt)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+
             if self.devaddr() == &encrypted_data.fhdr().dev_addr() {
                 let fcnt = encrypted_data.fhdr().fcnt() as u32;
                 let confirmed = encrypted_data.is_confirmed();

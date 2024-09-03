@@ -107,6 +107,10 @@ fixed_len_struct_impl_to_string_msb! {
 }
 
 fixed_len_struct_impl_to_string_msb! {
+    MulticastAddr[4];
+}
+
+fixed_len_struct_impl_to_string_msb! {
     NwkAddr[3];
 }
 

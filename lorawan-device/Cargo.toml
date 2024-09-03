@@ -40,8 +40,9 @@ lazy_static = "1"
 lorawan = { path = "../lorawan-encoding", features = ["default-crypto"] }
 
 [features]
-default = ["all-regions"]
+default = ["all-regions", "multicast"]
 all-regions = ["region-as923-1", "region-as923-2", "region-as923-3", "region-as923-4", "region-au915", "region-eu433", "region-eu868", "region-in865", "region-us915"]
+multicast = []
 
 ## Use pure Rust implementations of [`AES`](https://docs.rs/aes/latest/aes/) and [`CMAC`](https://docs.rs/cmac/latest/cmac/) for the LoRaWAN crypto layer.
 default-crypto = ["lorawan/default-crypto"]
