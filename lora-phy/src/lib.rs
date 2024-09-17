@@ -12,6 +12,12 @@
 /// Provides an implementation of the async LoRaWAN device trait.
 pub mod lorawan_radio;
 
+/// Sync word for public LoRaWAN networks
+pub const LORAWAN_PUBLIC_SYNCWORD: u8 = 0x34;
+
+/// Sync word for private LoRaWAN networks
+pub const LORAWAN_PRIVATE_SYNCWORD: u8 = 0x12;
+
 /// The read/write interface between an embedded framework/MCU combination and a LoRa chip
 pub(crate) mod interface;
 /// InterfaceVariant implementations using `embedded-hal`.
@@ -41,7 +47,7 @@ where
     radio_kind: RK,
     delay: DLY,
     radio_mode: RadioMode,
-    enable_public_network: bool,
+    sync_word: u8,
     cold_start: bool,
     calibrate_image: bool,
 }
@@ -52,12 +58,12 @@ where
     DLY: DelayNs,
 {
     /// Build and return a new instance of the LoRa physical layer API to control an initialized LoRa radio
-    pub async fn new(radio_kind: RK, enable_public_network: bool, delay: DLY) -> Result<Self, RadioError> {
+    pub async fn new(radio_kind: RK, sync_word: u8, delay: DLY) -> Result<Self, RadioError> {
         let mut lora = Self {
             radio_kind,
             delay,
             radio_mode: RadioMode::Sleep,
-            enable_public_network,
+            sync_word,
             cold_start: true,
             calibrate_image: true,
         };
@@ -138,7 +144,7 @@ where
     }
 
     async fn do_cold_start(&mut self) -> Result<(), RadioError> {
-        self.radio_kind.init_lora(self.enable_public_network).await?;
+        self.radio_kind.init_lora(self.sync_word).await?;
         self.radio_kind.set_tx_power_and_ramp_time(0, None, false).await?;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.cold_start = false;
