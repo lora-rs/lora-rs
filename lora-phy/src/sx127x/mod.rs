@@ -13,10 +13,6 @@ use crate::mod_params::*;
 use crate::mod_traits::IrqState;
 use crate::{InterfaceVariant, RadioKind, SpiInterface};
 
-// Syncwords for public and private networks
-const LORA_MAC_PUBLIC_SYNCWORD: u8 = 0x34; // corresponds to sx126x 0x3444
-const LORA_MAC_PRIVATE_SYNCWORD: u8 = 0x12; // corresponds to sx126x 0x1424
-
 // TCXO flag
 const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
 
@@ -122,17 +118,12 @@ where
     IV: InterfaceVariant,
     C: Sx127xVariant,
 {
-    async fn init_lora(&mut self, is_public_network: bool) -> Result<(), RadioError> {
+    async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError> {
         if self.config.tcxo_used {
             self.write_register(C::reg_txco(), TCXO_FOR_OSCILLATOR).await?;
         }
 
-        let syncword = if is_public_network {
-            LORA_MAC_PUBLIC_SYNCWORD
-        } else {
-            LORA_MAC_PRIVATE_SYNCWORD
-        };
-        self.write_register(Register::RegSyncWord, syncword).await?;
+        self.write_register(Register::RegSyncWord, sync_word).await?;
 
         self.set_tx_rx_buffer_base_address(0, 0).await?;
         Ok(())

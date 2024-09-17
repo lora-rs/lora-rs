@@ -12,10 +12,6 @@ use crate::{InterfaceVariant, RadioKind, SpiInterface};
 mod variant;
 pub use variant::*;
 
-// Syncwords for public and private networks
-const LORA_MAC_PUBLIC_SYNCWORD: u16 = 0x3444; // corresponds to sx127x 0x34
-const LORA_MAC_PRIVATE_SYNCWORD: u16 = 0x1424; // corresponds to sx127x 0x12
-
 // Maximum number of registers that can be added to the retention list
 const MAX_NUMBER_REGS_IN_RETENTION: u8 = 4;
 
@@ -187,7 +183,7 @@ where
     IV: InterfaceVariant,
     C: Sx126xVariant,
 {
-    async fn init_lora(&mut self, is_public_network: bool) -> Result<(), RadioError> {
+    async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError> {
         // DC-DC regulator setup (default is LDO)
         if self.config.use_dcdc {
             let reg_data = [OpCode::SetRegulatorMode.value(), RegulatorMode::UseDCDC.value()];
@@ -235,17 +231,13 @@ where
         self.intf
             .write(&[OpCode::SetPacketType.value(), PacketType::LoRa.value()], false)
             .await?;
-        let word = match is_public_network {
-            true => u16::to_be_bytes(LORA_MAC_PUBLIC_SYNCWORD),
-            false => u16::to_be_bytes(LORA_MAC_PRIVATE_SYNCWORD),
-        };
         // ...and network syncword
         let lora_syncword_set = [
             OpCode::WriteRegister.value(),
             Register::LoRaSyncword.addr1(),
             Register::LoRaSyncword.addr2(),
-            word[0],
-            word[1],
+            (sync_word & 0xF0) | 0x04,
+            ((sync_word & 0x0F) << 4) | 0x04,
         ];
         self.intf.write(&lora_syncword_set, false).await?;
 
