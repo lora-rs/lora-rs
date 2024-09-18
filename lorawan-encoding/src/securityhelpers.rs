@@ -1,6 +1,6 @@
 use super::keys;
-pub use generic_array;
-use generic_array::GenericArray;
+pub use hybrid_array as generic_array;
+use hybrid_array::Array as GenericArray;
 
 /// calculate_data_mic computes the MIC of a correct data packet.
 pub fn calculate_data_mic<M: keys::Mac>(data: &[u8], key: M, fcnt: u32) -> keys::MIC {

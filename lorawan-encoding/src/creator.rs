@@ -11,10 +11,10 @@ use super::securityhelpers;
 #[cfg(feature = "default-crypto")]
 use super::default_crypto::DefaultFactory;
 
-use generic_array::GenericArray;
+use hybrid_array::Array as GenericArray;
 
 #[cfg(feature = "default-crypto")]
-use aes::cipher::generic_array::typenum::U256;
+use aes::cipher::array::sizes::U256;
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]

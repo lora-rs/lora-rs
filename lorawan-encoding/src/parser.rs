@@ -26,7 +26,7 @@ use super::keys::{AppKey, AppSKey, CryptoFactory, Encrypter, AES128, MIC};
 use super::maccommands::{ChannelMask, DLSettings, Frequency};
 
 use super::securityhelpers;
-use super::securityhelpers::generic_array::GenericArray;
+use super::securityhelpers::generic_array::Array as GenericArray;
 
 use super::packet_length::phy::{join::*, mac::FPORT_LEN, MHDR_LEN, MIC_LEN, PHY_PAYLOAD_MIN_LEN};
 
