@@ -3,13 +3,11 @@ use heapless::Vec;
 use lorawan::keys::CryptoFactory;
 use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
 use lorawan::{
-    creator::DataPayloadCreator,
+    creator::{DataPayloadArray, DataPayloadCreator},
     maccommands::SerializableMacCommand,
     parser::{parse_with_factory as lorawan_parse, *},
     parser::{DecryptedJoinAcceptPayload, DevAddr},
 };
-
-use generic_array::{typenum::U256, GenericArray};
 
 use crate::radio::RadioBuffer;
 
@@ -186,7 +184,7 @@ impl Session {
     ) -> FcntUp {
         tx_buffer.clear();
         let fcnt = self.fcnt_up;
-        let mut phy: DataPayloadCreator<GenericArray<u8, U256>, C> = DataPayloadCreator::default();
+        let mut phy: DataPayloadCreator<DataPayloadArray, C> = DataPayloadCreator::default();
 
         let mut fctrl = FCtrl(0x0, true);
         if self.uplink.confirms_downlink() {
