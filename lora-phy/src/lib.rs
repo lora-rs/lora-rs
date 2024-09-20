@@ -57,8 +57,8 @@ where
     RK: RadioKind,
     DLY: DelayNs,
 {
-    /// Build and return a new instance of the LoRa physical layer API to control an initialized LoRa radio
-    pub async fn new(radio_kind: RK, sync_word: u8, delay: DLY) -> Result<Self, RadioError> {
+    /// Build and return a new instance of the LoRa physical layer API with a specified sync word
+    pub async fn with_syncword(radio_kind: RK, sync_word: u8, delay: DLY) -> Result<Self, RadioError> {
         let mut lora = Self {
             radio_kind,
             delay,
@@ -70,6 +70,16 @@ where
         lora.init().await?;
 
         Ok(lora)
+    }
+
+    /// Build and return a new instance of the LoRa physical layer API to control an initialized LoRa radio
+    pub async fn new(radio_kind: RK, enable_public_network: bool, delay: DLY) -> Result<Self, RadioError> {
+        let sync_word = if enable_public_network {
+            LORAWAN_PUBLIC_SYNCWORD
+        } else {
+            LORAWAN_PRIVATE_SYNCWORD
+        };
+        Self::with_syncword(radio_kind, sync_word, delay).await
     }
 
     /// Wait for an IRQ event to occur
