@@ -160,6 +160,7 @@ pub enum Register {
     RegPktSnrValue = 0x19,
     RegModemStat = 0x18,
     RegPktRssiValue = 0x1a,
+    RegRssiValue = 0x1b,
     RegModemConfig1 = 0x1d,
     RegModemConfig2 = 0x1e,
     RegSymbTimeoutLsb = 0x1f,

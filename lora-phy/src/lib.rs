@@ -174,7 +174,7 @@ where
         output_power: i32,
         buffer: &[u8],
     ) -> Result<(), RadioError> {
-        self.prepare_modem(mdltn_params).await?;
+        self.prepare_modem(mdltn_params.frequency_in_hz).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind
@@ -228,7 +228,7 @@ where
         rx_pkt_params: &PacketParams,
     ) -> Result<(), RadioError> {
         defmt::trace!("RX mode: {}", listen_mode);
-        self.prepare_modem(mdltn_params).await?;
+        self.prepare_modem(mdltn_params.frequency_in_hz).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_packet_params(rx_pkt_params).await?;
@@ -274,9 +274,34 @@ where
         }
     }
 
+    /// Start listening to a given frequency and bandwidth
+    pub async fn listen(&mut self, frequency_in_hz: u32, bandwidth: Bandwidth) -> Result<(), RadioError> {
+        self.prepare_modem(frequency_in_hz).await?;
+
+        self.radio_kind.set_channel(frequency_in_hz).await?;
+        // We need to set the bandwidth, otherwise sx126x doesn't return reasonable RSSI results
+        // All other params are irrelevant with regard to listening to measure RSSI.
+        let modulation_params = self.radio_kind.create_modulation_params(
+            SpreadingFactor::_7,
+            bandwidth,
+            CodingRate::_4_5,
+            frequency_in_hz,
+        )?;
+        self.radio_kind.set_modulation_params(&modulation_params).await?;
+        self.radio_mode = RadioMode::Listen;
+        self.radio_kind.do_rx(RxMode::Continuous).await?;
+
+        Ok(())
+    }
+
+    /// Get the current rssi
+    pub async fn get_rssi(&mut self) -> Result<i16, RadioError> {
+        self.radio_kind.get_rssi().await
+    }
+
     /// Prepare the radio for a channel activity detection (CAD) operation
     pub async fn prepare_for_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
-        self.prepare_modem(mdltn_params).await?;
+        self.prepare_modem(mdltn_params.frequency_in_hz).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
@@ -320,7 +345,7 @@ where
         mdltn_params: &ModulationParams,
         output_power: i32,
     ) -> Result<(), RadioError> {
-        self.prepare_modem(mdltn_params).await?;
+        self.prepare_modem(mdltn_params.frequency_in_hz).await?;
 
         let tx_pkt_params = self
             .radio_kind
@@ -342,7 +367,7 @@ where
         self.radio_kind.set_tx_continuous_wave_mode().await
     }
 
-    async fn prepare_modem(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
+    async fn prepare_modem(&mut self, frequency_in_hz: u32) -> Result<(), RadioError> {
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;
@@ -354,7 +379,7 @@ where
         }
 
         if self.calibrate_image {
-            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
+            self.radio_kind.calibrate_image(frequency_in_hz).await?;
             self.calibrate_image = false;
         }
 
