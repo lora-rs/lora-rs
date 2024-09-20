@@ -13,9 +13,6 @@ use super::default_crypto::DefaultFactory;
 
 use generic_array::GenericArray;
 
-#[cfg(feature = "default-crypto")]
-use aes::cipher::generic_array::typenum::U256;
-
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt", derive(defmt::Format))]
 pub enum Error {
@@ -27,6 +24,8 @@ pub enum Error {
 }
 
 const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
+
+pub type DataPayloadArray = GenericArray<u8, generic_array::typenum::U256>;
 
 /// JoinAcceptCreator serves for creating binary representation of Physical
 /// Payload of JoinAccept.
@@ -530,7 +529,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
 }
 
 #[cfg(feature = "default-crypto")]
-impl DataPayloadCreator<GenericArray<u8, U256>, DefaultFactory> {
+impl DataPayloadCreator<DataPayloadArray, DefaultFactory> {
     /// Creates a well initialized DataPayloadCreator.
     ///
     /// By default the packet is unconfirmed data up packet.
@@ -551,7 +550,7 @@ impl DataPayloadCreator<GenericArray<u8, U256>, DefaultFactory> {
     /// let payload = phy.build(b"hello", &[], &nwk_skey, &app_skey).unwrap();
     /// ```
     pub fn new() -> Self {
-        let mut data: GenericArray<u8, U256> = GenericArray::default();
+        let mut data: DataPayloadArray = GenericArray::default();
         data[0] = 0x40;
         Self { data, data_f_port: None, fcnt: 0, factory: DefaultFactory }
     }
