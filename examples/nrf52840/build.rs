@@ -82,7 +82,7 @@ fn main() {
     // Put linker configuration in our output directory and ensure it's
     // on the linker search path.
     if cfg!(feature = "link-to-ram") {
-        File::create(out.join("link_ram_cortex_m.x"))
+        File::create(out.join("link_ram.x"))
             .unwrap()
             .write_all(include_bytes!("../link_ram_cortex_m.x"))
             .unwrap();
