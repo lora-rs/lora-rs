@@ -12,12 +12,6 @@
 /// Provides an implementation of the async LoRaWAN device trait.
 pub mod lorawan_radio;
 
-/// Sync word for public LoRaWAN networks
-pub const LORAWAN_PUBLIC_SYNCWORD: u8 = 0x34;
-
-/// Sync word for private LoRaWAN networks
-pub const LORAWAN_PRIVATE_SYNCWORD: u8 = 0x12;
-
 /// The read/write interface between an embedded framework/MCU combination and a LoRa chip
 pub(crate) mod interface;
 /// InterfaceVariant implementations using `embedded-hal`.
@@ -38,6 +32,43 @@ use interface::*;
 use mod_params::*;
 use mod_traits::*;
 
+/// Sync word for public LoRaWAN networks
+const LORAWAN_PUBLIC_SYNCWORD: u8 = 0x34;
+
+/// Sync word for private LoRaWAN networks
+const LORAWAN_PRIVATE_SYNCWORD: u8 = 0x12;
+
+/// Sync word for Meshtastic network
+const MESHTASTIC_SYNCWORD: u8 = 0x2B;
+
+/// Sync word to differentiate LoRa networks
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum NetworkSyncWord {
+    /// Public LoRaWAN network sync word
+    LoRaWanPublic,
+
+    /// Private LoRaWAN network sync word
+    LoRaWanPrivate,
+
+    /// Meshtastic network sync word
+    Meshtastic,
+
+    /// Custom network sync word
+    CustomNetwork(u8),
+}
+
+impl NetworkSyncWord {
+    /// Convert the network sync word to a byte
+    pub fn as_byte(self) -> u8 {
+        match self {
+            NetworkSyncWord::LoRaWanPublic => LORAWAN_PUBLIC_SYNCWORD,
+            NetworkSyncWord::LoRaWanPrivate => LORAWAN_PRIVATE_SYNCWORD,
+            NetworkSyncWord::Meshtastic => MESHTASTIC_SYNCWORD,
+            NetworkSyncWord::CustomNetwork(n) => n,
+        }
+    }
+}
+
 /// Provides the physical layer API to support LoRa chips
 pub struct LoRa<RK, DLY>
 where
@@ -47,7 +78,7 @@ where
     radio_kind: RK,
     delay: DLY,
     radio_mode: RadioMode,
-    sync_word: u8,
+    sync_word: NetworkSyncWord,
     cold_start: bool,
     calibrate_image: bool,
 }
@@ -58,7 +89,7 @@ where
     DLY: DelayNs,
 {
     /// Build and return a new instance of the LoRa physical layer API with a specified sync word
-    pub async fn with_syncword(radio_kind: RK, sync_word: u8, delay: DLY) -> Result<Self, RadioError> {
+    pub async fn with_syncword(radio_kind: RK, sync_word: NetworkSyncWord, delay: DLY) -> Result<Self, RadioError> {
         let mut lora = Self {
             radio_kind,
             delay,
@@ -75,9 +106,9 @@ where
     /// Build and return a new instance of the LoRa physical layer API to control an initialized LoRa radio
     pub async fn new(radio_kind: RK, enable_public_network: bool, delay: DLY) -> Result<Self, RadioError> {
         let sync_word = if enable_public_network {
-            LORAWAN_PUBLIC_SYNCWORD
+            NetworkSyncWord::LoRaWanPublic
         } else {
-            LORAWAN_PRIVATE_SYNCWORD
+            NetworkSyncWord::LoRaWanPrivate
         };
         Self::with_syncword(radio_kind, sync_word, delay).await
     }

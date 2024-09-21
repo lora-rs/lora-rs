@@ -8,7 +8,7 @@ use radio_kind_params::*;
 
 use crate::mod_params::*;
 use crate::mod_traits::IrqState;
-use crate::{InterfaceVariant, RadioKind, SpiInterface};
+use crate::{InterfaceVariant, RadioKind, SpiInterface, NetworkSyncWord};
 mod variant;
 pub use variant::*;
 
@@ -177,13 +177,21 @@ where
     }
 }
 
+// Convert u8 sync word to two byte value expected by sx126x
+fn convert_sync_word(sync_word: u8) -> [u8; 2] {
+    [
+        (sync_word & 0xF0) | 0x04,
+        ((sync_word & 0x0F) << 4) | 0x04,
+    ]
+}
+
 impl<SPI, IV, C> RadioKind for Sx126x<SPI, IV, C>
 where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
     C: Sx126xVariant,
 {
-    async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError> {
+    async fn init_lora(&mut self, sync_word: NetworkSyncWord) -> Result<(), RadioError> {
         // DC-DC regulator setup (default is LDO)
         if self.config.use_dcdc {
             let reg_data = [OpCode::SetRegulatorMode.value(), RegulatorMode::UseDCDC.value()];
@@ -232,12 +240,13 @@ where
             .write(&[OpCode::SetPacketType.value(), PacketType::LoRa.value()], false)
             .await?;
         // ...and network syncword
+        let word = convert_sync_word(sync_word.as_byte());
         let lora_syncword_set = [
             OpCode::WriteRegister.value(),
             Register::LoRaSyncword.addr1(),
             Register::LoRaSyncword.addr2(),
-            (sync_word & 0xF0) | 0x04,
-            ((sync_word & 0x0F) << 4) | 0x04,
+            word[0],
+            word[1],
         ];
         self.intf.write(&lora_syncword_set, false).await?;
 
@@ -946,7 +955,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
+    use super::*;
 
     #[test]
     // -17 (0xEF) to +14 (0x0E) dBm by step of 1 dB if low power PA is selected
@@ -956,5 +965,14 @@ mod tests {
         assert_eq!(i32_val as u8, 0xefu8);
         i32_val = -9;
         assert_eq!(i32_val as u8, 0xf7u8);
+    }
+
+    #[test]
+    fn test_convert_sync_word() {
+        // sx126x 0x3444 corresponds to sx127 0x34
+        assert_eq!(convert_sync_word(0x34), [0x34, 0x44]);
+
+        // sx126x 0x1424 corresponds to sx127 0x12
+        assert_eq!(convert_sync_word(0x12), [0x14, 0x24]);
     }
 }
