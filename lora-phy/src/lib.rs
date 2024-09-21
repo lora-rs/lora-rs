@@ -12,12 +12,6 @@
 /// Provides an implementation of the async LoRaWAN device trait.
 pub mod lorawan_radio;
 
-/// Sync word for public LoRaWAN networks
-pub const LORAWAN_PUBLIC_SYNCWORD: u8 = 0x34;
-
-/// Sync word for private LoRaWAN networks
-pub const LORAWAN_PRIVATE_SYNCWORD: u8 = 0x12;
-
 /// The read/write interface between an embedded framework/MCU combination and a LoRa chip
 pub(crate) mod interface;
 /// InterfaceVariant implementations using `embedded-hal`.
@@ -37,6 +31,12 @@ pub use embedded_hal_async::delay::DelayNs;
 use interface::*;
 use mod_params::*;
 use mod_traits::*;
+
+/// Sync word for public LoRaWAN networks
+const LORAWAN_PUBLIC_SYNCWORD: u8 = 0x34;
+
+/// Sync word for private LoRaWAN networks
+const LORAWAN_PRIVATE_SYNCWORD: u8 = 0x12;
 
 /// Provides the physical layer API to support LoRa chips
 pub struct LoRa<RK, DLY>
