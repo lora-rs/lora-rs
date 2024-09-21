@@ -8,7 +8,7 @@ use radio_kind_params::*;
 
 use crate::mod_params::*;
 use crate::mod_traits::IrqState;
-use crate::{InterfaceVariant, RadioKind, SpiInterface, NetworkSyncWord};
+use crate::{InterfaceVariant, NetworkSyncWord, RadioKind, SpiInterface};
 mod variant;
 pub use variant::*;
 
@@ -179,10 +179,7 @@ where
 
 // Convert u8 sync word to two byte value expected by sx126x
 fn convert_sync_word(sync_word: u8) -> [u8; 2] {
-    [
-        (sync_word & 0xF0) | 0x04,
-        ((sync_word & 0x0F) << 4) | 0x04,
-    ]
+    [(sync_word & 0xF0) | 0x04, ((sync_word & 0x0F) << 4) | 0x04]
 }
 
 impl<SPI, IV, C> RadioKind for Sx126x<SPI, IV, C>

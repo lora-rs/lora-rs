@@ -11,7 +11,7 @@ use radio_kind_params::*;
 
 use crate::mod_params::*;
 use crate::mod_traits::IrqState;
-use crate::{InterfaceVariant, RadioKind, SpiInterface, NetworkSyncWord};
+use crate::{InterfaceVariant, NetworkSyncWord, RadioKind, SpiInterface};
 
 // TCXO flag
 const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
