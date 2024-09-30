@@ -72,7 +72,11 @@ where
         Ok(lora)
     }
 
-    /// Build and return a new instance of the LoRa physical layer API to control an initialized LoRa radio
+    /// Build and return a new instance of the LoRa physical layer API to
+    /// control an initialized LoRa radio for LoRaWAN public or private network.
+    ///
+    /// In order to configure radio to use non-LoRaWAN networks, use
+    /// [`Self::with_syncword()`] which has `sync_word` argument.
     pub async fn new(radio_kind: RK, enable_public_network: bool, delay: DLY) -> Result<Self, RadioError> {
         let sync_word = if enable_public_network {
             LORAWAN_PUBLIC_SYNCWORD
