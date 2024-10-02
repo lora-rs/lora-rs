@@ -5,7 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## [v3.0.0] - Unreleased
+## Unreleased
+
+- Bump MSRV to 1.75
+- Add documentation for crate features
+- Various documentation fixes (link rot, update docstrings to reflect reality)
+- Disable `default-features` for lorawan-device dependency
+- Preparations for Rust 2024 edition
+- sx126x: Fix IRQ processing order to handle Timeout before Preamble
+- sx127x: Switch to integer math for frequency handling
+
+## [v3.0.1] - 2024-07-01
+
+- Miscellaneous clippy and documentation fixes
+- Add `low_power` method to lorawan-radio.
+
+## [v3.0.0] - 2024-05-16
 
 - Switch SpiInterface to use SpiDevice trait.
 - Implement functionality for continuous wave mode.

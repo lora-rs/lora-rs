@@ -1,6 +1,6 @@
 use embedded_hal_async::delay::DelayNs;
 
-use crate::{mod_params::*, NetworkSyncWord};
+use crate::mod_params::*;
 
 /// Functions implemented for an embedded framework for an MCU/LoRa chip combination
 /// to allow this crate to control the LoRa chip.
@@ -34,7 +34,7 @@ pub enum IrqState {
 #[allow(async_fn_in_trait)]
 pub trait RadioKind {
     /// Initialize lora radio
-    async fn init_lora(&mut self, sync_word: NetworkSyncWord) -> Result<(), RadioError>;
+    async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError>;
     /// Create modulation parameters specific to the LoRa chip kind and type
     fn create_modulation_params(
         &self,

@@ -11,7 +11,7 @@ use radio_kind_params::*;
 
 use crate::mod_params::*;
 use crate::mod_traits::IrqState;
-use crate::{InterfaceVariant, NetworkSyncWord, RadioKind, SpiInterface};
+use crate::{InterfaceVariant, RadioKind, SpiInterface};
 
 // TCXO flag
 const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
@@ -118,12 +118,12 @@ where
     IV: InterfaceVariant,
     C: Sx127xVariant,
 {
-    async fn init_lora(&mut self, sync_word: NetworkSyncWord) -> Result<(), RadioError> {
+    async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError> {
         if self.config.tcxo_used {
             self.write_register(C::reg_txco(), TCXO_FOR_OSCILLATOR).await?;
         }
 
-        self.write_register(Register::RegSyncWord, sync_word.as_byte()).await?;
+        self.write_register(Register::RegSyncWord, sync_word).await?;
 
         self.set_tx_rx_buffer_base_address(0, 0).await?;
         Ok(())

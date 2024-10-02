@@ -8,7 +8,7 @@ use radio_kind_params::*;
 
 use crate::mod_params::*;
 use crate::mod_traits::IrqState;
-use crate::{InterfaceVariant, NetworkSyncWord, RadioKind, SpiInterface};
+use crate::{InterfaceVariant, RadioKind, SpiInterface};
 mod variant;
 pub use variant::*;
 
@@ -188,7 +188,7 @@ where
     IV: InterfaceVariant,
     C: Sx126xVariant,
 {
-    async fn init_lora(&mut self, sync_word: NetworkSyncWord) -> Result<(), RadioError> {
+    async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError> {
         // DC-DC regulator setup (default is LDO)
         if self.config.use_dcdc {
             let reg_data = [OpCode::SetRegulatorMode.value(), RegulatorMode::UseDCDC.value()];
@@ -237,7 +237,7 @@ where
             .write(&[OpCode::SetPacketType.value(), PacketType::LoRa.value()], false)
             .await?;
         // ...and network syncword
-        let word = convert_sync_word(sync_word.as_byte());
+        let word = convert_sync_word(sync_word);
         let lora_syncword_set = [
             OpCode::WriteRegister.value(),
             Register::LoRaSyncword.addr1(),
