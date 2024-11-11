@@ -56,21 +56,27 @@ where
     }
 
     async fn enable_rf_switch_rx(&mut self) -> Result<(), RadioError> {
-        if let Some(pin) = &mut self.rf_switch_tx { pin.set_low().map_err(|_| RfSwitchTx)? };
+        if let Some(pin) = &mut self.rf_switch_tx {
+            pin.set_low().map_err(|_| RfSwitchTx)?
+        };
         match &mut self.rf_switch_rx {
             Some(pin) => pin.set_high().map_err(|_| RfSwitchRx),
             None => Ok(()),
         }
     }
     async fn enable_rf_switch_tx(&mut self) -> Result<(), RadioError> {
-        if let Some(pin) = &mut self.rf_switch_rx { pin.set_low().map_err(|_| RfSwitchRx)? };
+        if let Some(pin) = &mut self.rf_switch_rx {
+            pin.set_low().map_err(|_| RfSwitchRx)?
+        };
         match &mut self.rf_switch_tx {
             Some(pin) => pin.set_high().map_err(|_| RfSwitchTx),
             None => Ok(()),
         }
     }
     async fn disable_rf_switch(&mut self) -> Result<(), RadioError> {
-        if let Some(pin) = &mut self.rf_switch_rx { pin.set_low().map_err(|_| RfSwitchRx)? };
+        if let Some(pin) = &mut self.rf_switch_rx {
+            pin.set_low().map_err(|_| RfSwitchRx)?
+        };
         match &mut self.rf_switch_tx {
             Some(pin) => pin.set_low().map_err(|_| RfSwitchTx),
             None => Ok(()),
@@ -132,21 +138,27 @@ where
     }
 
     async fn enable_rf_switch_rx(&mut self) -> Result<(), RadioError> {
-        if let Some(pin) = &mut self.rf_switch_tx { pin.set_low().map_err(|_| RfSwitchTx)? };
+        if let Some(pin) = &mut self.rf_switch_tx {
+            pin.set_low().map_err(|_| RfSwitchTx)?
+        };
         match &mut self.rf_switch_rx {
             Some(pin) => pin.set_high().map_err(|_| RfSwitchRx),
             None => Ok(()),
         }
     }
     async fn enable_rf_switch_tx(&mut self) -> Result<(), RadioError> {
-        if let Some(pin) = &mut self.rf_switch_rx { pin.set_low().map_err(|_| RfSwitchRx)? };
+        if let Some(pin) = &mut self.rf_switch_rx {
+            pin.set_low().map_err(|_| RfSwitchRx)?
+        };
         match &mut self.rf_switch_tx {
             Some(pin) => pin.set_high().map_err(|_| RfSwitchTx),
             None => Ok(()),
         }
     }
     async fn disable_rf_switch(&mut self) -> Result<(), RadioError> {
-        if let Some(pin) = &mut self.rf_switch_rx { pin.set_low().map_err(|_| RfSwitchRx)? };
+        if let Some(pin) = &mut self.rf_switch_rx {
+            pin.set_low().map_err(|_| RfSwitchRx)?
+        };
         match &mut self.rf_switch_tx {
             Some(pin) => pin.set_low().map_err(|_| RfSwitchTx),
             None => Ok(()),
