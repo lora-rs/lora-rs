@@ -96,6 +96,8 @@ pub trait RadioKind {
     ) -> Result<u8, RadioError>;
     /// Get the RSSI and SNR for the packet made available as the result of a receive operation
     async fn get_rx_packet_status(&mut self) -> Result<PacketStatus, RadioError>;
+    /// Get the current RSSI
+    async fn get_rssi(&mut self) -> Result<i16, RadioError>;
     /// Perform a channel activity detection operation
     async fn do_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError>;
     /// Set the LoRa chip to provide notification of specific events based on radio state

@@ -50,6 +50,8 @@ pub enum RadioMode {
     Transmit,
     /// Receive (RX) mode
     Receive(RxMode),
+    /// Listen mode
+    Listen,
     /// Channel activity detection (CAD) mode
     ChannelActivityDetection,
 }
