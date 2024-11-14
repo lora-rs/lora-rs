@@ -54,7 +54,8 @@ where
 {
     crypto: PhantomData<C>,
     radio: R,
-    rng: G,
+    /// Access to provided (pseudo)-random number generator.
+    pub rng: G,
     timer: T,
     mac: Mac,
     radio_buffer: RadioBuffer<N>,
@@ -173,7 +174,6 @@ where
 
     /// Enables Class C behavior. Note that Class C downlinks are not possible until a confirmed
     /// uplink is sent to the LNS.
-
     pub fn enable_class_c(&mut self) {
         self.class_c = true;
     }
