@@ -20,9 +20,7 @@
 //! }
 //! ```
 
-use crate::keys::NewSKey;
-
-use super::keys::{AppKey, AppSKey, CryptoFactory, Encrypter, AES128, MIC};
+use super::keys::{AppKey, AppSKey, CryptoFactory, Encrypter, NwkSKey, AES128, MIC};
 use super::maccommands::{ChannelMask, DLSettings, Frequency};
 
 use super::securityhelpers;
@@ -427,17 +425,26 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
     /// let join_accept = lorawan::parser::DecryptedJoinAcceptPayload::new(data, &app_key).unwrap();
     ///
-    /// let nwk_skey = join_accept.derive_newskey(
+    /// let nwk_skey = join_accept.derive_nwkskey(
     ///     &lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
     ///     &app_key,
     /// );
     /// ```
+    pub fn derive_nwkskey<TT: AsRef<[u8]>>(
+        &self,
+        dev_nonce: &DevNonce<TT>,
+        key: &AppKey,
+    ) -> NwkSKey {
+        NwkSKey(self.derive_session_key(0x1, dev_nonce, &key.0))
+    }
+
+    #[deprecated(since = "0.9.1", note = "Please use `derive_nwkskey` instead")]
     pub fn derive_newskey<TT: AsRef<[u8]>>(
         &self,
         dev_nonce: &DevNonce<TT>,
         key: &AppKey,
-    ) -> NewSKey {
-        NewSKey(self.derive_session_key(0x1, dev_nonce, &key.0))
+    ) -> NwkSKey {
+        NwkSKey(self.derive_session_key(0x1, dev_nonce, &key.0))
     }
 
     /// Computes the application session key for a given device.

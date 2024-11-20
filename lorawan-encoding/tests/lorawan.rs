@@ -632,18 +632,18 @@ fn test_join_request_creator_with_options() {
 }
 
 #[test]
-fn test_derive_newskey() {
+fn test_derive_nwkskey() {
     let key = AppKey::from(app_key());
     let join_request = JoinRequestPayload::new(phy_join_request_payload()).unwrap();
     let join_accept = DecryptedJoinAcceptPayload::new(phy_join_accept_payload(), &key).unwrap();
 
-    let newskey = join_accept.derive_newskey(&join_request.dev_nonce(), &key);
+    let nwkskey = join_accept.derive_nwkskey(&join_request.dev_nonce(), &key);
     //AppNonce([49, 3e, eb]), NwkAddr([51, fb, a2]), DevNonce([2d, 10])
-    let expect = NewSKey::from([
+    let expect = NwkSKey::from([
         0x7b, 0xb2, 0x5f, 0x89, 0xe0, 0xd1, 0x37, 0x1e, 0x1f, 0xbf, 0x4d, 0x99, 0x7e, 0x14, 0x68,
         0xa3,
     ]);
-    assert_eq!(newskey, expect);
+    assert_eq!(nwkskey, expect);
 }
 
 #[test]

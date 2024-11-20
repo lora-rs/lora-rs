@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## Unreleased
 
 - Remove defmt feature from defaults, rename to defmt-03
+- Mark `NewSKey` deprecated in favor of `NwkSkey` which is used in most LoRaWAN documentation.
 
 ## [v0.9.0]
 - for AppEui, DevEui, AppKey: implement `core::str::FromStr`  (#[nostd] compatible) and
