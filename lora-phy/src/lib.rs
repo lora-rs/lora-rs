@@ -32,6 +32,12 @@ use interface::*;
 use mod_params::*;
 use mod_traits::*;
 
+/// Sync word for public LoRaWAN networks
+const LORAWAN_PUBLIC_SYNCWORD: u8 = 0x34;
+
+/// Sync word for private LoRaWAN networks
+const LORAWAN_PRIVATE_SYNCWORD: u8 = 0x12;
+
 /// Provides the physical layer API to support LoRa chips
 pub struct LoRa<RK, DLY>
 where
@@ -41,7 +47,7 @@ where
     radio_kind: RK,
     delay: DLY,
     radio_mode: RadioMode,
-    enable_public_network: bool,
+    sync_word: u8,
     cold_start: bool,
     calibrate_image: bool,
 }
@@ -51,19 +57,33 @@ where
     RK: RadioKind,
     DLY: DelayNs,
 {
-    /// Build and return a new instance of the LoRa physical layer API to control an initialized LoRa radio
-    pub async fn new(radio_kind: RK, enable_public_network: bool, delay: DLY) -> Result<Self, RadioError> {
+    /// Build and return a new instance of the LoRa physical layer API with a specified sync word
+    pub async fn with_syncword(radio_kind: RK, sync_word: u8, delay: DLY) -> Result<Self, RadioError> {
         let mut lora = Self {
             radio_kind,
             delay,
             radio_mode: RadioMode::Sleep,
-            enable_public_network,
+            sync_word,
             cold_start: true,
             calibrate_image: true,
         };
         lora.init().await?;
 
         Ok(lora)
+    }
+
+    /// Build and return a new instance of the LoRa physical layer API to
+    /// control an initialized LoRa radio for LoRaWAN public or private network.
+    ///
+    /// In order to configure radio to use non-LoRaWAN networks, use
+    /// [`Self::with_syncword()`] which has `sync_word` argument.
+    pub async fn new(radio_kind: RK, enable_public_network: bool, delay: DLY) -> Result<Self, RadioError> {
+        let sync_word = if enable_public_network {
+            LORAWAN_PUBLIC_SYNCWORD
+        } else {
+            LORAWAN_PRIVATE_SYNCWORD
+        };
+        Self::with_syncword(radio_kind, sync_word, delay).await
     }
 
     /// Wait for an IRQ event to occur
@@ -138,7 +158,7 @@ where
     }
 
     async fn do_cold_start(&mut self) -> Result<(), RadioError> {
-        self.radio_kind.init_lora(self.enable_public_network).await?;
+        self.radio_kind.init_lora(self.sync_word).await?;
         self.radio_kind.set_tx_power_and_ramp_time(0, None, false).await?;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.cold_start = false;
