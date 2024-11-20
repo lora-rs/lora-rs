@@ -27,3 +27,7 @@ document-features = "0.2.8"
 [features]
 ## Async LoRaWAN Rx/Tx interface implementation
 lorawan-radio = ["dep:lorawan-device"]
+
+[dev-dependencies]
+# Include lorawan-device unconditionally so all regions are enabled for tests
+lorawan-device = { path = "../lorawan-device" }
