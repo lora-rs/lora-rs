@@ -742,6 +742,17 @@ where
         Ok(PacketStatus { rssi, snr })
     }
 
+    async fn get_rssi(&mut self) -> Result<i16, RadioError> {
+        let op_code = [OpCode::GetRSSIInst.value()];
+        let mut response = [0x00u8; 1];
+        let read_status = self.intf.read_with_status(&op_code, &mut response).await?;
+        if OpStatusErrorMask::is_error(read_status) {
+            return Err(RadioError::OpError(read_status));
+        }
+        let rssi = ((-(response[0] as i32)) >> 1) as i16;
+        Ok(rssi)
+    }
+
     async fn do_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_rx().await?;
 
@@ -941,8 +952,8 @@ where
                     return Ok(Some(IrqState::Done));
                 }
             }
-            RadioMode::Sleep | RadioMode::Standby => {
-                defmt::warn!("IRQ during sleep/standby?");
+            RadioMode::Sleep | RadioMode::Standby | RadioMode::Listen => {
+                defmt::warn!("IRQ during sleep/standby/listen?");
             }
             RadioMode::FrequencySynthesis => todo!(),
         }
