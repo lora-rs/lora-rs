@@ -6,6 +6,9 @@
 #![doc = document_features::document_features!(feature_label = r#"<span class="stab portability"><code>{feature}</code></span>"#)]
 #![doc = include_str!("../README.md")]
 
+// This must go FIRST so that all the other modules see its macros.
+pub(crate) mod fmt;
+
 use core::default::Default;
 use heapless::Vec;
 
@@ -38,15 +41,13 @@ pub use rand_core::RngCore;
 mod rng;
 pub use rng::Prng;
 
-mod log;
-
 /// Provides the application payload and FPort of a downlink message.
 pub struct Downlink {
     pub data: Vec<u8, 256>,
     pub fport: u8,
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for Downlink {
     fn format(&self, f: defmt::Formatter<'_>) {
         defmt::write!(f, "Downlink {{ fport: {}, data: ", self.fport,);

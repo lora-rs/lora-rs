@@ -10,9 +10,9 @@ repository = "https://github.com/lora-rs/lora-rs"
 keywords = ["lora", "iot", "lpwan"]
 
 [dependencies]
-defmt = { version = "0", optional = true }
+defmt = { version = "0.3", optional = true }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true }
 
 [features]
-defmt = ["dep:defmt"]
+defmt-03 = ["dep:defmt"]
 serde = ["dep:serde"]

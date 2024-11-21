@@ -19,7 +19,7 @@ use super::{
 };
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Session {
     pub uplink: uplink::Uplink,
@@ -32,7 +32,7 @@ pub struct Session {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct SessionKeys {
     pub newskey: NewSKey,
     pub appskey: AppSKey,

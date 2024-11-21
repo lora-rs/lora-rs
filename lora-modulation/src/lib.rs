@@ -2,7 +2,7 @@
 #![cfg_attr(not(test), no_std)]
 #![doc = include_str!("../README.md")]
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Channel width. Lower values increase time on air, but may be able to find clear frequencies.
@@ -42,7 +42,7 @@ impl From<Bandwidth> for u32 {
     }
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Controls the chirp rate. Lower values are slower bandwidth (longer time on air), but more robust.
@@ -78,7 +78,7 @@ impl From<SpreadingFactor> for u32 {
     }
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Controls the forward error correction. Higher values are more robust, but reduces the ratio
@@ -102,7 +102,7 @@ impl CodingRate {
 }
 
 /// LoRa modulation parameters barring frequency
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct BaseBandModulationParams {

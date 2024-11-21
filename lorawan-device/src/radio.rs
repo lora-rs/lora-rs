@@ -1,13 +1,13 @@
 pub use lora_modulation::BaseBandModulationParams;
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RfConfig {
     pub frequency: u32,
     pub bb: BaseBandModulationParams,
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RxMode {
     Continuous,
@@ -18,14 +18,14 @@ pub enum RxMode {
     },
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RxConfig {
     pub rf: RfConfig,
     pub mode: RxMode,
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TxConfig {
     pub pw: i8,
@@ -39,7 +39,7 @@ impl TxConfig {
     }
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RxQuality {
     rssi: i16,

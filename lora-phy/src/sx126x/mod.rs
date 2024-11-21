@@ -1,6 +1,5 @@
 mod radio_kind_params;
 
-use defmt::debug;
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
 pub use radio_kind_params::TcxoCtrlVoltage;
@@ -951,7 +950,7 @@ where
                 }
             }
             RadioMode::Sleep | RadioMode::Standby | RadioMode::Listen => {
-                defmt::warn!("IRQ during sleep/standby/listen?");
+                warn!("IRQ during sleep/standby/listen?");
             }
             RadioMode::FrequencySynthesis => todo!(),
         }

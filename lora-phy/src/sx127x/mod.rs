@@ -4,7 +4,6 @@ pub use sx1272::Sx1272;
 mod sx1276;
 pub use sx1276::Sx1276;
 
-use defmt::debug;
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
 use radio_kind_params::*;
@@ -535,7 +534,7 @@ where
                 }
             }
             RadioMode::Sleep | RadioMode::Standby | RadioMode::Listen => {
-                defmt::warn!("IRQ during sleep/standby/listen?");
+                warn!("IRQ during sleep/standby/listen?");
             }
             RadioMode::FrequencySynthesis => todo!(),
             RadioMode::Receive(RxMode::DutyCycle(_)) => todo!(),
