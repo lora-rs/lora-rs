@@ -7,6 +7,9 @@
 #![doc = document_features::document_features!(feature_label = r#"<span class="stab portability"><code>{feature}</code></span>"#)]
 #![doc = include_str!("../README.md")]
 
+// This must go FIRST so that all the other modules see its macros.
+pub(crate) mod fmt;
+
 #[cfg(feature = "lorawan-radio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "lorawan-radio")))]
 /// Provides an implementation of the async LoRaWAN device trait.
@@ -247,7 +250,7 @@ where
         mdltn_params: &ModulationParams,
         rx_pkt_params: &PacketParams,
     ) -> Result<(), RadioError> {
-        defmt::trace!("RX mode: {}", listen_mode);
+        trace!("RX mode: {}", listen_mode);
         self.prepare_modem(mdltn_params.frequency_in_hz).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+- Remove defmt feature from defaults, rename to defmt-03
+
 ## [v0.9.0]
 - for AppEui, DevEui, AppKey: implement `core::str::FromStr`  (#[nostd] compatible) and
 `std::str::ToString` (requires `with-to-string` feature and std) ([#234](https://github.com/lora-rs/lora-rs/pull/234))

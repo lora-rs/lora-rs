@@ -34,7 +34,7 @@ use super::packet_length::phy::{join::*, mac::FPORT_LEN, MHDR_LEN, MIC_LEN, PHY_
 use super::default_crypto::DefaultFactory;
 
 #[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error {
     InvalidData,
     InvalidMic,
@@ -52,7 +52,7 @@ macro_rules! fixed_len_struct {
         $(#[$outer])*
         #[derive(Debug, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+        #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
         pub struct $type<T: AsRef<[u8]>>(T);
 
         impl<T: AsRef<[u8]>> $type<T> {
@@ -132,7 +132,7 @@ pub enum PhyPayload<T, F> {
     Data(DataPayload<T, F>),
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl<T: defmt::Format, F> defmt::Format for PhyPayload<T, F> {
     fn format(&self, f: defmt::Formatter<'_>) {
         match self {
@@ -799,7 +799,7 @@ impl<T> DecryptedDataPayload<T> {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl<T: AsRef<[u8]>> defmt::Format for DecryptedDataPayload<T> {
     fn format(&self, fmt: defmt::Formatter<'_>) {
         defmt::write!(fmt, "DecryptedDataPayload {{ {:?} }}", self.0.as_ref())

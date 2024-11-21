@@ -38,7 +38,7 @@ pub(crate) enum Window {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 /// LoRaWAN Session and Network Configurations
 pub struct Configuration {
     pub(crate) data_rate: region::DR,
@@ -95,7 +95,7 @@ enum State {
 }
 
 #[derive(Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error {
     NotJoined,
     InvalidResponse(Response),
@@ -306,7 +306,7 @@ impl Mac {
     }
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug)]
 pub enum Response {
     NoAck,

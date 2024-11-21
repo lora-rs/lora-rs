@@ -9,7 +9,7 @@ macro_rules! lorawan_key {
         $(#[$outer])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+        #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
         pub struct $type(pub(crate) AES128);
 
         impl From<[u8;16]> for $type {
@@ -98,7 +98,7 @@ macro_rules! lorawan_eui {
         $(#[$outer])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+        #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
         pub struct $type(EUI64<[u8; 8]>);
 
         impl From<[u8;8]> for $type {
@@ -161,7 +161,7 @@ lorawan_eui!(
 );
 
 /// AES128 represents 128-bit AES key.
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub struct AES128(pub [u8; 16]);
@@ -173,7 +173,7 @@ impl From<[u8; 16]> for AES128 {
 }
 
 /// MIC represents LoRaWAN MIC.
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub struct MIC(pub [u8; 4]);
 
