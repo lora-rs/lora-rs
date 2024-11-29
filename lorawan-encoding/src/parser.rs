@@ -1022,11 +1022,11 @@ fixed_len_struct! {
 pub struct FHDR<'a>(&'a [u8], bool);
 
 impl<'a> FHDR<'a> {
-    pub fn new_from_raw(bytes: &'a [u8], uplink: bool) -> FHDR<'_> {
+    pub fn new_from_raw(bytes: &'a [u8], uplink: bool) -> FHDR<'a> {
         FHDR(bytes, uplink)
     }
 
-    pub fn new(bytes: &'a [u8], uplink: bool) -> Option<FHDR<'_>> {
+    pub fn new(bytes: &'a [u8], uplink: bool) -> Option<FHDR<'a>> {
         let data_len = bytes.len();
         if data_len < 7 {
             return None;
