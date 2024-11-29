@@ -93,7 +93,6 @@ impl<const N: usize> RadioBuffer<N> {
     }
 
     /// Provides a reference of the buffer up to the current position.
-
     pub(crate) fn as_ref_for_read(&self) -> &[u8] {
         &self.packet[..self.pos]
     }
