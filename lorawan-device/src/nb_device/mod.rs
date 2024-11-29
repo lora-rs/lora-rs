@@ -157,7 +157,7 @@ where
     TimeoutFired,
 }
 
-impl<'a, R> core::fmt::Debug for Event<'a, R>
+impl<R> core::fmt::Debug for Event<'_, R>
 where
     R: PhyRxTx,
 {
