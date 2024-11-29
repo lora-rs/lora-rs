@@ -452,7 +452,7 @@ impl<'a, T> MacCommandIterator<'a, T> {
 //     }
 // }
 
-impl<'a> LinkCheckAnsPayload<'a> {
+impl LinkCheckAnsPayload<'_> {
     create_value_reader_fn!(
         /// The link margin in dB of the last successfully received LinkCheckReq command.
         margin,
@@ -472,7 +472,7 @@ impl<'a> From<&'a [u8; 2]> for LinkCheckAnsPayload<'a> {
     }
 }
 
-impl<'a> LinkADRReqPayload<'a> {
+impl LinkADRReqPayload<'_> {
     /// Data Rate that the device should use for its next transmissions.
     pub fn data_rate(&self) -> u8 {
         self.0[0] >> 4
@@ -674,7 +674,7 @@ impl From<u8> for Redundancy {
     }
 }
 
-impl<'a> LinkADRAnsPayload<'a> {
+impl LinkADRAnsPayload<'_> {
     create_ack_fn!(
         /// Whether the channel mask change was applied successsfully.
         channel_mask_ack,
@@ -699,7 +699,7 @@ impl<'a> LinkADRAnsPayload<'a> {
     }
 }
 
-impl<'a> DutyCycleReqPayload<'a> {
+impl DutyCycleReqPayload<'_> {
     /// Integer value of the max duty cycle field.
     pub fn max_duty_cycle_raw(&self) -> u8 {
         self.0[0] & 0x0f
@@ -712,7 +712,7 @@ impl<'a> DutyCycleReqPayload<'a> {
     }
 }
 
-impl<'a> RXParamSetupReqPayload<'a> {
+impl RXParamSetupReqPayload<'_> {
     /// Downlink settings - namely rx1_dr_offset and rx2_data_rate.
     pub fn dl_settings(&self) -> DLSettings {
         DLSettings::new(self.0[0])
@@ -791,13 +791,13 @@ impl<'a> From<&'a [u8; 3]> for Frequency<'a> {
     }
 }
 
-impl<'a> AsRef<[u8]> for Frequency<'a> {
+impl AsRef<[u8]> for Frequency<'_> {
     fn as_ref(&self) -> &[u8] {
         self.0
     }
 }
 
-impl<'a> RXParamSetupAnsPayload<'a> {
+impl RXParamSetupAnsPayload<'_> {
     create_ack_fn!(
         /// Whether the channel change was applied successsfully.
         channel_ack,
@@ -822,7 +822,7 @@ impl<'a> RXParamSetupAnsPayload<'a> {
     }
 }
 
-impl<'a> DevStatusAnsPayload<'a> {
+impl DevStatusAnsPayload<'_> {
     create_value_reader_fn!(
         /// The battery level of the device.
         ///
@@ -840,7 +840,7 @@ impl<'a> DevStatusAnsPayload<'a> {
     }
 }
 
-impl<'a> NewChannelReqPayload<'a> {
+impl NewChannelReqPayload<'_> {
     create_value_reader_fn!(
         /// The index of the channel being created or modified.
         channel_index,
@@ -905,7 +905,7 @@ impl From<u8> for DataRateRange {
     }
 }
 
-impl<'a> NewChannelAnsPayload<'a> {
+impl NewChannelAnsPayload<'_> {
     create_ack_fn!(
         /// Whether the channel frequency change was applied successsfully.
         channel_freq_ack,
@@ -924,14 +924,14 @@ impl<'a> NewChannelAnsPayload<'a> {
     }
 }
 
-impl<'a> RXTimingSetupReqPayload<'a> {
+impl RXTimingSetupReqPayload<'_> {
     /// Delay before the first RX window.
     pub fn delay(&self) -> u8 {
         self.0[0] & 0x0f
     }
 }
 
-impl<'a> TXParamSetupReqPayload<'a> {
+impl TXParamSetupReqPayload<'_> {
     pub fn downlink_dwell_time(&self) -> bool {
         self.0[0] & (1 << 5) != 0
     }
