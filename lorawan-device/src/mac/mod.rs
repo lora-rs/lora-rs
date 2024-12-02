@@ -4,7 +4,7 @@
 
 use crate::{
     radio::{self, RadioBuffer, RfConfig, RxConfig, RxMode},
-    region, AppSKey, Downlink, NewSKey,
+    region, AppSKey, Downlink, NwkSKey,
 };
 use heapless::Vec;
 use lorawan::{self, keys::CryptoFactory};
@@ -145,7 +145,7 @@ impl Mac {
     /// Join via ABP. This does not transmit a join request frame, but instead sets the session.
     pub(crate) fn join_abp(
         &mut self,
-        newskey: NewSKey,
+        newskey: NwkSKey,
         appskey: AppSKey,
         devaddr: DevAddr<[u8; 4]>,
     ) {
