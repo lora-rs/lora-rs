@@ -33,9 +33,12 @@ use core::marker::PhantomData;
 #[cfg_attr(docsrs, doc(cfg(feature = "default-crypto")))]
 pub use lorawan::default_crypto;
 pub use lorawan::{
-    keys::{AppEui, AppKey, AppSKey, CryptoFactory, DevEui, NewSKey},
+    keys::{AppEui, AppKey, AppSKey, CryptoFactory, DevEui, NwkSKey},
     parser::DevAddr,
 };
+
+#[deprecated(since = "0.12.2", note = "Please use `NwkSKey` instead")]
+pub use lorawan::keys::NwkSKey as NewSKey;
 
 pub use rand_core::RngCore;
 mod rng;
@@ -75,5 +78,5 @@ pub trait Timings {
 /// Join the network using either OTAA or ABP.
 pub enum JoinMode {
     OTAA { deveui: DevEui, appeui: AppEui, appkey: AppKey },
-    ABP { newskey: NewSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]> },
+    ABP { newskey: NwkSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]> },
 }
