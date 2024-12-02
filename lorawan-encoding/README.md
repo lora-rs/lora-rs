@@ -4,7 +4,7 @@
 [![Docs]][doc.rs]
 
 The lorawan library provides structures and tools for reading and writing
-LoRaWAN 1.0.2 messages from and to slices of bytes.
+LoRaWAN 1.0.4 messages from and to slices of bytes.
 
 ## Sample Packet manipulation
 
