@@ -230,6 +230,7 @@ macro_rules! mac_cmds_enum {
 }
 mac_cmds_enum! {
     pub enum DownlinkMacCommand<'a> {
+        // 1.0.0
         LinkCheckAns(LinkCheckAnsPayload<'a>)
         LinkADRReq(LinkADRReqPayload<'a>)
         DutyCycleReq(DutyCycleReqPayload<'a>)
@@ -237,14 +238,17 @@ mac_cmds_enum! {
         DevStatusReq(DevStatusReqPayload)
         NewChannelReq(NewChannelReqPayload<'a>)
         RXTimingSetupReq(RXTimingSetupReqPayload<'a>)
+        // 1.0.2
         TXParamSetupReq(TXParamSetupReqPayload<'a>)
         DlChannelReq(DlChannelReqPayload<'a>)
+        // 1.0.3
         DeviceTimeAns(DeviceTimeAnsPayload<'a>)
     }
 }
 
 mac_cmds_enum! {
     pub enum UplinkMacCommand<'a> {
+        // 1.0.0
         LinkCheckReq(LinkCheckReqPayload)
         LinkADRAns(LinkADRAnsPayload<'a>)
         DutyCycleAns(DutyCycleAnsPayload)
@@ -252,8 +256,10 @@ mac_cmds_enum! {
         DevStatusAns(DevStatusAnsPayload<'a>)
         NewChannelAns(NewChannelAnsPayload<'a>)
         RXTimingSetupAns(RXTimingSetupAnsPayload)
+        // 1.0.2
         TXParamSetupAns(TXParamSetupAnsPayload)
         DlChannelAns(DlChannelAnsPayload<'a>)
+        // 1.0.3
         DeviceTimeReq(DeviceTimeReqPayload)
     }
 }

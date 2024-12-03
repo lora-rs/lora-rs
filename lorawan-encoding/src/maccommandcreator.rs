@@ -842,6 +842,7 @@ macro_rules! mac_cmds_creator_enum {
 
 mac_cmds_creator_enum! {
     pub enum UplinkMacCommandCreator {
+        // 1.0.0
         LinkCheckReq, LinkCheckReqCreator
         LinkADRAns, LinkADRAnsCreator
         DutyCycleAns, DutyCycleAnsCreator
@@ -849,14 +850,17 @@ mac_cmds_creator_enum! {
         DevStatusAns, DevStatusAnsCreator
         NewChannelAns, NewChannelAnsCreator
         RXTimingSetupAns, RXTimingSetupAnsCreator
+        // 1.0.2
         TXParamSetupAns, TXParamSetupAnsCreator
         DlChannelAns, DlChannelAnsCreator
+        // 1.0.3
         DeviceTimeReq, DeviceTimeReqCreator
     }
 }
 
 mac_cmds_creator_enum! {
     pub enum DownlinkMacCommandCreator {
+        // 1.0.0
         LinkCheckAns, LinkCheckAnsCreator
         LinkADRReq, LinkADRReqCreator
         DutyCycleReq, DutyCycleReqCreator
@@ -864,8 +868,10 @@ mac_cmds_creator_enum! {
         DevStatusReq, DevStatusReqCreator
         NewChannelReq, NewChannelReqCreator
         RXTimingSetupReq, RXTimingSetupReqCreator
+        // 1.0.2
         TXParamSetupReq, TXParamSetupReqCreator
         DlChannelReq, DlChannelReqCreator
+        // 1.0.3
         DeviceTimeAns, DeviceTimeAnsCreator
     }
 }
