@@ -1,4 +1,4 @@
-//! This module implements LoRaWAN packet handling and parsing.
+//! Library for parsing and handling LoRaWAN packets.
 #![no_std]
 #![deny(rust_2018_idioms)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
