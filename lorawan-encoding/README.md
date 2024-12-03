@@ -3,10 +3,13 @@
 [![Latest Version]][crates.io]
 [![Docs]][doc.rs]
 
-The lorawan library provides structures and tools for reading and writing
-LoRaWAN 1.0.4 class A messages from and to slices of bytes.
+The lorawan library provides structures and tools to read and write LoRaWAN
+packets from and to slices of bytes.
 
-Support for Class B and Class C (including multicast) is not yet implemented.
+Supported LoRaWAN features:
+* Class A (baseline) - up to 1.0.4 (1.1 unsupported)
+* Class B (beacon) - unsupported
+* Class C (continuous) - multicast unsupported
 
 ## Sample Packet manipulation
 
