@@ -37,6 +37,9 @@ macro_rules! lorawan_key {
 lorawan_key!(
     /// The [`AppKey`] is an AES-128 root key specific to the end-device.
     ///
+    /// `AppKey` SHALL be stored on an end-device intending to use the OTAA procedure.
+    /// It is NOT REQUIRED for ABP-only end-devices.
+    ///
     /// To create from a hex-encoded string:
     /// ```
     /// use lorawan::keys::AppKey;
@@ -52,10 +55,13 @@ lorawan_key!(
     pub struct AppKey(AES128);
 );
 lorawan_key!(
-    /// The [`AppSKey`] is an application session key (AES-128) specific for the
-    /// end-device.
+    /// The [`AppSKey`] is an application session key (AES-128) specific to
+    /// the end-device.
     ///
-    /// To create from a hex-encoded string :
+    /// `AppSKey` SHOULD be stored such that extraction and re-use by malicious
+    /// actors is prevented.
+    ///
+    /// To create from a hex-encoded string:
     /// ```
     /// use lorawan::keys::AppSKey;
     /// use core::str::FromStr;
@@ -71,7 +77,10 @@ lorawan_key!(
 );
 
 lorawan_key!(
-    /// The [`NwkSKey`] is a network session key (AES-128) specific for the end-device.
+    /// The [`NwkSKey`] is a network session key (AES-128) specific to the end-device.
+    ///
+    /// It SHOULD be stored such that extraction and re-use by malicious
+    /// actors is prevented.
     ///
     /// To create from a hex-encoded string:
     /// ```
@@ -123,8 +132,14 @@ macro_rules! lorawan_eui {
 }
 
 lorawan_eui!(
-    /// The [`DevEui`] is a global end-device ID in IEEE EUI64 address space
-    /// that uniquely identifies the end-device.
+    /// [`DevEui`] is a global end-device ID in the IEEE EUI64 address space
+    /// that uniquely identifies the end-device across roaming networks.
+    ///
+    /// All end-devices SHALL have an assigned `DevEui` regardless of which
+    /// activation procedure is used (i.e., ABP or OTAA).
+    ///
+    /// It is a recommended practice that `DevEui` should also be available on
+    /// an end-device label for the purpose of end-device administration.
     ///
     /// To create from a hex-encoded string:
     /// ```
@@ -143,6 +158,13 @@ lorawan_eui!(
 lorawan_eui!(
     /// The [`AppEui`] is a global application ID in IEEE EUI64 address space
     /// that uniquely identifies the entity able to process the JoinReq frame.
+    ///
+    /// For OTAA end-devices, `AppEui` SHALL be stored in the end-device before
+    /// the Join procedure is executed, although some network servers ignore
+    /// this value.
+    /// `AppEui` is not required for ABP-only end-devices.
+    ///
+    /// As of LoRaWAN 1.0.4, `AppEui` is called `JoinEui`.
     ///
     /// To create from a hex-encoded string:
     /// ```
