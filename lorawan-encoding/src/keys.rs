@@ -1,3 +1,5 @@
+//! Implement types for dealing with LoRaWAN keys and required
+//! cryptography entities.
 use super::parser::EUI64;
 use super::securityhelpers::generic_array::{typenum::U16, GenericArray};
 
@@ -33,11 +35,9 @@ macro_rules! lorawan_key {
 }
 
 lorawan_key!(
-    /// You can construct AppKey from a hex-encoded MSB string or bytes in MSB format.
+    /// The [`AppKey`] is an AES-128 root key specific to the end-device.
     ///
-    /// Typically, a LNS will provide it in a string format such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
-    ///
-    /// To create from a string:
+    /// To create from a hex-encoded string:
     /// ```
     /// use lorawan::keys::AppKey;
     /// use core::str::FromStr;
@@ -52,11 +52,10 @@ lorawan_key!(
     pub struct AppKey(AES128);
 );
 lorawan_key!(
-    /// You can construct AppSKey from a hex-encoded MSB string or bytes in MSB format.
+    /// The [`AppSKey`] is an application session key (AES-128) specific for the
+    /// end-device.
     ///
-    /// Typically, a LNS will provide a hex-encoded MSB string format such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
-    ///
-    /// To create from a string:
+    /// To create from a hex-encoded string :
     /// ```
     /// use lorawan::keys::AppSKey;
     /// use core::str::FromStr;
@@ -72,11 +71,9 @@ lorawan_key!(
 );
 
 lorawan_key!(
-    /// You can construct NwkSKey from a hex-encoded MSB string or bytes in MSB format.
+    /// The [`NwkSKey`] is a network session key (AES-128) specific for the end-device.
     ///
-    /// Typically, a LNS will provide a hex-encoded MSB string such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
-    ///
-    /// To create from a string:
+    /// To create from a hex-encoded string:
     /// ```
     /// use lorawan::keys::NwkSKey;
     /// use core::str::FromStr;
@@ -126,11 +123,10 @@ macro_rules! lorawan_eui {
 }
 
 lorawan_eui!(
-    /// You can construct DevEui from a hex-encoded MSB string or bytes in LSB format.
+    /// The [`DevEui`] is a global end-device ID in IEEE EUI64 address space
+    /// that uniquely identifies the end-device.
     ///
-    /// Typically, a LNS will provide a hex-encoded MSB string such as: `00:11:22:33:44:55:66:77`.
-    ///
-    /// To create from a string:
+    /// To create from a hex-encoded string:
     /// ```
     /// use lorawan::keys::DevEui;
     /// use core::str::FromStr;
@@ -145,11 +141,10 @@ lorawan_eui!(
     pub struct DevEui(EUI64<[u8; 8]>);
 );
 lorawan_eui!(
-    /// You can construct AppEui from a hex-encoded MSB string or bytes in LSB format.
+    /// The [`AppEui`] is a global application ID in IEEE EUI64 address space
+    /// that uniquely identifies the entity able to process the JoinReq frame.
     ///
-    /// Typically, a LNS will provide a hex-encoded MSB string such as: `00:11:22:33:44:55:66:77`.
-    ///
-    /// To create from a string:
+    /// To create from a hex-encoded string:
     /// ```
     /// use lorawan::keys::AppEui;
     /// use core::str::FromStr;
@@ -164,7 +159,7 @@ lorawan_eui!(
     pub struct AppEui(EUI64<[u8; 8]>);
 );
 
-/// AES128 represents 128-bit AES key.
+/// [`AES128`] represents 128-bit AES key.
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
@@ -176,7 +171,7 @@ impl From<[u8; 16]> for AES128 {
     }
 }
 
-/// MIC represents LoRaWAN MIC.
+/// [`MIC`] represents LoRaWAN message integrity code (MIC).
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub struct MIC(pub [u8; 4]);
@@ -197,7 +192,7 @@ pub trait Decrypter {
     fn decrypt_block(&self, block: &mut GenericArray<u8, U16>);
 }
 
-/// Trait for implementations of CMAC.
+/// Trait for implementations of CMAC (RFC4493).
 pub trait Mac {
     fn input(&mut self, data: &[u8]);
     fn reset(&mut self);
