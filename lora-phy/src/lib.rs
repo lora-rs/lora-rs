@@ -261,25 +261,23 @@ where
         Ok(())
     }
 
-    /// Start receiving and wait for result
-    pub async fn rx(
-        &mut self,
-        packet_params: &PacketParams,
-        receiving_buffer: &mut [u8],
-    ) -> Result<(u8, PacketStatus), RadioError> {
+    /// Start receiving but do not wait for the result.
+    /// Call complete_rx to finish waiting for result.
+    pub async fn start_rx(&mut self) -> Result<(), RadioError> {
         if let RadioMode::Receive(listen_mode) = self.radio_mode {
-            self.radio_kind.do_rx(listen_mode).await?;
+            self.radio_kind.do_rx(listen_mode).await
+        } else {
+            Err(RadioError::InvalidRadioMode)
+        }
+    }
+
+    /// Wait for the radio to detect either a preamble or full packet
+    pub async fn wait_for_packet_start(&mut self) -> Result<IrqState, RadioError> {
+        if let RadioMode::Receive(_) = self.radio_mode {
             loop {
                 self.wait_for_irq().await?;
-                match self.radio_kind.process_irq_event(self.radio_mode, None, true).await {
-                    Ok(Some(actual_state)) => match actual_state {
-                        IrqState::PreambleReceived => continue,
-                        IrqState::Done => {
-                            let received_len = self.radio_kind.get_rx_payload(packet_params, receiving_buffer).await?;
-                            let rx_pkt_status = self.radio_kind.get_rx_packet_status().await?;
-                            return Ok((received_len, rx_pkt_status));
-                        }
-                    },
+                match self.radio_kind.process_irq_event(self.radio_mode, None, false).await {
+                    Ok(Some(state)) => break Ok(state),
                     Ok(None) => continue,
                     Err(err) => {
                         // if in rx continuous mode, allow the caller to determine whether to keep receiving
@@ -295,6 +293,50 @@ where
         } else {
             Err(RadioError::InvalidRadioMode)
         }
+    }
+
+    /// Wait for a previously started receive to complete
+    pub async fn complete_rx(
+        &mut self,
+        packet_params: &PacketParams,
+        receiving_buffer: &mut [u8],
+    ) -> Result<(u8, PacketStatus), RadioError> {
+        if let RadioMode::Receive(_) = self.radio_mode {
+            loop {
+                match self.radio_kind.process_irq_event(self.radio_mode, None, true).await {
+                    Ok(Some(actual_state)) => match actual_state {
+                        IrqState::PreambleReceived => (),
+                        IrqState::Done => {
+                            let received_len = self.radio_kind.get_rx_payload(packet_params, receiving_buffer).await?;
+                            let rx_pkt_status = self.radio_kind.get_rx_packet_status().await?;
+                            return Ok((received_len, rx_pkt_status));
+                        }
+                    },
+                    Ok(None) => (),
+                    Err(err) => {
+                        // if in rx continuous mode, allow the caller to determine whether to keep receiving
+                        if self.radio_mode != RadioMode::Receive(RxMode::Continuous) {
+                            self.radio_kind.ensure_ready(self.radio_mode).await?;
+                            self.radio_kind.set_standby().await?;
+                            self.radio_mode = RadioMode::Standby;
+                        }
+                        return Err(err);
+                    }
+                }
+                self.wait_for_irq().await?;
+            }
+        } else {
+            Err(RadioError::InvalidRadioMode)
+        }
+    }
+
+    pub async fn rx(
+        &mut self,
+        packet_params: &PacketParams,
+        receiving_buffer: &mut [u8],
+    ) -> Result<(u8, PacketStatus), RadioError> {
+        self.start_rx().await?;
+        self.complete_rx(packet_params, receiving_buffer).await
     }
 
     /// Start listening to a given frequency and bandwidth

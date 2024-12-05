@@ -70,3 +70,29 @@ Example RadioKind implementations and ancillary information:
 ## LoRa board-specific support
 
 Board-specific configuration can be handled via the chip driver specific Config struct.
+
+## Receive related functions
+
+- [prepare_for_rx](LoRa::prepare_for_rx)
+Configures the radio for rx mode, but does not enter the rx radio mode.
+
+- [start_rx](LoRa::start_rx)
+Enters the rx radio mode, but does nothing else.
+
+- [wait_for_packet_start](LoRa::wait_for_packet_start)
+Wait for either a preamble or a complete packet. 
+This allows starting a rx and commiting to receiving the whole packet after only receiving the preamble.
+
+- [complete_rx](LoRa::complete_rx)
+Wait for a packet to be recieved and copy the packet from the radio to the local buffer.
+
+- [rx](LoRa::rx)
+Convenience fn to call start_rx and complete_rx.
+
+## Transmit related functions
+
+- [prepare_for_tx](LoRa::prepare_for_tx)
+Configures the modulation and packet parameters, and copies the tx buffer to the radio.
+
+- [tx](LoRa::tx)
+Sets the radio to tx mode, starting transmit.
