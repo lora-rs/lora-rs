@@ -2,7 +2,7 @@
 //!
 //! See [JoinAcceptCreator.new](struct.JoinAcceptCreator.html#method.new) for an example.
 
-use super::keys::{AppKey, AppSKey, CryptoFactory, Decrypter, NewSKey, AES128};
+use super::keys::{AppKey, AppSKey, CryptoFactory, Decrypter, NwkSKey, AES128};
 use super::maccommandcreator;
 use super::maccommands::{mac_commands_len, DLSettings, Frequency, SerializableMacCommand};
 use super::parser;
@@ -17,7 +17,7 @@ use generic_array::GenericArray;
 use aes::cipher::generic_array::typenum::U256;
 
 #[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error {
     BufferTooShort,
     InvalidChannelList,
@@ -301,7 +301,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
 ///
 /// ```
 /// let mut phy = lorawan::creator::DataPayloadCreator::new();
-/// let nwk_skey = lorawan::keys::NewSKey::from([2; 16]);
+/// let nwk_skey = lorawan::keys::NwkSKey::from([2; 16]);
 /// let app_skey = lorawan::keys::AppSKey::from([1; 16]);
 /// phy.set_confirmed(true)
 ///     .set_uplink(true)
@@ -448,7 +448,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     /// let mut cmds: Vec<&dyn lorawan::maccommands::SerializableMacCommand> = Vec::new();
     /// cmds.push(&mac_cmd1);
     /// cmds.push(&mac_cmd2);
-    /// let nwk_skey = lorawan::keys::NewSKey::from([2; 16]);
+    /// let nwk_skey = lorawan::keys::NwkSKey::from([2; 16]);
     /// let app_skey = lorawan::keys::AppSKey::from([1; 16]);
     /// phy.build(&[], &cmds, &nwk_skey, &app_skey).unwrap();
     /// ```
@@ -456,7 +456,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
         &mut self,
         payload: &[u8],
         cmds: &[&dyn SerializableMacCommand],
-        nwk_skey: &NewSKey,
+        nwk_skey: &NwkSKey,
         app_skey: &AppSKey,
     ) -> Result<&[u8], Error> {
         let d = self.data.as_mut();
@@ -539,7 +539,7 @@ impl DataPayloadCreator<GenericArray<u8, U256>, DefaultFactory> {
     ///
     /// ```
     /// let mut phy = lorawan::creator::DataPayloadCreator::new();
-    /// let nwk_skey = lorawan::keys::NewSKey::from([2; 16]);
+    /// let nwk_skey = lorawan::keys::NwkSKey::from([2; 16]);
     /// let app_skey = lorawan::keys::AppSKey::from([1; 16]);
     /// let fctrl = lorawan::parser::FCtrl::new(0x80, true);
     /// phy.set_confirmed(false).

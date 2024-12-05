@@ -1,4 +1,4 @@
-use crate::{region, AppSKey, Downlink, NewSKey};
+use crate::{region, AppSKey, Downlink, NwkSKey};
 use heapless::Vec;
 use lorawan::keys::CryptoFactory;
 use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
@@ -19,12 +19,12 @@ use super::{
 };
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Session {
     pub uplink: uplink::Uplink,
     pub confirmed: bool,
-    pub newskey: NewSKey,
+    pub newskey: NwkSKey,
     pub appskey: AppSKey,
     pub devaddr: DevAddr<[u8; 4]>,
     pub fcnt_up: u32,
@@ -32,9 +32,9 @@ pub struct Session {
 }
 
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct SessionKeys {
-    pub newskey: NewSKey,
+    pub newskey: NwkSKey,
     pub appskey: AppSKey,
     pub devaddr: DevAddr<[u8; 4]>,
 }
@@ -52,7 +52,7 @@ impl Session {
         credentials: &NetworkCredentials,
     ) -> Self {
         Self::new(
-            decrypt.derive_newskey(&devnonce, credentials.appkey()),
+            decrypt.derive_nwkskey(&devnonce, credentials.appkey()),
             decrypt.derive_appskey(&devnonce, credentials.appkey()),
             DevAddr::new([
                 decrypt.dev_addr().as_ref()[0],
@@ -64,7 +64,7 @@ impl Session {
         )
     }
 
-    pub fn new(newskey: NewSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]>) -> Self {
+    pub fn new(newskey: NwkSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]>) -> Self {
         Self {
             newskey,
             appskey,
@@ -82,7 +82,7 @@ impl Session {
     pub fn appskey(&self) -> &AppSKey {
         &self.appskey
     }
-    pub fn newskey(&self) -> &NewSKey {
+    pub fn newskey(&self) -> &NwkSKey {
         &self.newskey
     }
 

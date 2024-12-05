@@ -4,7 +4,6 @@ pub use sx1272::Sx1272;
 mod sx1276;
 pub use sx1276::Sx1276;
 
-use defmt::debug;
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
 use radio_kind_params::*;
@@ -12,10 +11,6 @@ use radio_kind_params::*;
 use crate::mod_params::*;
 use crate::mod_traits::IrqState;
 use crate::{InterfaceVariant, RadioKind, SpiInterface};
-
-// Syncwords for public and private networks
-const LORA_MAC_PUBLIC_SYNCWORD: u8 = 0x34; // corresponds to sx126x 0x3444
-const LORA_MAC_PRIVATE_SYNCWORD: u8 = 0x12; // corresponds to sx126x 0x1424
 
 // TCXO flag
 const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
@@ -122,17 +117,12 @@ where
     IV: InterfaceVariant,
     C: Sx127xVariant,
 {
-    async fn init_lora(&mut self, is_public_network: bool) -> Result<(), RadioError> {
+    async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError> {
         if self.config.tcxo_used {
             self.write_register(C::reg_txco(), TCXO_FOR_OSCILLATOR).await?;
         }
 
-        let syncword = if is_public_network {
-            LORA_MAC_PUBLIC_SYNCWORD
-        } else {
-            LORA_MAC_PRIVATE_SYNCWORD
-        };
-        self.write_register(Register::RegSyncWord, syncword).await?;
+        self.write_register(Register::RegSyncWord, sync_word).await?;
 
         self.set_tx_rx_buffer_base_address(0, 0).await?;
         Ok(())
@@ -405,6 +395,12 @@ where
         Ok(PacketStatus { rssi, snr })
     }
 
+    async fn get_rssi(&mut self) -> Result<i16, RadioError> {
+        let rssi_value = self.read_register(Register::RegRssiValue).await?;
+        let rssi_offset = C::rssi_offset(self).await?;
+        Ok(rssi_offset + rssi_value as i16)
+    }
+
     async fn do_cad(&mut self, _mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_rx().await?;
 
@@ -537,8 +533,8 @@ where
                     return Ok(Some(IrqState::Done));
                 }
             }
-            RadioMode::Sleep | RadioMode::Standby => {
-                defmt::warn!("IRQ during sleep/standby?");
+            RadioMode::Sleep | RadioMode::Standby | RadioMode::Listen => {
+                warn!("IRQ during sleep/standby/listen?");
             }
             RadioMode::FrequencySynthesis => todo!(),
             RadioMode::Receive(RxMode::DutyCycle(_)) => todo!(),

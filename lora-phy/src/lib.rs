@@ -7,6 +7,9 @@
 #![doc = document_features::document_features!(feature_label = r#"<span class="stab portability"><code>{feature}</code></span>"#)]
 #![doc = include_str!("../README.md")]
 
+// This must go FIRST so that all the other modules see its macros.
+pub(crate) mod fmt;
+
 #[cfg(feature = "lorawan-radio")]
 #[cfg_attr(docsrs, doc(cfg(feature = "lorawan-radio")))]
 /// Provides an implementation of the async LoRaWAN device trait.
@@ -32,6 +35,12 @@ use interface::*;
 use mod_params::*;
 use mod_traits::*;
 
+/// Sync word for public LoRaWAN networks
+const LORAWAN_PUBLIC_SYNCWORD: u8 = 0x34;
+
+/// Sync word for private LoRaWAN networks
+const LORAWAN_PRIVATE_SYNCWORD: u8 = 0x12;
+
 /// Provides the physical layer API to support LoRa chips
 pub struct LoRa<RK, DLY>
 where
@@ -41,7 +50,7 @@ where
     radio_kind: RK,
     delay: DLY,
     radio_mode: RadioMode,
-    enable_public_network: bool,
+    sync_word: u8,
     cold_start: bool,
     calibrate_image: bool,
 }
@@ -51,19 +60,33 @@ where
     RK: RadioKind,
     DLY: DelayNs,
 {
-    /// Build and return a new instance of the LoRa physical layer API to control an initialized LoRa radio
-    pub async fn new(radio_kind: RK, enable_public_network: bool, delay: DLY) -> Result<Self, RadioError> {
+    /// Build and return a new instance of the LoRa physical layer API with a specified sync word
+    pub async fn with_syncword(radio_kind: RK, sync_word: u8, delay: DLY) -> Result<Self, RadioError> {
         let mut lora = Self {
             radio_kind,
             delay,
             radio_mode: RadioMode::Sleep,
-            enable_public_network,
+            sync_word,
             cold_start: true,
             calibrate_image: true,
         };
         lora.init().await?;
 
         Ok(lora)
+    }
+
+    /// Build and return a new instance of the LoRa physical layer API to
+    /// control an initialized LoRa radio for LoRaWAN public or private network.
+    ///
+    /// In order to configure radio to use non-LoRaWAN networks, use
+    /// [`Self::with_syncword()`] which has `sync_word` argument.
+    pub async fn new(radio_kind: RK, enable_public_network: bool, delay: DLY) -> Result<Self, RadioError> {
+        let sync_word = if enable_public_network {
+            LORAWAN_PUBLIC_SYNCWORD
+        } else {
+            LORAWAN_PRIVATE_SYNCWORD
+        };
+        Self::with_syncword(radio_kind, sync_word, delay).await
     }
 
     /// Wait for an IRQ event to occur
@@ -138,7 +161,7 @@ where
     }
 
     async fn do_cold_start(&mut self) -> Result<(), RadioError> {
-        self.radio_kind.init_lora(self.enable_public_network).await?;
+        self.radio_kind.init_lora(self.sync_word).await?;
         self.radio_kind.set_tx_power_and_ramp_time(0, None, false).await?;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.cold_start = false;
@@ -174,7 +197,7 @@ where
         output_power: i32,
         buffer: &[u8],
     ) -> Result<(), RadioError> {
-        self.prepare_modem(mdltn_params).await?;
+        self.prepare_modem(mdltn_params.frequency_in_hz).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind
@@ -227,8 +250,8 @@ where
         mdltn_params: &ModulationParams,
         rx_pkt_params: &PacketParams,
     ) -> Result<(), RadioError> {
-        defmt::trace!("RX mode: {}", listen_mode);
-        self.prepare_modem(mdltn_params).await?;
+        trace!("RX mode: {}", listen_mode);
+        self.prepare_modem(mdltn_params.frequency_in_hz).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_packet_params(rx_pkt_params).await?;
@@ -307,7 +330,6 @@ where
         }
     }
 
-    /// Start receiving and wait for result
     pub async fn rx(
         &mut self,
         packet_params: &PacketParams,
@@ -317,9 +339,34 @@ where
         self.complete_rx(packet_params, receiving_buffer).await
     }
 
+    /// Start listening to a given frequency and bandwidth
+    pub async fn listen(&mut self, frequency_in_hz: u32, bandwidth: Bandwidth) -> Result<(), RadioError> {
+        self.prepare_modem(frequency_in_hz).await?;
+
+        self.radio_kind.set_channel(frequency_in_hz).await?;
+        // We need to set the bandwidth, otherwise sx126x doesn't return reasonable RSSI results
+        // All other params are irrelevant with regard to listening to measure RSSI.
+        let modulation_params = self.radio_kind.create_modulation_params(
+            SpreadingFactor::_7,
+            bandwidth,
+            CodingRate::_4_5,
+            frequency_in_hz,
+        )?;
+        self.radio_kind.set_modulation_params(&modulation_params).await?;
+        self.radio_mode = RadioMode::Listen;
+        self.radio_kind.do_rx(RxMode::Continuous).await?;
+
+        Ok(())
+    }
+
+    /// Get the current rssi
+    pub async fn get_rssi(&mut self) -> Result<i16, RadioError> {
+        self.radio_kind.get_rssi().await
+    }
+
     /// Prepare the radio for a channel activity detection (CAD) operation
     pub async fn prepare_for_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
-        self.prepare_modem(mdltn_params).await?;
+        self.prepare_modem(mdltn_params.frequency_in_hz).await?;
 
         self.radio_kind.set_modulation_params(mdltn_params).await?;
         self.radio_kind.set_channel(mdltn_params.frequency_in_hz).await?;
@@ -363,7 +410,7 @@ where
         mdltn_params: &ModulationParams,
         output_power: i32,
     ) -> Result<(), RadioError> {
-        self.prepare_modem(mdltn_params).await?;
+        self.prepare_modem(mdltn_params.frequency_in_hz).await?;
 
         let tx_pkt_params = self
             .radio_kind
@@ -385,7 +432,7 @@ where
         self.radio_kind.set_tx_continuous_wave_mode().await
     }
 
-    async fn prepare_modem(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
+    async fn prepare_modem(&mut self, frequency_in_hz: u32) -> Result<(), RadioError> {
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;
@@ -397,7 +444,7 @@ where
         }
 
         if self.calibrate_image {
-            self.radio_kind.calibrate_image(mdltn_params.frequency_in_hz).await?;
+            self.radio_kind.calibrate_image(frequency_in_hz).await?;
             self.calibrate_image = false;
         }
 

@@ -6,6 +6,9 @@
 #![doc = document_features::document_features!(feature_label = r#"<span class="stab portability"><code>{feature}</code></span>"#)]
 #![doc = include_str!("../README.md")]
 
+// This must go FIRST so that all the other modules see its macros.
+pub(crate) mod fmt;
+
 use core::default::Default;
 use heapless::Vec;
 
@@ -30,15 +33,16 @@ use core::marker::PhantomData;
 #[cfg_attr(docsrs, doc(cfg(feature = "default-crypto")))]
 pub use lorawan::default_crypto;
 pub use lorawan::{
-    keys::{AppEui, AppKey, AppSKey, CryptoFactory, DevEui, NewSKey},
+    keys::{AppEui, AppKey, AppSKey, CryptoFactory, DevEui, NwkSKey},
     parser::DevAddr,
 };
+
+#[deprecated(since = "0.12.2", note = "Please use `NwkSKey` instead")]
+pub use lorawan::keys::NwkSKey as NewSKey;
 
 pub use rand_core::RngCore;
 mod rng;
 pub use rng::Prng;
-
-mod log;
 
 /// Provides the application payload and FPort of a downlink message.
 pub struct Downlink {
@@ -46,7 +50,7 @@ pub struct Downlink {
     pub fport: u8,
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl defmt::Format for Downlink {
     fn format(&self, f: defmt::Formatter<'_>) {
         defmt::write!(f, "Downlink {{ fport: {}, data: ", self.fport,);
@@ -74,5 +78,5 @@ pub trait Timings {
 /// Join the network using either OTAA or ABP.
 pub enum JoinMode {
     OTAA { deveui: DevEui, appeui: AppEui, appkey: AppKey },
-    ABP { newskey: NewSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]> },
+    ABP { newskey: NwkSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]> },
 }

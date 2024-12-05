@@ -1,14 +1,13 @@
 [package]
 name = "lorawan-device"
 version = "0.12.2"
-authors = ["Louis Thiery <thiery.louis@gmail.com>", "Ulf Lilleengen <lulf@redhat.com>"]
+authors = [
+    "Louis Thiery <thiery.louis@gmail.com>",
+    "Ulf Lilleengen <lulf@redhat.com>",
+]
 edition = "2021"
 rust-version = "1.75"
-categories = [
-    "embedded",
-    "hardware-support",
-    "no-std",
-]
+categories = ["embedded", "hardware-support", "no-std"]
 license = "MIT"
 readme = "README.md"
 description = "A Rust LoRaWAN device stack implementation"
@@ -27,27 +26,42 @@ defmt = { version = "0.3", optional = true }
 fastrand = { version = "2", default-features = false }
 futures = { version = "0.3", default-features = false }
 rand_core = { version = "0.6", default-features = false }
-serde = { version = "1", default-features = false, features = ["derive"], optional = true }
+serde = { version = "1", default-features = false, features = [
+    "derive",
+], optional = true }
 seq-macro = "0.3.5"
 document-features = "0.2.8"
 embassy-time = { version = "0.3.0", optional = true }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}
+tokio = { version = "1", features = ["rt", "macros", "time", "sync"] }
 rand = { version = "0", features = ["getrandom"] }
 lazy_static = "1"
 # Pull in lorawan/default-crypto which is required for tests
-lorawan = { path = "../lorawan-encoding", features = ["default-crypto"] }
+lorawan = { path = "../lorawan-encoding", default-features = false, features = [
+    "default-crypto",
+    "defmt-03"
+] }
 
 [features]
 default = ["all-regions"]
-all-regions = ["region-as923-1", "region-as923-2", "region-as923-3", "region-as923-4", "region-au915", "region-eu433", "region-eu868", "region-in865", "region-us915"]
+all-regions = [
+    "region-as923-1",
+    "region-as923-2",
+    "region-as923-3",
+    "region-as923-4",
+    "region-au915",
+    "region-eu433",
+    "region-eu868",
+    "region-in865",
+    "region-us915",
+]
 
 ## Use pure Rust implementations of [`AES`](https://docs.rs/aes/latest/aes/) and [`CMAC`](https://docs.rs/cmac/latest/cmac/) for the LoRaWAN crypto layer.
 default-crypto = ["lorawan/default-crypto"]
 
 ## Use [`defmt`](https://docs.rs/defmt/latest/defmt/) for logging.
-defmt = ["dep:defmt", "lorawan/defmt", "lora-modulation/defmt"]
+defmt-03 = ["dep:defmt", "lorawan/defmt-03", "lora-modulation/defmt-03"]
 
 ## Provide an `async_device::Timer` impl based on `embassy-time`.
 embassy-time = ["dep:embassy-time"]

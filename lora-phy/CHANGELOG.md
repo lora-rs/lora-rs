@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Preparations for Rust 2024 edition
 - sx126x: Fix IRQ processing order to handle Timeout before Preamble
 - sx127x: Switch to integer math for frequency handling
+- Make defmt optional
 
 ## [v3.0.1] - 2024-07-01
 

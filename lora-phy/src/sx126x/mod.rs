@@ -1,6 +1,5 @@
 mod radio_kind_params;
 
-use defmt::debug;
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
 pub use radio_kind_params::TcxoCtrlVoltage;
@@ -11,10 +10,6 @@ use crate::mod_traits::IrqState;
 use crate::{InterfaceVariant, RadioKind, SpiInterface};
 mod variant;
 pub use variant::*;
-
-// Syncwords for public and private networks
-const LORA_MAC_PUBLIC_SYNCWORD: u16 = 0x3444; // corresponds to sx127x 0x34
-const LORA_MAC_PRIVATE_SYNCWORD: u16 = 0x1424; // corresponds to sx127x 0x12
 
 // Maximum number of registers that can be added to the retention list
 const MAX_NUMBER_REGS_IN_RETENTION: u8 = 4;
@@ -181,13 +176,18 @@ where
     }
 }
 
+// Convert u8 sync word to two byte value expected by sx126x
+fn convert_sync_word(sync_word: u8) -> [u8; 2] {
+    [(sync_word & 0xF0) | 0x04, ((sync_word & 0x0F) << 4) | 0x04]
+}
+
 impl<SPI, IV, C> RadioKind for Sx126x<SPI, IV, C>
 where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
     C: Sx126xVariant,
 {
-    async fn init_lora(&mut self, is_public_network: bool) -> Result<(), RadioError> {
+    async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError> {
         // DC-DC regulator setup (default is LDO)
         if self.config.use_dcdc {
             let reg_data = [OpCode::SetRegulatorMode.value(), RegulatorMode::UseDCDC.value()];
@@ -235,11 +235,8 @@ where
         self.intf
             .write(&[OpCode::SetPacketType.value(), PacketType::LoRa.value()], false)
             .await?;
-        let word = match is_public_network {
-            true => u16::to_be_bytes(LORA_MAC_PUBLIC_SYNCWORD),
-            false => u16::to_be_bytes(LORA_MAC_PRIVATE_SYNCWORD),
-        };
         // ...and network syncword
+        let word = convert_sync_word(sync_word);
         let lora_syncword_set = [
             OpCode::WriteRegister.value(),
             Register::LoRaSyncword.addr1(),
@@ -742,6 +739,17 @@ where
         Ok(PacketStatus { rssi, snr })
     }
 
+    async fn get_rssi(&mut self) -> Result<i16, RadioError> {
+        let op_code = [OpCode::GetRSSIInst.value()];
+        let mut response = [0x00u8; 1];
+        let read_status = self.intf.read_with_status(&op_code, &mut response).await?;
+        if OpStatusErrorMask::is_error(read_status) {
+            return Err(RadioError::OpError(read_status));
+        }
+        let rssi = ((-(response[0] as i32)) >> 1) as i16;
+        Ok(rssi)
+    }
+
     async fn do_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_rx().await?;
 
@@ -941,8 +949,8 @@ where
                     return Ok(Some(IrqState::Done));
                 }
             }
-            RadioMode::Sleep | RadioMode::Standby => {
-                defmt::warn!("IRQ during sleep/standby?");
+            RadioMode::Sleep | RadioMode::Standby | RadioMode::Listen => {
+                warn!("IRQ during sleep/standby/listen?");
             }
             RadioMode::FrequencySynthesis => todo!(),
         }
@@ -954,7 +962,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    // use super::*;
+    use super::*;
 
     #[test]
     // -17 (0xEF) to +14 (0x0E) dBm by step of 1 dB if low power PA is selected
@@ -964,5 +972,14 @@ mod tests {
         assert_eq!(i32_val as u8, 0xefu8);
         i32_val = -9;
         assert_eq!(i32_val as u8, 0xf7u8);
+    }
+
+    #[test]
+    fn test_convert_sync_word() {
+        // sx126x 0x3444 corresponds to sx127 0x34
+        assert_eq!(convert_sync_word(0x34), [0x34, 0x44]);
+
+        // sx126x 0x1424 corresponds to sx127 0x12
+        assert_eq!(convert_sync_word(0x12), [0x14, 0x24]);
     }
 }

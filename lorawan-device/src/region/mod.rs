@@ -85,7 +85,7 @@ pub struct Configuration {
 seq_macro::seq!(
     N in 0..=15 {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+        #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
         #[repr(u8)]
         /// A restricted data rate type that exposes the number of variants to only what _may_ be
         /// potentially be possible. Note that not all data rates are valid in all regions.

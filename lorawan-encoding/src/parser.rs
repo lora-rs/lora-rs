@@ -20,9 +20,7 @@
 //! }
 //! ```
 
-use crate::keys::NewSKey;
-
-use super::keys::{AppKey, AppSKey, CryptoFactory, Encrypter, AES128, MIC};
+use super::keys::{AppKey, AppSKey, CryptoFactory, Encrypter, NwkSKey, AES128, MIC};
 use super::maccommands::{ChannelMask, DLSettings, Frequency};
 
 use super::securityhelpers;
@@ -34,7 +32,7 @@ use super::packet_length::phy::{join::*, mac::FPORT_LEN, MHDR_LEN, MIC_LEN, PHY_
 use super::default_crypto::DefaultFactory;
 
 #[derive(Debug, PartialEq)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error {
     InvalidData,
     InvalidMic,
@@ -52,7 +50,7 @@ macro_rules! fixed_len_struct {
         $(#[$outer])*
         #[derive(Debug, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+        #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
         pub struct $type<T: AsRef<[u8]>>(T);
 
         impl<T: AsRef<[u8]>> $type<T> {
@@ -132,7 +130,7 @@ pub enum PhyPayload<T, F> {
     Data(DataPayload<T, F>),
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl<T: defmt::Format, F> defmt::Format for PhyPayload<T, F> {
     fn format(&self, f: defmt::Formatter<'_>) {
         match self {
@@ -427,17 +425,26 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
     ///     0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]);
     /// let join_accept = lorawan::parser::DecryptedJoinAcceptPayload::new(data, &app_key).unwrap();
     ///
-    /// let nwk_skey = join_accept.derive_newskey(
+    /// let nwk_skey = join_accept.derive_nwkskey(
     ///     &lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(),
     ///     &app_key,
     /// );
     /// ```
+    pub fn derive_nwkskey<TT: AsRef<[u8]>>(
+        &self,
+        dev_nonce: &DevNonce<TT>,
+        key: &AppKey,
+    ) -> NwkSKey {
+        NwkSKey(self.derive_session_key(0x1, dev_nonce, &key.0))
+    }
+
+    #[deprecated(since = "0.9.1", note = "Please use `derive_nwkskey` instead")]
     pub fn derive_newskey<TT: AsRef<[u8]>>(
         &self,
         dev_nonce: &DevNonce<TT>,
         key: &AppKey,
-    ) -> NewSKey {
-        NewSKey(self.derive_session_key(0x1, dev_nonce, &key.0))
+    ) -> NwkSKey {
+        NwkSKey(self.derive_session_key(0x1, dev_nonce, &key.0))
     }
 
     /// Computes the application session key for a given device.
@@ -799,7 +806,7 @@ impl<T> DecryptedDataPayload<T> {
     }
 }
 
-#[cfg(feature = "defmt")]
+#[cfg(feature = "defmt-03")]
 impl<T: AsRef<[u8]>> defmt::Format for DecryptedDataPayload<T> {
     fn format(&self, fmt: defmt::Formatter<'_>) {
         defmt::write!(fmt, "DecryptedDataPayload {{ {:?} }}", self.0.as_ref())
@@ -1022,11 +1029,11 @@ fixed_len_struct! {
 pub struct FHDR<'a>(&'a [u8], bool);
 
 impl<'a> FHDR<'a> {
-    pub fn new_from_raw(bytes: &'a [u8], uplink: bool) -> FHDR<'_> {
+    pub fn new_from_raw(bytes: &'a [u8], uplink: bool) -> FHDR<'a> {
         FHDR(bytes, uplink)
     }
 
-    pub fn new(bytes: &'a [u8], uplink: bool) -> Option<FHDR<'_>> {
+    pub fn new(bytes: &'a [u8], uplink: bool) -> Option<FHDR<'a>> {
         let data_len = bytes.len();
         if data_len < 7 {
             return None;

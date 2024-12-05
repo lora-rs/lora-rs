@@ -6,7 +6,7 @@ use heapless::Vec;
 use lorawan::maccommands::{LinkADRAnsPayload, RXTimingSetupAnsPayload, UplinkMacCommand};
 
 #[derive(Default, Debug, Clone)]
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Uplink {
     pub adr_ans: AdrAns,

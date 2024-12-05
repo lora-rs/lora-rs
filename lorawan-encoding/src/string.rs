@@ -115,7 +115,7 @@ fixed_len_struct_impl_to_string_msb! {
 }
 
 fixed_len_struct_impl_to_string_msb! {
-    NewSKey, 16;
+    NwkSKey, 16;
 }
 
 fixed_len_struct_impl_to_string_msb! {

@@ -70,7 +70,8 @@ where
     }
 }
 
-#[derive(Debug, defmt::Format)]
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error {
     Radio(RadioError),
     NoRxParams,

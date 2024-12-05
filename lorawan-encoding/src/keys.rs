@@ -9,7 +9,7 @@ macro_rules! lorawan_key {
         $(#[$outer])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+        #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
         pub struct $type(pub(crate) AES128);
 
         impl From<[u8;16]> for $type {
@@ -52,25 +52,6 @@ lorawan_key!(
     pub struct AppKey(AES128);
 );
 lorawan_key!(
-    /// You can construct NewSKey from a hex-encoded MSB string or bytes in MSB format.
-    ///
-    /// Typically, a LNS will provide a hex-encoded MSB string such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
-    ///
-    /// To create from a string:
-    /// ```
-    /// use lorawan::keys::NewSKey;
-    /// use core::str::FromStr;
-    /// let newskey = NewSKey::from_str("00112233445566778899aabbccddeeff").unwrap();
-    /// ```
-    ///
-    /// To create from a byte array, you should enter the bytes in MSB format:
-    /// ```
-    /// use lorawan::keys::NewSKey;
-    /// let newskey = NewSKey::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
-    /// ```
-    pub struct NewSKey(AES128);
-);
-lorawan_key!(
     /// You can construct AppSKey from a hex-encoded MSB string or bytes in MSB format.
     ///
     /// Typically, a LNS will provide a hex-encoded MSB string format such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
@@ -90,6 +71,29 @@ lorawan_key!(
     pub struct AppSKey(AES128);
 );
 
+lorawan_key!(
+    /// You can construct NwkSKey from a hex-encoded MSB string or bytes in MSB format.
+    ///
+    /// Typically, a LNS will provide a hex-encoded MSB string such as: `00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF`.
+    ///
+    /// To create from a string:
+    /// ```
+    /// use lorawan::keys::NwkSKey;
+    /// use core::str::FromStr;
+    /// let nwkskey = NwkSKey::from_str("00112233445566778899aabbccddeeff").unwrap();
+    /// ```
+    ///
+    /// To create from a byte array, you should enter the bytes in MSB format:
+    /// ```
+    /// use lorawan::keys::NwkSKey;
+    /// let nwkskey = NwkSKey::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+    /// ```
+    pub struct NwkSKey(AES128);
+);
+
+#[deprecated(since = "0.9.1", note = "Please use `NwkSKey` instead")]
+pub type NewSKey = NwkSKey;
+
 macro_rules! lorawan_eui {
     (
         $(#[$outer:meta])*
@@ -98,7 +102,7 @@ macro_rules! lorawan_eui {
         $(#[$outer])*
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        #[cfg_attr(feature = "defmt", derive(defmt::Format))]
+        #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
         pub struct $type(EUI64<[u8; 8]>);
 
         impl From<[u8;8]> for $type {
@@ -161,7 +165,7 @@ lorawan_eui!(
 );
 
 /// AES128 represents 128-bit AES key.
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub struct AES128(pub [u8; 16]);
@@ -173,7 +177,7 @@ impl From<[u8; 16]> for AES128 {
 }
 
 /// MIC represents LoRaWAN MIC.
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
 pub struct MIC(pub [u8; 4]);
 

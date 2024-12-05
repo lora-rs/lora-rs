@@ -8,7 +8,6 @@ pub use super::{
     region::{self, Region},
     Downlink, JoinMode,
 };
-use crate::log;
 use core::marker::PhantomData;
 use futures::{future::select, future::Either, pin_mut};
 use heapless::Vec;
@@ -54,7 +53,8 @@ where
 {
     crypto: PhantomData<C>,
     radio: R,
-    rng: G,
+    /// Access to provided (pseudo)-random number generator.
+    pub rng: G,
     timer: T,
     mac: Mac,
     radio_buffer: RadioBuffer<N>,
@@ -62,14 +62,14 @@ where
     class_c: bool,
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug)]
 pub enum Error<R> {
     Radio(R),
     Mac(mac::Error),
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug)]
 pub enum SendResponse {
     DownlinkReceived(mac::FcntDown),
@@ -78,7 +78,7 @@ pub enum SendResponse {
     RxComplete,
 }
 
-#[cfg_attr(feature = "defmt", derive(defmt::Format))]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug)]
 pub enum JoinResponse {
     JoinSuccess,
@@ -173,7 +173,6 @@ where
 
     /// Enables Class C behavior. Note that Class C downlinks are not possible until a confirmed
     /// uplink is sent to the LNS.
-
     pub fn enable_class_c(&mut self) {
         self.class_c = true;
     }
@@ -341,7 +340,7 @@ where
 
         // Class C listen while waiting for the window
         let rx_config = self.mac.get_rxc_config();
-        log::debug!("Configuring RXC window with config {}.", rx_config);
+        debug!("Configuring RXC window with config {}.", rx_config);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
         let mut response = None;
         let timeout_fut = self.timer.at(duration.into());
@@ -359,20 +358,20 @@ where
             .await
             {
                 RxcWindowResponse::Rx(sz, _, timeout_fut) => {
-                    log::debug!("RXC window received {} bytes.", sz);
+                    debug!("RXC window received {} bytes.", sz);
                     self.radio_buffer.set_pos(sz);
                     match self
                         .mac
                         .handle_rxc::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)?
                     {
                         mac::Response::NoUpdate => {
-                            log::debug!("RXC frame was invalid.");
+                            debug!("RXC frame was invalid.");
                             self.radio_buffer.clear();
                             // we preserve the timeout
                             maybe_timeout_fut = Some(timeout_fut);
                         }
                         r => {
-                            log::debug!("Valid RXC frame received.");
+                            debug!("Valid RXC frame received.");
                             self.radio_buffer.clear();
                             response = Some(r);
                             // more than one downlink may be received so we preserve the timeout
@@ -398,38 +397,38 @@ where
         let rx1_start_delay = self.mac.get_rx_delay(frame, &Window::_1) + window_delay
             - self.radio.get_rx_window_lead_time_ms();
 
-        log::debug!("Starting RX1 in {} ms.", rx1_start_delay);
+        debug!("Starting RX1 in {} ms.", rx1_start_delay);
         // sleep or RXC
         let _ = self.between_windows(rx1_start_delay).await?;
 
         // RX1
         let rx_config =
             self.mac.get_rx_config(self.radio.get_rx_window_buffer(), frame, &Window::_1);
-        log::debug!("Configuring RX1 window with config {}.", rx_config);
+        debug!("Configuring RX1 window with config {}.", rx_config);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
 
         if let Some(response) = self.rx_listen().await? {
-            log::debug!("RX1 received {}", response);
+            debug!("RX1 received {}", response);
             return Ok(response);
         }
 
         let rx2_start_delay = self.mac.get_rx_delay(frame, &Window::_2) + window_delay
             - self.radio.get_rx_window_lead_time_ms();
-        log::debug!("RX1 did not receive anything. Awaiting RX2 for {} ms.", rx2_start_delay);
+        debug!("RX1 did not receive anything. Awaiting RX2 for {} ms.", rx2_start_delay);
         // sleep or RXC
         let _ = self.between_windows(rx2_start_delay).await?;
 
         // RX2
         let rx_config =
             self.mac.get_rx_config(self.radio.get_rx_window_buffer(), frame, &Window::_2);
-        log::debug!("Configuring RX2 window with config {}.", rx_config);
+        debug!("Configuring RX2 window with config {}.", rx_config);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
 
         if let Some(response) = self.rx_listen().await? {
-            log::debug!("RX2 received {}", response);
+            debug!("RX2 received {}", response);
             return Ok(response);
         }
-        log::debug!("RX2 did not receive anything.");
+        debug!("RX2 did not receive anything.");
         Ok(self.mac.rx2_complete())
     }
 
