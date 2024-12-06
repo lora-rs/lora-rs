@@ -40,7 +40,7 @@ lorawan_key!(
     /// `AppKey` SHALL be stored on an end-device intending to use the OTAA procedure.
     /// It is NOT REQUIRED for ABP-only end-devices.
     ///
-    /// To create from a hex-encoded string:
+    /// To create from a hex-encoded MSB string:
     /// ```
     /// use lorawan::keys::AppKey;
     /// use core::str::FromStr;
@@ -61,7 +61,7 @@ lorawan_key!(
     /// `AppSKey` SHOULD be stored such that extraction and re-use by malicious
     /// actors is prevented.
     ///
-    /// To create from a hex-encoded string:
+    /// To create from a hex-encoded MSB string:
     /// ```
     /// use lorawan::keys::AppSKey;
     /// use core::str::FromStr;
@@ -82,7 +82,7 @@ lorawan_key!(
     /// It SHOULD be stored such that extraction and re-use by malicious
     /// actors is prevented.
     ///
-    /// To create from a hex-encoded string:
+    /// To create from a hex-encoded MSB string:
     /// ```
     /// use lorawan::keys::NwkSKey;
     /// use core::str::FromStr;
@@ -141,7 +141,7 @@ lorawan_eui!(
     /// It is a recommended practice that `DevEui` should also be available on
     /// an end-device label for the purpose of end-device administration.
     ///
-    /// To create from a hex-encoded string:
+    /// To create from a hex-encoded LSB string:
     /// ```
     /// use lorawan::keys::DevEui;
     /// use core::str::FromStr;
@@ -166,7 +166,7 @@ lorawan_eui!(
     ///
     /// As of LoRaWAN 1.0.4, `AppEui` is called `JoinEui`.
     ///
-    /// To create from a hex-encoded string:
+    /// To create from a hex-encoded LSB string:
     /// ```
     /// use lorawan::keys::AppEui;
     /// use core::str::FromStr;
