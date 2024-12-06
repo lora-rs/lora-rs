@@ -2,7 +2,7 @@ macro_rules! mac_cmd_zero_len {
     (
         $(
             $(#[$outer:meta])*
-            struct $type:ident[cmd=$name:ident, cid=$cid:expr, uplink=$uplink:expr]
+            struct $type:ident[cmd=$name:ident, cid=$cid:expr]
             )*
     ) => {
         $(
@@ -25,11 +25,6 @@ macro_rules! mac_cmd_zero_len {
                     $cid
                 }
 
-                /// Sent by end device or sent by network server.
-                pub const fn uplink() -> bool {
-                    $uplink
-                }
-
                 /// Length of empty payload.
                 pub const fn len() -> usize {
                     0
@@ -48,7 +43,7 @@ macro_rules! mac_cmds {
     (
         $(
             $(#[$outer:meta])*
-            struct $type:ident[cmd=$name:ident, cid=$cid:expr, uplink=$uplink:expr, size=$size:expr]
+            struct $type:ident[cmd=$name:ident, cid=$cid:expr, size=$size:expr]
             )*
     ) => {
         $(
@@ -75,11 +70,6 @@ macro_rules! mac_cmds {
                 /// Get the CID.
                 pub const fn cid() -> u8 {
                     $cid
-                }
-
-                /// Sent by end device or sent by network server.
-                pub const fn uplink() -> bool {
-                    $uplink
                 }
 
                 /// Length of payload without the CID.
@@ -118,15 +108,6 @@ macro_rules! mac_cmds_enum {
                 match *self {
                     $(
                         Self::$name(_) => $type::len(),
-                    )*
-                }
-            }
-
-            /// Sent by end device or sent by network server.
-            pub fn uplink(&self) -> bool {
-                match *self {
-                    $(
-                        Self::$name(_) => $type::uplink(),
                     )*
                 }
             }
