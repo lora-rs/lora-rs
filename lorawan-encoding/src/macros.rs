@@ -90,7 +90,7 @@ macro_rules! mac_cmds_enum {
     (
         $outer_vis:vis enum $outer_type:ident$(<$outer_lifetime:lifetime>),* {
         $(
-            $name:ident($type:ident$(<$lifetime:lifetime>),*)
+            $name:ident($type:ident$(<$lifetime:lifetime>)*),
         )*
     }
     ) => {

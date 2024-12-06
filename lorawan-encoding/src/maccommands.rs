@@ -24,36 +24,36 @@ pub fn mac_commands_len(cmds: &[&dyn SerializableMacCommand]) -> usize {
 mac_cmds_enum! {
     pub enum DownlinkMacCommand<'a> {
         // 1.0.0
-        LinkCheckAns(LinkCheckAnsPayload<'a>)
-        LinkADRReq(LinkADRReqPayload<'a>)
-        DutyCycleReq(DutyCycleReqPayload<'a>)
-        RXParamSetupReq(RXParamSetupReqPayload<'a>)
-        DevStatusReq(DevStatusReqPayload)
-        NewChannelReq(NewChannelReqPayload<'a>)
-        RXTimingSetupReq(RXTimingSetupReqPayload<'a>)
+        LinkCheckAns(LinkCheckAnsPayload<'a>),
+        LinkADRReq(LinkADRReqPayload<'a>),
+        DutyCycleReq(DutyCycleReqPayload<'a>),
+        RXParamSetupReq(RXParamSetupReqPayload<'a>),
+        DevStatusReq(DevStatusReqPayload),
+        NewChannelReq(NewChannelReqPayload<'a>),
+        RXTimingSetupReq(RXTimingSetupReqPayload<'a>),
         // 1.0.2
-        TXParamSetupReq(TXParamSetupReqPayload<'a>)
-        DlChannelReq(DlChannelReqPayload<'a>)
+        TXParamSetupReq(TXParamSetupReqPayload<'a>),
+        DlChannelReq(DlChannelReqPayload<'a>),
         // 1.0.3
-        DeviceTimeAns(DeviceTimeAnsPayload<'a>)
+        DeviceTimeAns(DeviceTimeAnsPayload<'a>),
     }
 }
 
 mac_cmds_enum! {
     pub enum UplinkMacCommand<'a> {
         // 1.0.0
-        LinkCheckReq(LinkCheckReqPayload)
-        LinkADRAns(LinkADRAnsPayload<'a>)
-        DutyCycleAns(DutyCycleAnsPayload)
-        RXParamSetupAns(RXParamSetupAnsPayload<'a>)
-        DevStatusAns(DevStatusAnsPayload<'a>)
-        NewChannelAns(NewChannelAnsPayload<'a>)
-        RXTimingSetupAns(RXTimingSetupAnsPayload)
+        LinkCheckReq(LinkCheckReqPayload),
+        LinkADRAns(LinkADRAnsPayload<'a>),
+        DutyCycleAns(DutyCycleAnsPayload),
+        RXParamSetupAns(RXParamSetupAnsPayload<'a>),
+        DevStatusAns(DevStatusAnsPayload<'a>),
+        NewChannelAns(NewChannelAnsPayload<'a>),
+        RXTimingSetupAns(RXTimingSetupAnsPayload),
         // 1.0.2
-        TXParamSetupAns(TXParamSetupAnsPayload)
-        DlChannelAns(DlChannelAnsPayload<'a>)
+        TXParamSetupAns(TXParamSetupAnsPayload),
+        DlChannelAns(DlChannelAnsPayload<'a>),
         // 1.0.3
-        DeviceTimeReq(DeviceTimeReqPayload)
+        DeviceTimeReq(DeviceTimeReqPayload),
     }
 }
 
