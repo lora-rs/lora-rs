@@ -237,20 +237,6 @@ impl<'a, T> MacCommandIterator<'a, T> {
     }
 }
 
-// impl<'a, T> Iterator for MacCommandIterator<'a, T> {
-//     type Item = T;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         if self.index < self.data.len() {
-//             if let Ok((l, v)) = parse_one_mac_cmd(&self.data[self.index..], self.uplink) {
-//                 self.index += 1 + l;
-//                 return Some(v);
-//             }
-//         }
-//         None
-//     }
-// }
-
 impl LinkCheckAnsPayload<'_> {
     create_value_reader_fn!(
         /// The link margin in dB of the last successfully received LinkCheckReq command.
