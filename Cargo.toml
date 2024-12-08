@@ -2,6 +2,7 @@
 members = [
     "lorawan-device",
     "lorawan-encoding",
+    "lorawan-macros",
     "lora-modulation",
     "lora-phy",
 ]
