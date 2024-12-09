@@ -20,12 +20,12 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
         let n = n.clone();
         let t = t.clone();
 
-        // DownlinkMacCommand.len()
+        // ...len()
         impl_len.push(quote! {
             Self::#n(_) => #t::len()
         });
 
-        // DownlinkMacCommand.bytes()
+        // ...bytes()
         impl_bytes.push(quote! {
             Self::#n(ref v) => v.bytes()
         });
