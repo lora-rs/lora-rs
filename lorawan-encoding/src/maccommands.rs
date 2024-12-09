@@ -4,6 +4,9 @@ use core::marker::PhantomData;
 #[deprecated(note = "Use lorawan::types::ChannelMask")]
 pub use crate::types::ChannelMask;
 
+#[deprecated(note = "Use lorawan::types::DataRateRange")]
+use crate::types::DataRateRange;
+
 #[deprecated(note = "Use lorawan::types::DLSettings")]
 pub use crate::types::DLSettings;
 
@@ -406,53 +409,6 @@ impl NewChannelReqPayload<'_> {
     /// The data rate range specifies allowed data rates for the new or modified channel.
     pub fn data_rate_range(&self) -> DataRateRange {
         DataRateRange::new_from_raw(self.0[4])
-    }
-}
-
-/// DataRateRange represents LoRaWAN DataRateRange.
-#[derive(Debug, PartialEq, Eq)]
-pub struct DataRateRange(u8);
-
-impl DataRateRange {
-    /// Constructs a new DataRateRange from the provided byte, without checking for correctness.
-    pub fn new_from_raw(byte: u8) -> DataRateRange {
-        DataRateRange(byte)
-    }
-
-    /// Constructs a new DataRateRange from the provided byte.
-    pub fn new(byte: u8) -> Result<DataRateRange, Error> {
-        Self::can_build_from(byte)?;
-
-        Ok(Self::new_from_raw(byte))
-    }
-
-    /// Check if the byte can be used to create DataRateRange.
-    pub fn can_build_from(byte: u8) -> Result<(), Error> {
-        if (byte >> 4) < (byte & 0x0f) {
-            return Err(Error::InvalidDataRateRange);
-        }
-        Ok(())
-    }
-
-    /// The highest data rate allowed on this channel.
-    pub fn max_data_rate(&self) -> u8 {
-        self.0 >> 4
-    }
-
-    /// The lowest data rate allowed on this channel.
-    pub fn min_data_rate(&self) -> u8 {
-        self.0 & 0x0f
-    }
-
-    /// The integer value of the DataRateRange.
-    pub fn raw_value(&self) -> u8 {
-        self.0
-    }
-}
-
-impl From<u8> for DataRateRange {
-    fn from(v: u8) -> Self {
-        DataRateRange(v)
     }
 }
 
