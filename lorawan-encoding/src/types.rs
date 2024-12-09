@@ -1,3 +1,5 @@
+//! LoRaWAN type primitives (frequency, channelmask, etc)
+//! commonly used in payloads.
 use crate::maccommands::Error;
 
 /// ChannelMask represents the ChannelMask from LoRaWAN.
