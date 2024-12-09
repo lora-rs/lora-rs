@@ -1,14 +1,31 @@
 use proc_macro2::Ident;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields, PathArguments};
+use syn::{parse_macro_input, Data, DeriveInput, Fields, Meta, PathArguments};
 
-#[proc_macro_derive(CommandHandler)]
+struct Payload {
+    name: Ident,
+    lifetime: Option<Ident>,
+}
+
+impl Payload {
+    fn new(name: Ident, lifetime: Option<Ident>) -> Self {
+        Self { name, lifetime }
+    }
+}
+
+// TODO: Figure out how to parse value to literal (and handle sanity checks)
+struct CmdInfo {
+    cid: Option<syn::Expr>,
+    len: Option<syn::Expr>,
+}
+
+#[proc_macro_derive(CommandHandler, attributes(cmd))]
 pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     let name = &input.ident;
 
-    // Vec<(Command, CommandPayload, Option<Lifetime>)>
+    // Parse enum members into list of (Command, Payload) tuples
     let members = parse_enum_members(&input);
 
     let mut impl_len = Vec::new();
@@ -16,9 +33,10 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
     let mut impl_cid = Vec::new();
     let mut impl_iter_next = Vec::new();
 
-    for (n, (t, _)) in members {
+    for (n, payload, _attributes) in members {
         let n = n.clone();
-        let t = t.clone();
+        let t = &payload.name;
+        let _lt = &payload.lifetime;
 
         // ...len()
         impl_len.push(quote! {
@@ -95,8 +113,16 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
     .into()
 }
 
-// Parse enum variant into tuple: (Name, Option<Lifetime>)
-fn parse_variant_arg(input: &syn::Type) -> (Ident, Option<Ident>) {
+// Parse enum variant arguments into `[Payload]` objects
+// For example:
+//
+// ```
+// enum Foo<'a> {
+//   FieldA(A),     # Payload { name: A, lifetime: None }
+//   FieldB(B<'a>), # Payload { name: B, lifetime: a }
+// }
+// ```
+fn parse_variant_fields(input: &syn::Type) -> Payload {
     match input {
         syn::Type::Path(p) => {
             if p.path.segments.len() != 1 {
@@ -109,11 +135,13 @@ fn parse_variant_arg(input: &syn::Type) -> (Ident, Option<Ident>) {
                         panic!("Only single argument is supported!");
                     }
                     match &e.args[0] {
-                        syn::GenericArgument::Lifetime(lt) => (var.clone(), Some(lt.ident.clone())),
+                        syn::GenericArgument::Lifetime(lt) => {
+                            Payload::new(var.clone(), Some(lt.ident.clone()))
+                        }
                         _ => todo!("???"),
                     }
                 }
-                PathArguments::None => (var.clone(), None),
+                PathArguments::None => Payload::new(var.clone(), None),
                 PathArguments::Parenthesized(_) => todo!("syn::PathArguments::None"),
             }
         }
@@ -121,22 +149,68 @@ fn parse_variant_arg(input: &syn::Type) -> (Ident, Option<Ident>) {
     }
 }
 
-// Parse enum variant into list of (Variant, Arg, ArgLifetime) tuples.
-fn parse_enum_members(input: &DeriveInput) -> Vec<(Ident, (Ident, Option<Ident>))> {
+// Parse `cid` and `len` values from `#[cmd(cid=cid, len=len)]` attribute into tuple
+fn parse_variant_attrs(attrs: &Vec<syn::Attribute>) -> CmdInfo {
+    let mut params = CmdInfo { cid: None, len: None };
+    for attr in attrs {
+        if !attr.path().is_ident("cmd") {
+            continue;
+        }
+        // Parse arguments
+        if let Ok(nested) = attr
+            .parse_args_with(syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated)
+        {
+            // We'll only expect NameValues (ie. val=xx)
+            for meta in nested {
+                match meta {
+                    Meta::NameValue(v) => {
+                        if let Some(id) = v.path.get_ident() {
+                            match id.to_string().as_str() {
+                                "cid" => {
+                                    params.cid = Some(v.value);
+                                }
+                                "len" => {
+                                    params.len = Some(v.value);
+                                }
+                                &_ => {
+                                    eprintln!("Unhandled argument: {}", &id);
+                                }
+                            }
+                        } else {
+                            panic!("Missing ident?");
+                        }
+                    }
+                    Meta::Path(_) => unimplemented!("Meta::Path is not supported!"),
+                    Meta::List(_) => unimplemented!("Meta::List is not supported!"),
+                }
+            }
+        }
+    }
+    params
+}
+
+// Parse enum variant into list of (Variant, [`Payload`]) tuples.
+// For example:
+// ```
+// enum Foo<'a> {
+//   FieldA(A),     # (FieldA, Payload { name: A, lifetime: None })
+//   FieldB(B<'a>), # (FieldB, Payload { name: B, lifetime: Some(a) })
+// }
+// ```
+fn parse_enum_members(input: &DeriveInput) -> Vec<(Ident, Payload, CmdInfo)> {
     let mut items = vec![];
     match input.data {
         Data::Enum(ref item) => {
             for elem in item.variants.clone() {
+                // eprintln!("{:#?}", elem);
                 if elem.fields.len() != 1 {
                     panic!("Expecting single argument for {}", elem.ident)
                 }
-                items.push((
-                    elem.ident,
-                    match elem.fields {
-                        Fields::Unnamed(f) => parse_variant_arg(&f.unnamed.get(0).unwrap().ty),
-                        Fields::Named(_) | Fields::Unit => panic!("Unsupported!"),
-                    },
-                ));
+                let payload = match elem.fields {
+                    Fields::Unnamed(f) => parse_variant_fields(&f.unnamed.get(0).unwrap().ty),
+                    Fields::Named(_) | Fields::Unit => panic!("Unsupported!"),
+                };
+                items.push((elem.ident.clone(), payload, parse_variant_attrs(&elem.attrs)));
             }
         }
         _ => panic!("Unsupported!"),
