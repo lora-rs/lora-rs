@@ -1,5 +1,6 @@
-use crate::macros::{mac_cmd_zero_len, mac_cmds, mac_cmds_enum};
+use crate::macros::{mac_cmd_zero_len, mac_cmds};
 use core::marker::PhantomData;
+use lorawan_macros::CommandHandler;
 
 #[deprecated(note = "Use lorawan::types::ChannelMask")]
 #[doc(hidden)]
@@ -41,40 +42,40 @@ pub fn mac_commands_len(cmds: &[&dyn SerializableMacCommand]) -> usize {
     cmds.iter().map(|mc| mc.payload_len() + 1).sum()
 }
 
-mac_cmds_enum! {
-    pub enum DownlinkMacCommand<'a> {
-        // 1.0.0
-        LinkCheckAns(LinkCheckAnsPayload<'a>),
-        LinkADRReq(LinkADRReqPayload<'a>),
-        DutyCycleReq(DutyCycleReqPayload<'a>),
-        RXParamSetupReq(RXParamSetupReqPayload<'a>),
-        DevStatusReq(DevStatusReqPayload),
-        NewChannelReq(NewChannelReqPayload<'a>),
-        RXTimingSetupReq(RXTimingSetupReqPayload<'a>),
-        // 1.0.2
-        TXParamSetupReq(TXParamSetupReqPayload<'a>),
-        DlChannelReq(DlChannelReqPayload<'a>),
-        // 1.0.3
-        DeviceTimeAns(DeviceTimeAnsPayload<'a>),
-    }
+#[derive(Debug, PartialEq, CommandHandler)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum DownlinkMacCommand<'a> {
+    // 1.0.0
+    LinkCheckAns(LinkCheckAnsPayload<'a>),
+    LinkADRReq(LinkADRReqPayload<'a>),
+    DutyCycleReq(DutyCycleReqPayload<'a>),
+    RXParamSetupReq(RXParamSetupReqPayload<'a>),
+    DevStatusReq(DevStatusReqPayload),
+    NewChannelReq(NewChannelReqPayload<'a>),
+    RXTimingSetupReq(RXTimingSetupReqPayload<'a>),
+    // 1.0.2
+    TXParamSetupReq(TXParamSetupReqPayload<'a>),
+    DlChannelReq(DlChannelReqPayload<'a>),
+    // 1.0.3
+    DeviceTimeAns(DeviceTimeAnsPayload<'a>),
 }
 
-mac_cmds_enum! {
-    pub enum UplinkMacCommand<'a> {
-        // 1.0.0
-        LinkCheckReq(LinkCheckReqPayload),
-        LinkADRAns(LinkADRAnsPayload<'a>),
-        DutyCycleAns(DutyCycleAnsPayload),
-        RXParamSetupAns(RXParamSetupAnsPayload<'a>),
-        DevStatusAns(DevStatusAnsPayload<'a>),
-        NewChannelAns(NewChannelAnsPayload<'a>),
-        RXTimingSetupAns(RXTimingSetupAnsPayload),
-        // 1.0.2
-        TXParamSetupAns(TXParamSetupAnsPayload),
-        DlChannelAns(DlChannelAnsPayload<'a>),
-        // 1.0.3
-        DeviceTimeReq(DeviceTimeReqPayload),
-    }
+#[derive(Debug, PartialEq, CommandHandler)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum UplinkMacCommand<'a> {
+    // 1.0.0
+    LinkCheckReq(LinkCheckReqPayload),
+    LinkADRAns(LinkADRAnsPayload<'a>),
+    DutyCycleAns(DutyCycleAnsPayload),
+    RXParamSetupAns(RXParamSetupAnsPayload<'a>),
+    DevStatusAns(DevStatusAnsPayload<'a>),
+    NewChannelAns(NewChannelAnsPayload<'a>),
+    RXTimingSetupAns(RXTimingSetupAnsPayload),
+    // 1.0.2
+    TXParamSetupAns(TXParamSetupAnsPayload),
+    DlChannelAns(DlChannelAnsPayload<'a>),
+    // 1.0.3
+    DeviceTimeReq(DeviceTimeReqPayload),
 }
 
 mac_cmd_zero_len! {
