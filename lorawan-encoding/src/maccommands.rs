@@ -2,18 +2,23 @@ use crate::macros::{mac_cmd_zero_len, mac_cmds, mac_cmds_enum};
 use core::marker::PhantomData;
 
 #[deprecated(note = "Use lorawan::types::ChannelMask")]
+#[doc(hidden)]
 pub use crate::types::ChannelMask;
 
 #[deprecated(note = "Use lorawan::types::DataRateRange")]
+#[doc(hidden)]
 use crate::types::DataRateRange;
 
 #[deprecated(note = "Use lorawan::types::DLSettings")]
+#[doc(hidden)]
 pub use crate::types::DLSettings;
 
 #[deprecated(note = "Use lorawan::types::Frequency")]
+#[doc(hidden)]
 pub use crate::types::Frequency;
 
 #[deprecated(note = "Use lorawan::types::Redundancy")]
+#[doc(hidden)]
 pub use crate::types::Redundancy;
 
 #[derive(Debug, PartialEq)]

@@ -1,5 +1,5 @@
 use super::maccommands::{mac_commands_len, SerializableMacCommand};
-use crate::types::{ChannelMask, DataRateRange, DLSettings, Frequency, Redundancy};
+use crate::types::{ChannelMask, DLSettings, DataRateRange, Frequency, Redundancy};
 
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
