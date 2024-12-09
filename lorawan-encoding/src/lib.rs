@@ -13,6 +13,7 @@ mod macros;
 pub mod packet_length;
 pub mod parser;
 pub mod string;
+pub mod types;
 
 #[cfg(feature = "full")]
 pub mod extra;
