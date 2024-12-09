@@ -14,12 +14,12 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-aes = { version = "0.8", optional = true }
-cmac = { version = "0.7", optional = true }
-generic-array = "0"
+aes = { version = "0.9.0-pre.2", optional = true }
+cmac = { version = "0.8.0-pre.2", optional = true }
 hex = { version = "0", default-features = false }
 defmt = { version = "0.3", optional = true }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true}
+hybrid-array = { version = "0.2.0-pre.10" }
 
 [dev-dependencies]
 criterion = "0"

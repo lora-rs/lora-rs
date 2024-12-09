@@ -1,7 +1,7 @@
 //! Implement types for dealing with LoRaWAN keys and required
 //! cryptography entities.
 use super::parser::EUI64;
-use super::securityhelpers::generic_array::{typenum::U16, GenericArray};
+use super::securityhelpers::generic_array::{typenum::U16, Array as GenericArray};
 
 macro_rules! lorawan_key {
     (
