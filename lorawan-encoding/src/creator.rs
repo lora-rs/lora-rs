@@ -4,7 +4,8 @@
 
 use super::keys::{AppKey, AppSKey, CryptoFactory, Decrypter, NwkSKey, AES128};
 use super::maccommandcreator;
-use super::maccommands::{mac_commands_len, DLSettings, Frequency, SerializableMacCommand};
+use super::maccommands::{mac_commands_len, DLSettings, SerializableMacCommand};
+use crate::types::Frequency;
 use super::parser;
 use super::securityhelpers;
 
@@ -196,9 +197,9 @@ impl JoinAcceptCreator<[u8; 33], DefaultFactory> {
     /// phy.set_dev_addr(&[1; 4]);
     /// phy.set_dl_settings(2);
     /// phy.set_rx_delay(1);
-    /// let mut freqs: Vec<lorawan::maccommands::Frequency> = Vec::new();
-    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap());
-    /// freqs.push(lorawan::maccommands::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap());
+    /// let mut freqs: Vec<lorawan::types::Frequency> = Vec::new();
+    /// freqs.push(lorawan::types::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap());
+    /// freqs.push(lorawan::types::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap());
     /// phy.set_c_f_list(freqs);
     /// let payload = phy.build(&key).unwrap();
     /// ```

@@ -21,8 +21,8 @@
 //! ```
 
 use super::keys::{AppKey, AppSKey, CryptoFactory, Encrypter, NwkSKey, AES128, MIC};
-use super::maccommands::{DLSettings, Frequency};
-use crate::types::ChannelMask;
+use super::maccommands::DLSettings;
+use crate::types::{ChannelMask, Frequency};
 
 use super::securityhelpers;
 use super::securityhelpers::generic_array::GenericArray;
