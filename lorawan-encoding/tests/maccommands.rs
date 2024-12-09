@@ -1,6 +1,6 @@
 use lorawan::maccommandcreator::*;
 use lorawan::maccommands::*;
-use lorawan::types::{DLSettings, Frequency};
+use lorawan::types::{DLSettings, Frequency, Redundancy};
 
 macro_rules! test_helper {
     ( $cmd:ident, $data:ident, $name:ident, $type:ident, $size:expr, $( ( $method:ident, $val:expr ) ,)*) => {{
