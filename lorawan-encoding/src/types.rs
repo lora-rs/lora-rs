@@ -213,3 +213,35 @@ impl AsRef<[u8]> for Frequency<'_> {
         self.0
     }
 }
+
+/// Redundancy represents the LinkADRReq Redundancy from LoRaWAN.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Redundancy(u8);
+
+impl Redundancy {
+    /// Constructs a new Redundancy from the provided data.
+    pub fn new(data: u8) -> Self {
+        Redundancy(data)
+    }
+
+    /// Controls the interpretation of the previously defined ChannelMask bit mask.
+    pub fn channel_mask_control(&self) -> u8 {
+        (self.0 >> 4) & 0x07
+    }
+
+    /// How many times each message should be repeated.
+    pub fn number_of_transmissions(&self) -> u8 {
+        self.0 & 0x0f
+    }
+
+    /// The integer value of the Redundancy.
+    pub fn raw_value(&self) -> u8 {
+        self.0
+    }
+}
+
+impl From<u8> for Redundancy {
+    fn from(v: u8) -> Self {
+        Redundancy(v)
+    }
+}
