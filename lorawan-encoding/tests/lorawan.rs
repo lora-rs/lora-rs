@@ -4,6 +4,7 @@ use lorawan::keys::*;
 use lorawan::maccommandcreator::*;
 use lorawan::maccommands::*;
 use lorawan::parser::*;
+use lorawan::types::Frequency;
 
 fn phy_join_request_payload() -> Vec<u8> {
     let mut res = Vec::new();
