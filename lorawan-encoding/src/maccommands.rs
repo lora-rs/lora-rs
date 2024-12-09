@@ -4,6 +4,9 @@ use core::marker::PhantomData;
 #[deprecated(note = "Use lorawan::types::ChannelMask")]
 pub use crate::types::ChannelMask;
 
+#[deprecated(note = "Use lorawan::types::DLSettings")]
+pub use crate::types::DLSettings;
+
 #[deprecated(note = "Use lorawan::types::Frequency")]
 pub use crate::types::Frequency;
 
@@ -371,39 +374,6 @@ impl RXParamSetupReqPayload<'_> {
     /// RX2 frequency.
     pub fn frequency(&self) -> Frequency<'_> {
         Frequency::new_from_raw(&self.0[1..])
-    }
-}
-
-/// DLSettings represents LoRaWAN DLSettings.
-#[derive(Debug, PartialEq, Eq)]
-pub struct DLSettings(u8);
-
-impl DLSettings {
-    /// Constructs a new DLSettings from the provided data.
-    pub fn new(byte: u8) -> DLSettings {
-        DLSettings(byte)
-    }
-
-    /// The offset between the uplink data rate and the downlink data rate used to communicate with
-    /// the end-device on the first reception slot (RX1).
-    pub fn rx1_dr_offset(&self) -> u8 {
-        self.0 >> 4 & 0x07
-    }
-
-    /// The data rate of a downlink using the second receive window.
-    pub fn rx2_data_rate(&self) -> u8 {
-        self.0 & 0x0f
-    }
-
-    /// The integer value of the DL Settings.
-    pub fn raw_value(&self) -> u8 {
-        self.0
-    }
-}
-
-impl From<u8> for DLSettings {
-    fn from(v: u8) -> Self {
-        DLSettings(v)
     }
 }
 

@@ -4,10 +4,10 @@
 
 use super::keys::{AppKey, AppSKey, CryptoFactory, Decrypter, NwkSKey, AES128};
 use super::maccommandcreator;
-use super::maccommands::{mac_commands_len, DLSettings, SerializableMacCommand};
-use crate::types::Frequency;
+use super::maccommands::{mac_commands_len, SerializableMacCommand};
 use super::parser;
 use super::securityhelpers;
+use crate::types::{DLSettings, Frequency};
 
 #[cfg(feature = "default-crypto")]
 use super::default_crypto::DefaultFactory;
