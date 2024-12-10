@@ -14,7 +14,8 @@ impl Payload {
 }
 
 // TODO: Figure out how to parse value to literal (and handle value sanity checks)
-struct CmdInfo {
+struct Attributes {
+    doc: Vec<syn::Attribute>,
     cid: Option<syn::Expr>,
     len: Option<syn::Expr>,
 }
@@ -39,6 +40,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
         let n = n.clone();
         let t = &payload.name;
         let _lt = &payload.lifetime;
+        let doc = &attributes.doc;
 
         // ...len()
         impl_len.push(quote! {
@@ -65,7 +67,6 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
 
         // Generate PayLoad structs (for payloads with zero length)
         // TODO: Support for payloads where len != 0
-        // TODO: Docstring handling (for structs) and manipulation (methods)
         if attributes.cid.is_some() && attributes.len.is_some() {
             let cid = attributes.cid.unwrap();
             let len = attributes.len.unwrap();
@@ -73,6 +74,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
             payload_struct_impls.push(quote! {
                 #[derive(Debug, PartialEq, Eq)]
                 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+                #( #doc )*
                 pub struct #t();
 
                 impl #t {
@@ -150,7 +152,6 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
         }
 
         #( #payload_struct_impls )*
-
     }
     .into()
 }
@@ -192,9 +193,15 @@ fn parse_variant_fields(input: &syn::Type) -> Payload {
 }
 
 // Parse `cid` and `len` values from `#[cmd(cid=cid, len=len)]` attribute into tuple
-fn parse_variant_attrs(attrs: &Vec<syn::Attribute>) -> CmdInfo {
-    let mut params = CmdInfo { cid: None, len: None };
+fn parse_variant_attrs(attrs: &Vec<syn::Attribute>) -> Attributes {
+    let mut doc = Vec::new();
+    let mut cid = None;
+    let mut len = None;
     for attr in attrs {
+        if attr.path().is_ident("doc") {
+            doc.push(attr.clone());
+            continue;
+        }
         if !attr.path().is_ident("cmd") {
             continue;
         }
@@ -209,10 +216,10 @@ fn parse_variant_attrs(attrs: &Vec<syn::Attribute>) -> CmdInfo {
                         if let Some(id) = v.path.get_ident() {
                             match id.to_string().as_str() {
                                 "cid" => {
-                                    params.cid = Some(v.value);
+                                    cid = Some(v.value);
                                 }
                                 "len" => {
-                                    params.len = Some(v.value);
+                                    len = Some(v.value);
                                 }
                                 &_ => {
                                     eprintln!("Unhandled argument: {}", &id);
@@ -228,20 +235,20 @@ fn parse_variant_attrs(attrs: &Vec<syn::Attribute>) -> CmdInfo {
             }
         }
     }
-    params
+    Attributes { doc, cid, len }
 }
 
-// Parse enum variant into list of (Variant, Payload, CmdInfo) tuples.
+// Parse enum variant into list of (Variant, Payload, Attributes) tuples.
 // For example:
 // ```
 // enum Foo<'a> {
 //   #[cmd(cid=0x1, len=1)]
-//   FieldA(A),     # (FieldA, Payload { name: A, lifetime: None }, CmdInfo { cid: 0x1, len: 1})
+//   FieldA(A),     # (FieldA, Payload { name: A, lifetime: None }, Attributes)
 //   #[cmd(cid=0x2, len=5)]
-//   FieldB(B<'a>), # (FieldB, Payload { name: B, lifetime: Some(a) }, CmdInfo { cid: 0x2, len: 5})
+//   FieldB(B<'a>), # (FieldB, Payload { name: B, lifetime: Some(a) }, Attributes)
 // }
 // ```
-fn parse_enum_members(input: &DeriveInput) -> Vec<(Ident, Payload, CmdInfo)> {
+fn parse_enum_members(input: &DeriveInput) -> Vec<(Ident, Payload, Attributes)> {
     let mut items = vec![];
     match input.data {
         Data::Enum(ref item) => {
@@ -259,7 +266,6 @@ fn parse_enum_members(input: &DeriveInput) -> Vec<(Ident, Payload, CmdInfo)> {
         }
         _ => panic!("Unsupported!"),
     };
-    // TODO: Sanity checks?
-    // TODO: Warn about missing CmdInfo and its values...
+    // TODO: Sanity checks like missing cid/len and wrong values
     items
 }
