@@ -13,7 +13,7 @@ impl Payload {
     }
 }
 
-// TODO: Figure out how to parse value to literal (and handle sanity checks)
+// TODO: Figure out how to parse value to literal (and handle value sanity checks)
 struct CmdInfo {
     cid: Option<syn::Expr>,
     len: Option<syn::Expr>,
@@ -33,7 +33,9 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
     let mut impl_cid = Vec::new();
     let mut impl_iter_next = Vec::new();
 
-    for (n, payload, _attributes) in members {
+    let mut payload_struct_impls = Vec::new();
+
+    for (n, payload, attributes) in members {
         let n = n.clone();
         let t = &payload.name;
         let _lt = &payload.lifetime;
@@ -60,6 +62,43 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                 Some(#name::#n(#t::new_from_raw(&data[1..1 + #t::len()])))
             } else
         });
+
+        // Generate PayLoad structs (for payloads with zero length)
+        // TODO: Support for payloads where len != 0
+        // TODO: Docstring handling (for structs) and manipulation (methods)
+        if attributes.cid.is_some() && attributes.len.is_some() {
+            let cid = attributes.cid.unwrap();
+            let len = attributes.len.unwrap();
+
+            payload_struct_impls.push(quote! {
+                #[derive(Debug, PartialEq, Eq)]
+                #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+                pub struct #t();
+
+                impl #t {
+                    /// Create new
+                    pub fn new(_: &[u8]) -> #t {
+                        #t()
+                    }
+                    /// Create from raw_bytes (for compatibility with non-zero length payloads)
+                    pub fn new_from_raw(_: &[u8]) -> #t {
+                        #t()
+                    }
+                    /// Payload CID
+                    pub const fn cid() -> u8 {
+                        #cid
+                    }
+                    /// Length of empty payload.
+                    pub const fn len() -> usize {
+                        #len
+                    }
+                    /// Reference to the empty payload.
+                    pub fn bytes(&self) -> &[u8] {
+                        &[]
+                    }
+                }
+            });
+        }
     }
 
     quote! {
@@ -109,6 +148,9 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                 }
             }
         }
+
+        #( #payload_struct_impls )*
+
     }
     .into()
 }
@@ -189,12 +231,14 @@ fn parse_variant_attrs(attrs: &Vec<syn::Attribute>) -> CmdInfo {
     params
 }
 
-// Parse enum variant into list of (Variant, [`Payload`]) tuples.
+// Parse enum variant into list of (Variant, Payload, CmdInfo) tuples.
 // For example:
 // ```
 // enum Foo<'a> {
-//   FieldA(A),     # (FieldA, Payload { name: A, lifetime: None })
-//   FieldB(B<'a>), # (FieldB, Payload { name: B, lifetime: Some(a) })
+//   #[cmd(cid=0x1, len=1)]
+//   FieldA(A),     # (FieldA, Payload { name: A, lifetime: None }, CmdInfo { cid: 0x1, len: 1})
+//   #[cmd(cid=0x2, len=5)]
+//   FieldB(B<'a>), # (FieldB, Payload { name: B, lifetime: Some(a) }, CmdInfo { cid: 0x2, len: 5})
 // }
 // ```
 fn parse_enum_members(input: &DeriveInput) -> Vec<(Ident, Payload, CmdInfo)> {
@@ -215,5 +259,7 @@ fn parse_enum_members(input: &DeriveInput) -> Vec<(Ident, Payload, CmdInfo)> {
         }
         _ => panic!("Unsupported!"),
     };
+    // TODO: Sanity checks?
+    // TODO: Warn about missing CmdInfo and its values...
     items
 }
