@@ -1,3 +1,7 @@
+//! LoRaWAN MAC layer command and payload handling support.
+//!
+//! A MAC command consists of a command identifier (CID) of 1 octet followed
+//! by a possibly empty command-specific sequence of octets (payload).
 use core::marker::PhantomData;
 use lorawan_macros::CommandHandler;
 
@@ -43,38 +47,39 @@ pub fn mac_commands_len(cmds: &[&dyn SerializableMacCommand]) -> usize {
 
 #[derive(Debug, PartialEq, CommandHandler)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+/// Downlink MAC commands, transmitted by Network Server
 pub enum DownlinkMacCommand<'a> {
     // LoRaWAN 1.0.0+ commands
-    /// LinkCheckAns payload support (LoRaWAN 1.0.0+)
+    /// LinkCheckAns payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x02, len = 2)]
     LinkCheckAns(LinkCheckAnsPayload<'a>),
 
-    /// LinkADRReq payload support (LoRaWAN 1.0.0+)
+    /// LinkADRReq payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x03, len = 4)]
     LinkADRReq(LinkADRReqPayload<'a>),
 
-    /// DutyCycleReq Payload support (LoRaWAN 1.0.0+)
+    /// DutyCycleReq Payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x04, len = 1)]
     DutyCycleReq(DutyCycleReqPayload<'a>),
 
-    /// RXParamSetupReq payload support (LoRaWAN 1.0.0+)
+    /// RXParamSetupReq payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x05, len = 4)]
     RXParamSetupReq(RXParamSetupReqPayload<'a>),
 
-    /// DevStatusReq payload support (LoRaWAN 1.0.0+)
+    /// DevStatusReq payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x06, len = 0)]
     DevStatusReq(DevStatusReqPayload),
 
-    /// NewChannelReq payload support (LoRaWAN 1.0.0+)
+    /// NewChannelReq payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x07, len = 5)]
     NewChannelReq(NewChannelReqPayload<'a>),
 
-    /// RXTimingSetupReq payload support (LoRaWAN 1.0.0+)
+    /// RXTimingSetupReq payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x08, len = 1)]
     RXTimingSetupReq(RXTimingSetupReqPayload<'a>),
 
     // LoRaWAN 1.0.2+ commands
-    /// TXParamSetupReq payload support (LoRaWAN 1.0.2+).
+    /// TXParamSetupReq payload handling (LoRaWAN 1.0.2+).
     #[cmd(cid = 0x09, len = 1)]
     TXParamSetupReq(TXParamSetupReqPayload<'a>),
 
@@ -83,54 +88,55 @@ pub enum DownlinkMacCommand<'a> {
     DlChannelReq(DlChannelReqPayload<'a>),
 
     // LoRaWAN 1.0.3+ commands
-    /// DeviceTimeAns payload support (LoRaWAN 1.0.3+)
+    /// DeviceTimeAns payload handling (LoRaWAN 1.0.3+)
     #[cmd(cid = 0x0D, len = 5)]
     DeviceTimeAns(DeviceTimeAnsPayload<'a>),
 }
 
 #[derive(Debug, PartialEq, CommandHandler)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+/// Uplink MAC commands, transmitted by End-device
 pub enum UplinkMacCommand<'a> {
     // LoRaWAN 1.0.0 commands
-    /// LinkCheckReq payload support (LoRaWAN 1.0.0+)
+    /// LinkCheckReq payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x02, len = 0)]
     LinkCheckReq(LinkCheckReqPayload),
 
-    /// LinkADRAns payload support (LoRaWAN 1.0.0+)
+    /// LinkADRAns payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x03, len = 1)]
     LinkADRAns(LinkADRAnsPayload<'a>),
 
-    /// DutyCycleAns payload support (LoRaWAN 1.0.0+)
+    /// DutyCycleAns payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x04, len = 0)]
     DutyCycleAns(DutyCycleAnsPayload),
 
-    /// RXParamSetupAns payload support (LoRaWAN 1.0.0+)
+    /// RXParamSetupAns payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x05, len = 1)]
     RXParamSetupAns(RXParamSetupAnsPayload<'a>),
 
-    /// DevStatusAns payload support (LoRaWAN 1.0.0+)
+    /// DevStatusAns payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x06, len = 2)]
     DevStatusAns(DevStatusAnsPayload<'a>),
 
-    /// NewChannelAns payload support (LoRaWAN 1.0.0+)
+    /// NewChannelAns payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x07, len = 1)]
     NewChannelAns(NewChannelAnsPayload<'a>),
 
-    /// RXTimingSetupAns payload support (LoRaWAN 1.0.0+)
+    /// RXTimingSetupAns payload handling (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x08, len = 0)]
     RXTimingSetupAns(RXTimingSetupAnsPayload),
 
     // LoRaWAN 1.0.2+ commands
-    /// TXParamSetupAns payload support (LoRaWAN 1.0.2+)
+    /// TXParamSetupAns payload handling (LoRaWAN 1.0.2+)
     #[cmd(cid = 0x09, len = 0)]
     TXParamSetupAns(TXParamSetupAnsPayload),
 
-    /// DlChannelAns payload support (LoRaWAN 1.0.2+)
+    /// DlChannelAns payload handling (LoRaWAN 1.0.2+)
     #[cmd(cid = 0x0A, len = 1)]
     DlChannelAns(DlChannelAnsPayload<'a>),
 
     // 1.0.3+
-    /// DeviceTimeReq payload support (LoRaWAN 1.0.3+)
+    /// DeviceTimeReq payload handling (LoRaWAN 1.0.3+)
     #[cmd(cid = 0x0D, len = 0)]
     DeviceTimeReq(DeviceTimeReqPayload),
 }
