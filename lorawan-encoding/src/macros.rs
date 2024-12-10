@@ -1,44 +1,3 @@
-macro_rules! mac_cmd_zero_len {
-    (
-        $(
-            $(#[$outer:meta])*
-            struct $type:ident[cmd=$name:ident, cid=$cid:expr]
-            )*
-    ) => {
-        $(
-            $(#[$outer])*
-            pub struct $type();
-
-            impl $type {
-                /// Creation.
-                pub fn new(_: &[u8]) -> $type {
-                    $type()
-                }
-
-                /// Duplicate fn to be compatible with the mac_cmds macro
-                pub fn new_from_raw(_: &[u8]) ->$type {
-                    $type()
-                }
-
-                /// Get the CID.
-                pub const fn cid() -> u8 {
-                    $cid
-                }
-
-                /// Length of empty payload.
-                pub const fn len() -> usize {
-                    0
-                }
-
-                /// Reference to the empty payload.
-                pub fn bytes (&self) -> &[u8]{
-                    &[]
-                }
-            }
-        )*
-    }
-}
-
 macro_rules! mac_cmds {
     (
         $(
@@ -87,4 +46,4 @@ macro_rules! mac_cmds {
 }
 
 // Export the macros for internal use
-pub(crate) use {mac_cmd_zero_len, mac_cmds};
+pub(crate) use mac_cmds;
