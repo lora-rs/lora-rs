@@ -9,7 +9,6 @@ pub mod creator;
 pub mod keys;
 pub mod maccommandcreator;
 pub mod maccommands;
-mod macros;
 pub mod packet_length;
 pub mod parser;
 pub mod string;
