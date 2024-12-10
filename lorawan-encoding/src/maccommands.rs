@@ -1,4 +1,3 @@
-use crate::macros::mac_cmds;
 use core::marker::PhantomData;
 use lorawan_macros::CommandHandler;
 
@@ -45,121 +44,95 @@ pub fn mac_commands_len(cmds: &[&dyn SerializableMacCommand]) -> usize {
 #[derive(Debug, PartialEq, CommandHandler)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum DownlinkMacCommand<'a> {
-    // 1.0.0
+    // LoRaWAN 1.0.0+ commands
+    /// LinkCheckAns payload support (LoRaWAN 1.0.0+)
+    #[cmd(cid = 0x02, len = 2)]
     LinkCheckAns(LinkCheckAnsPayload<'a>),
+
+    /// LinkADRReq payload support (LoRaWAN 1.0.0+)
+    #[cmd(cid = 0x03, len = 4)]
     LinkADRReq(LinkADRReqPayload<'a>),
+
+    /// DutyCycleReq Payload support (LoRaWAN 1.0.0+)
+    #[cmd(cid = 0x04, len = 1)]
     DutyCycleReq(DutyCycleReqPayload<'a>),
+
+    /// RXParamSetupReq payload support (LoRaWAN 1.0.0+)
+    #[cmd(cid = 0x05, len = 4)]
     RXParamSetupReq(RXParamSetupReqPayload<'a>),
+
     /// DevStatusReq payload support (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x06, len = 0)]
     DevStatusReq(DevStatusReqPayload),
+
+    /// NewChannelReq payload support (LoRaWAN 1.0.0+)
+    #[cmd(cid = 0x07, len = 5)]
     NewChannelReq(NewChannelReqPayload<'a>),
+
+    /// RXTimingSetupReq payload support (LoRaWAN 1.0.0+)
+    #[cmd(cid = 0x08, len = 1)]
     RXTimingSetupReq(RXTimingSetupReqPayload<'a>),
-    // 1.0.2
+
+    // LoRaWAN 1.0.2+ commands
+    /// TXParamSetupReq payload support (LoRaWAN 1.0.2+).
+    #[cmd(cid = 0x09, len = 1)]
     TXParamSetupReq(TXParamSetupReqPayload<'a>),
+
+    /// DlChannelReq payload (LoRaWAN 1.0.2+)
+    #[cmd(cid = 0x0A, len = 4)]
     DlChannelReq(DlChannelReqPayload<'a>),
-    // 1.0.3
+
+    // LoRaWAN 1.0.3+ commands
+    /// DeviceTimeAns payload support (LoRaWAN 1.0.3+)
+    #[cmd(cid = 0x0D, len = 5)]
     DeviceTimeAns(DeviceTimeAnsPayload<'a>),
 }
 
 #[derive(Debug, PartialEq, CommandHandler)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum UplinkMacCommand<'a> {
-    // 1.0.0
+    // LoRaWAN 1.0.0 commands
     /// LinkCheckReq payload support (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x02, len = 0)]
     LinkCheckReq(LinkCheckReqPayload),
+
+    /// LinkADRAns payload support (LoRaWAN 1.0.0+)
+    #[cmd(cid = 0x03, len = 1)]
     LinkADRAns(LinkADRAnsPayload<'a>),
+
     /// DutyCycleAns payload support (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x04, len = 0)]
     DutyCycleAns(DutyCycleAnsPayload),
+
+    /// RXParamSetupAns payload support (LoRaWAN 1.0.0+)
+    #[cmd(cid = 0x05, len = 1)]
     RXParamSetupAns(RXParamSetupAnsPayload<'a>),
+
+    /// DevStatusAns payload support (LoRaWAN 1.0.0+)
+    #[cmd(cid = 0x06, len = 2)]
     DevStatusAns(DevStatusAnsPayload<'a>),
+
+    /// NewChannelAns payload support (LoRaWAN 1.0.0+)
+    #[cmd(cid = 0x07, len = 1)]
     NewChannelAns(NewChannelAnsPayload<'a>),
+
     /// RXTimingSetupAns payload support (LoRaWAN 1.0.0+)
     #[cmd(cid = 0x08, len = 0)]
     RXTimingSetupAns(RXTimingSetupAnsPayload),
-    // 1.0.2+
+
+    // LoRaWAN 1.0.2+ commands
     /// TXParamSetupAns payload support (LoRaWAN 1.0.2+)
     #[cmd(cid = 0x09, len = 0)]
     TXParamSetupAns(TXParamSetupAnsPayload),
+
+    /// DlChannelAns payload support (LoRaWAN 1.0.2+)
+    #[cmd(cid = 0x0A, len = 1)]
     DlChannelAns(DlChannelAnsPayload<'a>),
+
     // 1.0.3+
     /// DeviceTimeReq payload support (LoRaWAN 1.0.3+)
     #[cmd(cid = 0x0D, len = 0)]
     DeviceTimeReq(DeviceTimeReqPayload),
-}
-
-mac_cmds! {
-    /// LinkCheckAnsPayload represents the LinkCheckAns LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct LinkCheckAnsPayload[cmd=LinkCheckAns, cid=0x02, size=2]
-
-    /// LinkADRReqPayload represents the LinkADRReq LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct LinkADRReqPayload[cmd=LinkADRReq, cid=0x03, size=4]
-
-    /// LinkADRAnsPayload represents the LinkADRAns LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct LinkADRAnsPayload[cmd=LinkADRAns, cid=0x03, size=1]
-
-    /// DutyCycleReqPayload represents the DutyCycleReq LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct DutyCycleReqPayload[cmd=DutyCycleReq, cid=0x04, size=1]
-
-    /// RXParamSetupReqPayload represents the RXParamSetupReq LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct RXParamSetupReqPayload[cmd=RXParamSetupReq, cid=0x05, size=4]
-
-    /// RXParamSetupAnsPayload represents the RXParamSetupAns LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct RXParamSetupAnsPayload[cmd=RXParamSetupAns, cid=0x05, size=1]
-
-    /// DevStatusAnsPayload represents the DevStatusAns LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct DevStatusAnsPayload[cmd=DevStatusAns, cid=0x06, size=2]
-
-    /// NewChannelReqPayload represents the NewChannelReq LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct NewChannelReqPayload[cmd=NewChannelReq, cid=0x07, size=5]
-
-    /// NewChannelAnsPayload represents the NewChannelAns LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct NewChannelAnsPayload[cmd=NewChannelAns, cid=0x07, size=1]
-
-    /// RXTimingSetupReqPayload represents the RXTimingSetupReq LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct RXTimingSetupReqPayload[cmd=RXTimingSetupReq, cid=0x08, size=1]
-
-    /// TXParamSetupReqPayload represents the TXParamSetupReq LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct TXParamSetupReqPayload[cmd=TXParamSetupReq, cid=0x09, size=1]
-
-    /// DlChannelReqPayload represents the DlChannelReq LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct DlChannelReqPayload[cmd=DlChannelReq, cid=0x0A, size=4]
-
-    /// DlChannelAnsPayload represents the DlChannelAns LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct DlChannelAnsPayload[cmd=DlChannelAns, cid=0x0A, size=1]
-
-    /// DeviceTimeAnsPayload represents the DeviceTimeAns LoRaWAN MACCommand.
-    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-    #[derive(Debug, PartialEq, Eq)]
-    struct DeviceTimeAnsPayload[cmd=DeviceTimeAns, cid=0x0D, size=5]
 }
 
 macro_rules! create_ack_fn {
