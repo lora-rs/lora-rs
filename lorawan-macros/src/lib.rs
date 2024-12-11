@@ -13,13 +13,12 @@ impl Payload {
     }
 }
 
-// TODO: Figure out how to parse value to literal (and handle value sanity checks)
 struct Attributes {
     doc: Vec<syn::Attribute>,
     attrs: Option<(syn::Expr, syn::Expr)>,
 }
 
-#[proc_macro_derive(CommandHandler, attributes(cmd))]
+#[proc_macro_derive(CommandHandler, attributes(ack, cmd))]
 pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -230,55 +229,64 @@ fn parse_variant_fields(input: &syn::Type) -> Payload {
     }
 }
 
-// Parse `cid` and `len` values from `#[cmd(cid=cid, len=len)]` attribute into tuple
-fn parse_variant_attrs(attrs: &Vec<syn::Attribute>) -> Attributes {
-    let mut doc = Vec::new();
+/// Handler for `#[cmd(cid = ..., len = ...)]` attribute
+fn attr_handle_cmd(attr: &syn::Attribute) -> Option<(syn::Expr, syn::Expr)> {
+    // TODO: Figure out how to convert cid/len values to u8
+    // TODO: Raise errors on missing cid/len as these are required?
     let mut cid = None;
     let mut len = None;
-    for attr in attrs {
-        // Only support `#[doc(...)]`
-        if attr.path().is_ident("doc") {
-            doc.push(attr.clone());
-            continue;
-        }
-        // ... and `#[cmd(...)]` arguments
-        if !attr.path().is_ident("cmd") {
-            continue;
-        }
-        if let Ok(nested) = attr
-            .parse_args_with(syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated)
-        {
-            for meta in nested {
-                match meta {
-                    Meta::Path(_) => unimplemented!("Meta::Path is not supported!"),
-                    Meta::List(_) => unimplemented!("Meta::List is not supported!"),
-                    // We'll only expect NameValues (ie. val=xx)
-                    Meta::NameValue(v) => {
-                        if let Some(id) = v.path.get_ident() {
-                            match id.to_string().as_str() {
-                                "cid" => {
-                                    cid = Some(v.value);
-                                }
-                                "len" => {
-                                    len = Some(v.value);
-                                }
-                                &_ => {
-                                    panic!("Invalid argument: {}", &id);
-                                }
+    if let Ok(nested) =
+        attr.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated)
+    {
+        for meta in nested {
+            match meta {
+                Meta::Path(_) => unimplemented!("Meta::Path is not supported!"),
+                Meta::List(_) => unimplemented!("Meta::List is not supported!"),
+                // We'll only expect NameValues (ie. val=xx)
+                Meta::NameValue(v) => {
+                    if let Some(id) = v.path.get_ident() {
+                        match id.to_string().as_str() {
+                            "cid" => {
+                                cid = Some(v.value);
                             }
-                        } else {
-                            panic!("Missing ident?");
+                            "len" => {
+                                len = Some(v.value);
+                            }
+                            &_ => {
+                                panic!("Invalid argument: {}", &id);
+                            }
                         }
+                    } else {
+                        panic!("Missing ident?");
                     }
                 }
             }
         }
     }
-    let attrs = if let (Some(cid), Some(len)) = (cid, len) {
+    if let (Some(cid), Some(len)) = (cid, len) {
         Some((cid, len))
     } else {
         None
-    };
+    }
+}
+
+/// Collect supported attributes for enum members into [`Attributes`]:
+/// * docstring
+/// * `cmd(..)` - used to specify size and CID for payload
+fn parse_variant_attrs(input: &Vec<syn::Attribute>) -> Attributes {
+    let mut doc = Vec::new();
+    let mut attrs: Option<(syn::Expr, syn::Expr)> = None;
+    for attr in input {
+        if attr.path().is_ident("cmd") {
+            attrs = attr_handle_cmd(attr);
+            continue;
+        }
+        // Docstrings
+        if attr.path().is_ident("doc") {
+            doc.push(attr.clone());
+            continue;
+        }
+    }
     Attributes { doc, attrs }
 }
 
@@ -312,6 +320,5 @@ fn parse_enum_members(input: &DeriveInput) -> Vec<(Ident, Payload, Attributes)> 
         }
         _ => panic!("Unsupported!"),
     };
-    // TODO: Sanity checks like missing cid/len and wrong values (u8)?
     items
 }
