@@ -1,4 +1,4 @@
-use proc_macro2::Ident;
+use proc_macro2::{Ident, Span};
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Meta, PathArguments};
 
@@ -33,6 +33,8 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
     let mut impl_iter_next = Vec::new();
 
     let mut payload_struct_impls = Vec::new();
+
+    let mut payload_struct_creator_impls = Vec::new();
 
     for (n, payload, attributes) in members {
         let n = n.clone();
@@ -137,6 +139,56 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                     }
                 });
             }
+
+            let creator = Ident::new(&format!("{}Creator", n), Span::call_site());
+
+            payload_struct_creator_impls.push(quote! {
+                #[derive(Debug)]
+                #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+                #[doc(hidden)]
+                pub struct #creator {
+                    pub(crate) data: [u8; #len + 1],
+                }
+
+                impl #creator {
+                    pub fn new() -> Self {
+                        let mut data = [0; #len + 1];
+                        data[0] = #cid;
+                        Self { data }
+                    }
+
+                    pub fn build(&self) -> &[u8] {
+                     &self.data[..]
+                    }
+
+                    /// Get the CID.
+                    pub const fn cid(&self) -> u8 {
+                        #cid
+                    }
+
+                    /// Get the length.
+                    #[allow(clippy::len_without_is_empty)]
+                    pub const fn len(&self) -> usize {
+                        #len + 1
+                    }
+                }
+
+                impl SerializableMacCommand for #creator {
+                    fn payload_bytes(&self) -> &[u8] {
+                        &self.build()[1..]
+                    }
+
+                    /// The cid of the SerializableMacCommand.
+                    fn cid(&self) -> u8 {
+                        self.build()[0]
+                    }
+
+                    /// Length of the SerializableMacCommand without the cid.
+                    fn payload_len(&self) -> usize {
+                        self.build().len() - 1
+                    }
+                }
+            });
         }
     }
 
@@ -189,6 +241,8 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
         }
 
         #( #payload_struct_impls )*
+
+        // #( #payload_struct_creator_impls )*
     }
     .into()
 }
