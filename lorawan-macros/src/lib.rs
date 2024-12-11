@@ -242,7 +242,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
 
         #( #payload_struct_impls )*
 
-        // #( #payload_struct_creator_impls )*
+        #( #payload_struct_creator_impls )*
     }
     .into()
 }
