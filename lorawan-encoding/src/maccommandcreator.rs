@@ -13,98 +13,6 @@ pub enum Error {
     BufferTooShort,
 }
 
-macro_rules! impl_mac_cmd_creator_boilerplate {
-    ($type:ident, $cid:expr) => {
-        impl Default for $type {
-            fn default() -> Self {
-                Self {}
-            }
-        }
-
-        impl $type {
-            /// Creates a new instance of the class.
-            pub fn new() -> Self {
-                Default::default()
-            }
-
-            /// Returns the serialized version of the class as bytes.
-            pub fn build(&self) -> &[u8] {
-                &[$cid]
-            }
-
-            /// Get the CID.
-            pub const fn cid(&self) -> u8 {
-                $cid
-            }
-
-            /// Get the length.
-            #[allow(clippy::len_without_is_empty)]
-            pub const fn len(&self) -> usize {
-                1
-            }
-        }
-
-        impl_mac_cmd_payload!($type);
-    };
-
-    ($type:ident, $cid:expr, $len:expr) => {
-        impl Default for $type {
-            fn default() -> Self {
-                let data = [0; $len];
-                Self { data }
-            }
-        }
-
-        impl $type {
-            /// Creates a new instance of the class.
-            pub fn new() -> Self {
-                let mut data = [0; $len];
-                data[0] = $cid;
-                Self { data }
-            }
-
-            /// Returns the serialized version of the class as bytes.
-            pub fn build(&self) -> &[u8] {
-                &self.data[..]
-            }
-
-            /// Get the CID.
-            pub const fn cid(&self) -> u8 {
-                $cid
-            }
-
-            /// Get the length.
-            #[allow(clippy::len_without_is_empty)]
-            pub const fn len(&self) -> usize {
-                $len
-            }
-        }
-
-        impl_mac_cmd_payload!($type);
-    };
-}
-
-macro_rules! impl_mac_cmd_payload {
-    ($type:ident) => {
-        impl SerializableMacCommand for $type {
-            /// Bytes of the SerializableMacCommand without the cid.
-            fn payload_bytes(&self) -> &[u8] {
-                &self.build()[1..]
-            }
-
-            /// The cid of the SerializableMacCommand.
-            fn cid(&self) -> u8 {
-                self.build()[0]
-            }
-
-            /// Length of the SerializableMacCommand without the cid.
-            fn payload_len(&self) -> usize {
-                self.build().len() - 1
-            }
-        }
-    };
-}
-
 /// LinkCheckReqCreator serves for creating LinkCheckReq MacCommand.
 ///
 /// # Examples
@@ -113,11 +21,8 @@ macro_rules! impl_mac_cmd_payload {
 /// let mut creator = lorawan::maccommandcreator::LinkCheckReqCreator::new();
 /// let res = creator.build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct LinkCheckReqCreator {}
-
-impl_mac_cmd_creator_boilerplate!(LinkCheckReqCreator, 0x02);
+#[doc(inline)]
+pub use crate::maccommands::LinkCheckReqCreator;
 
 /// LinkCheckAnsCreator serves for creating LinkCheckAns MacCommand.
 ///
@@ -127,13 +32,8 @@ impl_mac_cmd_creator_boilerplate!(LinkCheckReqCreator, 0x02);
 /// let mut creator = lorawan::maccommandcreator::LinkCheckAnsCreator::new();
 /// let res = creator.set_margin(253).set_gateway_count(254).build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct LinkCheckAnsCreator {
-    data: [u8; 3],
-}
-
-impl_mac_cmd_creator_boilerplate!(LinkCheckAnsCreator, 0x02, 3);
+#[doc(inline)]
+pub use crate::maccommands::LinkCheckAnsCreator;
 
 impl LinkCheckAnsCreator {
     /// Sets the margin of the LinkCheckAns to the provided value.
@@ -176,13 +76,8 @@ impl LinkCheckAnsCreator {
 ///     .set_redundancy(0x37)
 ///     .build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct LinkADRReqCreator {
-    data: [u8; 5],
-}
-
-impl_mac_cmd_creator_boilerplate!(LinkADRReqCreator, 0x03, 5);
+#[doc(inline)]
+pub use crate::maccommands::LinkADRReqCreator;
 
 impl LinkADRReqCreator {
     /// Sets the data rate of the LinkADRReq to the provided value.
@@ -255,13 +150,8 @@ impl LinkADRReqCreator {
 ///     .set_tx_power_ack(true)
 ///     .build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct LinkADRAnsCreator {
-    data: [u8; 2],
-}
-
-impl_mac_cmd_creator_boilerplate!(LinkADRAnsCreator, 0x03, 2);
+#[doc(inline)]
+pub use crate::maccommands::LinkADRAnsCreator;
 
 impl LinkADRAnsCreator {
     /// Sets the channel mask acknowledgement of the LinkADRAns to the provided value.
@@ -309,13 +199,8 @@ impl LinkADRAnsCreator {
 /// let mut creator = lorawan::maccommandcreator::DutyCycleReqCreator::new();
 /// let res = creator.set_max_duty_cycle(0x0f).unwrap().build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct DutyCycleReqCreator {
-    data: [u8; 2],
-}
-
-impl_mac_cmd_creator_boilerplate!(DutyCycleReqCreator, 0x04, 2);
+#[doc(inline)]
+pub use crate::maccommands::DutyCycleReqCreator;
 
 impl DutyCycleReqCreator {
     /// Sets the max duty cycle of the DutyCycleReq to the provided value.
@@ -339,11 +224,8 @@ impl DutyCycleReqCreator {
 /// let creator = lorawan::maccommandcreator::DutyCycleAnsCreator::new();
 /// let res = creator.build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct DutyCycleAnsCreator {}
-
-impl_mac_cmd_creator_boilerplate!(DutyCycleAnsCreator, 0x04);
+#[doc(inline)]
+pub use crate::maccommands::DutyCycleAnsCreator;
 
 /// RXParamSetupReqCreator serves for creating RXParamSetupReq MacCommand.
 ///
@@ -356,13 +238,8 @@ impl_mac_cmd_creator_boilerplate!(DutyCycleAnsCreator, 0x04);
 ///     .set_frequency(&[0x12, 0x34, 0x56])
 ///     .build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct RXParamSetupReqCreator {
-    data: [u8; 5],
-}
-
-impl_mac_cmd_creator_boilerplate!(RXParamSetupReqCreator, 0x05, 5);
+#[doc(inline)]
+pub use crate::maccommands::RXParamSetupReqCreator;
 
 impl RXParamSetupReqCreator {
     /// Sets the DLSettings of the RXParamSetupReq to the provided value.
@@ -404,13 +281,8 @@ impl RXParamSetupReqCreator {
 ///     .set_rx1_data_rate_offset_ack(true)
 ///     .build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct RXParamSetupAnsCreator {
-    data: [u8; 2],
-}
-
-impl_mac_cmd_creator_boilerplate!(RXParamSetupAnsCreator, 0x05, 2);
+#[doc(inline)]
+pub use crate::maccommands::RXParamSetupAnsCreator;
 
 impl RXParamSetupAnsCreator {
     /// Sets the channel acknowledgement of the RXParamSetupAns to the provided value.
@@ -458,11 +330,8 @@ impl RXParamSetupAnsCreator {
 /// let creator = lorawan::maccommandcreator::DevStatusReqCreator::new();
 /// let res = creator.build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct DevStatusReqCreator {}
-
-impl_mac_cmd_creator_boilerplate!(DevStatusReqCreator, 0x06);
+#[doc(inline)]
+pub use crate::maccommands::DevStatusReqCreator;
 
 /// DevStatusAnsCreator serves for creating DevStatusAns MacCommand.
 ///
@@ -472,13 +341,8 @@ impl_mac_cmd_creator_boilerplate!(DevStatusReqCreator, 0x06);
 /// let mut creator = lorawan::maccommandcreator::DevStatusAnsCreator::new();
 /// let res = creator.set_battery(0xfe).set_margin(-32).unwrap().build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct DevStatusAnsCreator {
-    data: [u8; 3],
-}
-
-impl_mac_cmd_creator_boilerplate!(DevStatusAnsCreator, 0x06, 3);
+#[doc(inline)]
+pub use crate::maccommands::DevStatusAnsCreator;
 
 impl DevStatusAnsCreator {
     /// Sets the battery of the DevStatusAns to the provided value.
@@ -522,13 +386,8 @@ impl DevStatusAnsCreator {
 ///     .set_data_rate_range(0x53)
 ///     .build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct NewChannelReqCreator {
-    data: [u8; 6],
-}
-
-impl_mac_cmd_creator_boilerplate!(NewChannelReqCreator, 0x07, 6);
+#[doc(inline)]
+pub use crate::maccommands::NewChannelReqCreator;
 
 impl NewChannelReqCreator {
     /// Sets the channel index of the NewChannelReq to the provided value.
@@ -579,13 +438,8 @@ impl NewChannelReqCreator {
 ///     .set_data_rate_range_ack(true)
 ///     .build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct NewChannelAnsCreator {
-    data: [u8; 2],
-}
-
-impl_mac_cmd_creator_boilerplate!(NewChannelAnsCreator, 0x07, 2);
+#[doc(inline)]
+pub use crate::maccommands::NewChannelAnsCreator;
 
 impl NewChannelAnsCreator {
     /// Sets the channel frequency acknowledgement of the NewChannelAns to the provided value.
@@ -621,13 +475,8 @@ impl NewChannelAnsCreator {
 /// let mut creator = lorawan::maccommandcreator::RXTimingSetupReqCreator::new();
 /// let res = creator.set_delay(0x0f).unwrap().build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct RXTimingSetupReqCreator {
-    data: [u8; 2],
-}
-
-impl_mac_cmd_creator_boilerplate!(RXTimingSetupReqCreator, 0x08, 2);
+#[doc(inline)]
+pub use crate::maccommands::RXTimingSetupReqCreator;
 
 impl RXTimingSetupReqCreator {
     /// Sets the delay of the RXTimingSetupReq to the provided value.
@@ -654,18 +503,12 @@ impl RXTimingSetupReqCreator {
 /// let creator = lorawan::maccommandcreator::RXTimingSetupAnsCreator::new();
 /// let res = creator.build();
 /// ```
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct RXTimingSetupAnsCreator {}
+#[doc(inline)]
+pub use crate::maccommands::RXTimingSetupAnsCreator;
 
-impl_mac_cmd_creator_boilerplate!(RXTimingSetupAnsCreator, 0x08);
+#[doc(inline)]
+pub use crate::maccommands::TXParamSetupReqCreator;
 
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct TXParamSetupReqCreator {
-    data: [u8; 2],
-}
-impl_mac_cmd_creator_boilerplate!(TXParamSetupReqCreator, 0x09, 2);
 impl TXParamSetupReqCreator {
     pub fn set_downlink_dwell_time(&mut self) -> &mut Self {
         self.data[1] &= 0xfe;
@@ -688,17 +531,12 @@ impl TXParamSetupReqCreator {
     }
 }
 
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct TXParamSetupAnsCreator;
-impl_mac_cmd_creator_boilerplate!(TXParamSetupAnsCreator, 0x09);
+#[doc(inline)]
+pub use crate::maccommands::TXParamSetupAnsCreator;
 
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct DlChannelReqCreator {
-    data: [u8; 5],
-}
-impl_mac_cmd_creator_boilerplate!(DlChannelReqCreator, 0x0A, 5);
+#[doc(inline)]
+pub use crate::maccommands::DlChannelReqCreator;
+
 impl DlChannelReqCreator {
     pub fn set_channel_index(&mut self, index: u8) -> &mut Self {
         self.data[1] = index;
@@ -711,12 +549,10 @@ impl DlChannelReqCreator {
         self
     }
 }
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct DlChannelAnsCreator {
-    data: [u8; 2],
-}
-impl_mac_cmd_creator_boilerplate!(DlChannelAnsCreator, 0x0A, 2);
+
+#[doc(inline)]
+pub use crate::maccommands::DlChannelAnsCreator;
+
 impl DlChannelAnsCreator {
     /// Sets the channel frequency acknowledgement of the DlChannelAns to the provided value.
     ///
@@ -742,16 +578,12 @@ impl DlChannelAnsCreator {
         self
     }
 }
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct DeviceTimeReqCreator;
-impl_mac_cmd_creator_boilerplate!(DeviceTimeReqCreator, 0x0D);
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct DeviceTimeAnsCreator {
-    data: [u8; 6],
-}
-impl_mac_cmd_creator_boilerplate!(DeviceTimeAnsCreator, 0x0D, 6);
+
+#[doc(inline)]
+pub use crate::maccommands::DeviceTimeAnsCreator;
+#[doc(inline)]
+pub use crate::maccommands::DeviceTimeReqCreator;
+
 impl DeviceTimeAnsCreator {
     pub fn set_seconds(&mut self, seconds: u32) -> &mut Self {
         self.data[1..5].copy_from_slice(&seconds.to_le_bytes());
