@@ -23,6 +23,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
     let input = parse_macro_input!(input as DeriveInput);
 
     let name = &input.ident;
+    let creator_enum = Ident::new(&format!("{}Creator", name), Span::call_site());
 
     // Parse enum members into list of (Command, Payload, Attributes) tuples
     let members = parse_enum_members(&input);
@@ -36,11 +37,17 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
 
     let mut payload_struct_creator_impls = Vec::new();
 
+    let mut creator_enum_variants = Vec::new();
+    let mut creator_enum_len = Vec::new();
+    let mut creator_enum_build = Vec::new();
+    let mut creator_enum_impl_cid = Vec::new();
+
     for (n, payload, attributes) in members {
         let n = n.clone();
         let t = &payload.name;
         let lt = &payload.lifetime;
         let doc = &attributes.doc;
+        let creator = Ident::new(&format!("{}Creator", n), Span::call_site());
 
         // ...len()
         impl_len.push(quote! {
@@ -65,8 +72,25 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
             } else
         });
 
+        // CommandCreator enum
+        creator_enum_variants.push(quote! {
+            #n(#creator)
+        });
+
+        creator_enum_len.push(quote! {
+            Self::#n(c) => c.len()
+        });
+        creator_enum_build.push(quote! {
+            Self::#n(ref c) => c.build()
+        });
+        creator_enum_impl_cid.push(quote! {
+            Self::#n(c) => c.cid()
+        });
+
         // Generate definition and common implementation for payloads
         if let Some((cid, len)) = attributes.attrs {
+            let payload_creator = Ident::new(&format!("{}Creator", n), Span::call_site());
+
             // Generate common code used by zero and non-zero length payloads
             let common = quote! {
                 /// Payload CID.
@@ -140,17 +164,15 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                 });
             }
 
-            let creator = Ident::new(&format!("{}Creator", n), Span::call_site());
-
             payload_struct_creator_impls.push(quote! {
                 #[derive(Debug)]
                 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
                 #[doc(hidden)]
-                pub struct #creator {
+                pub struct #payload_creator {
                     pub(crate) data: [u8; #len + 1],
                 }
 
-                impl #creator {
+                impl #payload_creator {
                     pub fn new() -> Self {
                         let mut data = [0; #len + 1];
                         data[0] = #cid;
@@ -173,7 +195,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                     }
                 }
 
-                impl SerializableMacCommand for #creator {
+                impl SerializableMacCommand for #payload_creator {
                     fn payload_bytes(&self) -> &[u8] {
                         &self.build()[1..]
                     }
@@ -218,7 +240,6 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                     #( #impl_cid, )*
                 }
             }
-
             fn payload_len(&self) -> usize {
                 self.len()
             }
@@ -243,6 +264,45 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
         #( #payload_struct_impls )*
 
         #( #payload_struct_creator_impls )*
+
+        #[derive(Debug)]
+        #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+        pub enum #creator_enum {
+            #( #creator_enum_variants ),*
+        }
+
+        impl #creator_enum {
+            /// Get the length.
+            #[allow(clippy::len_without_is_empty)]
+            pub fn len(&self) -> usize {
+                match self {
+                    # ( #creator_enum_len ),*
+                }
+            }
+
+            /// Build.
+            pub fn build(&self) -> &[u8] {
+                match *self {
+                    #( #creator_enum_build ),*
+                }
+            }
+        }
+
+        impl SerializableMacCommand for #creator_enum {
+            fn payload_bytes(&self) -> &[u8] {
+                &self.build()[1..]
+            }
+
+            fn cid(&self) -> u8 {
+                match self {
+                    #( #creator_enum_impl_cid ),*
+                }
+            }
+
+            fn payload_len(&self) -> usize {
+                self.len() - 1
+            }
+        }
     }
     .into()
 }
