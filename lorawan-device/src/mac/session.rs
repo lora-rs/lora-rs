@@ -9,8 +9,6 @@ use lorawan::{
     parser::{DecryptedJoinAcceptPayload, DevAddr},
 };
 
-use generic_array::{typenum::U256, GenericArray};
-
 use crate::radio::RadioBuffer;
 
 use super::{
@@ -186,7 +184,8 @@ impl Session {
     ) -> FcntUp {
         tx_buffer.clear();
         let fcnt = self.fcnt_up;
-        let mut phy: DataPayloadCreator<GenericArray<u8, U256>, C> = DataPayloadCreator::default();
+        let mut buf = [0u8;256];
+        let mut phy=  DataPayloadCreator::with_options(&mut buf, C::default()).unwrap();
 
         let mut fctrl = FCtrl(0x0, true);
         if self.uplink.confirms_downlink() {

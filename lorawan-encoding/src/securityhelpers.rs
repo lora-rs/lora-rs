@@ -1,6 +1,4 @@
 use super::keys;
-pub use generic_array;
-use generic_array::GenericArray;
 
 /// calculate_data_mic computes the MIC of a correct data packet.
 pub fn calculate_data_mic<M: keys::Mac>(data: &[u8], key: M, fcnt: u32) -> keys::MIC {
@@ -58,7 +56,6 @@ pub fn encrypt_frm_data_payload(
     generate_helper_block(phy_payload, 0x01, fcnt, &mut a[..]);
 
     let mut s = [0u8; 16];
-    let s_block = GenericArray::from_mut_slice(&mut s[..]);
 
     let mut ctr = 1;
     for i in 0..len {
@@ -66,9 +63,9 @@ pub fn encrypt_frm_data_payload(
         if j == 0 {
             a[15] = ctr;
             ctr += 1;
-            s_block.copy_from_slice(&a);
-            aes_enc.encrypt_block(s_block);
+            s = a;
+            aes_enc.encrypt_block(&mut s);
         }
-        phy_payload[start + i] ^= s_block[j]
+        phy_payload[start + i] ^= s[j]
     }
 }

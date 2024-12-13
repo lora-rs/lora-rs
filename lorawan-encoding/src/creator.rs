@@ -12,8 +12,6 @@ use crate::types::{DLSettings, Frequency};
 #[cfg(feature = "default-crypto")]
 use super::default_crypto::DefaultFactory;
 
-use generic_array::GenericArray;
-
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error {
@@ -172,8 +170,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
         let aes_enc = self.factory.new_dec(key);
         for i in 0..(d.len() >> 4) {
             let start = (i << 4) + 1;
-            let tmp = GenericArray::from_mut_slice(&mut d[start..(16 + start)]);
-            aes_enc.decrypt_block(tmp);
+            aes_enc.decrypt_block(&mut d[start..(16 + start)]);
         }
         self.encrypted = true;
     }
