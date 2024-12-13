@@ -22,8 +22,19 @@ struct Attributes {
 pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    let name = &input.ident;
-    let creator_enum = Ident::new(&format!("{}Creator", name), Span::call_site());
+    let handler = &input.ident;
+    let (handler_lt, _ty, _where) = input.generics.split_for_impl();
+    // Collect lifetime requirements for MacCommandIterator<'_, T<..>>
+    let handler_lifetimes =
+        input.generics.lifetimes().map(|lt| lt.lifetime.clone()).collect::<Vec<_>>();
+    let anon_lifetime = syn::Lifetime::new("'_", Span::call_site());
+    let iter_lifetime = match handler_lifetimes.len() {
+        1 => handler_lifetimes.first(),
+        0 => Some(&anon_lifetime),
+        _ => panic!("Multiple lifetimes for this enum are unsupported!"),
+    };
+
+    let creator_enum = Ident::new(&format!("{}Creator", handler), Span::call_site());
 
     // Parse enum members into list of (Command, Payload, Attributes) tuples
     let members = parse_enum_members(&input);
@@ -68,7 +79,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
         impl_iter_next.push(quote! {
             if data[0] == #t::cid() && data.len() >= #t::len() {
                 self.index = self.index + #t::len() + 1;
-                Some(#name::#n(#t::new_from_raw(&data[1..1 + #t::len()])))
+                Some(#handler::#n(#t::new_from_raw(&data[1..1 + #t::len()])))
             } else
         });
 
@@ -216,7 +227,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
 
     quote! {
         #[allow(clippy::len_without_is_empty)]
-        impl<'a> #name<'a> {
+        impl #handler_lt #handler #handler_lt {
             /// Get the length.
             pub fn len(&self) -> usize {
                 match *self {
@@ -231,7 +242,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
             }
         }
 
-        impl<'a> SerializableMacCommand for #name<'a> {
+        impl #handler_lt SerializableMacCommand for #handler #handler_lt {
             fn payload_bytes(&self) -> &[u8] {
                 &self.bytes()
             }
@@ -245,8 +256,8 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
             }
         }
 
-        impl<'a> Iterator for MacCommandIterator<'a, #name<'a>> {
-            type Item = #name<'a>;
+        impl #handler_lt Iterator for MacCommandIterator<#iter_lifetime, #handler #handler_lt > {
+            type Item = #handler #handler_lt;
 
             fn next(&mut self) -> Option<Self::Item> {
                 if self.index < self.data.len() {
