@@ -11,6 +11,7 @@ pub mod maccommandcreator;
 pub mod maccommands;
 pub mod packet_length;
 pub mod parser;
+pub mod protocol;
 pub mod string;
 pub mod types;
 
