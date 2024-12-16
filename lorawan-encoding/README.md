@@ -12,7 +12,7 @@ Supported LoRaWAN features:
 * Class C (continuous)
 * Multicast - unsupported (only basic packet encoding/decoding)
 * Relay - unsupported
-* Certification - unsupported
+* Certification protocol (wip)
 
 ## Sample Packet manipulation
 
