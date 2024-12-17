@@ -435,7 +435,7 @@ fn test_fctrl_downlink_complete() {
 
 #[test]
 fn test_data_payload_uplink_creator() {
-    let mut buf = [0u8;256];
+    let mut buf = [0u8; 256];
     let mut phy = DataPayloadCreator::with_options(&mut buf, DefaultFactory).unwrap();
     let nwk_skey = [2; 16].into();
     let app_skey = [1; 16].into();
@@ -452,7 +452,7 @@ fn test_data_payload_uplink_creator() {
 
 #[test]
 fn test_long_data_payload_uplink_creator() {
-    let mut buf = [0u8;256];
+    let mut buf = [0u8; 256];
     let mut phy = DataPayloadCreator::with_options(&mut buf, DefaultFactory).unwrap();
     let nwk_skey = [2; 16].into();
     let app_skey = [1; 16].into();
@@ -472,7 +472,7 @@ fn test_long_data_payload_uplink_creator() {
 
 #[test]
 fn test_data_payload_downlink_creator() {
-    let mut buf = [0u8;256];
+    let mut buf = [0u8; 256];
     let mut phy = DataPayloadCreator::with_options(&mut buf, DefaultFactory).unwrap();
     let nwk_skey = [2; 16].into();
     let app_skey = [1; 16].into();
@@ -492,7 +492,7 @@ fn test_data_payload_downlink_creator() {
 
 #[test]
 fn test_data_payload_creator_when_payload_and_fport_0() {
-    let mut buf = [0u8;256];
+    let mut buf = [0u8; 256];
     let mut phy = DataPayloadCreator::with_options(&mut buf, DefaultFactory).unwrap();
     let nwk_skey = [2; 16].into();
     let app_skey = [1; 16].into();
@@ -502,7 +502,7 @@ fn test_data_payload_creator_when_payload_and_fport_0() {
 
 #[test]
 fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
-    let mut buf = [0u8;256];
+    let mut buf = [0u8; 256];
     let mut phy = DataPayloadCreator::with_options(&mut buf, DefaultFactory).unwrap();
     let nwk_skey = [2; 16].into();
     let app_skey = [1; 16].into();
@@ -517,7 +517,7 @@ fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
 
 #[test]
 fn test_data_payload_creator_when_payload_no_fport() {
-    let mut buf = [0u8;256];
+    let mut buf = [0u8; 256];
     let mut phy = DataPayloadCreator::with_options(&mut buf, DefaultFactory).unwrap();
     let nwk_skey = [2; 16].into();
     let app_skey = [1; 16].into();
@@ -526,7 +526,7 @@ fn test_data_payload_creator_when_payload_no_fport() {
 
 #[test]
 fn test_data_payload_creator_when_mac_commands_in_payload() {
-    let mut buf = [0u8;256];
+    let mut buf = [0u8; 256];
     let mut phy = DataPayloadCreator::with_options(&mut buf, DefaultFactory).unwrap();
     let nwk_skey = [1; 16].into();
     let app_skey = [0; 16].into();
@@ -544,7 +544,7 @@ fn test_data_payload_creator_when_mac_commands_in_payload() {
 
 #[test]
 fn test_data_payload_creator_when_mac_commands_in_f_opts() {
-    let mut buf = [0u8;256];
+    let mut buf = [0u8; 256];
     let mut phy = DataPayloadCreator::with_options(&mut buf, DefaultFactory).unwrap();
     let nwk_skey = [1; 16].into();
     let app_skey = [0; 16].into();

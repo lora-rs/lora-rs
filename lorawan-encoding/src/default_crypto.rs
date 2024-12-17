@@ -5,8 +5,8 @@ use super::parser::{
     DecryptedDataPayload, DecryptedJoinAcceptPayload, EncryptedDataPayload,
     EncryptedJoinAcceptPayload, JoinRequestPayload,
 };
-use aes::cipher::generic_array::GenericArray;
 use crate::parser::Error;
+use aes::cipher::generic_array::GenericArray;
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 use aes::Aes128;
 
@@ -56,7 +56,7 @@ impl Mac for Cmac {
         cmac::Mac::reset(self);
     }
 
-    fn result(self) -> [u8;16] {
+    fn result(self) -> [u8; 16] {
         cmac::Mac::finalize(self).into_bytes().into()
     }
 }

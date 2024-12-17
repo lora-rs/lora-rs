@@ -184,8 +184,8 @@ impl Session {
     ) -> FcntUp {
         tx_buffer.clear();
         let fcnt = self.fcnt_up;
-        let mut buf = [0u8;256];
-        let mut phy=  DataPayloadCreator::with_options(&mut buf, C::default()).unwrap();
+        let mut buf = [0u8; 256];
+        let mut phy = DataPayloadCreator::with_options(&mut buf, C::default()).unwrap();
 
         let mut fctrl = FCtrl(0x0, true);
         if self.uplink.confirms_downlink() {

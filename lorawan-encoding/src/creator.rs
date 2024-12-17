@@ -525,7 +525,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
 }
 
 #[cfg(feature = "default-crypto")]
-impl DataPayloadCreator<[u8;256], DefaultFactory> {
+impl DataPayloadCreator<[u8; 256], DefaultFactory> {
     /// Creates a well initialized DataPayloadCreator.
     ///
     /// By default the packet is unconfirmed data up packet.
@@ -546,7 +546,7 @@ impl DataPayloadCreator<[u8;256], DefaultFactory> {
     /// let payload = phy.build(b"hello", &[], &nwk_skey, &app_skey).unwrap();
     /// ```
     pub fn new() -> Self {
-        let mut data = [0u8;256];
+        let mut data = [0u8; 256];
         data[0] = 0x40;
         Self { data, data_f_port: None, fcnt: 0, factory: DefaultFactory }
     }

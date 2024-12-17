@@ -217,7 +217,7 @@ pub trait Decrypter {
 pub trait Mac {
     fn input(&mut self, data: &[u8]);
     fn reset(&mut self);
-    fn result(self) -> [u8;16];
+    fn result(self) -> [u8; 16];
 }
 
 /// Represents an abstraction over the crypto functions.
