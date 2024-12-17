@@ -28,15 +28,13 @@ pub enum DownlinkDUTCommand<'a> {
     #[cmd(cid = 0x03, len = 1)]
     SwitchClassReq(SwitchClassReqPayload<'a>),
 
-    // TODO
-    // /// Request to activate/deactivate Adaptive Data Rate (ADR)
-    // #[cmd(cid = 0x04, len = 1)]
-    // AdrBitChangeReq(AdrBitChangeReqPayload),
+    /// Request to activate/deactivate Adaptive Data Rate (ADR)
+    #[cmd(cid = 0x04, len = 1)]
+    AdrBitChangeReq(AdrBitChangeReqPayload<'a>),
 
-    // TODO
-    // /// Activate/deactivate the regional band duty-cycle enforcement
-    // #[cmd(cid = 0x05, len = 1)]
-    // RegionalDutyCycleCtrlReq(RegionalDutyCycleCtrlReqPayload),
+    /// Activate/deactivate the regional band duty-cycle enforcement
+    #[cmd(cid = 0x05, len = 1)]
+    RegionalDutyCycleCtrlReq(RegionalDutyCycleCtrlReqPayload<'a>),
 
     // TODO
     // /// Change uplink periodicity to the provided value
@@ -75,11 +73,9 @@ pub enum DownlinkDUTCommand<'a> {
     // PingSlotInfoReq(PingSlotInfoReqPayload),
 
     // 0x23 .. 0x3f RFU
-
-    // TODO
-    // /// Class B: Request to activate/deactivate the autonomous BeaconRxStatusInd transmission
-    // #[cmd(cid = 0x40, len = 2)]
-    // BeaconRxStatusIndCtrl(BeaconRxStatusIndCtrlPayload),
+    /// Class B: Request to activate/deactivate the autonomous BeaconRxStatusInd transmission
+    #[cmd(cid = 0x40, len = 1)]
+    BeaconRxStatusIndCtrl(BeaconRxStatusIndCtrlPayload),
 
     // 0x41 - uplink only
 
@@ -91,7 +87,7 @@ pub enum DownlinkDUTCommand<'a> {
     // 0x43 - uplink only
     /// Class B: Request to reset the `BeaconCnt` value to 0
     #[cmd(cid = 0x44, len = 0)]
-    BeaconCntRstReq(BeaconCntRstReqPayload),
+    BeaconCntRstReq(BeaconCntRstReqPayload<'a>),
 
     // 0x45 .. 0x4f RFU
 
@@ -104,10 +100,9 @@ pub enum DownlinkDUTCommand<'a> {
     // TODO
     // #[cmd(cid = 0x52, len = 1)]
     // FragSessionCntReq(FragSessionCntReqPayload),
-
-    // TODO
-    // #[cmd(cid = 0x53, len = 1)]
-    // RelayModeCtrl(RelayModeCtrlPayload),
+    /// Request to activate/deactivate operation in Relay mode
+    #[cmd(cid = 0x53, len = 1)]
+    RelayModeCtrl(RelayModeCtrlPayload),
 
     // 0x54 .. 0x7c RFU
 
@@ -180,6 +175,34 @@ pub enum UplinkDUTCommand {
     // DutVersionsAns(DutVersionsAnsPayload),
 
     // 0x80 .. 0xff Proprietary
+}
+
+impl AdrBitChangeReqPayload<'_> {
+    /// Enable/disable ADR
+    pub fn adr_enable(&self) -> bool {
+        self.0[0] == 0x01
+    }
+}
+
+impl BeaconCntRstReqPayload<'_> {
+    /// Enable/disable `BeaconRxStatusInd` transmission
+    pub fn ctrl_enable(&self) -> bool {
+        self.0[0] == 0x01
+    }
+}
+
+impl RegionalDutyCycleCtrlReqPayload<'_> {
+    /// Enable/disable regional duty-cycle enforcement
+    pub fn dutycycle_enable(&self) -> bool {
+        self.0[0] == 0x01
+    }
+}
+
+impl RegionalDutyCycleCtrlReqPayload<'_> {
+    /// Enable/disable regional duty-cycle enforcement
+    pub fn ctrl_enable(&self) -> bool {
+        self.0[0] == 0x01
+    }
 }
 
 impl SwitchClassReqPayload<'_> {
