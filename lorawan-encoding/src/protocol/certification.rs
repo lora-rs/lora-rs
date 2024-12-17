@@ -4,10 +4,14 @@ use lorawan_macros::CommandHandler;
 use crate::maccommands::MacCommandIterator;
 use crate::maccommands::SerializableMacCommand;
 
+use crate::maccommands::Error;
+
+use crate::types::DeviceClass;
+
 //#[derive(Debug, PartialEq, CommandHandler)]
 //#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(CommandHandler)]
-pub enum DownlinkDUTCommand {
+pub enum DownlinkDUTCommand<'a> {
     /// Requests the package version implemented by the end-device
     #[cmd(cid = 0x00, len = 0)]
     PackageVersionReq(PackageVersionReqPayload),
@@ -20,10 +24,9 @@ pub enum DownlinkDUTCommand {
     #[cmd(cid = 0x02, len = 0)]
     DutJoinReq(DutJoinReqPayload),
 
-    // TODO
-    // /// Request to change class of operation to A, B, or C
-    // #[cmd(cid = 0x03, len = 1)]
-    // SwitchClassReq(SwitchClassReqPayload),
+    /// Request to change class of operation to A, B, or C
+    #[cmd(cid = 0x03, len = 1)]
+    SwitchClassReq(SwitchClassReqPayload<'a>),
 
     // TODO
     // /// Request to activate/deactivate Adaptive Data Rate (ADR)
@@ -177,4 +180,19 @@ pub enum UplinkDUTCommand {
     // DutVersionsAns(DutVersionsAnsPayload),
 
     // 0x80 .. 0xff Proprietary
+}
+
+impl SwitchClassReqPayload<'_> {
+    /// Return requested device class
+    pub fn class(&self) -> Result<DeviceClass, Error> {
+        DeviceClass::try_from(self.0[0])
+    }
+}
+
+impl SwitchClassReqCreator {
+    pub fn set_class(&mut self, device_class: DeviceClass) -> &mut Self {
+        self.data[1] = device_class.into();
+
+        self
+    }
 }
