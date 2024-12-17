@@ -944,7 +944,7 @@ where
             RadioMode::ChannelActivityDetection => {
                 if IrqMask::CADDone.is_set(irq_flags) {
                     if let Some(detected) = cad_activity_detected {
-                        *detected = IrqMask::CADDone.is_set(irq_flags);
+                        *detected = IrqMask::CADActivityDetected.is_set(irq_flags);
                     }
                     return Ok(Some(IrqState::Done));
                 }
