@@ -294,3 +294,36 @@ impl From<u8> for Redundancy {
         Redundancy(v)
     }
 }
+
+/// LoRaWAN device class
+pub enum DeviceClass {
+    /// Class A device
+    A,
+    /// Class B device
+    B,
+    /// Class C device
+    C,
+}
+
+impl From<DeviceClass> for u8 {
+    fn from(v: DeviceClass) -> Self {
+        match v {
+            DeviceClass::A => 0,
+            DeviceClass::B => 1,
+            DeviceClass::C => 2,
+        }
+    }
+}
+
+impl TryFrom<u8> for DeviceClass {
+    type Error = Error;
+
+    fn try_from(v: u8) -> Result<Self, Error> {
+        match v {
+            0 => Ok(DeviceClass::A),
+            1 => Ok(DeviceClass::B),
+            2 => Ok(DeviceClass::C),
+            _ => Err(Error::RFU),
+        }
+    }
+}
