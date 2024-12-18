@@ -1,4 +1,4 @@
-//! LoRaWAN Certification Protocol command and payload handling
+//! LoRaWAN Certification Protocol (TS009) command and payload handling
 use lorawan_macros::CommandHandler;
 
 use crate::maccommands::MacCommandIterator;
@@ -6,7 +6,7 @@ use crate::maccommands::SerializableMacCommand;
 
 use crate::maccommands::Error;
 
-use crate::types::DeviceClass;
+use crate::types::{DeviceClass, Frequency};
 
 //#[derive(Debug, PartialEq, CommandHandler)]
 //#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
@@ -36,20 +36,21 @@ pub enum DownlinkDUTCommand<'a> {
     #[cmd(cid = 0x05, len = 1)]
     RegionalDutyCycleCtrlReq(RegionalDutyCycleCtrlReqPayload<'a>),
 
-    // TODO
-    // /// Change uplink periodicity to the provided value
+    // TODO: Class B (?)
+    // /// Class B: Change uplink periodicity to the provided value
     // #[cmd(cid = 0x06, len = 1)]
     // TxPeriodicityChangeReq(TxPeriodicityChangeReqPayload),
 
-    // TODO: len = N
+    // TODO: len = N (max size is 242)
     // /// Send all subsequent uplinks of the specified type
     // #[cmd(cid = 0x07, len = ???)]
     // TxFramesCtrlReq(TxFramesCtrlReqPayload),
 
-    // TODO: len = N
+    // TODO: len = N (max size is 242)
     // /// Requests the DUT to echo the provided payload, where each byte is incremented by 1
     // #[cmd(cid = 0x08, len = ???)]
     // EchoPayloadReq(EchoPayloadReqPayload),
+    //
     /// Request to provide the current applicative `RxAppCnt` value
     #[cmd(cid = 0x09, len = 0)]
     RxAppCntReq(RxAppCntReqPayload),
@@ -67,7 +68,7 @@ pub enum DownlinkDUTCommand<'a> {
     #[cmd(cid = 0x21, len = 0)]
     DeviceTimeReq(DeviceTimeReqPayload),
 
-    // TODO
+    // TODO: Class B
     // /// Request to send a PingSlotInfoReq MAC command to the TCL; only required for Class B DUTs
     // #[cmd(cid = 0x22, len = 1)]
     // PingSlotInfoReq(PingSlotInfoReqPayload),
@@ -79,7 +80,7 @@ pub enum DownlinkDUTCommand<'a> {
 
     // 0x41 - uplink only
 
-    // TODO
+    // TODO: Class B
     // /// Class B: Request to provide the current `BeaconCnt` value
     // #[cmd(cid = 0x42, len = 2)]
     // BeaconCntReq(BeaconCntReqPayload),
@@ -91,24 +92,25 @@ pub enum DownlinkDUTCommand<'a> {
 
     // 0x45 .. 0x4f RFU
 
-    // TODO
+    // TODO: SCHC
     // #[cmd(cid = 0x50, len = 4)]
     // SCHCMsgSendReq(SCHCMsgSendReqPayload),
 
     // 0x51 - uplink only
 
-    // TODO
+    // TODO: Fragmentation Data Block Transport (TS004)
     // #[cmd(cid = 0x52, len = 1)]
     // FragSessionCntReq(FragSessionCntReqPayload),
+    //
     /// Request to activate/deactivate operation in Relay mode
     #[cmd(cid = 0x53, len = 1)]
     RelayModeCtrl(RelayModeCtrlPayload),
 
     // 0x54 .. 0x7c RFU
+    /// Request to switch device into Continuous Wave transmission mode
+    #[cmd(cid = 0x7d, len = 6)]
+    TxCwReq(TxCwReqPayload<'a>),
 
-    // TODO
-    // #[cmd(cid = 0x7d, len = 6)]
-    // TxCwReq(TxCwReqPayload),
     /// Request to disable the processing of data received on `FPort=224`
     #[cmd(cid = 0x7e, len = 0)]
     DutFPort224DisableReq(DutFPort224DisableReqPayload),
@@ -158,6 +160,7 @@ pub enum UplinkDUTCommand {
     /// Answer to the `SCHCMsgSendReq` request
     #[cmd(cid = 0x50, len = 0)]
     SCHCMsgSendAns(SCHCMsgSendAnsPayload),
+    //
     // TODO: 48 bytes of header + 1..=60 bytes of data
     // #[cmd(cid = 0x51, len = ...)]
     // SCHCACKInd(SCHCACKIndPayload),
@@ -217,5 +220,22 @@ impl SwitchClassReqCreator {
         self.data[1] = device_class.into();
 
         self
+    }
+}
+
+impl TxCwReqPayload<'_> {
+    /// Requested timeout (in seconds)
+    pub fn timeout(&self) -> u16 {
+        u16::from_le_bytes([self.0[0], self.0[1]])
+    }
+
+    /// Requested frequency in 100Hz units
+    pub fn frequency(&self) -> Frequency<'_> {
+        Frequency::new_from_raw(&self.0[2..=4])
+    }
+
+    /// Requested power in dBm
+    pub fn tx_power(&self) -> i8 {
+        self.0[5].try_into().unwrap()
     }
 }
