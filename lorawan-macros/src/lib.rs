@@ -123,7 +123,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                     pub struct #t <#lt> (pub(crate) &#lt [u8]);
 
                     impl<#lt> #t<#lt> {
-                        /// Creates a new instance of the MAC command if there is enought data.
+                        /// Creates a new instance of the MAC command if there is enough data.
                         pub fn new(data: &#lt [u8]) -> Result<#t<#lt>, Error> {
                             if data.len() != #len {
                                 Err(Error::BufferTooShort)
@@ -211,12 +211,12 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                         &self.build()[1..]
                     }
 
-                    /// The cid of the SerializableMacCommand.
+                    /// The CID of the SerializableMacCommand.
                     fn cid(&self) -> u8 {
                         self.build()[0]
                     }
 
-                    /// Length of the SerializableMacCommand without the cid.
+                    /// Length of the SerializableMacCommand not including CID.
                     fn payload_len(&self) -> usize {
                         self.build().len() - 1
                     }
