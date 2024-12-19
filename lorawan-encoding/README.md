@@ -11,6 +11,7 @@ Supported LoRaWAN features:
 * Class B (beacon) - unsupported
 * Class C (continuous) - multicast unsupported
 * Relay - unsupported
+* Certification protocol (wip)
 
 ## Sample Packet manipulation
 
