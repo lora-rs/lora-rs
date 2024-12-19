@@ -24,7 +24,6 @@ use super::keys::{AppKey, AppSKey, CryptoFactory, Encrypter, NwkSKey, AES128, MI
 use crate::types::{ChannelMask, DLSettings, Frequency};
 
 use super::securityhelpers;
-use super::securityhelpers::generic_array::GenericArray;
 
 use super::packet_length::phy::{join::*, mac::FPORT_LEN, MHDR_LEN, MIC_LEN, PHY_PAYLOAD_MIN_LEN};
 
@@ -373,8 +372,7 @@ impl<T: AsRef<[u8]> + AsMut<[u8]>, F: CryptoFactory> EncryptedJoinAcceptPayload<
 
             for i in 0..(len >> 4) {
                 let start = (i << 4) + 1;
-                let block = GenericArray::from_mut_slice(&mut bytes[start..(start + 16)]);
-                aes_enc.encrypt_block(block);
+                aes_enc.encrypt_block(&mut bytes[start..(start + 16)]);
             }
         }
         DecryptedJoinAcceptPayload(self.0, self.1)
@@ -504,12 +502,8 @@ impl<T: AsRef<[u8]>, F: CryptoFactory> DecryptedJoinAcceptPayload<T, F> {
         block[7] = dev_nonce_arr[0];
         block[8] = dev_nonce_arr[1];
 
-        let mut input = GenericArray::clone_from_slice(&block);
-        cipher.encrypt_block(&mut input);
-
-        let mut output_key = [0u8; 16];
-        output_key.copy_from_slice(&input[0..16]);
-        AES128(output_key)
+        cipher.encrypt_block(&mut block);
+        AES128(block)
     }
 }
 

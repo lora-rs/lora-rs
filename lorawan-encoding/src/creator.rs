@@ -12,11 +12,6 @@ use crate::types::{DLSettings, Frequency};
 #[cfg(feature = "default-crypto")]
 use super::default_crypto::DefaultFactory;
 
-use generic_array::GenericArray;
-
-#[cfg(feature = "default-crypto")]
-use aes::cipher::generic_array::typenum::U256;
-
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error {
@@ -175,8 +170,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
         let aes_enc = self.factory.new_dec(key);
         for i in 0..(d.len() >> 4) {
             let start = (i << 4) + 1;
-            let tmp = GenericArray::from_mut_slice(&mut d[start..(16 + start)]);
-            aes_enc.decrypt_block(tmp);
+            aes_enc.decrypt_block(&mut d[start..(16 + start)]);
         }
         self.encrypted = true;
     }
@@ -531,7 +525,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
 }
 
 #[cfg(feature = "default-crypto")]
-impl DataPayloadCreator<GenericArray<u8, U256>, DefaultFactory> {
+impl DataPayloadCreator<[u8; 256], DefaultFactory> {
     /// Creates a well initialized DataPayloadCreator.
     ///
     /// By default the packet is unconfirmed data up packet.
@@ -552,7 +546,7 @@ impl DataPayloadCreator<GenericArray<u8, U256>, DefaultFactory> {
     /// let payload = phy.build(b"hello", &[], &nwk_skey, &app_skey).unwrap();
     /// ```
     pub fn new() -> Self {
-        let mut data: GenericArray<u8, U256> = GenericArray::default();
+        let mut data = [0u8; 256];
         data[0] = 0x40;
         Self { data, data_f_port: None, fcnt: 0, factory: DefaultFactory }
     }

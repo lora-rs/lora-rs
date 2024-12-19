@@ -1,7 +1,6 @@
 //! Implement types for dealing with LoRaWAN keys and required
 //! cryptography entities.
 use super::parser::EUI64;
-use super::securityhelpers::generic_array::{typenum::U16, GenericArray};
 
 macro_rules! lorawan_key {
     (
@@ -206,19 +205,19 @@ impl From<[u8; 4]> for MIC {
 
 /// Trait for implementations of AES128 encryption.
 pub trait Encrypter {
-    fn encrypt_block(&self, block: &mut GenericArray<u8, U16>);
+    fn encrypt_block(&self, block: &mut [u8]);
 }
 
 /// Trait for implementations of AES128 decryption.
 pub trait Decrypter {
-    fn decrypt_block(&self, block: &mut GenericArray<u8, U16>);
+    fn decrypt_block(&self, block: &mut [u8]);
 }
 
 /// Trait for implementations of CMAC (RFC4493).
 pub trait Mac {
     fn input(&mut self, data: &[u8]);
     fn reset(&mut self);
-    fn result(self) -> GenericArray<u8, U16>;
+    fn result(self) -> [u8; 16];
 }
 
 /// Represents an abstraction over the crypto functions.

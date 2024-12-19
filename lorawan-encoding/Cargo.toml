@@ -16,7 +16,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 aes = { version = "0.8", optional = true }
 cmac = { version = "0.7", optional = true }
-generic-array = "0"
 hex = { version = "0", default-features = false }
 defmt = { version = "0.3", optional = true }
 serde = { version = "1", default-features = false, features = ["derive"], optional = true}
