@@ -25,7 +25,7 @@ document-features = "0.2.8"
 [features]
 
 ## Use [`defmt`](https://docs.rs/defmt/0.3.8/defmt/index.html) for logging.
-defmt-03 = ["dep:defmt", "lorawan-device/defmt-03", "lora-modulation/defmt-03"]
+defmt-03 = ["dep:defmt", "lorawan-device?/defmt-03", "lora-modulation/defmt-03"]
 
 ## Async LoRaWAN Rx/Tx interface implementation
 lorawan-radio = ["dep:lorawan-device"]
