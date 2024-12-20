@@ -27,7 +27,6 @@ lorawan = "0.9"
 use lorawan::{creator::JoinAcceptCreator, keys};
 use lorawan::default_crypto::DefaultFactory;
 use lorawan::types::Frequency;
-use heapless;
 
 fn main() {
     let mut data = [0; 33];
@@ -39,9 +38,10 @@ fn main() {
     phy.set_dev_addr(&[1; 4]);
     phy.set_dl_settings(2);
     phy.set_rx_delay(1);
-    let mut freqs: heapless::Vec<Frequency, 2> = heapless::Vec::new();
-    freqs.push(Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap()).unwrap();
-    freqs.push(Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()).unwrap();
+    let mut freqs = [
+        Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap(),
+        Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()
+    ];
     phy.set_c_f_list(freqs).unwrap();
     let payload = phy.build(&key).unwrap();
     println!("Payload: {:x?}", payload);
