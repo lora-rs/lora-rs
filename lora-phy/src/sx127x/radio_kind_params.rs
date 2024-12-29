@@ -5,6 +5,15 @@ use embedded_hal_async::spi::SpiDevice;
 
 #[allow(async_fn_in_trait)]
 pub trait Sx127xVariant {
+    type Data: Default;
+
+    async fn init_lora<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
+        radio: &mut Sx127x<SPI, IV, Self>,
+        sync_word: u8,
+    ) -> Result<(), RadioError>
+    where
+        Self: Sized;
+
     fn bandwidth_value(bw: Bandwidth) -> Result<u8, RadioError>;
     fn reg_txco() -> Register;
     async fn set_tx_power<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
@@ -175,8 +184,10 @@ pub enum Register {
     RegRssiWideband = 0x2c,
     RegDetectionOptimize = 0x31,
     RegInvertiq = 0x33,
+    RegHighBwOptimize1 = 0x36,
     RegDetectionThreshold = 0x37,
     RegSyncWord = 0x39,
+    RegHighBwOptimize2 = 0x3a,
     RegInvertiq2 = 0x3b,
     RegDioMapping1 = 0x40,
     RegVersion = 0x42,
