@@ -9,6 +9,15 @@ use lora_modulation::Bandwidth;
 pub struct Sx1272;
 
 impl Sx127xVariant for Sx1272 {
+    type Data = ();
+
+    async fn init_lora<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
+        _radio: &mut Sx127x<SPI, IV, Self>,
+        _sync_word: u8,
+    ) -> Result<(), RadioError> {
+        Ok(())
+    }
+
     fn bandwidth_value(bw: Bandwidth) -> Result<u8, RadioError> {
         match bw {
             Bandwidth::_125KHz => Ok(0x00),

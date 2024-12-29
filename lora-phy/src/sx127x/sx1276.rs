@@ -12,7 +12,28 @@ use lora_modulation::Bandwidth;
 /// Sx1276 implements the Sx127xVariant trait
 pub struct Sx1276;
 
+#[derive(Default)]
+pub struct Sx1276Data {
+    /// flag to indicate the Errata 2.1: Sensitivity optimization with 500 kHz bandwidth is required
+    sensitivity_quirk: bool,
+}
+
 impl Sx127xVariant for Sx1276 {
+    type Data = Sx1276Data;
+
+    async fn init_lora<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
+        radio: &mut Sx127x<SPI, IV, Self>,
+        _sync_word: u8,
+    ) -> Result<(), RadioError> {
+        let chip_version = radio.read_register(Register::RegVersion).await?;
+        debug!("Detected sx1276 v{}", chip_version);
+
+        // Errata 2.1: Sensitivity optimization only applies to version 0x12
+        radio.data.sensitivity_quirk = chip_version == 0x12;
+
+        Ok(())
+    }
+
     fn bandwidth_value(bw: Bandwidth) -> Result<u8, RadioError> {
         match bw {
             Bandwidth::_7KHz => Ok(0x00),
@@ -108,7 +129,34 @@ impl Sx127xVariant for Sx1276 {
         }
         let mut config_3 = radio.read_register(Register::RegModemConfig3).await?;
         config_3 = (config_3 & 0xf3u8) | ldro_agc_auto_flags;
-        radio.write_register(Register::RegModemConfig3, config_3).await
+        radio.write_register(Register::RegModemConfig3, config_3).await?;
+
+        if radio.data.sensitivity_quirk {
+            // apply Errata 2.1: Sensitivity optimization with 500 kHz bandwidth
+
+            if mdltn_params.bandwidth == Bandwidth::_500KHz {
+                let val_1 = 0x02;
+                match mdltn_params.frequency_in_hz {
+                    862_000..=1_020_000 => {
+                        radio.write_register(Register::RegHighBwOptimize1, val_1).await?;
+                        radio.write_register(Register::RegHighBwOptimize2, 0x64).await?;
+                        return Ok(());
+                    }
+                    410_000..=525_000 => {
+                        radio.write_register(Register::RegHighBwOptimize1, val_1).await?;
+                        radio.write_register(Register::RegHighBwOptimize2, 0x7f).await?;
+                        return Ok(());
+                    }
+                    // fall through...
+                    _ => {}
+                }
+            }
+
+            // for all other combinations of bandwidth / frequencies, reset to 0x03 (RegHighBwOptimize2 is automatically set by the chip)
+            radio.write_register(Register::RegHighBwOptimize1, 0x03).await?;
+        }
+
+        Ok(())
     }
 
     async fn set_packet_params<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
