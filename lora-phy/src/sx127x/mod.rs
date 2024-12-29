@@ -428,8 +428,6 @@ where
                 let mut dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
                 dio_mapping_1 = (dio_mapping_1 & DioMapping1Dio0::Mask.value()) | DioMapping1Dio0::TxDone.value();
                 self.write_register(Register::RegDioMapping1, dio_mapping_1).await?;
-
-                self.write_register(Register::RegIrqFlags, 0x00u8).await?;
             }
             Some(RadioMode::Receive(_)) => {
                 self.write_register(
@@ -450,8 +448,6 @@ where
                 let val = (dio_mapping_1 & DioMapping1Dio0::Mask.value() & DioMapping1Dio3::Mask.value())
                     | (DioMapping1Dio0::RxDone.value() | DioMapping1Dio3::ValidHeader.value());
                 self.write_register(Register::RegDioMapping1, val).await?;
-
-                self.write_register(Register::RegIrqFlags, 0x00u8).await?;
             }
             Some(RadioMode::ChannelActivityDetection) => {
                 self.write_register(
@@ -463,8 +459,6 @@ where
                 let mut dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
                 dio_mapping_1 = (dio_mapping_1 & DioMapping1Dio0::Mask.value()) | DioMapping1Dio0::CadDone.value();
                 self.write_register(Register::RegDioMapping1, dio_mapping_1).await?;
-
-                self.write_register(Register::RegIrqFlags, 0x00u8).await?;
             }
             _ => {
                 self.write_register(Register::RegIrqFlagsMask, IrqMask::All.value())
@@ -473,9 +467,11 @@ where
                 let mut dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
                 dio_mapping_1 = (dio_mapping_1 & DioMapping1Dio0::Mask.value()) | DioMapping1Dio0::Other.value();
                 self.write_register(Register::RegDioMapping1, dio_mapping_1).await?;
-                self.write_register(Register::RegIrqFlags, 0xffu8).await?;
             }
         }
+
+        // clear all active IRQ flags
+        self.write_register(Register::RegIrqFlags, 0xffu8).await?;
 
         Ok(())
     }
