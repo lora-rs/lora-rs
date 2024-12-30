@@ -173,12 +173,14 @@ where
 
     /// Enables Class C behavior. Note that Class C downlinks are not possible until a confirmed
     /// uplink is sent to the LNS.
+    #[cfg(feature = "class-c")]
     pub fn enable_class_c(&mut self) {
         self.class_c = true;
     }
-
+    
     /// Disables Class C behavior. Note that an uplink must be set for the radio to disable
     /// Class C listen.
+    #[cfg(feature = "class-c")]
     pub fn disable_class_c(&mut self) {
         self.class_c = false;
     }
@@ -285,7 +287,7 @@ where
     }
 
     async fn window_complete(&mut self) -> Result<(), Error<R::PhyError>> {
-        if self.class_c {
+        if !(cfg!(feature = "class-c") && self.class_c) {
             let rf_config = self.mac.get_rxc_config();
             self.radio.setup_rx(rf_config).await.map_err(Error::Radio)
         } else {
@@ -297,7 +299,7 @@ where
         &mut self,
         duration: u32,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
-        if !self.class_c {
+        if !(cfg!(feature = "class-c") && self.class_c) {
             self.radio.low_power().await.map_err(Error::Radio)?;
             self.timer.at(duration.into()).await;
             return Ok(None);

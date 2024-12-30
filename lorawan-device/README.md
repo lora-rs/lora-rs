@@ -13,7 +13,7 @@ Note: The `lorawan-radio` feature in the `lora-phy` crate provides `LorawanRadio
 Both stacks share a dependency on the internal module, `mac` where LoRaWAN 1.0.x is approximately implemented:
 
 - Class A device behavior
-- Class C device behavior (async only)
+- Class C device behavior (async only, enabled by default with the `class-c` feature)
 - Over-the-Air Activation (OTAA) and Activation by Personalization (ABP)
 - CFList is supported for fixed and dynamic channel plans
 - Regional support for AS923_1, AS923_2, AS923_3, AS923_4, AU915, EU868, EU433, IN865, US915 (note: regional power 
