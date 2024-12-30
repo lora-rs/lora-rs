@@ -287,7 +287,7 @@ where
     }
 
     async fn window_complete(&mut self) -> Result<(), Error<R::PhyError>> {
-        if !(cfg!(feature = "class-c") && self.class_c) {
+        if cfg!(feature = "class-c") && self.class_c {
             let rf_config = self.mac.get_rxc_config();
             self.radio.setup_rx(rf_config).await.map_err(Error::Radio)
         } else {
