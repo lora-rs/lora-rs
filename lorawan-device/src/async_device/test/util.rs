@@ -1,7 +1,6 @@
-use super::{get_dev_addr, get_key, radio::*, region, timer::*, Device, SendResponse};
+use super::{get_dev_addr, get_key, radio::*, region, timer::*, Device};
 
 use crate::mac::Session;
-use crate::test_util::handle_class_c_uplink_after_join;
 use crate::{AppSKey, NewSKey};
 
 fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel, Device) {
@@ -30,6 +29,7 @@ pub fn setup_with_session() -> (RadioChannel, TimerChannel, Device) {
     }))
 }
 
+#[cfg(feature = "class-c")]
 pub async fn setup_with_session_class_c() -> (RadioChannel, TimerChannel, Device) {
     let (radio, timer, mut async_device) = setup_with_session();
     async_device.enable_class_c();
@@ -40,9 +40,11 @@ pub async fn setup_with_session_class_c() -> (RadioChannel, TimerChannel, Device
     });
     // timeout the first sends RX windows which enables class C
     timer.fire_most_recent().await;
-    radio.handle_rxtx(handle_class_c_uplink_after_join).await;
+    radio.handle_rxtx(crate::test_util::handle_class_c_uplink_after_join).await;
 
     let (device, response) = task.await.unwrap();
+
+    use super::SendResponse;
     match response {
         Ok(SendResponse::DownlinkReceived(0)) => (),
         _ => {
