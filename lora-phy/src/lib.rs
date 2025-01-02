@@ -79,7 +79,7 @@ where
     /// control an initialized LoRa radio for LoRaWAN public or private network.
     ///
     /// In order to configure radio to use non-LoRaWAN networks, use
-    /// [`Self::with_syncword()`] which has `sync_word` argument.
+    /// [`LoRa::with_syncword()`] which has `sync_word` argument.
     pub async fn new(radio_kind: RK, enable_public_network: bool, delay: DLY) -> Result<Self, RadioError> {
         let sync_word = if enable_public_network {
             LORAWAN_PUBLIC_SYNCWORD
@@ -111,7 +111,7 @@ where
             .create_modulation_params(spreading_factor, bandwidth, coding_rate, frequency_in_hz)
     }
 
-    /// Create packet parameters for a send operation on a communication channel
+    /// Create packet parameters for a transmit operation on a communication channel
     pub fn create_tx_packet_params(
         &mut self,
         preamble_length: u16,
@@ -174,7 +174,8 @@ where
         self.radio_kind.set_standby().await
     }
 
-    /// Place the LoRa physical layer in low power mode, specifying cold or warm start (if chip supports it)
+    /// Place the LoRa physical layer in low power mode, specifying cold or
+    /// warm start (if chip supports it)
     pub async fn sleep(&mut self, warm_start_if_possible: bool) -> Result<(), RadioError> {
         if self.radio_mode != RadioMode::Sleep {
             self.radio_kind.ensure_ready(self.radio_mode).await?;
@@ -189,7 +190,7 @@ where
         Ok(())
     }
 
-    /// Prepare the radio for a send operation
+    /// Prepare the radio for a transmit operation
     pub async fn prepare_for_tx(
         &mut self,
         mdltn_params: &ModulationParams,
@@ -218,7 +219,7 @@ where
         Ok(())
     }
 
-    /// Execute a send operation
+    /// Execute a transmit operation
     pub async fn tx(&mut self) -> Result<(), RadioError> {
         if let RadioMode::Transmit = self.radio_mode {
             self.radio_kind.do_tx().await?;
@@ -243,7 +244,7 @@ where
         }
     }
 
-    /// Prepare the radio for a receive operation
+    /// Configure radio for a receive operation
     pub async fn prepare_for_rx(
         &mut self,
         listen_mode: RxMode,
@@ -261,8 +262,8 @@ where
         Ok(())
     }
 
-    /// Start receiving but do not wait for the result.
-    /// Call complete_rx to finish waiting for result.
+    /// Switch radio to receive mode (prepared via [`LoRa::prepare_for_rx`]).
+    /// Call [`LoRa::complete_rx`] to wait and handle result.
     pub async fn start_rx(&mut self) -> Result<(), RadioError> {
         if let RadioMode::Receive(listen_mode) = self.radio_mode {
             self.radio_kind.do_rx(listen_mode).await
@@ -341,13 +342,14 @@ where
         self.complete_rx(packet_params, receiving_buffer).await
     }
 
-    /// Start listening to a given frequency and bandwidth
+    /// Start listening to a given frequency and [`Bandwidth`]
     pub async fn listen(&mut self, frequency_in_hz: u32, bandwidth: Bandwidth) -> Result<(), RadioError> {
         self.prepare_modem(frequency_in_hz).await?;
 
         self.radio_kind.set_channel(frequency_in_hz).await?;
-        // We need to set the bandwidth, otherwise sx126x doesn't return reasonable RSSI results
-        // All other params are irrelevant with regard to listening to measure RSSI.
+        // We need to set the bandwidth, otherwise sx126x doesn't return
+        // reasonable RSSI results. All other params are irrelevant with
+        // regard to listening to measure RSSI.
         let modulation_params = self.radio_kind.create_modulation_params(
             SpreadingFactor::_7,
             bandwidth,
@@ -361,7 +363,7 @@ where
         Ok(())
     }
 
-    /// Get the current rssi
+    /// Get the current RSSI
     pub async fn get_rssi(&mut self) -> Result<i16, RadioError> {
         self.radio_kind.get_rssi().await
     }
