@@ -330,6 +330,8 @@ where
         }
     }
 
+    /// Start reception and wait for its completion by calling
+    /// [`LoRa::start_rx`]  and [`LoRa::complete_rx`] in succession.
     pub async fn rx(
         &mut self,
         packet_params: &PacketParams,
