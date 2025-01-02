@@ -6,7 +6,12 @@ use crate::mod_params::RadioError;
 use crate::mod_params::RadioError::*;
 use crate::mod_traits::InterfaceVariant;
 
-/// Base for the InterfaceVariant implementation for the Sx127x combination
+/// Base for the InterfaceVariant implementation for the Sx127x for
+/// LoRa P2P operations.
+///
+/// Note: This `InterfaceVariant` is not compatible with
+/// [`lorawan_device::async_device::Device`] due to its reliance on `RxTimeout`
+/// IRQ which is exposed on secondary IRQ pin.
 pub struct GenericSx127xInterfaceVariant<CTRL, WAIT> {
     reset: CTRL,
     irq: WAIT,
@@ -19,7 +24,7 @@ where
     CTRL: OutputPin,
     WAIT: Wait,
 {
-    /// Create an InterfaceVariant instance for an stm32l0/sx1276 combination
+    /// Create an InterfaceVariant instance for sx127x chips for LoRa P2P operations.
     pub fn new(
         reset: CTRL,
         irq: WAIT,
@@ -84,7 +89,7 @@ where
     }
 }
 
-/// Base for the InterfaceVariant implementation for a generic Sx126x LoRa board
+/// Base for the InterfaceVariant implementation for Sx126x-based boards
 pub struct GenericSx126xInterfaceVariant<CTRL, WAIT> {
     reset: CTRL,
     dio1: WAIT,
@@ -98,7 +103,7 @@ where
     CTRL: OutputPin,
     WAIT: Wait,
 {
-    /// Create an InterfaceVariant instance for an nrf52840/sx1262 combination
+    /// Create an InterfaceVariant instance for sx126x chips
     pub fn new(
         reset: CTRL,
         dio1: WAIT,
