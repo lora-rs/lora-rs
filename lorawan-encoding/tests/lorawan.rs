@@ -613,16 +613,57 @@ fn test_join_accept_creator() {
 
     assert_eq!(phy.build(&key), Ok(&phy_join_accept_payload()[..]));
 }
+#[test]
+#[cfg(feature = "default-crypto")]
+fn test_join_accept_creator_short_buffer() {
+    let mut buf = [0u8; 16];
+    let phy_res = JoinAcceptCreator::with_options(&mut buf[..], DefaultFactory);
+    assert!(phy_res.is_err(), "JoinAccept should not fit in 16 bytes");
+}
+#[test]
+#[cfg(feature = "default-crypto")]
+fn test_join_accept_creator_with_cflist() {
+    let mut buf = [0u8; 17 + 16];
+    let mut phy = JoinAcceptCreator::with_options(&mut buf[..], DefaultFactory).unwrap();
+    let key: AppKey = AppKey::from(app_key());
+    let app_nonce_bytes = [0xc7, 0x0b, 0x57];
+    let freqs = [
+        Frequency::new_from_raw(&[0x18, 0x4F, 0x84]),
+        Frequency::new_from_raw(&[0xE8, 0x56, 0x84]),
+        Frequency::new_from_raw(&[0xB8, 0x5E, 0x84]),
+        Frequency::new_from_raw(&[0x88, 0x66, 0x84]),
+        Frequency::new_from_raw(&[0x58, 0x6E, 0x84]),
+    ];
+    phy.set_app_nonce(&app_nonce_bytes)
+        .set_net_id(&[0x01, 0x11, 0x22])
+        .set_dev_addr(&[0x80, 0x19, 0x03, 0x02])
+        .set_dl_settings(0)
+        .set_rx_delay(0)
+        .set_c_f_list(&freqs)
+        .unwrap();
+    phy.build(key.inner()).unwrap();
+    let encrypted = EncryptedJoinAcceptPayload::new(buf).unwrap();
+    let decrypted = encrypted.decrypt(&key);
+    assert!(decrypted.validate_mic(&key));
+    assert_eq!(decrypted.c_f_list(), Some(CfList::DynamicChannel(freqs)))
+}
 
 #[test]
 fn test_join_request_creator() {
-    let mut phy = JoinRequestCreator::new();
+    let buf = [0u8; 23];
+    let mut phy = JoinRequestCreator::with_options(buf, DefaultFactory).unwrap();
     let key = [1; 16].into();
     phy.set_app_eui(&[0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01])
         .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
         .set_dev_nonce(&[0x2du8, 0x10]);
 
     assert_eq!(phy.build(&key), &phy_join_request_payload()[..]);
+}
+#[test]
+fn test_join_request_creator_short_buffer() {
+    let buf = [0u8; 0];
+    let phy_res = JoinRequestCreator::with_options(buf, DefaultFactory);
+    assert!(phy_res.is_err(), "JoinRequest should fail with short buffer")
 }
 
 #[test]
