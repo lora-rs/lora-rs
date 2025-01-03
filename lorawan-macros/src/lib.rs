@@ -15,13 +15,12 @@ impl Payload {
 
 struct Attributes {
     doc: Vec<syn::Attribute>,
-    attrs: Option<(syn::Expr, syn::Expr)>,
+    attrs: Option<(syn::Expr, Option<syn::Expr>)>,
 }
 
-#[proc_macro_derive(CommandHandler, attributes(ack, cmd))]
+#[proc_macro_derive(CommandHandler, attributes(cmd))]
 pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-
     let handler = &input.ident;
     let (handler_lt, _ty, _where) = input.generics.split_for_impl();
     // Collect lifetime requirements for MacCommandIterator<'_, T<..>>
@@ -34,20 +33,16 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
         _ => panic!("Multiple lifetimes for this enum are unsupported!"),
     };
 
-    let creator_enum = Ident::new(&format!("{}Creator", handler), Span::call_site());
-
     // Parse enum members into list of (Command, Payload, Attributes) tuples
     let members = parse_enum_members(&input);
-
     let mut impl_len = Vec::new();
     let mut impl_bytes = Vec::new();
     let mut impl_cid = Vec::new();
     let mut impl_iter_next = Vec::new();
-
     let mut payload_struct_impls = Vec::new();
-
     let mut payload_struct_creator_impls = Vec::new();
 
+    let creator_enum = Ident::new(&format!("{}Creator", handler), Span::call_site());
     let mut creator_enum_variants = Vec::new();
     let mut creator_enum_len = Vec::new();
     let mut creator_enum_build = Vec::new();
@@ -62,7 +57,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
 
         // ...len()
         impl_len.push(quote! {
-            Self::#n(_) => #t::len()
+            Self::#n(ref v) => v.len()
         });
 
         // ...bytes()
@@ -76,12 +71,33 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
         });
 
         // SerializableMacCommand::next()
-        impl_iter_next.push(quote! {
-            if data[0] == #t::cid() && data.len() >= #t::len() {
-                self.index = self.index + #t::len() + 1;
-                Some(#handler::#n(#t::new_from_raw(&data[1..1 + #t::len()])))
-            } else
-        });
+        // Different iterator implementation for fixed and variable length
+        if let Some((_, ref len_opt)) = attributes.attrs {
+            match len_opt {
+                Some(_) => {
+                    impl_iter_next.push(quote! {
+                        if data[0] == #t::cid() && data.len() >= #t::max_len() {
+                            self.index = self.index + #t::max_len() + 1;
+                            Some(#handler::#n(#t::new_from_raw(&data[1..1 + #t::max_len()])))
+                        } else
+                    });
+                }
+                None => {
+                    impl_iter_next.push(quote! {
+                        if data[0] == #t::cid() {
+                            let payload = #t::new_from_raw(&data[1..]);
+                            let len = payload.len();
+                            if data.len() >= len {
+                                self.index = self.index + len + 1;
+                                Some(#handler::#n(payload))
+                            } else {
+                                None
+                            }
+                        } else
+                    });
+                }
+            }
+        }
 
         // CommandCreator enum
         creator_enum_variants.push(quote! {
@@ -99,22 +115,8 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
         });
 
         // Generate definition and common implementation for payloads
-        if let Some((cid, len)) = attributes.attrs {
-            let payload_creator = Ident::new(&format!("{}Creator", n), Span::call_site());
-
-            // Generate common code used by zero and non-zero length payloads
-            let common = quote! {
-                /// Payload CID.
-                pub const fn cid() -> u8 {
-                    #cid
-                }
-                /// Length of payload without the CID.
-                pub const fn len() -> usize {
-                    #len
-                }
-            };
-
-            // Payloads with len > 0 (which have lifetime)
+        if let Some((ref cid, ref len_opt)) = attributes.attrs {
+            // Payloads with len > 0 (which have lifetime). Includes variable and fixed length payloads.
             if let Some(lt) = lt {
                 payload_struct_impls.push(quote! {
                     #[derive(Debug, PartialEq, Eq)]
@@ -123,26 +125,21 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                     pub struct #t <#lt> (pub(crate) &#lt [u8]);
 
                     impl<#lt> #t<#lt> {
-                        /// Creates a new instance of the MAC command if there is enough data.
-                        pub fn new(data: &#lt [u8]) -> Result<#t<#lt>, Error> {
-                            if data.len() != #len {
-                                Err(Error::BufferTooShort)
-                            } else {
-                                Ok(#t(&data))
-                            }
+                        /// Payload CID.
+                        pub const fn cid() -> u8 {
+                            #cid
                         }
+
                         /// Constructs a new instance of the MAC command from the provided data,
                         /// without verifying the data length.
                         ///
                         /// Improper use of this method could lead to panic during runtime!
-                        pub fn new_from_raw(data: &#lt [u8]) ->#t<#lt> {
-                            #t(&data)
+                        pub fn new_from_raw(data: &#lt [u8]) -> #t<#lt> {
+                            #t(data)
                         }
 
-                        #common
-
                         /// Reference to the payload.
-                        pub fn bytes (&self) -> &[u8]{
+                        pub fn bytes(&self) -> &[u8] {
                             self.0
                         }
                     }
@@ -156,64 +153,49 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                     pub struct #t();
 
                     impl #t {
-                        /// Create new
+                        /// Payload CID.
+                        pub const fn cid() -> u8 {
+                            #cid
+                        }
+
+                        /// Reference to the payload.
+                        pub fn bytes(&self) -> &[u8] {
+                            &[]
+                        }
+
+                        /// Create new instance - zero-length payloads don't need validation
                         pub fn new(_: &[u8]) -> #t {
                             #t()
                         }
+
                         /// Create from raw_bytes (for compatibility with non-zero length payloads)
                         pub fn new_from_raw(_: &[u8]) -> #t {
                             #t()
                         }
 
-                        #common
+                        /// Maximum length of payload without the CID.
+                        pub const fn max_len() -> usize {
+                            0
+                        }
 
-                        /// Reference to the empty payload.
-                        pub fn bytes(&self) -> &[u8] {
-                            &[]
+                        /// Actual length of payload without the CID.
+                        pub fn len(&self) -> usize {
+                            Self::max_len()
                         }
                     }
                 });
             }
 
+            // Add build() implementation only for fixed-length payloads
             payload_struct_creator_impls.push(quote! {
-                #[derive(Debug)]
-                #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-                #[doc(hidden)]
-                pub struct #payload_creator {
-                    pub(crate) data: [u8; #len + 1],
-                }
-
-                impl #payload_creator {
-                    pub fn new() -> Self {
-                        let mut data = [0; #len + 1];
-                        data[0] = #cid;
-                        Self { data }
-                    }
-
-                    pub fn build(&self) -> &[u8] {
-                     &self.data[..]
-                    }
-
-                    /// Get the CID.
-                    pub const fn cid(&self) -> u8 {
-                        #cid
-                    }
-
-                    /// Get the length.
-                    #[allow(clippy::len_without_is_empty)]
-                    pub const fn len(&self) -> usize {
-                        #len + 1
-                    }
-                }
-
-                impl SerializableMacCommand for #payload_creator {
-                    fn payload_bytes(&self) -> &[u8] {
-                        &self.build()[1..]
-                    }
-
+                impl SerializableMacCommand for #creator {
                     /// The CID of the SerializableMacCommand.
                     fn cid(&self) -> u8 {
                         self.build()[0]
+                    }
+
+                    fn payload_bytes(&self) -> &[u8] {
+                        &self.build()[1..]
                     }
 
                     /// Length of the SerializableMacCommand not including CID.
@@ -222,9 +204,71 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                     }
                 }
             });
+
+            // Add fixed-length methods if len is specified
+            if let Some(ref len) = len_opt {
+                if let Some(lt) = lt {
+                    payload_struct_impls.push(quote! {
+                        impl<#lt> #t<#lt> {
+                            /// Creates a new instance of the MAC command if there is enough data.
+                            pub fn new(data: &#lt [u8]) -> Result<#t<#lt>, Error> {
+                                if data.len() != Self::max_len() {
+                                    Err(Error::BufferTooShort)
+                                } else {
+                                    Ok(#t(data))
+                                }
+                            }
+
+                            /// Maximum length of payload without the CID.
+                            pub const fn max_len() -> usize {
+                                #len
+                            }
+
+                            /// Actual length of payload without the CID.
+                            pub fn len(&self) -> usize {
+                                Self::max_len()
+                            }
+
+                        }
+                    });
+                }
+            }
+
+            let payload_creator = Ident::new(&format!("{}Creator", n), Span::call_site());
+            payload_struct_creator_impls.push(quote! {
+                #[derive(Debug)]
+                #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+                #[doc(hidden)]
+                pub struct #payload_creator {
+                    pub(crate) data: [u8; #t::max_len() + 1],
+                }
+
+                impl #payload_creator {
+                    pub fn new() -> Self {
+                        let mut data = [0; #t::max_len() + 1];
+                        data[0] = #cid;
+                        Self { data }
+                    }
+
+                    pub fn build(&self) -> &[u8] {
+                     &self.data[..self.len()]
+                    }
+
+                    pub const fn cid(&self) -> u8 {
+                        #cid
+                    }
+
+                    /// Get the length including CID.
+                    #[allow(clippy::len_without_is_empty)]
+                    pub fn len(&self) -> usize {
+                        #t::max_len() + 1
+                    }
+                }
+            });
         }
     }
 
+    // Generate the final implementations
     quote! {
         #[allow(clippy::len_without_is_empty)]
         impl #handler_lt #handler #handler_lt {
@@ -287,7 +331,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
             #[allow(clippy::len_without_is_empty)]
             pub fn len(&self) -> usize {
                 match self {
-                    # ( #creator_enum_len ),*
+                    #( #creator_enum_len ),*
                 }
             }
 
@@ -355,7 +399,7 @@ fn parse_variant_fields(input: &syn::Type) -> Payload {
 }
 
 /// Handler for `#[cmd(cid = ..., len = ...)]` attribute
-fn attr_handle_cmd(attr: &syn::Attribute) -> Option<(syn::Expr, syn::Expr)> {
+fn attr_handle_cmd(attr: &syn::Attribute) -> Option<(syn::Expr, Option<syn::Expr>)> {
     // TODO: Figure out how to convert cid/len values to u8
     // TODO: Raise errors on missing cid/len as these are required?
     let mut cid = None;
@@ -367,7 +411,6 @@ fn attr_handle_cmd(attr: &syn::Attribute) -> Option<(syn::Expr, syn::Expr)> {
             match meta {
                 Meta::Path(_) => unimplemented!("Meta::Path is not supported!"),
                 Meta::List(_) => unimplemented!("Meta::List is not supported!"),
-                // We'll only expect NameValues (ie. val=xx)
                 Meta::NameValue(v) => {
                     if let Some(id) = v.path.get_ident() {
                         match id.to_string().as_str() {
@@ -388,11 +431,8 @@ fn attr_handle_cmd(attr: &syn::Attribute) -> Option<(syn::Expr, syn::Expr)> {
             }
         }
     }
-    if let (Some(cid), Some(len)) = (cid, len) {
-        Some((cid, len))
-    } else {
-        None
-    }
+    // Return cid with optional len
+    cid.map(|cid| (cid, len))
 }
 
 /// Collect supported attributes for enum members into [`Attributes`]:
@@ -400,7 +440,7 @@ fn attr_handle_cmd(attr: &syn::Attribute) -> Option<(syn::Expr, syn::Expr)> {
 /// * `cmd(..)` - used to specify size and CID for payload
 fn parse_variant_attrs(input: &Vec<syn::Attribute>) -> Attributes {
     let mut doc = Vec::new();
-    let mut attrs: Option<(syn::Expr, syn::Expr)> = None;
+    let mut attrs: Option<(syn::Expr, Option<syn::Expr>)> = None;
     for attr in input {
         if attr.path().is_ident("cmd") {
             attrs = attr_handle_cmd(attr);

@@ -3,12 +3,14 @@
 #![deny(rust_2018_idioms)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![allow(clippy::upper_case_acronyms)]
+#![allow(clippy::len_without_is_empty)]
 #![doc = include_str!("../README.md")]
 
 pub mod creator;
 pub mod keys;
 pub mod maccommandcreator;
 pub mod maccommands;
+pub mod multicast;
 pub mod packet_length;
 pub mod parser;
 pub mod string;
