@@ -7,7 +7,7 @@ macro_rules! test_helper {
         {
             assert!($type::new(&[]).is_err());
             let res = $type::new(&$data[..]).unwrap();
-            assert_eq!($type::len(), $size);
+            assert_eq!(res.len(), $size);
             $(
                 assert_eq!(res.$method(), $val);
             )*
@@ -71,7 +71,7 @@ fn test_link_adr_ans_new() {
     assert!(LinkADRReqPayload::new(&[]).is_err());
     for (v, e_power, e_dr, e_cm, e_ack) in &examples {
         let laa = LinkADRAnsPayload::new(&v[..]).unwrap();
-        assert_eq!(LinkADRAnsPayload::len(), 1);
+        assert_eq!(laa.len(), 1);
         assert_eq!(laa.channel_mask_ack(), *e_power);
         assert_eq!(laa.data_rate_ack(), *e_dr);
         assert_eq!(laa.powert_ack(), *e_cm);
@@ -125,7 +125,7 @@ fn test_rx_param_setup_ans_new() {
     assert!(RXParamSetupAnsPayload::new(&[]).is_err());
     for (v, e_ch, e_rx2_dr, e_rx1_dr_offset, e_ack) in &examples {
         let psa = RXParamSetupAnsPayload::new(&v[..]).unwrap();
-        assert_eq!(RXParamSetupAnsPayload::len(), 1);
+        assert_eq!(psa.len(), 1);
         assert_eq!(psa.channel_ack(), *e_ch);
         assert_eq!(psa.rx2_data_rate_ack(), *e_rx2_dr);
         assert_eq!(psa.rx1_dr_offset_ack(), *e_rx1_dr_offset);
@@ -178,7 +178,7 @@ fn test_new_channel_ans() {
     assert!(NewChannelAnsPayload::new(&[]).is_err());
     for (v, e_ch_freq, e_drr, e_ack) in &examples {
         let nca = NewChannelAnsPayload::new(&v[..]).unwrap();
-        assert_eq!(NewChannelAnsPayload::len(), 1);
+        assert_eq!(nca.len(), 1);
         assert_eq!(nca.data_rate_range_ack(), *e_drr);
         assert_eq!(nca.channel_freq_ack(), *e_ch_freq);
         assert_eq!(nca.ack(), *e_ack);
