@@ -7,6 +7,10 @@ use super::maccommandcreator;
 use super::maccommands::{mac_commands_len, SerializableMacCommand};
 use super::parser;
 use super::securityhelpers;
+use crate::packet_length::phy::join::{
+    JOIN_ACCEPT_LEN, JOIN_ACCEPT_WITH_CFLIST_LEN, JOIN_REQUEST_LEN,
+};
+use crate::packet_length::phy::{MIC_LEN, PHY_PAYLOAD_MIN_LEN};
 use crate::types::{DLSettings, Frequency};
 
 #[cfg(feature = "default-crypto")]
@@ -39,8 +43,10 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     ///
     /// TODO: Add more details & and example
     pub fn with_options(mut data: D, factory: F) -> Result<Self, Error> {
-        // length verification will occur during building
         let d = data.as_mut();
+        if d.len() < JOIN_ACCEPT_LEN {
+            return Err(Error::BufferTooShort);
+        }
         d[0] = 0x20;
         Ok(Self { data, with_c_f_list: false, encrypted: false, factory })
     }
@@ -129,12 +135,18 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
             return Err(Error::InvalidChannelList);
         }
         let d = self.data.as_mut();
+        if d.len() < JOIN_ACCEPT_WITH_CFLIST_LEN {
+            return Err(Error::BufferTooShort);
+        }
         ch_list.iter().enumerate().for_each(|(i, fr)| {
             let v = fr.value() / 100;
             d[13 + i * 3] = (v & 0xff) as u8;
             d[14 + i * 3] = ((v >> 8) & 0xff) as u8;
             d[15 + i * 3] = ((v >> 16) & 0xff) as u8;
         });
+        // set cflist type
+        d[JOIN_ACCEPT_WITH_CFLIST_LEN - 1] = 0;
+        self.with_c_f_list = true;
 
         Ok(self)
     }
@@ -147,9 +159,9 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     /// * key - the key to be used for encryption and setting the MIC.
     pub fn build(&mut self, key: &AES128) -> Result<&[u8], Error> {
         let required_len = if self.with_c_f_list {
-            33
+            JOIN_ACCEPT_WITH_CFLIST_LEN
         } else {
-            17
+            JOIN_ACCEPT_LEN
         };
         if self.data.as_mut().len() < required_len {
             return Err(Error::BufferTooShort);
@@ -206,9 +218,9 @@ impl JoinAcceptCreator<[u8; 33], DefaultFactory> {
 
 fn set_mic<F: CryptoFactory>(data: &mut [u8], key: &AES128, factory: &F) {
     let len = data.len();
-    let mic = securityhelpers::calculate_mic(&data[..len - 4], factory.new_mac(key));
+    let mic = securityhelpers::calculate_mic(&data[..len - MIC_LEN], factory.new_mac(key));
 
-    data[len - 4..].copy_from_slice(&mic.0[..]);
+    data[len - MIC_LEN..].copy_from_slice(&mic.0[..]);
 }
 
 /// JoinRequestCreator serves for creating binary representation of Physical
@@ -223,7 +235,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     /// Creates a well initialized JoinRequestCreator with specific crypto functions.
     pub fn with_options(mut data: D, factory: F) -> Result<Self, Error> {
         let d = data.as_mut();
-        if d.len() < 23 {
+        if d.len() < JOIN_REQUEST_LEN {
             return Err(Error::BufferTooShort);
         }
         d[0] = 0x00;
@@ -320,7 +332,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     /// By default the packet is unconfirmed data up packet.
     pub fn with_options(mut data: D, factory: F) -> Result<Self, Error> {
         let d = data.as_mut();
-        if d.len() < 255 {
+        if d.len() < PHY_PAYLOAD_MIN_LEN {
             return Err(Error::BufferTooShort);
         }
         d[0] = 0x40;
@@ -476,6 +488,9 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
         }
         // Set FOptsLen if present
         if !has_fport_zero && mac_cmds_len > 0 {
+            if d.len() < last_filled + mac_cmds_len + MIC_LEN {
+                return Err(Error::BufferTooShort);
+            }
             d[5] |= mac_cmds_len as u8 & 0x0f;
             maccommandcreator::build_mac_commands(
                 cmds,
@@ -486,6 +501,9 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
         }
 
         if has_fport {
+            if d.len() < last_filled + 1 + MIC_LEN {
+                return Err(Error::BufferTooShort);
+            }
             d[last_filled] = self.data_f_port.unwrap();
             last_filled += 1;
         }
@@ -494,12 +512,18 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
         if mac_cmds_len > 0 && has_fport_zero {
             enc_key = nwk_skey.0;
             payload_len = mac_cmds_len;
+            if d.len() < last_filled + payload_len + MIC_LEN {
+                return Err(Error::BufferTooShort);
+            }
             maccommandcreator::build_mac_commands(
                 cmds,
                 &mut d[last_filled..last_filled + payload_len],
             )
             .map_err(|_| Error::BufferTooShort)?;
         } else {
+            if d.len() < last_filled + payload_len + MIC_LEN {
+                return Err(Error::BufferTooShort);
+            }
             d[last_filled..last_filled + payload_len].copy_from_slice(payload);
         };
 
@@ -511,16 +535,17 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
             self.fcnt,
             &self.factory.new_enc(&enc_key),
         );
+        last_filled += payload_len;
 
         // MIC set
         let mic = securityhelpers::calculate_data_mic(
-            &d[..last_filled + payload_len],
+            &d[..last_filled],
             self.factory.new_mac(&nwk_skey.0),
             self.fcnt,
         );
-        d[last_filled + payload_len..last_filled + payload_len + 4].copy_from_slice(&mic.0);
+        d[last_filled..last_filled + MIC_LEN].copy_from_slice(&mic.0);
 
-        Ok(&d[..last_filled + payload_len + 4])
+        Ok(&d[..last_filled + MIC_LEN])
     }
 }
 
