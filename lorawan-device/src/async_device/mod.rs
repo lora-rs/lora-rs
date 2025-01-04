@@ -59,6 +59,7 @@ where
     mac: Mac,
     radio_buffer: RadioBuffer<N>,
     downlink: Vec<Downlink, D>,
+    #[cfg(feature = "class-c")]
     class_c: bool,
 }
 
@@ -167,6 +168,7 @@ where
             radio_buffer: RadioBuffer::new(),
             timer,
             downlink: Vec::new(),
+            #[cfg(feature = "class-c")]
             class_c: false,
         }
     }
@@ -177,7 +179,7 @@ where
     pub fn enable_class_c(&mut self) {
         self.class_c = true;
     }
-    
+
     /// Disables Class C behavior. Note that an uplink must be set for the radio to disable
     /// Class C listen.
     #[cfg(feature = "class-c")]
@@ -287,23 +289,37 @@ where
     }
 
     async fn window_complete(&mut self) -> Result<(), Error<R::PhyError>> {
-        if cfg!(feature = "class-c") && self.class_c {
+        #[cfg(feature = "class-c")]
+        if self.class_c {
             let rf_config = self.mac.get_rxc_config();
-            self.radio.setup_rx(rf_config).await.map_err(Error::Radio)
-        } else {
-            self.radio.low_power().await.map_err(Error::Radio)
+            return self.radio.setup_rx(rf_config).await.map_err(Error::Radio);
         }
+
+        self.radio.low_power().await.map_err(Error::Radio)
     }
 
     async fn between_windows(
         &mut self,
         duration: u32,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
-        if !(cfg!(feature = "class-c") && self.class_c) {
+        #[allow(unused_assignments, unused_mut)]
+        let mut class_c = false;
+
+        #[cfg(feature = "class-c")]
+        {
+            class_c = self.class_c;
+        }
+
+        if !class_c {
             self.radio.low_power().await.map_err(Error::Radio)?;
             self.timer.at(duration.into()).await;
             return Ok(None);
         }
+
+        // rustc does not recognize that the above return is always run without feature class-c
+        // with this unreachable!(), the code below is optimized away
+        #[cfg(not(feature = "class-c"))]
+        unreachable!();
 
         #[allow(unused)]
         enum RxcWindowResponse<F: futures::Future<Output = ()> + Sized + Unpin> {
@@ -341,6 +357,7 @@ where
         }
 
         // Class C listen while waiting for the window
+        #[allow(unreachable_code)]
         let rx_config = self.mac.get_rxc_config();
         debug!("Configuring RXC window with config {}.", rx_config);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
