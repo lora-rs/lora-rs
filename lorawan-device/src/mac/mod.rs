@@ -298,6 +298,7 @@ impl Mac {
         }
     }
 
+    #[cfg(feature = "class-c")]
     pub(crate) fn get_rxc_config(&self) -> RxConfig {
         RxConfig {
             rf: self.region.get_rxc_config(self.configuration.data_rate),

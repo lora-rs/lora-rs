@@ -9,7 +9,6 @@ pub use super::{
     Downlink, JoinMode,
 };
 use core::marker::PhantomData;
-use futures::{future::select, future::Either, pin_mut};
 use heapless::Vec;
 use lorawan::{self, keys::CryptoFactory};
 use rand_core::RngCore;
@@ -27,7 +26,7 @@ pub use embassy_time::EmbassyTimer;
 #[cfg(test)]
 mod test;
 
-use self::radio::{RxQuality, RxStatus};
+use self::radio::RxStatus;
 
 /// Type representing a LoRaWAN capable device.
 ///
@@ -298,28 +297,29 @@ where
         self.radio.low_power().await.map_err(Error::Radio)
     }
 
+    #[cfg(not(feature = "class-c"))]
     async fn between_windows(
         &mut self,
         duration: u32,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
-        #[allow(unused_assignments, unused_mut)]
-        let mut class_c = false;
+        self.radio.low_power().await.map_err(Error::Radio)?;
+        self.timer.at(duration.into()).await;
+        Ok(None)
+    }
 
-        #[cfg(feature = "class-c")]
-        {
-            class_c = self.class_c;
-        }
+    #[cfg(feature = "class-c")]
+    async fn between_windows(
+        &mut self,
+        duration: u32,
+    ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
+        use self::radio::RxQuality;
+        use futures::{future::select, future::Either, pin_mut};
 
-        if !class_c {
+        if self.class_c {
             self.radio.low_power().await.map_err(Error::Radio)?;
             self.timer.at(duration.into()).await;
             return Ok(None);
         }
-
-        // rustc does not recognize that the above return is always run without feature class-c
-        // with this unreachable!(), the code below is optimized away
-        #[cfg(not(feature = "class-c"))]
-        unreachable!();
 
         #[allow(unused)]
         enum RxcWindowResponse<F: futures::Future<Output = ()> + Sized + Unpin> {
@@ -357,7 +357,6 @@ where
         }
 
         // Class C listen while waiting for the window
-        #[allow(unreachable_code)]
         let rx_config = self.mac.get_rxc_config();
         debug!("Configuring RXC window with config {}.", rx_config);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;

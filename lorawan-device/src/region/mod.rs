@@ -437,6 +437,7 @@ impl Configuration {
     // Unicast: The RXC parameters are identical to the RX2 parameters, and they use the same
     // channel and data rate. Modifying the RX2 parameters using the appropriate MAC
     // commands also modifies the RXC parameters.
+    #[cfg(feature = "class-c")]
     pub(crate) fn get_rxc_config(&self, datarate: DR) -> RfConfig {
         let dr = self.get_rx_datarate(datarate, &Frame::Data, &Window::_2);
         let frequency = self.get_rx_frequency(&Frame::Data, &Window::_2);
