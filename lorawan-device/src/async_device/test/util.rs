@@ -1,7 +1,7 @@
 use super::{get_dev_addr, get_key, radio::*, region, timer::*, Device};
 
 use crate::mac::Session;
-use crate::{AppSKey, NewSKey};
+use crate::{AppSKey, NwkSKey};
 
 fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel, Device) {
     let (radio_channel, mock_radio) = TestRadio::new();
@@ -19,7 +19,7 @@ fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel,
 
 pub fn setup_with_session() -> (RadioChannel, TimerChannel, Device) {
     setup_internal(Some(Session {
-        newskey: NewSKey::from(get_key()),
+        nwkskey: NwkSKey::from(get_key()),
         appskey: AppSKey::from(get_key()),
         devaddr: get_dev_addr(),
         fcnt_up: 0,
