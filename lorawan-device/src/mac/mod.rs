@@ -145,11 +145,11 @@ impl Mac {
     /// Join via ABP. This does not transmit a join request frame, but instead sets the session.
     pub(crate) fn join_abp(
         &mut self,
-        newskey: NwkSKey,
+        nwkskey: NwkSKey,
         appskey: AppSKey,
         devaddr: DevAddr<[u8; 4]>,
     ) {
-        self.state = State::Joined(Session::new(newskey, appskey, devaddr));
+        self.state = State::Joined(Session::new(nwkskey, appskey, devaddr));
     }
 
     /// Join via ABP. This does not transmit a join request frame, but instead sets the session.

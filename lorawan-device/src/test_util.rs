@@ -62,7 +62,7 @@ pub fn get_abp_credentials() -> JoinMode {
     JoinMode::ABP {
         devaddr: get_dev_addr(),
         appskey: AppSKey::from(get_key()),
-        newskey: NewSKey::from(get_key()),
+        nwkskey: NwkSKey::from(get_key()),
     }
 }
 
