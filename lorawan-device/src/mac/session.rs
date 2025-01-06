@@ -22,7 +22,7 @@ use super::{
 pub struct Session {
     pub uplink: uplink::Uplink,
     pub confirmed: bool,
-    pub newskey: NwkSKey,
+    pub nwkskey: NwkSKey,
     pub appskey: AppSKey,
     pub devaddr: DevAddr<[u8; 4]>,
     pub fcnt_up: u32,
@@ -32,14 +32,14 @@ pub struct Session {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct SessionKeys {
-    pub newskey: NwkSKey,
+    pub nwkskey: NwkSKey,
     pub appskey: AppSKey,
     pub devaddr: DevAddr<[u8; 4]>,
 }
 
 impl From<Session> for SessionKeys {
     fn from(session: Session) -> Self {
-        Self { newskey: session.newskey, appskey: session.appskey, devaddr: session.devaddr }
+        Self { nwkskey: session.nwkskey, appskey: session.appskey, devaddr: session.devaddr }
     }
 }
 
@@ -62,9 +62,9 @@ impl Session {
         )
     }
 
-    pub fn new(newskey: NwkSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]>) -> Self {
+    pub fn new(nwkskey: NwkSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]>) -> Self {
         Self {
-            newskey,
+            nwkskey,
             appskey,
             devaddr,
             confirmed: false,
@@ -80,12 +80,17 @@ impl Session {
     pub fn appskey(&self) -> &AppSKey {
         &self.appskey
     }
+    #[deprecated(since = "0.12.2", note = "Please use `self.nwkskey` instead")]
     pub fn newskey(&self) -> &NwkSKey {
-        &self.newskey
+        &self.nwkskey
+    }
+
+    pub fn nwkskey(&self) -> &NwkSKey {
+        &self.nwkskey
     }
 
     pub fn get_session_keys(&self) -> Option<SessionKeys> {
-        Some(SessionKeys { newskey: self.newskey, appskey: self.appskey, devaddr: self.devaddr })
+        Some(SessionKeys { nwkskey: self.nwkskey, appskey: self.appskey, devaddr: self.devaddr })
     }
 }
 
@@ -104,14 +109,14 @@ impl Session {
             if self.devaddr() == &encrypted_data.fhdr().dev_addr() {
                 let fcnt = encrypted_data.fhdr().fcnt() as u32;
                 let confirmed = encrypted_data.is_confirmed();
-                if encrypted_data.validate_mic(self.newskey().inner(), fcnt)
+                if encrypted_data.validate_mic(self.nwkskey().inner(), fcnt)
                     && (fcnt > self.fcnt_down || fcnt == 0)
                 {
                     self.fcnt_down = fcnt;
                     // We can safely unwrap here because we already validated the MIC
                     let decrypted = encrypted_data
                         .decrypt(
-                            Some(self.newskey().inner()),
+                            Some(self.nwkskey().inner()),
                             Some(self.appskey().inner()),
                             self.fcnt_down,
                         )
@@ -211,7 +216,7 @@ impl Session {
             }
         }
 
-        match phy.build(data.data, dyn_cmds.as_slice(), &self.newskey, &self.appskey) {
+        match phy.build(data.data, dyn_cmds.as_slice(), &self.nwkskey, &self.appskey) {
             Ok(packet) => {
                 tx_buffer.clear();
                 tx_buffer.extend_from_slice(packet).unwrap();
