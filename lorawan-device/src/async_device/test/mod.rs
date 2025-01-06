@@ -277,8 +277,8 @@ async fn test_class_c_data_before_rx1() {
     let _ = device.take_downlink().unwrap();
 }
 
-#[cfg(feature = "class-c")]
 #[tokio::test]
+#[cfg(feature = "class-c")]
 async fn test_class_c_data_before_rx2() {
     let (radio, timer, mut async_device) = util::setup_with_session_class_c().await;
     // Run the device
@@ -310,8 +310,8 @@ async fn test_class_c_data_before_rx2() {
     let _ = device.take_downlink().unwrap();
 }
 
-#[cfg(feature = "class-c")]
 #[tokio::test]
+#[cfg(feature = "class-c")]
 async fn test_class_c_async_down() {
     let (radio, _timer, mut async_device) = util::setup_with_session_class_c().await;
     // Run the device
