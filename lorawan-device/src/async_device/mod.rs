@@ -315,7 +315,7 @@ where
         use self::radio::RxQuality;
         use futures::{future::select, future::Either, pin_mut};
 
-        if self.class_c {
+        if !self.class_c {
             self.radio.low_power().await.map_err(Error::Radio)?;
             self.timer.at(duration.into()).await;
             return Ok(None);
