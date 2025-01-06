@@ -9,7 +9,6 @@ pub use super::{
     Downlink, JoinMode,
 };
 use core::marker::PhantomData;
-use futures::{future::select, future::Either, pin_mut};
 use heapless::Vec;
 use lorawan::{self, keys::CryptoFactory};
 use rand_core::RngCore;
@@ -27,7 +26,7 @@ pub use embassy_time::EmbassyTimer;
 #[cfg(test)]
 mod test;
 
-use self::radio::{RxQuality, RxStatus};
+use self::radio::RxStatus;
 
 /// Type representing a LoRaWAN capable device.
 ///
@@ -59,6 +58,7 @@ where
     mac: Mac,
     radio_buffer: RadioBuffer<N>,
     downlink: Vec<Downlink, D>,
+    #[cfg(feature = "class-c")]
     class_c: bool,
 }
 
@@ -167,18 +167,21 @@ where
             radio_buffer: RadioBuffer::new(),
             timer,
             downlink: Vec::new(),
+            #[cfg(feature = "class-c")]
             class_c: false,
         }
     }
 
     /// Enables Class C behavior. Note that Class C downlinks are not possible until a confirmed
     /// uplink is sent to the LNS.
+    #[cfg(feature = "class-c")]
     pub fn enable_class_c(&mut self) {
         self.class_c = true;
     }
 
     /// Disables Class C behavior. Note that an uplink must be set for the radio to disable
     /// Class C listen.
+    #[cfg(feature = "class-c")]
     pub fn disable_class_c(&mut self) {
         self.class_c = false;
     }
@@ -285,18 +288,33 @@ where
     }
 
     async fn window_complete(&mut self) -> Result<(), Error<R::PhyError>> {
+        #[cfg(feature = "class-c")]
         if self.class_c {
             let rf_config = self.mac.get_rxc_config();
-            self.radio.setup_rx(rf_config).await.map_err(Error::Radio)
-        } else {
-            self.radio.low_power().await.map_err(Error::Radio)
+            return self.radio.setup_rx(rf_config).await.map_err(Error::Radio);
         }
+
+        self.radio.low_power().await.map_err(Error::Radio)
     }
 
+    #[cfg(not(feature = "class-c"))]
     async fn between_windows(
         &mut self,
         duration: u32,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
+        self.radio.low_power().await.map_err(Error::Radio)?;
+        self.timer.at(duration.into()).await;
+        Ok(None)
+    }
+
+    #[cfg(feature = "class-c")]
+    async fn between_windows(
+        &mut self,
+        duration: u32,
+    ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
+        use self::radio::RxQuality;
+        use futures::{future::select, future::Either, pin_mut};
+
         if !self.class_c {
             self.radio.low_power().await.map_err(Error::Radio)?;
             self.timer.at(duration.into()).await;

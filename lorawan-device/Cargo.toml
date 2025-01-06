@@ -43,7 +43,7 @@ lorawan = { path = "../lorawan-encoding", default-features = false, features = [
 ] }
 
 [features]
-default = ["all-regions"]
+default = ["all-regions", "class-c"]
 all-regions = [
     "region-as923-1",
     "region-as923-2",
@@ -67,6 +67,9 @@ embassy-time = ["dep:embassy-time"]
 
 ## Enable [`serde`](https://docs.rs/serde/latest/serde/) serialization/deserialization for data structures.
 serde = ["dep:serde", "lorawan/serde"]
+
+## Enable support for Class C devices
+class-c = []
 
 ## Enable support for AS923-1 region (by default all regions are enabled).
 region-as923-1 = []

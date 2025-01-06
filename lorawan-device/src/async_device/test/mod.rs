@@ -15,7 +15,7 @@ mod radio;
 use radio::TestRadio;
 
 mod util;
-use util::{setup, setup_with_session, setup_with_session_class_c};
+use util::{setup, setup_with_session};
 
 type Device =
     crate::async_device::Device<TestRadio, DefaultFactory, TestTimer, rand_core::OsRng, 512, 4>;
@@ -250,8 +250,9 @@ async fn test_link_adr_ans() {
 }
 
 #[tokio::test]
+#[cfg(feature = "class-c")]
 async fn test_class_c_data_before_rx1() {
-    let (radio, timer, mut async_device) = setup_with_session_class_c().await;
+    let (radio, timer, mut async_device) = util::setup_with_session_class_c().await;
     // Run the device
     let task = tokio::spawn(async move {
         let response = async_device.send(&[1, 2, 3], 3, true).await;
@@ -277,8 +278,9 @@ async fn test_class_c_data_before_rx1() {
 }
 
 #[tokio::test]
+#[cfg(feature = "class-c")]
 async fn test_class_c_data_before_rx2() {
-    let (radio, timer, mut async_device) = setup_with_session_class_c().await;
+    let (radio, timer, mut async_device) = util::setup_with_session_class_c().await;
     // Run the device
     let task = tokio::spawn(async move {
         let response = async_device.send(&[1, 2, 3], 3, true).await;
@@ -309,8 +311,9 @@ async fn test_class_c_data_before_rx2() {
 }
 
 #[tokio::test]
+#[cfg(feature = "class-c")]
 async fn test_class_c_async_down() {
-    let (radio, _timer, mut async_device) = setup_with_session_class_c().await;
+    let (radio, _timer, mut async_device) = util::setup_with_session_class_c().await;
     // Run the device
     let task = tokio::spawn(async move {
         let response = async_device.rxc_listen().await;
