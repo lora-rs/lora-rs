@@ -239,8 +239,8 @@ where
                 self.timer.reset();
                 Ok(self.rx_downlink(&Frame::Join, ms).await?.try_into()?)
             }
-            JoinMode::ABP { newskey, appskey, devaddr } => {
-                self.mac.join_abp(*newskey, *appskey, *devaddr);
+            JoinMode::ABP { nwkskey, appskey, devaddr } => {
+                self.mac.join_abp(*nwkskey, *appskey, *devaddr);
                 Ok(JoinResponse::JoinSuccess)
             }
         }
