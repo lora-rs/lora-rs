@@ -46,7 +46,7 @@ fn main() -> ! {
         p.DMA_CH1,
         Config::default(),
     );
-    let spi = ExclusiveDevice::new(spi, nss, Delay);
+    let spi = ExclusiveDevice::new(spi, nss, Delay).unwrap();
 
     let iv = GenericSx126xInterfaceVariant::new(reset, dio1, busy, None, None).unwrap();
 
