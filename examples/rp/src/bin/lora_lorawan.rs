@@ -41,7 +41,7 @@ async fn main(_spawner: Spawner) {
         p.DMA_CH1,
         Config::default(),
     );
-    let spi = ExclusiveDevice::new(spi, nss, Delay);
+    let spi = ExclusiveDevice::new(spi, nss, Delay).unwrap();
 
     let config = sx126x::Config {
         chip: Sx1262,
