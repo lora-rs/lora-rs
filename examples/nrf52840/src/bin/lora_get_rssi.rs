@@ -20,7 +20,7 @@ const LORA_FREQUENCY_IN_HZ: u32 = 869_400_000; // warning: set this appropriatel
 const RSSI_THRESHOLD: i16 = -100;
 
 bind_interrupts!(struct Irqs {
-    SPIM1_SPIS1_TWIM1_TWIS1_SPI1_TWI1 => spim::InterruptHandler<peripherals::TWISPI1>;
+    TWISPI1 => spim::InterruptHandler<peripherals::TWISPI1>;
 });
 
 #[embassy_executor::main]

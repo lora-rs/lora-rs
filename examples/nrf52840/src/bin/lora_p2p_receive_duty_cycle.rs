@@ -19,7 +19,7 @@ use {defmt_rtt as _, panic_probe as _};
 const LORA_FREQUENCY_IN_HZ: u32 = 903_900_000; // warning: set this appropriately for the region
 
 bind_interrupts!(struct Irqs {
-    SPIM1_SPIS1_TWIM1_TWIS1_SPI1_TWI1 => spim::InterruptHandler<peripherals::TWISPI1>;
+    TWISPI1 => spim::InterruptHandler<peripherals::TWISPI1>;
 });
 
 #[embassy_executor::main]

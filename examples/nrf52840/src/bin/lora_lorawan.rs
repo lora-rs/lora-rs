@@ -34,7 +34,7 @@ const DEFAULT_APPEUI: [u8; 8] = [0, 0, 0, 0, 0, 0, 0, 0];
 const DEFAULT_APPKEY: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
 bind_interrupts!(struct Irqs {
-    SPIM1_SPIS1_TWIM1_TWIS1_SPI1_TWI1 => spim::InterruptHandler<peripherals::TWISPI1>;
+    TWISPI1 => spim::InterruptHandler<peripherals::TWISPI1>;
     RNG => rng::InterruptHandler<peripherals::RNG>;
 });
 
