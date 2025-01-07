@@ -13,7 +13,7 @@ use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx126xInterfaceVariant;
 use lora_phy::sx126x::{Sx1262, Sx126x, TcxoCtrlVoltage};
 use lora_phy::{mod_params::*, sx126x};
-use lora_phy::{LoRa, RxMode};
+use lora_phy::LoRa;
 use {defmt_rtt as _, panic_probe as _};
 
 const LORA_FREQUENCY_IN_HZ: u32 = 869_400_000; // warning: set this appropriately for the region
@@ -31,8 +31,8 @@ async fn main(_spawner: Spawner) {
     let reset = Output::new(p.P1_06.degrade(), Level::High, OutputDrive::Standard);
     let dio1 = Input::new(p.P1_15.degrade(), Pull::Down);
     let busy = Input::new(p.P1_14.degrade(), Pull::None);
-    let rf_switch_rx = Output::new(p.P1_05.degrade(), Level::Low, OutputDrive::Standard);
-    let rf_switch_tx = Output::new(p.P1_07.degrade(), Level::Low, OutputDrive::Standard);
+    let _rf_switch_rx = Output::new(p.P1_05.degrade(), Level::Low, OutputDrive::Standard);
+    let _rf_switch_tx = Output::new(p.P1_07.degrade(), Level::Low, OutputDrive::Standard);
 
     let mut spi_config = spim::Config::default();
     spi_config.frequency = spim::Frequency::M16;
@@ -60,8 +60,6 @@ async fn main(_spawner: Spawner) {
             return;
         }
     };
-
-    let mut counter = 0;
 
     loop {
         let rssi = match lora.get_rssi().await {
