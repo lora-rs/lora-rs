@@ -6,7 +6,7 @@
 
 use defmt::*;
 use embassy_executor::Executor;
-use embassy_rp::gpio::{AnyPin, Input, Level, Output, Pin, Pull};
+use embassy_rp::gpio::{Input, Level, Output, Pin, Pull};
 use embassy_rp::multicore::{spawn_core1, Stack};
 use embassy_rp::peripherals::SPI1;
 use embassy_rp::spi::{Async, Config, Spi};
@@ -50,10 +50,14 @@ fn main() -> ! {
 
     let iv = GenericSx126xInterfaceVariant::new(reset, dio1, busy, None, None).unwrap();
 
-    spawn_core1(p.CORE1, unsafe { &mut CORE1_STACK }, move || {
-        let executor1 = EXECUTOR1.init(Executor::new());
-        executor1.run(|spawner| unwrap!(spawner.spawn(core1_task(spi, iv))));
-    });
+    spawn_core1(
+        p.CORE1,
+        unsafe { &mut *core::ptr::addr_of_mut!(CORE1_STACK) },
+        move || {
+            let executor1 = EXECUTOR1.init(Executor::new());
+            executor1.run(|spawner| unwrap!(spawner.spawn(core1_task(spi, iv))));
+        },
+    );
 
     let executor0 = EXECUTOR0.init(Executor::new());
     executor0.run(|spawner| unwrap!(spawner.spawn(core0_task())));
@@ -70,8 +74,8 @@ async fn core0_task() {
 
 #[embassy_executor::task]
 async fn core1_task(
-    spi: ExclusiveDevice<Spi<'static, SPI1, Async>, Output<'static, AnyPin>, Delay>,
-    iv: GenericSx126xInterfaceVariant<Output<'static, AnyPin>, Input<'static, AnyPin>>,
+    spi: ExclusiveDevice<Spi<'static, SPI1, Async>, Output<'static>, Delay>,
+    iv: GenericSx126xInterfaceVariant<Output<'static>, Input<'static>>,
 ) {
     info!("Hello from core 1");
 
