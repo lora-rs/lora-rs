@@ -52,7 +52,7 @@ async fn main(_spawner: Spawner) {
     let mut spi_config = spim::Config::default();
     spi_config.frequency = spim::Frequency::M16;
     let spim = spim::Spim::new(p.TWISPI1, Irqs, p.P1_11, p.P1_13, p.P1_12, spi_config);
-    let spi = ExclusiveDevice::new(spim, nss, Delay);
+    let spi = ExclusiveDevice::new(spim, nss, Delay).unwrap();
 
     let config = sx126x::Config {
         chip: Sx1262,
