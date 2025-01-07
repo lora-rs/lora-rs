@@ -30,7 +30,7 @@ serde = { version = "1", default-features = false, features = [
 ], optional = true }
 seq-macro = "0.3.5"
 document-features = "0.2.8"
-embassy-time = { version = "0.3.0", optional = true }
+embassy-time = { version = "0.4", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time", "sync"] }
