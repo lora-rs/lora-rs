@@ -28,3 +28,9 @@ embedded-hal-bus = { version = "0.1.0", features = ["async"]}
 [profile.release]
 debug = 2
 
+[patch.crates-io]
+embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "3387ee7238f1c9c4eeccb732ba543cbe38ab7ccd" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "3387ee7238f1c9c4eeccb732ba543cbe38ab7ccd" }
+embassy-sync = { git = "https://github.com/embassy-rs/embassy.git", rev = "3387ee7238f1c9c4eeccb732ba543cbe38ab7ccd" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "3387ee7238f1c9c4eeccb732ba543cbe38ab7ccd" }
+#embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "3387ee7238f1c9c4eeccb732ba543cbe38ab7ccd" }
