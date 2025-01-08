@@ -602,7 +602,8 @@ fn test_validate_join_request_mic_when_not_ok() {
 #[test]
 #[cfg(feature = "default-crypto")]
 fn test_join_accept_creator() {
-    let mut phy = JoinAcceptCreator::new();
+    let mut buf = [0u8; 17];
+    let mut phy = JoinAcceptCreator::new(&mut buf[..]).unwrap();
     let key = AES128(app_key());
     let app_nonce_bytes = [0xc7, 0x0b, 0x57];
     phy.set_app_nonce(&app_nonce_bytes)

@@ -5,6 +5,7 @@ use super::parser::{
     DecryptedDataPayload, DecryptedJoinAcceptPayload, EncryptedDataPayload,
     EncryptedJoinAcceptPayload, JoinRequestPayload,
 };
+use crate::creator::{DataPayloadCreator, JoinAcceptCreator};
 use crate::parser::Error;
 use aes::cipher::generic_array::GenericArray;
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
@@ -61,21 +62,74 @@ impl Mac for Cmac {
     }
 }
 
-impl JoinRequestCreator<[u8; 23], DefaultFactory> {
+impl<D: AsMut<[u8]>> DataPayloadCreator<D, DefaultFactory> {
+    /// Creates a well initialized DataPayloadCreator.
+    ///
+    /// By default the packet is unconfirmed data up packet.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut buf = [0u8; 255];
+    /// let mut phy = lorawan::creator::DataPayloadCreator::new(&mut buf).unwrap();
+    /// let nwk_skey = lorawan::keys::NwkSKey::from([2; 16]);
+    /// let app_skey = lorawan::keys::AppSKey::from([1; 16]);
+    /// let fctrl = lorawan::parser::FCtrl::new(0x80, true);
+    /// phy.set_confirmed(false).
+    ///     set_uplink(true).
+    ///     set_f_port(1).
+    ///     set_dev_addr(&[4, 3, 2, 1]).
+    ///     set_fctrl(&fctrl). // ADR: true, all others: false
+    ///     set_fcnt(1);
+    /// let payload = phy.build(b"hello", &[], &nwk_skey, &app_skey).unwrap();
+    /// ```
+    pub fn new(buf: D) -> Result<Self, super::creator::Error> {
+        Self::with_options(buf, DefaultFactory)
+    }
+}
+
+impl<D: AsMut<[u8]>> JoinRequestCreator<D, DefaultFactory> {
     /// Creates a well initialized JoinRequestCreator.
     ///
     /// # Examples
     ///
     /// ```
-    /// let mut phy = lorawan::creator::JoinRequestCreator::new();
+    /// let mut buf = [0u8; 23];
+    /// let mut phy = lorawan::creator::JoinRequestCreator::new(&mut buf[..]).unwrap();
     /// let key = lorawan::keys::AppKey::from([7; 16]);
     /// phy.set_app_eui(&[1; 8]);
     /// phy.set_dev_eui(&[2; 8]);
     /// phy.set_dev_nonce(&[3; 2]);
     /// let payload = phy.build(&key);
     /// ```
-    pub fn new() -> Self {
-        Self::with_options([0; 23], DefaultFactory).unwrap()
+    pub fn new(buf: D) -> Result<Self, super::creator::Error> {
+        Self::with_options(buf, DefaultFactory)
+    }
+}
+
+impl<D: AsMut<[u8]>> JoinAcceptCreator<D, DefaultFactory> {
+    /// Creates a well initialized JoinAcceptCreator.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut buf = [0u8; 17];
+    /// let mut phy = lorawan::creator::JoinAcceptCreator::new(&mut buf[..]).unwrap();
+    /// let key = lorawan::keys::AES128([1; 16]);
+    /// let app_nonce_bytes = [1; 3];
+    /// phy.set_app_nonce(&app_nonce_bytes);
+    /// phy.set_net_id(&[1; 3]);
+    /// phy.set_dev_addr(&[1; 4]);
+    /// phy.set_dl_settings(2);
+    /// phy.set_rx_delay(1);
+    /// let mut freqs: Vec<lorawan::types::Frequency> = Vec::new();
+    /// freqs.push(lorawan::types::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap());
+    /// freqs.push(lorawan::types::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap());
+    /// phy.set_c_f_list(freqs);
+    /// let payload = phy.build(&key).unwrap();
+    /// ```
+    pub fn new(buf: D) -> Result<Self, super::creator::Error> {
+        Self::with_options(buf, DefaultFactory)
     }
 }
 
