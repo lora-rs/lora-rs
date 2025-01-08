@@ -29,8 +29,8 @@ embedded-hal-bus = { version = "0.1.0", features = ["async"]}
 debug = 2
 
 [patch.crates-io]
-embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "489d0be2a2971cfae7d6413b601bbd044d42e351" }
-embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "489d0be2a2971cfae7d6413b601bbd044d42e351" }
-embassy-sync= { git = "https://github.com/embassy-rs/embassy.git", rev = "489d0be2a2971cfae7d6413b601bbd044d42e351" }
-embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "489d0be2a2971cfae7d6413b601bbd044d42e351" }
-embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "489d0be2a2971cfae7d6413b601bbd044d42e351" }
+embassy-stm32 = { git = "https://github.com/embassy-rs/embassy.git", rev = "be087e5d43326178878878bebae96f3b51a3b184" }
+embassy-executor = { git = "https://github.com/embassy-rs/embassy.git", rev = "be087e5d43326178878878bebae96f3b51a3b184" }
+embassy-sync= { git = "https://github.com/embassy-rs/embassy.git", rev = "be087e5d43326178878878bebae96f3b51a3b184" }
+embassy-time = { git = "https://github.com/embassy-rs/embassy.git", rev = "be087e5d43326178878878bebae96f3b51a3b184" }
+embassy-time-driver = { git = "https://github.com/embassy-rs/embassy.git", rev = "be087e5d43326178878878bebae96f3b51a3b184" }
