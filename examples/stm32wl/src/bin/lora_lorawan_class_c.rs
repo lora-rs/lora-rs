@@ -11,7 +11,7 @@ use defmt::info;
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either};
 use embassy_stm32::exti::ExtiInput;
-use embassy_stm32::gpio::{AnyPin, Input, Level, Output, Pin, Pull, Speed};
+use embassy_stm32::gpio::{Level, Output, Pin, Pull, Speed};
 use embassy_stm32::rng::{self, Rng};
 use embassy_stm32::spi::Spi;
 use embassy_stm32::time::Hertz;
@@ -88,15 +88,14 @@ async fn main(spawner: Spawner) {
 
     let _lora_task = spawner.spawn(lora_task(lora, Rng::new(p.RNG, Irqs), CHANNEL.receiver()));
 
-    let button = Input::new(p.PA0, Pull::Up);
-    let button = ExtiInput::new(button, p.EXTI0);
+    let button = ExtiInput::new(p.PA0, p.EXTI0, Pull::Up);
     let _button_task = spawner.spawn(button_task(button, CHANNEL.sender()));
 }
 
 type Stm32wlLoRa<'d> = LoRa<
     Sx126x<
         iv::SubghzSpiDevice<Spi<'d, peripherals::SUBGHZSPI, peripherals::DMA1_CH1, peripherals::DMA1_CH2>>,
-        Stm32wlInterfaceVariant<Output<'d, AnyPin>>,
+        Stm32wlInterfaceVariant<Output<'d>>,
         Stm32wl,
     >,
     Delay,
@@ -185,7 +184,7 @@ enum ButtonState {
 
 #[embassy_executor::task]
 async fn button_task(
-    mut button: ExtiInput<'static, peripherals::PA0>,
+    mut button: ExtiInput<'static>,
     tx: Sender<'static, ThreadModeRawMutex, ButtonState, 3>,
 ) {
     info!("Press the USER button...");
