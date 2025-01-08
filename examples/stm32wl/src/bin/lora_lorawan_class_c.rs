@@ -93,10 +93,8 @@ async fn main(spawner: Spawner) {
     let _button_task = spawner.spawn(button_task(button, CHANNEL.sender()));
 }
 
-type Stm32wlLoRa<'d> = LoRa<
-    Sx126x<iv::SubghzSpiDevice<Spi<'d, peripherals::SUBGHZSPI, Async>>, Stm32wlInterfaceVariant<Output<'d>>, Stm32wl>,
-    Delay,
->;
+type Stm32wlLoRa<'d> =
+    LoRa<Sx126x<iv::SubghzSpiDevice<Spi<'d, Async>>, Stm32wlInterfaceVariant<Output<'d>>, Stm32wl>, Delay>;
 
 #[embassy_executor::task]
 async fn lora_task(
