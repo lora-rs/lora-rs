@@ -43,7 +43,7 @@ async fn main(_spawner: Spawner) {
     let mut spi_config = spi::Config::default();
     spi_config.frequency = khz(200);
     let spi = spi::Spi::new(p.SPI1, p.PB3, p.PA7, p.PA6, p.DMA1_CH3, p.DMA1_CH2, spi_config);
-    let spi = ExclusiveDevice::new(spi, nss, Delay);
+    let spi = ExclusiveDevice::new(spi, nss, Delay).unwrap();
 
     let config = sx127x::Config {
         chip: Sx1276,
