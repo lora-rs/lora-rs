@@ -5,8 +5,8 @@
 
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_stm32::exti::{Channel, ExtiInput};
-use embassy_stm32::gpio::{Input, Level, Output, Pin, Pull, Speed};
+use embassy_stm32::exti::ExtiInput;
+use embassy_stm32::gpio::{Level, Output, Pin, Pull, Speed};
 use embassy_stm32::rng::Rng;
 use embassy_stm32::time::khz;
 use embassy_stm32::{bind_interrupts, peripherals, rng, spi};
@@ -14,7 +14,7 @@ use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx127xInterfaceVariant;
 use lora_phy::lorawan_radio::LorawanRadio;
-use lora_phy::sx127x::{self, Sx127x, Sx1276};
+use lora_phy::sx127x::{self, Sx1276, Sx127x};
 use lora_phy::LoRa;
 use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode};
 use lorawan_device::default_crypto::DefaultFactory as Crypto;
@@ -33,13 +33,12 @@ const MAX_TX_POWER: u8 = 14;
 async fn main(_spawner: Spawner) {
     let mut config = embassy_stm32::Config::default();
     config.rcc.hsi = true;
-    config.rcc.mux = embassy_stm32::rcc::ClockSrc::HSI;
+    config.rcc.sys = embassy_stm32::rcc::Sysclk::HSI;
     let p = embassy_stm32::init(config);
 
     let nss = Output::new(p.PA15.degrade(), Level::High, Speed::Low);
     let reset = Output::new(p.PC0.degrade(), Level::High, Speed::Low);
-    let irq_pin = Input::new(p.PB4.degrade(), Pull::Up);
-    let irq = ExtiInput::new(irq_pin, p.EXTI4.degrade());
+    let irq = ExtiInput::new(p.PB4, p.EXTI4, Pull::Up);
 
     let mut spi_config = spi::Config::default();
     spi_config.frequency = khz(200);
