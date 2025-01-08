@@ -12,6 +12,7 @@ use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either};
 use embassy_stm32::exti::ExtiInput;
 use embassy_stm32::gpio::{Level, Output, Pin, Pull, Speed};
+use embassy_stm32::mode::Async;
 use embassy_stm32::rng::{self, Rng};
 use embassy_stm32::spi::Spi;
 use embassy_stm32::time::Hertz;
@@ -93,11 +94,7 @@ async fn main(spawner: Spawner) {
 }
 
 type Stm32wlLoRa<'d> = LoRa<
-    Sx126x<
-        iv::SubghzSpiDevice<Spi<'d, peripherals::SUBGHZSPI, peripherals::DMA1_CH1, peripherals::DMA1_CH2>>,
-        Stm32wlInterfaceVariant<Output<'d>>,
-        Stm32wl,
-    >,
+    Sx126x<iv::SubghzSpiDevice<Spi<'d, peripherals::SUBGHZSPI, Async>>, Stm32wlInterfaceVariant<Output<'d>>, Stm32wl>,
     Delay,
 >;
 
@@ -183,10 +180,7 @@ enum ButtonState {
 }
 
 #[embassy_executor::task]
-async fn button_task(
-    mut button: ExtiInput<'static>,
-    tx: Sender<'static, ThreadModeRawMutex, ButtonState, 3>,
-) {
+async fn button_task(mut button: ExtiInput<'static>, tx: Sender<'static, ThreadModeRawMutex, ButtonState, 3>) {
     info!("Press the USER button...");
     loop {
         button.wait_for_falling_edge().await;
