@@ -37,12 +37,12 @@ impl Otaa {
     ) -> u16 {
         self.dev_nonce = DevNonce::from(rng.next_u32() as u16);
         buf.clear();
-        let mut phy: JoinRequestCreator<[u8; 23], C> = JoinRequestCreator::default();
+        let mut phy = JoinRequestCreator::with_options(buf.as_mut(), C::default()).unwrap();
         phy.set_app_eui(self.network_credentials.appeui)
             .set_dev_eui(self.network_credentials.deveui)
             .set_dev_nonce(self.dev_nonce);
-        let vec = phy.build(&self.network_credentials.appkey);
-        buf.extend_from_slice(vec).unwrap();
+        let len = phy.build(&self.network_credentials.appkey).len();
+        buf.set_pos(len);
         u16::from(self.dev_nonce)
     }
 
