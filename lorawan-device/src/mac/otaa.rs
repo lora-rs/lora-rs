@@ -37,11 +37,12 @@ impl Otaa {
     ) -> u16 {
         self.dev_nonce = DevNonce::from(rng.next_u32() as u16);
         buf.clear();
-        let mut phy = JoinRequestCreator::with_options(buf.as_mut(), C::default()).unwrap();
+        let mut phy = JoinRequestCreator::new(buf.as_mut()).unwrap();
         phy.set_app_eui(self.network_credentials.appeui)
             .set_dev_eui(self.network_credentials.deveui)
             .set_dev_nonce(self.dev_nonce);
-        let len = phy.build(&self.network_credentials.appkey).len();
+        let crypto_factory = C::default();
+        let len = phy.build(&self.network_credentials.appkey, &crypto_factory).len();
         buf.set_pos(len);
         u16::from(self.dev_nonce)
     }

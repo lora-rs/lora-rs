@@ -190,7 +190,7 @@ impl Session {
         tx_buffer.clear();
         let fcnt = self.fcnt_up;
         let mut buf = [0u8; 256];
-        let mut phy = DataPayloadCreator::with_options(&mut buf, C::default()).unwrap();
+        let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
 
         let mut fctrl = FCtrl(0x0, true);
         if self.uplink.confirms_downlink() {
@@ -216,7 +216,14 @@ impl Session {
             }
         }
 
-        match phy.build(data.data, dyn_cmds.as_slice(), &self.nwkskey, &self.appskey) {
+        let crypto_factory = C::default();
+        match phy.build(
+            data.data,
+            dyn_cmds.as_slice(),
+            &self.nwkskey,
+            &self.appskey,
+            &crypto_factory,
+        ) {
             Ok(packet) => {
                 tx_buffer.clear();
                 tx_buffer.extend_from_slice(packet).unwrap();

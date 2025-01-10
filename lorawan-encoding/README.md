@@ -30,7 +30,7 @@ use lorawan::types::Frequency;
 
 fn main() {
     let mut data = [0; 33];
-    let mut phy = JoinAcceptCreator::with_options(&mut data, DefaultFactory).unwrap();
+    let mut phy = JoinAcceptCreator::new(&mut data).unwrap();
     let key = keys::AES128([1; 16]);
     let app_nonce_bytes = [1; 3];
     phy.set_app_nonce(&app_nonce_bytes);
@@ -43,7 +43,8 @@ fn main() {
         Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()
     ];
     phy.set_c_f_list(freqs).unwrap();
-    let payload = phy.build(&key).unwrap();
+    let crypto_factory = DefaultFactory::default();
+    let payload = phy.build(&key,&crypto_factory).unwrap();
     println!("Payload: {:x?}", payload);
 }
 ```
