@@ -166,14 +166,14 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
         if !self.encrypted {
             self.encrypt_payload(key);
         }
-        Ok(&self.data.as_mut()[0..required_len])
+        Ok(&self.data.as_mut()[..required_len])
     }
 
     fn encrypt_payload(&mut self, key: &AES128) {
         let d = if self.with_c_f_list {
-            self.data.as_mut()
+            &mut self.data.as_mut()[..JOIN_ACCEPT_WITH_CFLIST_LEN]
         } else {
-            &mut self.data.as_mut()[..17]
+            &mut self.data.as_mut()[..JOIN_ACCEPT_LEN]
         };
         set_mic(d, key, &self.factory);
         let aes_enc = self.factory.new_dec(key);
@@ -265,8 +265,8 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     /// * key - the key to be used for setting the MIC.
     pub fn build(&mut self, key: &AppKey) -> &[u8] {
         let d = self.data.as_mut();
-        set_mic(d, &key.0, &self.factory);
-        d
+        set_mic(&mut d[..JOIN_REQUEST_LEN], &key.0, &self.factory);
+        &d[..JOIN_REQUEST_LEN]
     }
 }
 
