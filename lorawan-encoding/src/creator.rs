@@ -280,8 +280,7 @@ impl<D: AsMut<[u8]>> JoinRequestCreator<D> {
 ///     .set_dev_addr(&[4, 3, 2, 1])
 ///     .set_fctrl(&lorawan::parser::FCtrl::new(0x80, true)) // ADR: true, all others: false
 ///     .set_fcnt(76543);
-///    let crypto_factory = lorawan::default_crypto::DefaultFactory::default();
-/// phy.build(b"hello lora", &[], &nwk_skey, &app_skey,&crypto_factory).unwrap();
+/// phy.build(b"hello lora", &[], &nwk_skey, &app_skey,&lorawan::default_crypto::DefaultFactory).unwrap();
 /// ```
 #[derive(Default)]
 pub struct DataPayloadCreator<D> {
@@ -422,8 +421,7 @@ impl<D: AsMut<[u8]>> DataPayloadCreator<D> {
     /// cmds.push(&mac_cmd2);
     /// let nwk_skey = lorawan::keys::NwkSKey::from([2; 16]);
     /// let app_skey = lorawan::keys::AppSKey::from([1; 16]);
-    /// let crypto_factory = lorawan::default_crypto::DefaultFactory::default();
-    /// phy.build(&[], &cmds, &nwk_skey, &app_skey, &crypto_factory).unwrap();
+    /// phy.build(&[], &cmds, &nwk_skey, &app_skey, &lorawan::default_crypto::DefaultFactory).unwrap();
     /// ```
     pub fn build<F: CryptoFactory>(
         &mut self,

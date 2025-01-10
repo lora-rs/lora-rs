@@ -89,8 +89,7 @@ pub fn handle_join_request<const I: usize>(
             phy.set_app_nonce(&app_nonce_bytes);
             phy.set_net_id(&[1; 3]);
             phy.set_dev_addr(get_dev_addr());
-            let crypto_factory = DefaultFactory::default();
-            let finished = phy.build(&get_key().into(), &crypto_factory).unwrap();
+            let finished = phy.build(&get_key().into(), &DefaultFactory).unwrap();
             rx_buffer[..finished.len()].copy_from_slice(finished);
 
             let mut copy = rx_buffer[..finished.len()].to_vec();
@@ -153,9 +152,8 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
             phy.set_dev_addr(&[0; 4]);
             phy.set_uplink(false);
             phy.set_fcnt(FCNT_DOWN);
-            let crypto_factory = DefaultFactory::default();
             let finished = phy
-                .build(&[3, 2, 1], &cmd, &get_key().into(), &get_key().into(), &crypto_factory)
+                .build(&[3, 2, 1], &cmd, &get_key().into(), &get_key().into(), &DefaultFactory)
                 .unwrap();
             finished.len()
         } else {
@@ -188,9 +186,8 @@ pub fn handle_class_c_uplink_after_join(
             phy.set_uplink(false);
             phy.set_fctrl(&fctrl);
             // set ack bit
-            let crypto_factory = DefaultFactory::default();
             let finished =
-                phy.build(&[], &[], &get_key().into(), &get_key().into(), &crypto_factory).unwrap();
+                phy.build(&[], &[], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
             finished.len()
         } else {
             panic!("Did not decode PhyPayload::Data!");
@@ -243,9 +240,8 @@ pub fn handle_data_uplink_with_link_adr_ans(
             //phy.set_f_port(3);
             phy.set_fcnt(1);
             // zero out rx_buffer
-            let crypto_factory = DefaultFactory::default();
             let finished =
-                phy.build(&[], &[], &get_key().into(), &get_key().into(), &crypto_factory).unwrap();
+                phy.build(&[], &[], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
             finished.len()
         } else {
             panic!("Unable to parse PhyPayload::Data from uplink in handle_data_uplink_with_link_adr_ans")
@@ -267,8 +263,7 @@ pub fn class_c_downlink<const FCNT_DOWN: u32>(
     phy.set_uplink(false);
     phy.set_fcnt(FCNT_DOWN);
 
-    let crypto_factory = DefaultFactory::default();
     let finished =
-        phy.build(&[1, 2, 3], &[], &get_key().into(), &get_key().into(), &crypto_factory).unwrap();
+        phy.build(&[1, 2, 3], &[], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
     finished.len()
 }

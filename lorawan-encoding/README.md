@@ -43,8 +43,7 @@ fn main() {
         Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()
     ];
     phy.set_c_f_list(freqs).unwrap();
-    let crypto_factory = DefaultFactory::default();
-    let payload = phy.build(&key,&crypto_factory).unwrap();
+    let payload = phy.build(&key,&DefaultFactory).unwrap();
     println!("Payload: {:x?}", payload);
 }
 ```

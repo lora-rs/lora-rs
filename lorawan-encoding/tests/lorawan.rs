@@ -447,9 +447,8 @@ fn test_data_payload_uplink_creator() {
         .set_fctrl(&fctrl) // ADR: true, all others: false
         .set_fcnt(1);
 
-    let crypto_factory = DefaultFactory::default();
     assert_eq!(
-        phy.build(b"hello", &[], &nwk_skey, &app_skey, &crypto_factory).unwrap(),
+        phy.build(b"hello", &[], &nwk_skey, &app_skey, &DefaultFactory).unwrap(),
         &phy_dataup_payload()[..]
     );
 }
@@ -468,14 +467,13 @@ fn test_long_data_payload_uplink_creator() {
         .set_fctrl(&fctrl) // all flags set to false
         .set_fcnt(0);
 
-    let crypto_factory = DefaultFactory::default();
     assert_eq!(
         phy.build(
             &long_data_payload().into_bytes()[..],
             &[],
             &nwk_skey,
             &app_skey,
-            &crypto_factory
+            &DefaultFactory
         )
         .unwrap(),
         &phy_long_dataup_payload()[..]
@@ -496,9 +494,8 @@ fn test_data_payload_downlink_creator() {
         .set_fctrl(&fctrl) // ADR: true, all others: false
         .set_fcnt(76543);
 
-    let crypto_factory = DefaultFactory::default();
     assert_eq!(
-        phy.build(b"hello lora", &[], &nwk_skey, &app_skey, &crypto_factory).unwrap(),
+        phy.build(b"hello lora", &[], &nwk_skey, &app_skey, &DefaultFactory).unwrap(),
         &phy_datadown_payload()[..]
     );
 }
@@ -510,8 +507,7 @@ fn test_data_payload_creator_when_payload_and_fport_0() {
     let nwk_skey = [2; 16].into();
     let app_skey = [1; 16].into();
     phy.set_f_port(0);
-    let crypto_factory = DefaultFactory::default();
-    assert!(phy.build(b"hello", &[], &nwk_skey, &app_skey, &crypto_factory).is_err());
+    assert!(phy.build(b"hello", &[], &nwk_skey, &app_skey, &DefaultFactory).is_err());
 }
 
 #[test]
@@ -526,8 +522,7 @@ fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
     cmds.extend_from_slice(&[&new_channel_req, &new_channel_req, &new_channel_req]);
     phy.set_f_port(1);
-    let crypto_factory = DefaultFactory::default();
-    assert!(phy.build(b"", &cmds[..], &nwk_skey, &app_skey, &crypto_factory).is_err());
+    assert!(phy.build(b"", &cmds[..], &nwk_skey, &app_skey, &DefaultFactory).is_err());
 }
 
 #[test]
@@ -536,8 +531,7 @@ fn test_data_payload_creator_when_payload_no_fport() {
     let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
     let nwk_skey = [2; 16].into();
     let app_skey = [1; 16].into();
-    let crypto_factory = DefaultFactory::default();
-    assert!(phy.build(b"hello", &[], &nwk_skey, &app_skey, &crypto_factory).is_err());
+    assert!(phy.build(b"hello", &[], &nwk_skey, &app_skey, &DefaultFactory).is_err());
 }
 
 #[test]
@@ -552,9 +546,8 @@ fn test_data_payload_creator_when_mac_commands_in_payload() {
     let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
     cmds.extend_from_slice(&[&mac_cmd1, &mac_cmd2]);
     phy.set_confirmed(false).set_uplink(true).set_f_port(0).set_dev_addr(&[4, 3, 2, 1]).set_fcnt(0);
-    let crypto_factory = DefaultFactory::default();
     assert_eq!(
-        phy.build(b"", &cmds[..], &nwk_skey, &app_skey, &crypto_factory).unwrap(),
+        phy.build(b"", &cmds[..], &nwk_skey, &app_skey, &DefaultFactory).unwrap(),
         &data_payload_with_fport_zero()[..]
     );
 }
@@ -562,7 +555,6 @@ fn test_data_payload_creator_when_mac_commands_in_payload() {
 #[test]
 fn test_data_payload_creator_when_mac_commands_in_f_opts() {
     let mut buf = [0u8; 256];
-    let crypto_factory = DefaultFactory::default();
     let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
     let nwk_skey = [1; 16].into();
     let app_skey = [0; 16].into();
@@ -574,7 +566,7 @@ fn test_data_payload_creator_when_mac_commands_in_f_opts() {
     phy.set_confirmed(false).set_uplink(true).set_dev_addr(&[4, 3, 2, 1]).set_fcnt(0);
 
     assert_eq!(
-        phy.build(b"", &cmds[..], &nwk_skey, &app_skey, &crypto_factory).unwrap(),
+        phy.build(b"", &cmds[..], &nwk_skey, &app_skey, &DefaultFactory).unwrap(),
         &data_payload_with_f_opts()[..]
     );
 }
@@ -630,8 +622,7 @@ fn test_join_accept_creator() {
         .set_dl_settings(0)
         .set_rx_delay(0);
 
-    let crypto_factory = DefaultFactory::default();
-    assert_eq!(phy.build(&key, &crypto_factory), Ok(&phy_join_accept_payload()[..]));
+    assert_eq!(phy.build(&key, &DefaultFactory), Ok(&phy_join_accept_payload()[..]));
 }
 #[test]
 #[cfg(feature = "default-crypto")]
@@ -661,8 +652,7 @@ fn test_join_accept_creator_with_cflist() {
         .set_rx_delay(0)
         .set_c_f_list(&freqs)
         .unwrap();
-    let crypto_factory = DefaultFactory::default();
-    phy.build(key.inner(), &crypto_factory).unwrap();
+    phy.build(key.inner(), &DefaultFactory).unwrap();
     let encrypted = EncryptedJoinAcceptPayload::new(buf).unwrap();
     let decrypted = encrypted.decrypt(&key);
     assert!(decrypted.validate_mic(&key));
@@ -678,8 +668,7 @@ fn test_join_request_creator() {
         .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
         .set_dev_nonce(&[0x2du8, 0x10]);
 
-    let crypto_factory = DefaultFactory::default();
-    assert_eq!(phy.build(&key, &crypto_factory), &phy_join_request_payload()[..]);
+    assert_eq!(phy.build(&key, &DefaultFactory), &phy_join_request_payload()[..]);
 }
 #[test]
 fn test_join_request_creator_short_buffer() {
