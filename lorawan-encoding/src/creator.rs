@@ -27,6 +27,25 @@ const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
 /// JoinAcceptCreator serves for creating binary representation of Physical
 /// Payload of JoinAccept.
+///
+/// # Examples
+///
+/// ```
+/// let mut buf = [0u8; 100];
+/// let mut phy = lorawan::creator::JoinAcceptCreator::new(&mut buf).unwrap();
+/// let key = lorawan::keys::AES128([1; 16]);
+/// let app_nonce_bytes = [1; 3];
+/// phy.set_app_nonce(&app_nonce_bytes);
+/// phy.set_net_id(&[1; 3]);
+/// phy.set_dev_addr(&[1; 4]);
+/// phy.set_dl_settings(2);
+/// phy.set_rx_delay(1);
+/// let mut freqs: Vec<lorawan::types::Frequency> = Vec::new();
+/// freqs.push(lorawan::types::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap());
+/// freqs.push(lorawan::types::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap());
+/// phy.set_c_f_list(freqs);
+/// let payload = phy.build(&key, &lorawan::default_crypto::DefaultFactory).unwrap();
+/// ```
 #[derive(Default)]
 pub struct JoinAcceptCreator<D> {
     data: D,
@@ -189,6 +208,17 @@ fn set_mic<F: CryptoFactory>(data: &mut [u8], key: &AES128, factory: &F) {
 
 /// JoinRequestCreator serves for creating binary representation of Physical
 /// Payload of JoinRequest.
+/// # Examples
+///
+/// ```
+/// let mut buf = [0u8;100];
+/// let mut phy = lorawan::creator::JoinRequestCreator::new(&mut buf).unwrap();
+/// let key = lorawan::keys::AppKey::from([7; 16]);
+/// phy.set_app_eui(&[1; 8]);
+/// phy.set_dev_eui(&[2; 8]);
+/// phy.set_dev_nonce(&[3; 2]);
+/// let payload = phy.build(&key, &lorawan::default_crypto::DefaultFactory);
+/// ```
 #[derive(Default)]
 pub struct JoinRequestCreator<D> {
     data: D,
