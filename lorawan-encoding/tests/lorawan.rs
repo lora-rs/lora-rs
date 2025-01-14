@@ -626,6 +626,21 @@ fn test_join_accept_creator() {
 }
 #[test]
 #[cfg(feature = "default-crypto")]
+fn test_join_accept_creator_long_buffer() {
+    let mut buf = [0u8; 255];
+    let mut phy = JoinAcceptCreator::new(&mut buf[..]).unwrap();
+    let key = AES128(app_key());
+    let app_nonce_bytes = [0xc7, 0x0b, 0x57];
+    phy.set_app_nonce(&app_nonce_bytes)
+        .set_net_id(&[0x01, 0x11, 0x22])
+        .set_dev_addr(&[0x80, 0x19, 0x03, 0x02])
+        .set_dl_settings(0)
+        .set_rx_delay(0);
+
+    assert_eq!(phy.build(&key, &DefaultFactory), Ok(&phy_join_accept_payload()[..]));
+}
+#[test]
+#[cfg(feature = "default-crypto")]
 fn test_join_accept_creator_short_buffer() {
     let mut buf = [0u8; 16];
     let phy_res = JoinAcceptCreator::new(&mut buf[..]);
@@ -662,6 +677,17 @@ fn test_join_accept_creator_with_cflist() {
 #[test]
 fn test_join_request_creator() {
     let buf = [0u8; 23];
+    let mut phy = JoinRequestCreator::new(buf).unwrap();
+    let key = [1; 16].into();
+    phy.set_app_eui(&[0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01])
+        .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
+        .set_dev_nonce(&[0x2du8, 0x10]);
+
+    assert_eq!(phy.build(&key, &DefaultFactory), &phy_join_request_payload()[..]);
+}
+#[test]
+fn test_join_request_creator_long_buffer() {
+    let buf = [0u8; 255];
     let mut phy = JoinRequestCreator::new(buf).unwrap();
     let key = [1; 16].into();
     phy.set_app_eui(&[0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01])
