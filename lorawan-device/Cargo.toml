@@ -35,7 +35,6 @@ embassy-time = { version = ">=0.3, <0.5", optional = true }
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time", "sync"] }
 rand = { version = "0", features = ["getrandom"] }
-lazy_static = "1"
 # Pull in lorawan/default-crypto which is required for tests
 lorawan = { path = "../lorawan-encoding", default-features = false, features = [
     "default-crypto",
