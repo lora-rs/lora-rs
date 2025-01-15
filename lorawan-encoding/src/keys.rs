@@ -41,15 +41,18 @@ lorawan_key!(
     ///
     /// To create from a hex-encoded MSB string:
     /// ```
-    /// use lorawan::keys::AppKey;
     /// use core::str::FromStr;
-    ///let appkey = AppKey::from_str("00112233445566778899aabbccddeeff").unwrap();
+    /// use lorawan::keys::AppKey;
+    /// let appkey = AppKey::from_str("00112233445566778899aabbccddeeff").unwrap();
     /// ```
     ///
     /// To create from a byte array, you should enter the bytes in MSB format:
     /// ```
     /// use lorawan::keys::AppKey;
-    /// let appkey = AppKey::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+    /// let appkey = AppKey::from([
+    ///     0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
+    ///     0xFF,
+    /// ]);
     /// ```
     pub struct AppKey(AES128);
 );
@@ -62,15 +65,18 @@ lorawan_key!(
     ///
     /// To create from a hex-encoded MSB string:
     /// ```
-    /// use lorawan::keys::AppSKey;
     /// use core::str::FromStr;
+    /// use lorawan::keys::AppSKey;
     /// let appskey = AppSKey::from_str("00112233445566778899aabbccddeeff").unwrap();
     /// ```
     ///
     /// To create from a byte array, you should enter the bytes in MSB format:
     /// ```
     /// use lorawan::keys::AppSKey;
-    /// let appskey = AppSKey::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+    /// let appskey = AppSKey::from([
+    ///     0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
+    ///     0xFF,
+    /// ]);
     /// ```
     pub struct AppSKey(AES128);
 );
@@ -83,15 +89,18 @@ lorawan_key!(
     ///
     /// To create from a hex-encoded MSB string:
     /// ```
-    /// use lorawan::keys::NwkSKey;
     /// use core::str::FromStr;
+    /// use lorawan::keys::NwkSKey;
     /// let nwkskey = NwkSKey::from_str("00112233445566778899aabbccddeeff").unwrap();
     /// ```
     ///
     /// To create from a byte array, you should enter the bytes in MSB format:
     /// ```
     /// use lorawan::keys::NwkSKey;
-    /// let nwkskey = NwkSKey::from([0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF]);
+    /// let nwkskey = NwkSKey::from([
+    ///     0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE,
+    ///     0xFF,
+    /// ]);
     /// ```
     pub struct NwkSKey(AES128);
 );
@@ -142,8 +151,8 @@ lorawan_eui!(
     ///
     /// To create from a hex-encoded LSB string:
     /// ```
-    /// use lorawan::keys::DevEui;
     /// use core::str::FromStr;
+    /// use lorawan::keys::DevEui;
     /// let dev_eui = DevEui::from_str("0011223344556677").unwrap();
     /// ```
     ///
@@ -167,8 +176,8 @@ lorawan_eui!(
     ///
     /// To create from a hex-encoded LSB string:
     /// ```
-    /// use lorawan::keys::AppEui;
     /// use core::str::FromStr;
+    /// use lorawan::keys::AppEui;
     /// let app_eui = AppEui::from_str("0011223344556677").unwrap();
     /// ```
     ///

@@ -144,11 +144,8 @@ impl LinkADRReqCreator {
 ///
 /// ```
 /// let mut creator = lorawan::maccommandcreator::LinkADRAnsCreator::new();
-/// let res = creator
-///     .set_channel_mask_ack(true)
-///     .set_data_rate_ack(true)
-///     .set_tx_power_ack(true)
-///     .build();
+/// let res =
+///     creator.set_channel_mask_ack(true).set_data_rate_ack(true).set_tx_power_ack(true).build();
 /// ```
 #[doc(inline)]
 pub use crate::maccommands::LinkADRAnsCreator;
@@ -233,10 +230,7 @@ pub use crate::maccommands::DutyCycleAnsCreator;
 ///
 /// ```
 /// let mut creator = lorawan::maccommandcreator::RXParamSetupReqCreator::new();
-/// let res = creator
-///     .set_dl_settings(0xcd)
-///     .set_frequency(&[0x12, 0x34, 0x56])
-///     .build();
+/// let res = creator.set_dl_settings(0xcd).set_frequency(&[0x12, 0x34, 0x56]).build();
 /// ```
 #[doc(inline)]
 pub use crate::maccommands::RXParamSetupReqCreator;
@@ -433,10 +427,7 @@ impl NewChannelReqCreator {
 ///
 /// ```
 /// let mut creator = lorawan::maccommandcreator::NewChannelAnsCreator::new();
-/// let res = creator
-///     .set_channel_frequency_ack(true)
-///     .set_data_rate_range_ack(true)
-///     .build();
+/// let res = creator.set_channel_frequency_ack(true).set_data_rate_range_ack(true).build();
 /// ```
 #[doc(inline)]
 pub use crate::maccommands::NewChannelAnsCreator;
