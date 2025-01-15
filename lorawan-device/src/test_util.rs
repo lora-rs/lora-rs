@@ -12,7 +12,11 @@ use lorawan::{
 use mac::Session;
 
 use radio::{RfConfig, TxConfig};
-use std::{collections::HashMap, sync::Mutex, vec::Vec};
+use std::{
+    collections::HashMap,
+    sync::{LazyLock, Mutex},
+    vec::Vec,
+};
 
 /// This module contains some functions for both async device and state machine driven devices
 /// to operate unit tests.
@@ -68,10 +72,8 @@ pub fn get_abp_credentials() -> JoinMode {
 
 pub type RxTxHandler = fn(Option<Uplink>, RfConfig, &mut [u8]) -> usize;
 
-lazy_static::lazy_static! {
-    static ref SESSION: Mutex<HashMap<usize, Session>> = Mutex::new(HashMap::new());
-
-}
+static SESSION: LazyLock<Mutex<HashMap<usize, Session>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Handle join request and pack a JoinAccept into RxBuffer
 pub fn handle_join_request<const I: usize>(
