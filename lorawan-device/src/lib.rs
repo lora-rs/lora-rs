@@ -3,7 +3,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! ## Feature flags
-#![doc = document_features::document_features!(feature_label = r#"<span class="stab portability"><code>{feature}</code></span>"#)]
+#![doc = document_features::document_features!()]
 #![doc = include_str!("../README.md")]
 
 // This must go FIRST so that all the other modules see its macros.
