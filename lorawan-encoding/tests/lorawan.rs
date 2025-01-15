@@ -683,7 +683,7 @@ fn test_join_request_creator() {
         .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
         .set_dev_nonce(&[0x2du8, 0x10]);
 
-    assert_eq!(phy.build(&key, &DefaultFactory), &phy_join_request_payload()[..]);
+    assert_eq!(phy.build(&key, &DefaultFactory), &phy_join_request_payload());
 }
 #[test]
 fn test_join_request_creator_long_buffer() {
