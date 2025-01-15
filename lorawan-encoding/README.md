@@ -9,8 +9,10 @@ packets from and to slices of bytes.
 Supported LoRaWAN features:
 * Class A (baseline) - up to 1.0.4 (1.1 unsupported)
 * Class B (beacon) - unsupported
-* Class C (continuous) - multicast unsupported
+* Class C (continuous)
+* Multicast - unsupported (only basic packet encoding/decoding)
 * Relay - unsupported
+* Certification - unsupported
 
 ## Sample Packet manipulation
 
