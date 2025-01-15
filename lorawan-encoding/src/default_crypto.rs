@@ -1,5 +1,4 @@
 //! Provides a default software implementation for LoRaWAN's cryptographic functions.
-use super::creator::JoinRequestCreator;
 use super::keys::*;
 use super::parser::{
     DecryptedDataPayload, DecryptedJoinAcceptPayload, EncryptedDataPayload,
@@ -58,24 +57,6 @@ impl Mac for Cmac {
 
     fn result(self) -> [u8; 16] {
         cmac::Mac::finalize(self).into_bytes().into()
-    }
-}
-
-impl JoinRequestCreator<[u8; 23], DefaultFactory> {
-    /// Creates a well initialized JoinRequestCreator.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut phy = lorawan::creator::JoinRequestCreator::new();
-    /// let key = lorawan::keys::AppKey::from([7; 16]);
-    /// phy.set_app_eui(&[1; 8]);
-    /// phy.set_dev_eui(&[2; 8]);
-    /// phy.set_dev_nonce(&[3; 2]);
-    /// let payload = phy.build(&key);
-    /// ```
-    pub fn new() -> Self {
-        Self::with_options([0; 23], DefaultFactory).unwrap()
     }
 }
 

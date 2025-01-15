@@ -13,9 +13,6 @@ use crate::packet_length::phy::join::{
 use crate::packet_length::phy::{MIC_LEN, PHY_PAYLOAD_MIN_LEN};
 use crate::types::{DLSettings, Frequency};
 
-#[cfg(feature = "default-crypto")]
-use super::default_crypto::DefaultFactory;
-
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error {
@@ -30,25 +27,43 @@ const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
 /// JoinAcceptCreator serves for creating binary representation of Physical
 /// Payload of JoinAccept.
+///
+/// # Examples
+///
+/// ```
+/// let mut buf = [0u8; 100];
+/// let mut phy = lorawan::creator::JoinAcceptCreator::new(&mut buf).unwrap();
+/// let key = lorawan::keys::AES128([1; 16]);
+/// let app_nonce_bytes = [1; 3];
+/// phy.set_app_nonce(&app_nonce_bytes);
+/// phy.set_net_id(&[1; 3]);
+/// phy.set_dev_addr(&[1; 4]);
+/// phy.set_dl_settings(2);
+/// phy.set_rx_delay(1);
+/// let mut freqs: Vec<lorawan::types::Frequency> = Vec::new();
+/// freqs.push(lorawan::types::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap());
+/// freqs.push(lorawan::types::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap());
+/// phy.set_c_f_list(freqs);
+/// let payload = phy.build(&key, &lorawan::default_crypto::DefaultFactory).unwrap();
+/// ```
 #[derive(Default)]
-pub struct JoinAcceptCreator<D, F> {
+pub struct JoinAcceptCreator<D> {
     data: D,
     with_c_f_list: bool,
     encrypted: bool,
-    factory: F,
 }
 
-impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
+impl<D: AsMut<[u8]>> JoinAcceptCreator<D> {
     /// Creates a well initialized JoinAcceptCreator with specific data and crypto functions.
     ///
     /// TODO: Add more details & and example
-    pub fn with_options(mut data: D, factory: F) -> Result<Self, Error> {
+    pub fn new(mut data: D) -> Result<Self, Error> {
         let d = data.as_mut();
         if d.len() < JOIN_ACCEPT_LEN {
             return Err(Error::BufferTooShort);
         }
         d[0] = 0x20;
-        Ok(Self { data, with_c_f_list: false, encrypted: false, factory })
+        Ok(Self { data, with_c_f_list: false, encrypted: false })
     }
 
     /// Sets the AppNonce of the JoinAccept to the provided value.
@@ -157,7 +172,7 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
     /// # Argument
     ///
     /// * key - the key to be used for encryption and setting the MIC.
-    pub fn build(&mut self, key: &AES128) -> Result<&[u8], Error> {
+    pub fn build<F: CryptoFactory>(&mut self, key: &AES128, factory: &F) -> Result<&[u8], Error> {
         let required_len = if self.with_c_f_list {
             JOIN_ACCEPT_WITH_CFLIST_LEN
         } else {
@@ -167,52 +182,20 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> JoinAcceptCreator<D, F> {
             return Err(Error::BufferTooShort);
         }
         if !self.encrypted {
-            self.encrypt_payload(key);
+            let d = if self.with_c_f_list {
+                &mut self.data.as_mut()[..JOIN_ACCEPT_WITH_CFLIST_LEN]
+            } else {
+                &mut self.data.as_mut()[..JOIN_ACCEPT_LEN]
+            };
+            set_mic(d, key, factory);
+            let aes_enc = factory.new_dec(key);
+            for i in 0..(d.len() >> 4) {
+                let start = (i << 4) + 1;
+                aes_enc.decrypt_block(&mut d[start..(16 + start)]);
+            }
+            self.encrypted = true;
         }
-        Ok(&self.data.as_mut()[0..required_len])
-    }
-
-    fn encrypt_payload(&mut self, key: &AES128) {
-        let d = if self.with_c_f_list {
-            self.data.as_mut()
-        } else {
-            &mut self.data.as_mut()[..17]
-        };
-        set_mic(d, key, &self.factory);
-        let aes_enc = self.factory.new_dec(key);
-        for i in 0..(d.len() >> 4) {
-            let start = (i << 4) + 1;
-            aes_enc.decrypt_block(&mut d[start..(16 + start)]);
-        }
-        self.encrypted = true;
-    }
-}
-
-#[cfg(feature = "default-crypto")]
-impl JoinAcceptCreator<[u8; 33], DefaultFactory> {
-    /// Creates a well initialized JoinAcceptCreator.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut phy = lorawan::creator::JoinAcceptCreator::new();
-    /// let key = lorawan::keys::AES128([1; 16]);
-    /// let app_nonce_bytes = [1; 3];
-    /// phy.set_app_nonce(&app_nonce_bytes);
-    /// phy.set_net_id(&[1; 3]);
-    /// phy.set_dev_addr(&[1; 4]);
-    /// phy.set_dl_settings(2);
-    /// phy.set_rx_delay(1);
-    /// let mut freqs: Vec<lorawan::types::Frequency> = Vec::new();
-    /// freqs.push(lorawan::types::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap());
-    /// freqs.push(lorawan::types::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap());
-    /// phy.set_c_f_list(freqs);
-    /// let payload = phy.build(&key).unwrap();
-    /// ```
-    pub fn new() -> Self {
-        let mut data = [0; 33];
-        data[0] = 0x20;
-        Self { data, with_c_f_list: false, encrypted: false, factory: DefaultFactory }
+        Ok(&self.data.as_mut()[..required_len])
     }
 }
 
@@ -225,21 +208,31 @@ fn set_mic<F: CryptoFactory>(data: &mut [u8], key: &AES128, factory: &F) {
 
 /// JoinRequestCreator serves for creating binary representation of Physical
 /// Payload of JoinRequest.
+/// # Examples
+///
+/// ```
+/// let mut buf = [0u8;100];
+/// let mut phy = lorawan::creator::JoinRequestCreator::new(&mut buf).unwrap();
+/// let key = lorawan::keys::AppKey::from([7; 16]);
+/// phy.set_app_eui(&[1; 8]);
+/// phy.set_dev_eui(&[2; 8]);
+/// phy.set_dev_nonce(&[3; 2]);
+/// let payload = phy.build(&key, &lorawan::default_crypto::DefaultFactory);
+/// ```
 #[derive(Default)]
-pub struct JoinRequestCreator<D, F> {
+pub struct JoinRequestCreator<D> {
     data: D,
-    factory: F,
 }
 
-impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
+impl<D: AsMut<[u8]>> JoinRequestCreator<D> {
     /// Creates a well initialized JoinRequestCreator with specific crypto functions.
-    pub fn with_options(mut data: D, factory: F) -> Result<Self, Error> {
+    pub fn new(mut data: D) -> Result<Self, Error> {
         let d = data.as_mut();
         if d.len() < JOIN_REQUEST_LEN {
             return Err(Error::BufferTooShort);
         }
         d[0] = 0x00;
-        Ok(Self { data, factory })
+        Ok(Self { data })
     }
 
     /// Sets the application EUI of the JoinRequest to the provided value.
@@ -294,10 +287,10 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
     /// # Argument
     ///
     /// * key - the key to be used for setting the MIC.
-    pub fn build(&mut self, key: &AppKey) -> &[u8] {
+    pub fn build<F: CryptoFactory>(&mut self, key: &AppKey, factory: &F) -> &[u8] {
         let d = self.data.as_mut();
-        set_mic(d, &key.0, &self.factory);
-        d
+        set_mic(&mut d[..JOIN_REQUEST_LEN], &key.0, factory);
+        &d[..JOIN_REQUEST_LEN]
     }
 }
 
@@ -307,7 +300,8 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
 /// # Example
 ///
 /// ```
-/// let mut phy = lorawan::creator::DataPayloadCreator::new();
+/// let mut buf = [0u8; 23];
+/// let mut phy = lorawan::creator::DataPayloadCreator::new(&mut buf[..]).unwrap();
 /// let nwk_skey = lorawan::keys::NwkSKey::from([2; 16]);
 /// let app_skey = lorawan::keys::AppSKey::from([1; 16]);
 /// phy.set_confirmed(true)
@@ -316,27 +310,26 @@ impl<D: AsMut<[u8]>, F: CryptoFactory> JoinRequestCreator<D, F> {
 ///     .set_dev_addr(&[4, 3, 2, 1])
 ///     .set_fctrl(&lorawan::parser::FCtrl::new(0x80, true)) // ADR: true, all others: false
 ///     .set_fcnt(76543);
-/// phy.build(b"hello lora", &[], &nwk_skey, &app_skey).unwrap();
+/// phy.build(b"hello lora", &[], &nwk_skey, &app_skey,&lorawan::default_crypto::DefaultFactory).unwrap();
 /// ```
 #[derive(Default)]
-pub struct DataPayloadCreator<D, F> {
+pub struct DataPayloadCreator<D> {
     data: D,
     data_f_port: Option<u8>,
     fcnt: u32,
-    factory: F,
 }
 
-impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
+impl<D: AsMut<[u8]>> DataPayloadCreator<D> {
     /// Creates a well initialized DataPayloadCreator with specific crypto functions.
     ///
     /// By default the packet is unconfirmed data up packet.
-    pub fn with_options(mut data: D, factory: F) -> Result<Self, Error> {
+    pub fn new(mut data: D) -> Result<Self, Error> {
         let d = data.as_mut();
         if d.len() < PHY_PAYLOAD_MIN_LEN {
             return Err(Error::BufferTooShort);
         }
         d[0] = 0x40;
-        Ok(DataPayloadCreator { data, data_f_port: None, fcnt: 0, factory })
+        Ok(DataPayloadCreator { data, data_f_port: None, fcnt: 0 })
     }
 
     /// Sets whether the packet is uplink or downlink.
@@ -444,7 +437,8 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     /// # Example
     ///
     /// ```
-    /// let mut phy = lorawan::creator::DataPayloadCreator::new();
+    /// let mut buf = [0u8; 255];
+    /// let mut phy = lorawan::creator::DataPayloadCreator::new(&mut buf[..]).unwrap();
     /// let mac_cmd1 = lorawan::maccommands::UplinkMacCommand::LinkCheckReq(
     ///     lorawan::maccommands::LinkCheckReqPayload());
     /// let mut mac_cmd2 = lorawan::maccommandcreator::LinkADRAnsCreator::new();
@@ -457,14 +451,15 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
     /// cmds.push(&mac_cmd2);
     /// let nwk_skey = lorawan::keys::NwkSKey::from([2; 16]);
     /// let app_skey = lorawan::keys::AppSKey::from([1; 16]);
-    /// phy.build(&[], &cmds, &nwk_skey, &app_skey).unwrap();
+    /// phy.build(&[], &cmds, &nwk_skey, &app_skey, &lorawan::default_crypto::DefaultFactory).unwrap();
     /// ```
-    pub fn build(
+    pub fn build<F: CryptoFactory>(
         &mut self,
         payload: &[u8],
         cmds: &[&dyn SerializableMacCommand],
         nwk_skey: &NwkSKey,
         app_skey: &AppSKey,
+        factory: &F,
     ) -> Result<&[u8], Error> {
         let d = self.data.as_mut();
         let mut last_filled = 8; // MHDR + FHDR without the FOpts
@@ -533,46 +528,18 @@ impl<D: AsMut<[u8]>, F: CryptoFactory + Default> DataPayloadCreator<D, F> {
             last_filled,
             last_filled + payload_len,
             self.fcnt,
-            &self.factory.new_enc(&enc_key),
+            &factory.new_enc(&enc_key),
         );
         last_filled += payload_len;
 
         // MIC set
         let mic = securityhelpers::calculate_data_mic(
             &d[..last_filled],
-            self.factory.new_mac(&nwk_skey.0),
+            factory.new_mac(&nwk_skey.0),
             self.fcnt,
         );
         d[last_filled..last_filled + MIC_LEN].copy_from_slice(&mic.0);
 
         Ok(&d[..last_filled + MIC_LEN])
-    }
-}
-
-#[cfg(feature = "default-crypto")]
-impl DataPayloadCreator<[u8; 256], DefaultFactory> {
-    /// Creates a well initialized DataPayloadCreator.
-    ///
-    /// By default the packet is unconfirmed data up packet.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// let mut phy = lorawan::creator::DataPayloadCreator::new();
-    /// let nwk_skey = lorawan::keys::NwkSKey::from([2; 16]);
-    /// let app_skey = lorawan::keys::AppSKey::from([1; 16]);
-    /// let fctrl = lorawan::parser::FCtrl::new(0x80, true);
-    /// phy.set_confirmed(false).
-    ///     set_uplink(true).
-    ///     set_f_port(1).
-    ///     set_dev_addr(&[4, 3, 2, 1]).
-    ///     set_fctrl(&fctrl). // ADR: true, all others: false
-    ///     set_fcnt(1);
-    /// let payload = phy.build(b"hello", &[], &nwk_skey, &app_skey).unwrap();
-    /// ```
-    pub fn new() -> Self {
-        let mut data = [0u8; 256];
-        data[0] = 0x40;
-        Self { data, data_f_port: None, fcnt: 0, factory: DefaultFactory }
     }
 }

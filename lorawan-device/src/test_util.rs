@@ -84,14 +84,12 @@ pub fn handle_join_request<const I: usize>(
             let devnonce = join_request.dev_nonce().to_owned();
             assert!(join_request.validate_mic(&get_key().into()));
             let mut buffer: [u8; 17] = [0; 17];
-            let mut phy =
-                lorawan::creator::JoinAcceptCreator::with_options(&mut buffer, DefaultFactory)
-                    .unwrap();
+            let mut phy = lorawan::creator::JoinAcceptCreator::new(&mut buffer[..]).unwrap();
             let app_nonce_bytes = [1; 3];
             phy.set_app_nonce(&app_nonce_bytes);
             phy.set_net_id(&[1; 3]);
             phy.set_dev_addr(get_dev_addr());
-            let finished = phy.build(&get_key().into()).unwrap();
+            let finished = phy.build(&get_key().into(), &DefaultFactory).unwrap();
             rx_buffer[..finished.len()].copy_from_slice(finished);
 
             let mut copy = rx_buffer[..finished.len()].to_vec();
@@ -148,16 +146,15 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
                 ),
             ];
             let cmd: Vec<&dyn SerializableMacCommand> = vec![&mac_cmds[0], &mac_cmds[1]];
-            let mut phy =
-                lorawan::creator::DataPayloadCreator::with_options(rx_buffer, DefaultFactory)
-                    .unwrap();
+            let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
             phy.set_confirmed(uplink.is_confirmed());
             phy.set_f_port(4);
             phy.set_dev_addr(&[0; 4]);
             phy.set_uplink(false);
             phy.set_fcnt(FCNT_DOWN);
-            let finished =
-                phy.build(&[3, 2, 1], &cmd, &get_key().into(), &get_key().into()).unwrap();
+            let finished = phy
+                .build(&[3, 2, 1], &cmd, &get_key().into(), &get_key().into(), &DefaultFactory)
+                .unwrap();
             finished.len()
         } else {
             panic!("Did not decode PhyPayload::Data!");
@@ -181,9 +178,7 @@ pub fn handle_class_c_uplink_after_join(
             let uplink =
                 data.decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt).unwrap();
             assert_eq!(uplink.fhdr().fcnt(), 0);
-            let mut phy =
-                lorawan::creator::DataPayloadCreator::with_options(rx_buffer, DefaultFactory)
-                    .unwrap();
+            let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
             let mut fctrl = parser::FCtrl::new(0, false);
             fctrl.set_ack();
             phy.set_confirmed(false);
@@ -191,7 +186,8 @@ pub fn handle_class_c_uplink_after_join(
             phy.set_uplink(false);
             phy.set_fctrl(&fctrl);
             // set ack bit
-            let finished = phy.build(&[], &[], &get_key().into(), &get_key().into()).unwrap();
+            let finished =
+                phy.build(&[], &[], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
             finished.len()
         } else {
             panic!("Did not decode PhyPayload::Data!");
@@ -237,16 +233,15 @@ pub fn handle_data_uplink_with_link_adr_ans(
 
             // Build the actual data payload with FPort 0 which allows MAC Commands in payload
             rx_buffer.iter_mut().for_each(|x| *x = 0);
-            let mut phy =
-                lorawan::creator::DataPayloadCreator::with_options(rx_buffer, DefaultFactory)
-                    .unwrap();
+            let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
             phy.set_confirmed(uplink.is_confirmed());
             phy.set_dev_addr(&[0; 4]);
             phy.set_uplink(false);
             //phy.set_f_port(3);
             phy.set_fcnt(1);
             // zero out rx_buffer
-            let finished = phy.build(&[], &[], &get_key().into(), &get_key().into()).unwrap();
+            let finished =
+                phy.build(&[], &[], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
             finished.len()
         } else {
             panic!("Unable to parse PhyPayload::Data from uplink in handle_data_uplink_with_link_adr_ans")
@@ -262,12 +257,13 @@ pub fn class_c_downlink<const FCNT_DOWN: u32>(
     _config: RfConfig,
     rx_buffer: &mut [u8],
 ) -> usize {
-    let mut phy =
-        lorawan::creator::DataPayloadCreator::with_options(rx_buffer, DefaultFactory).unwrap();
+    let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
     phy.set_f_port(3);
     phy.set_dev_addr(&[0; 4]);
     phy.set_uplink(false);
     phy.set_fcnt(FCNT_DOWN);
-    let finished = phy.build(&[1, 2, 3], &[], &get_key().into(), &get_key().into()).unwrap();
+
+    let finished =
+        phy.build(&[1, 2, 3], &[], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
     finished.len()
 }
