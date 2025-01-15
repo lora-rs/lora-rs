@@ -41,8 +41,8 @@ const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 /// phy.set_dl_settings(2);
 /// phy.set_rx_delay(1);
 /// let mut freqs: Vec<lorawan::types::Frequency> = Vec::new();
-/// freqs.push(lorawan::types::Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap());
-/// freqs.push(lorawan::types::Frequency::new(&[0x88, 0x66, 0x84,]).unwrap());
+/// freqs.push(lorawan::types::Frequency::new(&[0x58, 0x6e, 0x84]).unwrap());
+/// freqs.push(lorawan::types::Frequency::new(&[0x88, 0x66, 0x84]).unwrap());
 /// phy.set_c_f_list(freqs);
 /// let payload = phy.build(&key, &lorawan::default_crypto::DefaultFactory).unwrap();
 /// ```
@@ -211,7 +211,7 @@ fn set_mic<F: CryptoFactory>(data: &mut [u8], key: &AES128, factory: &F) {
 /// # Examples
 ///
 /// ```
-/// let mut buf = [0u8;100];
+/// let mut buf = [0u8; 100];
 /// let mut phy = lorawan::creator::JoinRequestCreator::new(&mut buf).unwrap();
 /// let key = lorawan::keys::AppKey::from([7; 16]);
 /// phy.set_app_eui(&[1; 8]);
@@ -310,7 +310,8 @@ impl<D: AsMut<[u8]>> JoinRequestCreator<D> {
 ///     .set_dev_addr(&[4, 3, 2, 1])
 ///     .set_fctrl(&lorawan::parser::FCtrl::new(0x80, true)) // ADR: true, all others: false
 ///     .set_fcnt(76543);
-/// phy.build(b"hello lora", &[], &nwk_skey, &app_skey,&lorawan::default_crypto::DefaultFactory).unwrap();
+/// phy.build(b"hello lora", &[], &nwk_skey, &app_skey, &lorawan::default_crypto::DefaultFactory)
+///     .unwrap();
 /// ```
 #[derive(Default)]
 pub struct DataPayloadCreator<D> {
@@ -440,12 +441,10 @@ impl<D: AsMut<[u8]>> DataPayloadCreator<D> {
     /// let mut buf = [0u8; 255];
     /// let mut phy = lorawan::creator::DataPayloadCreator::new(&mut buf[..]).unwrap();
     /// let mac_cmd1 = lorawan::maccommands::UplinkMacCommand::LinkCheckReq(
-    ///     lorawan::maccommands::LinkCheckReqPayload());
+    ///     lorawan::maccommands::LinkCheckReqPayload(),
+    /// );
     /// let mut mac_cmd2 = lorawan::maccommandcreator::LinkADRAnsCreator::new();
-    /// mac_cmd2
-    ///     .set_channel_mask_ack(true)
-    ///     .set_data_rate_ack(false)
-    ///     .set_tx_power_ack(true);
+    /// mac_cmd2.set_channel_mask_ack(true).set_data_rate_ack(false).set_tx_power_ack(true);
     /// let mut cmds: Vec<&dyn lorawan::maccommands::SerializableMacCommand> = Vec::new();
     /// cmds.push(&mac_cmd1);
     /// cmds.push(&mac_cmd2);
