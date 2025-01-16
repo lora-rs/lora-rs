@@ -179,6 +179,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                         }
 
                         /// Actual length of payload without the CID.
+                        #[allow(clippy::len_without_is_empty)]
                         pub fn len(&self) -> usize {
                             Self::max_len()
                         }
@@ -225,6 +226,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                             }
 
                             /// Actual length of payload without the CID.
+                            #[allow(clippy::len_without_is_empty)]
                             pub fn len(&self) -> usize {
                                 Self::max_len()
                             }
@@ -270,9 +272,9 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
 
     // Generate the final implementations
     quote! {
-        #[allow(clippy::len_without_is_empty)]
         impl #handler_lt #handler #handler_lt {
             /// Get the length.
+            #[allow(clippy::len_without_is_empty)]
             pub fn len(&self) -> usize {
                 match *self {
                     #( #impl_len, )*

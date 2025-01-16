@@ -67,6 +67,7 @@ impl<'a> McGroupStatusAnsPayload<'a> {
     }
 
     /// Actual length of this specific payload
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         Self::required_len(self.0[0])
     }
