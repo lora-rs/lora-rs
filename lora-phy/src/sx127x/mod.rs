@@ -58,7 +58,6 @@ pub struct Config<C: Sx127xVariant> {
 pub struct Sx127x<SPI, IV, C: Sx127xVariant + Sized> {
     intf: SpiInterface<SPI, IV>,
     config: Config<C>,
-    data: C::Data,
 }
 
 impl<SPI, IV, C> Sx127x<SPI, IV, C>
@@ -70,11 +69,7 @@ where
     /// Create an instance of the RadioKind implementation for the LoRa chip kind and board type
     pub fn new(spi: SPI, iv: IV, config: Config<C>) -> Self {
         let intf = SpiInterface::new(spi, iv);
-        Self {
-            intf,
-            config,
-            data: Default::default(),
-        }
+        Self { intf, config }
     }
 
     // Utility functions

@@ -10,17 +10,12 @@ use embedded_hal_async::spi::SpiDevice;
 use lora_modulation::Bandwidth;
 
 /// Sx1276 implements the Sx127xVariant trait
-pub struct Sx1276;
-
-#[derive(Default)]
-pub struct Sx1276Data {
-    /// flag to indicate the Errata 2.1: Sensitivity optimization with 500 kHz bandwidth is required
+pub struct Sx1276 {
+    /// Errata 2.1 - sensitivity optimization with 500 kHz bandwidth
     sensitivity_quirk: bool,
 }
 
 impl Sx127xVariant for Sx1276 {
-    type Data = Sx1276Data;
-
     async fn init_lora<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
         radio: &mut Sx127x<SPI, IV, Self>,
         _sync_word: u8,
@@ -28,8 +23,8 @@ impl Sx127xVariant for Sx1276 {
         let chip_version = radio.read_register(Register::RegVersion).await?;
         debug!("Detected sx1276 v{}", chip_version);
 
-        // Errata 2.1: Sensitivity optimization only applies to version 0x12
-        radio.data.sensitivity_quirk = chip_version == 0x12;
+        // Check whether our radio needs to apply Errata 2.1
+        radio.config.chip.sensitivity_quirk = chip_version == 0x12;
 
         Ok(())
     }
@@ -131,7 +126,7 @@ impl Sx127xVariant for Sx1276 {
         config_3 = (config_3 & 0xf3u8) | ldro_agc_auto_flags;
         radio.write_register(Register::RegModemConfig3, config_3).await?;
 
-        if radio.data.sensitivity_quirk {
+        if radio.config.chip.sensitivity_quirk {
             // apply Errata 2.1: Sensitivity optimization with 500 kHz bandwidth
 
             if mdltn_params.bandwidth == Bandwidth::_500KHz {
