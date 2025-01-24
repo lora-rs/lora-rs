@@ -9,8 +9,6 @@ use lora_modulation::Bandwidth;
 pub struct Sx1272;
 
 impl Sx127xVariant for Sx1272 {
-    type Data = ();
-
     async fn init_lora<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
         _radio: &mut Sx127x<SPI, IV, Self>,
         _sync_word: u8,

@@ -67,7 +67,8 @@ pub struct Config<C: Sx127xVariant> {
 pub struct Sx127x<SPI, IV, C: Sx127xVariant + Sized> {
     intf: SpiInterface<SPI, IV>,
     config: Config<C>,
-    data: C::Data,
+    /// Whether the SX1276 Errata 2.1 sensitivity workaround is required.
+    sx1276_sensitivity_quirk: bool,
 }
 
 impl<SPI, IV, C> Sx127x<SPI, IV, C>
@@ -82,7 +83,7 @@ where
         Self {
             intf,
             config,
-            data: Default::default(),
+            sx1276_sensitivity_quirk: false,
         }
     }
 
