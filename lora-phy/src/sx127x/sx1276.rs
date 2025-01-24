@@ -3,11 +3,13 @@ use crate::mod_traits::InterfaceVariant;
 use crate::sx127x::radio_kind_params::{
     coding_rate_denominator_value, spreading_factor_value, OcpTrim, PaConfig, PaDac, RampTime, Register, Sx127xVariant,
 };
-use crate::sx127x::{
-    pll_step_to_freq, Sx127x, SX1276_RF_MID_BAND_THRESH, SX1276_RSSI_OFFSET_HF, SX1276_RSSI_OFFSET_LF,
-};
+use crate::sx127x::{pll_step_to_freq, Sx127x};
 use embedded_hal_async::spi::SpiDevice;
 use lora_modulation::Bandwidth;
+
+const SX1276_RSSI_OFFSET_LF: i16 = -164;
+const SX1276_RSSI_OFFSET_HF: i16 = -157;
+const SX1276_RF_MID_BAND_THRESH: u32 = 525_000_000;
 
 /// Sx1276 implements the Sx127xVariant trait
 pub struct Sx1276 {
