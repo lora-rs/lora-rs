@@ -22,13 +22,6 @@ const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
 const SX127X_MIN_LORA_SYMB_NUM_TIMEOUT: u16 = 4;
 const SX127X_MAX_LORA_SYMB_NUM_TIMEOUT: u16 = 1023;
 
-// Constant values need to compute the RSSI value
-const SX1272_RSSI_OFFSET: i16 = -139;
-const SX1276_RSSI_OFFSET_LF: i16 = -164;
-const SX1276_RSSI_OFFSET_HF: i16 = -157;
-const SX1276_RF_MID_BAND_THRESH: u32 = 525_000_000;
-
-// Frequency synthesizer step: FXOSC (32 MHz) / 524288 (2^19) = 61.03515625 Hz
 fn freq_to_pll_step(freq_in_hz: u32) -> u32 {
     // Full-precision integer form of freq / 61.03515625. The previous
     // truncate-then-shift shortcut zeroed the low 8 pll-step bits, putting
@@ -644,7 +637,11 @@ mod tests {
     fn test_rssi_linearization() {
         // rounded to the nearest 0.25 dB, so never more than 0.125 dB off
         const DELTA: f32 = 0.125;
-        for offset in [SX1272_RSSI_OFFSET, SX1276_RSSI_OFFSET_LF, SX1276_RSSI_OFFSET_HF] {
+        for offset in [
+            sx1272::SX1272_RSSI_OFFSET,
+            sx1276::SX1276_RSSI_OFFSET_LF,
+            sx1276::SX1276_RSSI_OFFSET_HF,
+        ] {
             for rssi in 0..=u8::MAX {
                 let float_rssi = offset as f32 + rssi as f32 * 16.0 / 15.0;
                 let approx_rssi = (4 * offset + linearize_rssi_quarter(rssi)) as f32 / 4.0;
