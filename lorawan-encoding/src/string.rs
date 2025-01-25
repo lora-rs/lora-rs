@@ -107,6 +107,10 @@ fixed_len_struct_impl_to_string_msb! {
 }
 
 fixed_len_struct_impl_to_string_msb! {
+    McAddr[4];
+}
+
+fixed_len_struct_impl_to_string_msb! {
     NwkAddr[3];
 }
 
@@ -120,6 +124,26 @@ fixed_len_struct_impl_to_string_msb! {
 
 fixed_len_struct_impl_to_string_msb! {
     AppSKey, 16;
+}
+
+fixed_len_struct_impl_to_string_msb! {
+    McRootKey, 16;
+}
+
+fixed_len_struct_impl_to_string_msb! {
+    McKEKey, 16;
+}
+
+fixed_len_struct_impl_to_string_msb! {
+    McNetSKey, 16;
+}
+
+fixed_len_struct_impl_to_string_msb! {
+    McAppSKey, 16;
+}
+
+fixed_len_struct_impl_to_string_msb! {
+    McKey, 16;
 }
 
 fixed_len_struct_impl_string_lsb! {
