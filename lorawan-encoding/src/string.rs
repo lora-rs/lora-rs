@@ -143,6 +143,10 @@ fixed_len_struct_impl_to_string_msb! {
 }
 
 fixed_len_struct_impl_to_string_msb! {
+    GenAppKey, 16;
+}
+
+fixed_len_struct_impl_to_string_msb! {
     McKey, 16;
 }
 

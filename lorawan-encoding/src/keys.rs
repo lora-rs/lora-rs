@@ -139,8 +139,8 @@ lorawan_key!(
 
 lorawan_key!(
     /// The multicast root key ([`McRootKey`]) is an AES-128 key specific to the end-device. For
-    /// Lorawan 1.0.x, it is derived by the "GenAppKey" ([`AppKey`]). For Lorawan 1.1.x, it is
-    /// derived by the "GenAppKey" ([`AppKey`]) or the "GenMcKey" ([`McKey`]).
+    /// Lorawan 1.0.x, it is derived by the "GenAppKey" ([`GenAppKey`]). For Lorawan 1.1.x, it is
+    /// derived by the "AppKey" ([`AppKey`]) or the "GenMcKey" ([`McKey`]).
     ///
     /// `McRootKey` SHALL be stored on an end-device intended to be used for deriving the
     /// [`McKEKey`].
@@ -155,6 +155,14 @@ lorawan_key!(
     pub struct McKEKey(AES128);
 );
 
+lorawan_key!(
+    /// The [`GenAppKey`] is an AES-128 root key specific to the end-device.
+    ///
+    /// `GenAppKey` SHALL be stored on an end-device intending to be used to derive the McRootKey.
+    /// It is NOT REQUIRED for ABP-only end-devices.
+    pub struct GenAppKey(AES128);
+);
+
 impl McKEKey {
     /// McKEKey = aes128_encrypt(McRootKey, 0x00 | pad16)
     pub fn derive_from<F: CryptoFactory>(crypto: &F, root_key: &McRootKey) -> Self {
@@ -166,8 +174,17 @@ impl McKEKey {
 }
 
 impl McRootKey {
-    /// McRootKey = aes128_encrypt(GenAppKey, 0x00 | pad16)
-    pub fn derive_from<F: CryptoFactory>(crypto: &F, app_key: &AppKey) -> Self {
+    /// LoRaWAN 1.1.x: McRootKey = aes128_encrypt(AppKey, 0x20 | pad16)
+    pub fn derive_from_app_key<F: CryptoFactory>(crypto: &F, app_key: &AppKey) -> Self {
+        let aes_enc = crypto.new_enc(&app_key.0);
+        let mut bytes: [u8; 16] = [0; 16];
+        bytes[0] = 0x20;
+        aes_enc.encrypt_block(&mut bytes);
+        McRootKey::from(bytes)
+    }
+
+    /// LoRaWAN 1.0.x: McRootKey = aes128_encrypt(GenAppKey, 0x00 | pad16)
+    pub fn derive_from_gen_app_key<F: CryptoFactory>(crypto: &F, app_key: &GenAppKey) -> Self {
         let aes_enc = crypto.new_enc(&app_key.0);
         let mut bytes: [u8; 16] = [0; 16];
         aes_enc.encrypt_block(&mut bytes);
