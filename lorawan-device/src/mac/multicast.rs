@@ -3,7 +3,9 @@ use crate::radio::RadioBuffer;
 use crate::Downlink;
 use lorawan::keys::{CryptoFactory, McKEKey};
 pub use lorawan::multicast::{self, Session};
-use lorawan::multicast::{parse_downlink_multicast_messages, McGroupSetupAnsCreator};
+use lorawan::multicast::{
+    parse_downlink_multicast_messages, DownlinkRemoteSetup, McGroupSetupAnsCreator,
+};
 use lorawan::parser::FRMPayload;
 pub use lorawan::parser::McAddr;
 use lorawan::parser::{DataHeader, EncryptedDataPayload};
@@ -124,21 +126,22 @@ impl Multicast {
         &mut self,
         data: &[u8],
     ) -> Response {
-        use lorawan::multicast::DownlinkRemoteSetup;
+        if self.mc_k_e_key.is_none() {
+            return Response::NoUpdate;
+        }
+        let mc_k_e_key = self.mc_k_e_key.as_ref().unwrap();
         let messages = parse_downlink_multicast_messages(data);
         for message in messages {
-            if let Some(mc_k_e_key) = &self.mc_k_e_key {
-                if let DownlinkRemoteSetup::McGroupSetupReq(mc_group_setup_req) = message {
-                    let (group_id, session) =
-                        mc_group_setup_req.derive_session(&C::default(), mc_k_e_key);
-                    self.sessions[group_id as usize] = Some(session);
-                    let mut buffer: heapless::Vec<u8, 256> = heapless::Vec::new();
-                    let mut ans = McGroupSetupAnsCreator::new();
-                    ans.mc_group_id_header(group_id);
-                    buffer.extend_from_slice(ans.build()).unwrap();
-                    self.pending_uplinks = Some(buffer);
-                    return Response::GroupSetupTransmitRequest(group_id);
-                }
+            if let DownlinkRemoteSetup::McGroupSetupReq(mc_group_setup_req) = message {
+                let (group_id, session) =
+                    mc_group_setup_req.derive_session(&C::default(), mc_k_e_key);
+                self.sessions[group_id as usize] = Some(session);
+                let mut buffer: heapless::Vec<u8, 256> = heapless::Vec::new();
+                let mut ans = McGroupSetupAnsCreator::new();
+                ans.mc_group_id_header(group_id);
+                buffer.extend_from_slice(ans.build()).unwrap();
+                self.pending_uplinks = Some(buffer);
+                return Response::GroupSetupTransmitRequest(group_id);
             }
         }
         Response::NoUpdate
