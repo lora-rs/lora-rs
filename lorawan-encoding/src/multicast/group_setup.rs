@@ -103,7 +103,7 @@ impl McGroupSetupReqPayload<'_> {
 
     /// `maxMcFCount` specifies the lifetime of this multicast group expressed as a maximum number
     /// of frames. The end-device will only accept a multicast downlink frame if the 32-bits frame
-    /// counter value minMcFCount ≤ McFCount < maxMcFCount.
+    /// counter value `minMcFCount ≤ McFCount < maxMcFCount`.
     pub fn max_mc_fcount(&self) -> u32 {
         const OFFSET: usize =
             1 + McAddr::<&[u8]>::byte_len() + McKey::byte_len() + size_of::<u32>();

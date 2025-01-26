@@ -187,9 +187,9 @@ where
 
     /// Sets the port range for frames sent to multicast groups. Warning: this exclusively handles
     /// these frames in the multicast context and, therefore, unicast frames in this range will not
-    /// be handled. Defaults to `201..205`.
+    /// be handled. Defaults to `201..=205`.
     #[cfg(feature = "multicast")]
-    pub fn set_multicast_port_range(&mut self, range: core::ops::Range<u8>) {
+    pub fn set_multicast_port_range(&mut self, range: core::ops::RangeInclusive<u8>) {
         self.mac.multicast.set_range(range);
     }
 

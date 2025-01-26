@@ -1,6 +1,7 @@
 use crate::mac;
 use crate::radio::RadioBuffer;
 use crate::Downlink;
+use core::ops::RangeInclusive;
 use lorawan::keys::{CryptoFactory, McKEKey};
 pub use lorawan::multicast::{self, Session};
 use lorawan::multicast::{
@@ -9,7 +10,6 @@ use lorawan::multicast::{
 use lorawan::parser::FRMPayload;
 pub use lorawan::parser::McAddr;
 use lorawan::parser::{DataHeader, EncryptedDataPayload};
-
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Response {
@@ -29,14 +29,12 @@ pub enum Error {}
 const REMOTE_MULTICAST_SETUP_PORT: u8 = 200;
 /// These ports are for actual multicast messages; they are encrypted and sent within a multicast
 /// session
-const DEFAULT_MC_PORT_START: u8 = 201;
-const DEFAULT_MC_PORT_END: u8 = 205;
+const DEFAULT_MC_PORT_RANGE: RangeInclusive<u8> = 201..=205;
 
 pub struct Multicast {
     pub(crate) mc_k_e_key: Option<McKEKey>,
     pub(crate) sessions: [Option<Session>; multicast::MAX_GROUPS],
-    range_start: u8,
-    range_end: u8,
+    range: RangeInclusive<u8>,
     remote_setup_port: u8,
     pending_uplinks: Option<heapless::Vec<u8, 256>>,
 }
@@ -51,8 +49,7 @@ impl Multicast {
     pub fn new() -> Self {
         Self {
             mc_k_e_key: None,
-            range_start: DEFAULT_MC_PORT_START,
-            range_end: DEFAULT_MC_PORT_END,
+            range: DEFAULT_MC_PORT_RANGE,
             remote_setup_port: REMOTE_MULTICAST_SETUP_PORT,
             sessions: [None, None, None, None],
             pending_uplinks: None,
@@ -102,14 +99,13 @@ impl Multicast {
     }
 
     /// Sets a custom range for the multicast.
-    pub fn set_range(&mut self, range: core::ops::Range<u8>) {
-        self.range_start = range.start;
-        self.range_end = range.end;
+    pub fn set_range(&mut self, range: RangeInclusive<u8>) {
+        self.range = range;
     }
 
     /// Checks if a given port is within the current range.
     pub(crate) fn is_in_range(&self, port: u8) -> bool {
-        port >= self.range_start && port < self.range_end
+        self.range.contains(&port)
     }
 
     /// Checks if a given port is the remote multicast setup port
