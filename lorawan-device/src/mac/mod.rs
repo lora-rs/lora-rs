@@ -25,6 +25,9 @@ use crate::nb_device;
 
 pub(crate) mod uplink;
 
+#[cfg(feature = "multicast")]
+pub(crate) mod multicast;
+
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum Frame {
     Join,
@@ -80,6 +83,8 @@ pub(crate) struct Mac {
     pub region: region::Configuration,
     board_eirp: BoardEirp,
     state: State,
+    #[cfg(feature = "multicast")]
+    pub multicast: multicast::Multicast,
 }
 
 struct BoardEirp {
@@ -88,7 +93,7 @@ struct BoardEirp {
 }
 
 #[allow(clippy::large_enum_variant)]
-enum State {
+pub(crate) enum State {
     Joined(Session),
     Otaa(otaa::Otaa),
     Unjoined,
@@ -99,6 +104,8 @@ enum State {
 pub enum Error {
     NotJoined,
     InvalidResponse(Response),
+    #[cfg(feature = "multicast")]
+    Multicast(multicast::Error),
 }
 
 pub struct SendData<'a> {
@@ -122,6 +129,8 @@ impl Mac {
                 join_accept_delay1: region::constants::JOIN_ACCEPT_DELAY1,
                 join_accept_delay2: region::constants::JOIN_ACCEPT_DELAY2,
             },
+            #[cfg(feature = "multicast")]
+            multicast: multicast::Multicast::new(),
         }
     }
 
@@ -176,6 +185,20 @@ impl Mac {
         Ok((tx_config, fcnt))
     }
 
+    #[cfg(feature = "multicast")]
+    pub(crate) fn multicast_setup_send<C: CryptoFactory + Default, RNG: RngCore, const N: usize>(
+        &mut self,
+        rng: &mut RNG,
+        buf: &mut RadioBuffer<N>,
+    ) -> Result<(radio::TxConfig, FcntUp)> {
+        self.multicast.setup_send::<C, N>(&mut self.state, buf).map(|fcnt_up| {
+            let mut tx_config =
+                self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
+            tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
+            (tx_config, fcnt_up)
+        })
+    }
+
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
         match frame {
             Frame::Join => match window {
@@ -216,6 +239,8 @@ impl Mac {
             State::Joined(ref mut session) => session.handle_rx::<C, N, D>(
                 &mut self.region,
                 &mut self.configuration,
+                #[cfg(feature = "multicast")]
+                &mut self.multicast,
                 buf,
                 dl,
                 false,
@@ -246,6 +271,8 @@ impl Mac {
             State::Joined(ref mut session) => Ok(session.handle_rx::<C, N, D>(
                 &mut self.region,
                 &mut self.configuration,
+                #[cfg(feature = "multicast")]
+                &mut self.multicast,
                 buf,
                 dl,
                 true,
@@ -317,6 +344,8 @@ pub enum Response {
     JoinSuccess,
     NoUpdate,
     RxComplete,
+    #[cfg(feature = "multicast")]
+    Multicast(multicast::Response),
 }
 
 impl From<Response> for nb_device::Response {
@@ -329,6 +358,8 @@ impl From<Response> for nb_device::Response {
             Response::JoinSuccess => nb_device::Response::JoinSuccess,
             Response::NoUpdate => nb_device::Response::NoUpdate,
             Response::RxComplete => nb_device::Response::RxComplete,
+            #[cfg(feature = "multicast")]
+            Response::Multicast(_) => unimplemented!(),
         }
     }
 }

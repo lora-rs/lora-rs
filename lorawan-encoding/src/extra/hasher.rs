@@ -1,6 +1,4 @@
-pub extern crate std;
-
-use std::hash::{Hash, Hasher};
+use super::std::hash::{Hash, Hasher};
 
 use crate::parser::*;
 

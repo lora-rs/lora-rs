@@ -1,8 +1,6 @@
 //! LoRaWAN device which uses async-await for driving the protocol state against pin and timer events,
 //! allowing for asynchronous radio implementations. Requires the `async` feature.
-use super::mac::Mac;
-
-use super::mac::{self, Frame, Window};
+use super::mac::{self, Frame, Mac, Window};
 pub use super::{
     mac::{NetworkCredentials, SendData, Session},
     region::{self, Region},
@@ -22,6 +20,14 @@ pub mod radio;
 mod embassy_time;
 #[cfg(feature = "embassy-time")]
 pub use embassy_time::EmbassyTimer;
+
+#[cfg(feature = "multicast")]
+use crate::mac::multicast;
+#[cfg(feature = "multicast")]
+pub use lorawan::{
+    keys::{AppKey, AppSKey, GenAppKey, McAppSKey, McNetSKey, McRootKey},
+    parser::McAddr,
+};
 
 #[cfg(test)]
 mod test;
@@ -177,6 +183,51 @@ where
     #[cfg(feature = "class-c")]
     pub fn enable_class_c(&mut self) {
         self.class_c = true;
+    }
+
+    /// Sets the port range for frames sent to multicast groups. Warning: this exclusively handles
+    /// these frames in the multicast context and, therefore, unicast frames in this range will not
+    /// be handled. Defaults to `201..=205`.
+    #[cfg(feature = "multicast")]
+    pub fn set_multicast_port_range(&mut self, range: core::ops::RangeInclusive<u8>) {
+        self.mac.multicast.set_range(range);
+    }
+
+    /// Sets the port for remote multicast setup messages used to derive multicast session keys.
+    /// Warning: this exclusively handles these frames in the multicast layer and other application
+    /// frames on this port will be ignored. Defaults to `200`.
+    #[cfg(feature = "multicast")]
+    pub fn set_multicast_remote_setup_port(&mut self, port: u8) {
+        self.mac.multicast.set_remote_setup_port(port);
+    }
+
+    #[cfg(feature = "multicast")]
+    /// Set the McKEKey for multicast session key derivation by providing a McRootKey.
+    pub fn set_multicast_ke_key(&mut self, mc_root_key: McRootKey) {
+        let key = lorawan::keys::McKEKey::derive_from(&C::default(), &mc_root_key);
+        self.mac.multicast.mc_k_e_key = Some(key);
+    }
+
+    #[cfg(feature = "multicast")]
+    /// In LoRaWAN 1.0.x, st the McKEKey for multicast session key derivation by providing an
+    /// GenAppKey. The McRootKey is derived from this using `McRootKey = aes128_encrypt(GenAppKey, 0x00 | pad16) `
+    /// and then the McKEKey is derived from the McRootKey.
+    pub fn set_multicast_ke_key_from_gen_app_key(&mut self, key: GenAppKey) {
+        let crypto = C::default();
+        let mc_root_key = McRootKey::derive_from_gen_app_key(&crypto, &key);
+        let key = lorawan::keys::McKEKey::derive_from(&crypto, &mc_root_key);
+        self.mac.multicast.mc_k_e_key = Some(key);
+    }
+
+    #[cfg(feature = "multicast")]
+    /// In LoRaWAN 1.1.x, st the McKEKey for multicast session key derivation by providing an
+    /// GenAppKey. The McRootKey is derived from this using `McRootKey = aes128_encrypt(AppKey, 0x20 | pad16) `
+    /// and then the McKEKey is derived from the McRootKey.
+    pub fn set_multicast_ke_key_from_app_key(&mut self, key: AppKey) {
+        let crypto = C::default();
+        let mc_root_key = McRootKey::derive_from_app_key(&crypto, &key);
+        let key = lorawan::keys::McKEKey::derive_from(&crypto, &mc_root_key);
+        self.mac.multicast.mc_k_e_key = Some(key);
     }
 
     /// Disables Class C behavior. Note that an uplink must be set for the radio to disable
@@ -388,6 +439,24 @@ where
                             // we preserve the timeout
                             maybe_timeout_fut = Some(timeout_fut);
                         }
+                        #[cfg(feature = "multicast")]
+                        mac::Response::Multicast(response) => {
+                            if let multicast::Response::GroupSetupTransmitRequest(group_id) =
+                                response
+                            {
+                                self.radio_buffer.clear();
+                                let (tx_config, _fcnt_up) =
+                                    self.mac.multicast_setup_send::<C, G, N>(
+                                        &mut self.rng,
+                                        &mut self.radio_buffer,
+                                    )?;
+                                self.radio
+                                    .tx(tx_config, self.radio_buffer.as_ref_for_read())
+                                    .await
+                                    .map_err(Error::Radio)?;
+                                return Ok(Some(multicast::Response::NewSession(group_id).into()));
+                            }
+                        }
                         r => {
                             debug!("Valid RXC frame received.");
                             self.radio_buffer.clear();
@@ -458,6 +527,23 @@ where
                     match self.mac.handle_rx::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)
                     {
                         mac::Response::NoUpdate => None,
+                        #[cfg(feature = "multicast")]
+                        mac::Response::Multicast(response) => match response {
+                            multicast::Response::GroupSetupTransmitRequest(group_id) => {
+                                self.radio_buffer.clear();
+                                let (tx_config, _fcnt_up) =
+                                    self.mac.multicast_setup_send::<C, G, N>(
+                                        &mut self.rng,
+                                        &mut self.radio_buffer,
+                                    )?;
+                                self.radio
+                                    .tx(tx_config, self.radio_buffer.as_ref_for_read())
+                                    .await
+                                    .map_err(Error::Radio)?;
+                                Some(multicast::Response::NewSession(group_id).into())
+                            }
+                            _ => None,
+                        },
                         r => Some(r),
                     }
                 }
@@ -478,6 +564,21 @@ where
             match self.mac.handle_rxc::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)? {
                 mac::Response::NoUpdate => {
                     self.radio_buffer.clear();
+                }
+                #[cfg(feature = "multicast")]
+                mac::Response::Multicast(response) => {
+                    if let multicast::Response::GroupSetupTransmitRequest(group_id) = response {
+                        self.radio_buffer.clear();
+                        let (tx_config, _fcnt_up) = self.mac.multicast_setup_send::<C, G, N>(
+                            &mut self.rng,
+                            &mut self.radio_buffer,
+                        )?;
+                        self.radio
+                            .tx(tx_config, self.radio_buffer.as_ref_for_read())
+                            .await
+                            .map_err(Error::Radio)?;
+                        return Ok(multicast::Response::NewSession(group_id).into());
+                    }
                 }
                 r => {
                     self.radio_buffer.clear();

@@ -61,14 +61,17 @@ default-crypto = ["lorawan/default-crypto"]
 ## Use [`defmt`](https://docs.rs/defmt/latest/defmt/) for logging.
 defmt-03 = ["dep:defmt", "lorawan/defmt-03", "lora-modulation/defmt-03"]
 
+## Enable support for Class C devices
+class-c = []
+
 ## Provide an `async_device::Timer` impl based on `embassy-time`.
 embassy-time = ["dep:embassy-time"]
 
+# Enable multicast sessions on the device.
+multicast = []
+
 ## Enable [`serde`](https://docs.rs/serde/latest/serde/) serialization/deserialization for data structures.
 serde = ["dep:serde", "lorawan/serde"]
-
-## Enable support for Class C devices
-class-c = []
 
 ## Enable support for AS923-1 region (by default all regions are enabled).
 region-as923-1 = []
