@@ -78,10 +78,10 @@ impl LoRaMode {
 
 #[allow(dead_code)]
 pub enum DioMapping1Dio0 {
-    RxDone = 0x00,
-    TxDone = 0x40,
-    CadDone = 0x80,
-    Other = 0xc0,
+    RxDone = 0b00 << 6,
+    TxDone = 0b01 << 6,
+    CadDone = 0b10 << 6,
+    Other = 0b11 << 6,
     Mask = 0x3f,
 }
 
@@ -93,11 +93,11 @@ impl DioMapping1Dio0 {
 
 #[allow(dead_code)]
 pub enum DioMapping1Dio1 {
-    RxTimeOut = 0b00 << 2,
-    FhssChangeChannel = 0b01 << 2,
-    CadDetected = 0b10 << 2,
-    Other = 0b11 << 2,
-    Mask = 0xf3,
+    RxTimeOut = 0b00 << 4,
+    FhssChangeChannel = 0b01 << 4,
+    CadDetected = 0b10 << 4,
+    Other = 0b11 << 4,
+    Mask = 0xcf,
 }
 
 #[allow(dead_code)]
