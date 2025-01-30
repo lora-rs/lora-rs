@@ -451,10 +451,14 @@ where
                 // HeaderValid and CRCError are mutually exclusive when attempting to
                 // trigger DIO-based interrupt, so our approach is to trigger HeaderValid
                 // as this is required for preamble detection.
-                // TODO: RxTimeout should be configured on DIO1
                 let dio_mapping_1 = self.read_register(Register::RegDioMapping1).await?;
-                let val = (dio_mapping_1 & DioMapping1Dio0::Mask.value() & DioMapping1Dio3::Mask.value())
-                    | (DioMapping1Dio0::RxDone.value() | DioMapping1Dio3::ValidHeader.value());
+                let val = (dio_mapping_1
+                    & DioMapping1Dio0::Mask.value()
+                    & DioMapping1Dio1::Mask.value()
+                    & DioMapping1Dio3::Mask.value())
+                    | (DioMapping1Dio0::RxDone.value()
+                        | DioMapping1Dio1::RxTimeOut.value()
+                        | DioMapping1Dio3::ValidHeader.value());
                 self.write_register(Register::RegDioMapping1, val).await?;
             }
             Some(RadioMode::ChannelActivityDetection) => {
