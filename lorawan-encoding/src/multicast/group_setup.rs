@@ -1,6 +1,7 @@
 use crate::keys::{CryptoFactory, McAppSKey, McKEKey, McKey, McNetSKey};
+use crate::multicast::McGroupSetupReqCreator;
 use crate::{
-    keys::Encrypter,
+    keys::{Decrypter, Encrypter},
     multicast::{McGroupSetupAnsCreator, McGroupSetupAnsPayload, McGroupSetupReqPayload},
     parser::McAddr,
 };
@@ -127,5 +128,86 @@ impl McGroupSetupAnsCreator {
     pub fn mc_group_id_header(&mut self, mc_group_id_header: u8) -> &mut Self {
         self.data[0] = mc_group_id_header;
         self
+    }
+}
+
+impl McGroupSetupReqCreator {
+    pub fn mc_group_id_header(&mut self, mc_group_id_header: u8) -> &mut Self {
+        const OFFSET: usize = 1;
+        self.data[OFFSET] = mc_group_id_header;
+        self
+    }
+
+    pub fn mc_addr(&mut self, addr: &McAddr<[u8; 4]>) -> &mut Self {
+        const OFFSET: usize = 2;
+        const END: usize = OFFSET + 4;
+        self.data[OFFSET..END].copy_from_slice(addr.as_ref());
+        self
+    }
+
+    pub fn mc_key<F: CryptoFactory>(
+        &mut self,
+        crypto: &F,
+        mc_key: &McKey,
+        mcke_key: &McKEKey,
+    ) -> &mut Self {
+        const OFFSET: usize = 2 + McAddr::<&[u8]>::byte_len();
+        const END: usize = OFFSET + McKey::byte_len();
+        let aes_enc = crypto.new_dec(&mcke_key.0);
+        let block = &mut self.data[OFFSET..END];
+        block.copy_from_slice(mc_key.as_ref());
+        //println!("block: {block:?}");
+        aes_enc.decrypt_block(block);
+        self
+    }
+
+    pub fn min_mc_fcount(&mut self, fcount: u32) -> &mut Self {
+        const OFFSET: usize = 2 + McAddr::<&[u8]>::byte_len() + McKey::byte_len();
+
+        const END: usize = OFFSET + 4;
+        self.data[OFFSET..END].copy_from_slice(&fcount.to_le_bytes());
+        self
+    }
+
+    pub fn max_mc_fcount(&mut self, fcount: u32) -> &mut Self {
+        const OFFSET: usize =
+            2 + McAddr::<&[u8]>::byte_len() + McKey::byte_len() + size_of::<u32>();
+        self.data[OFFSET..OFFSET + size_of::<u32>()].copy_from_slice(&fcount.to_le_bytes());
+        self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::default_crypto::DefaultFactory;
+    use crate::multicast::{parse_downlink_multicast_messages, DownlinkRemoteSetup};
+
+    #[test]
+    fn roundtrip() {
+        // Create a request with the encrypted key
+        let mut req = McGroupSetupReqCreator::new();
+        let mc_addr = McAddr::from([52, 110, 29, 60]);
+        let mc_key = McKey::from([0x44; 16]);
+        let mcke_key = McKEKey::from([0x66; 16]);
+
+        req.mc_group_id_header(0x01);
+        req.mc_addr(&mc_addr);
+        req.mc_key(&DefaultFactory, &mc_key, &mcke_key);
+        req.min_mc_fcount(0x12345678);
+        req.max_mc_fcount(0x87654321);
+        let messages = req.build();
+        let mut messages = parse_downlink_multicast_messages(messages);
+        let downlink_remote_setup = messages.next().unwrap();
+        let mc_group_setup_req = match downlink_remote_setup {
+            DownlinkRemoteSetup::McGroupSetupReq(mc_group_setup_req) => mc_group_setup_req,
+            _ => panic!("Expected McGroupSetupReq"),
+        };
+        assert_eq!(mc_group_setup_req.mc_group_id_header(), 1);
+        assert_eq!(mc_group_setup_req.mc_addr(), mc_addr);
+        let decrypt_key = mc_group_setup_req.mc_key_decrypted(&DefaultFactory, &mcke_key);
+        assert_eq!(decrypt_key.as_ref(), mc_key.as_ref());
+        assert_eq!(mc_group_setup_req.min_mc_fcount(), 0x12345678);
+        assert_eq!(mc_group_setup_req.max_mc_fcount(), 0x87654321);
     }
 }

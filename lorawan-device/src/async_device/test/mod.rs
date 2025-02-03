@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    radio::{RxQuality, TxConfig},
+    radio::{RfConfig, RxQuality, TxConfig},
     region,
     test_util::*,
 };
@@ -16,6 +16,9 @@ use radio::TestRadio;
 
 mod util;
 use util::{setup, setup_with_session};
+
+#[cfg(feature = "multicast")]
+mod multicast;
 
 type Device =
     crate::async_device::Device<TestRadio, DefaultFactory, TestTimer, rand_core::OsRng, 512, 4>;
