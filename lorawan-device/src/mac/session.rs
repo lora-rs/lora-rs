@@ -129,15 +129,15 @@ impl Session {
 
                 if !ignore_mac {
                     // MAC commands may be in the FHDR or the FRMPayload
-                    configuration.handle_downlink_macs(
+                    self.handle_downlink_macs(
+                        configuration,
                         region,
-                        &mut self.uplink,
                         MacCommandIterator::<DownlinkMacCommand<'_>>::new(decrypted.fhdr().data()),
                     );
                     if let FRMPayload::MACCommands(mac_cmds) = decrypted.frm_payload() {
-                        configuration.handle_downlink_macs(
+                        self.handle_downlink_macs(
+                            configuration,
                             region,
-                            &mut self.uplink,
                             MacCommandIterator::<DownlinkMacCommand<'_>>::new(mac_cmds.data()),
                         );
                     }
@@ -238,5 +238,31 @@ impl Session {
             Err(e) => panic!("Error assembling packet! {:?} ", e),
         }
         fcnt
+    }
+
+    fn handle_downlink_macs(
+        &mut self,
+        configuration: &mut super::Configuration,
+        region: &mut region::Configuration,
+        cmds: lorawan::maccommands::MacCommandIterator<'_, DownlinkMacCommand<'_>>,
+    ) {
+        use uplink::MacAnsTrait;
+        for cmd in cmds {
+            match cmd {
+                DownlinkMacCommand::LinkADRReq(payload) => {
+                    // TODO: Handle DR and TxPwr
+                    region.set_channel_mask(
+                        payload.redundancy().channel_mask_control(),
+                        payload.channel_mask(),
+                    );
+                    self.uplink.adr_ans.add();
+                }
+                DownlinkMacCommand::RXTimingSetupReq(payload) => {
+                    configuration.rx1_delay = super::del_to_delay_ms(payload.delay());
+                    self.uplink.ack_rx_delay();
+                }
+                _ => (),
+            }
+        }
     }
 }
