@@ -7,8 +7,8 @@ use crate::{
     region, AppSKey, Downlink, NwkSKey,
 };
 use heapless::Vec;
+use lorawan::parser::DevAddr;
 use lorawan::{self, keys::CryptoFactory};
-use lorawan::{maccommands::DownlinkMacCommand, parser::DevAddr};
 
 pub type FcntDown = u32;
 pub type FcntUp = u32;
@@ -48,34 +48,6 @@ pub struct Configuration {
     rx1_delay: u32,
     join_accept_delay1: u32,
     join_accept_delay2: u32,
-}
-
-impl Configuration {
-    fn handle_downlink_macs(
-        &mut self,
-        region: &mut region::Configuration,
-        uplink: &mut uplink::Uplink,
-        cmds: lorawan::maccommands::MacCommandIterator<'_, DownlinkMacCommand<'_>>,
-    ) {
-        use uplink::MacAnsTrait;
-        for cmd in cmds {
-            match cmd {
-                DownlinkMacCommand::LinkADRReq(payload) => {
-                    // we ignore DR and TxPwr
-                    region.set_channel_mask(
-                        payload.redundancy().channel_mask_control(),
-                        payload.channel_mask(),
-                    );
-                    uplink.adr_ans.add();
-                }
-                DownlinkMacCommand::RXTimingSetupReq(payload) => {
-                    self.rx1_delay = del_to_delay_ms(payload.delay());
-                    uplink.ack_rx_delay();
-                }
-                _ => (),
-            }
-        }
-    }
 }
 
 pub(crate) struct Mac {
