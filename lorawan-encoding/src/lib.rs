@@ -4,6 +4,7 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![doc = include_str!("../README.md")]
 
+pub mod certification;
 pub mod creator;
 pub mod keys;
 pub mod maccommandcreator;
