@@ -29,6 +29,16 @@ pub use lorawan::{
     parser::McAddr,
 };
 
+#[cfg(feature = "multicast")]
+#[derive(Debug, Clone, Copy)]
+/// Multicast Groups range from 0 to 3.
+pub enum McGroup {
+    _0,
+    _1,
+    _2,
+    _3,
+}
+
 #[cfg(test)]
 mod test;
 
@@ -228,6 +238,18 @@ where
         let mc_root_key = McRootKey::derive_from_app_key(&crypto, &key);
         let key = lorawan::keys::McKEKey::derive_from(&crypto, &mc_root_key);
         self.mac.multicast.mc_k_e_key = Some(key);
+    }
+
+    /// Sets a multicast session for this device for a specific group.
+    #[cfg(feature = "multicast")]
+    pub fn set_multicast_session(&mut self, group: McGroup, session: multicast::Session) {
+        let index = match group {
+            McGroup::_0 => 0,
+            McGroup::_1 => 1,
+            McGroup::_2 => 2,
+            McGroup::_3 => 3,
+        };
+        self.mac.multicast.sessions[index] = Some(session);
     }
 
     /// Disables Class C behavior. Note that an uplink must be set for the radio to disable
