@@ -451,45 +451,38 @@ where
                 RxcWindowResponse::Rx(sz, _, timeout_fut) => {
                     debug!("RXC window received {} bytes.", sz);
                     self.radio_buffer.set_pos(sz);
-                    match self
+                    let mac_response = self
                         .mac
-                        .handle_rxc::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)?
+                        .handle_rxc::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)?;
+                    match Self::handle_mac_response(
+                        &mut self.radio_buffer,
+                        &mut self.mac,
+                        &mut self.radio,
+                        &mut self.rng,
+                        mac_response,
+                    )
+                    .await?
                     {
-                        mac::Response::NoUpdate => {
+                        None => {
                             debug!("RXC frame was invalid.");
-                            self.radio_buffer.clear();
-                            // we preserve the timeout
-                            maybe_timeout_fut = Some(timeout_fut);
                         }
-                        #[cfg(feature = "multicast")]
-                        mac::Response::Multicast(response) => {
-                            if let multicast::Response::GroupSetupTransmitRequest(group_id) =
-                                response
-                            {
-                                self.radio_buffer.clear();
-                                let (tx_config, _fcnt_up) =
-                                    self.mac.multicast_setup_send::<C, G, N>(
-                                        &mut self.rng,
-                                        &mut self.radio_buffer,
-                                    )?;
-                                self.radio
-                                    .tx(tx_config, self.radio_buffer.as_ref_for_read())
-                                    .await
-                                    .map_err(Error::Radio)?;
-                                return Ok(Some(multicast::Response::NewSession(group_id).into()));
-                            }
-                        }
-                        r => {
+                        Some(r) => {
                             debug!("Valid RXC frame received.");
-                            self.radio_buffer.clear();
+                            // avoid overwriting new multicast session response
+                            #[cfg(feature = "multicast")]
+                            if let Some(mac::Response::Multicast(
+                                multicast::Response::NewSession(_),
+                            )) = response
+                            {
+                                continue;
+                            }
                             response = Some(r);
-                            // more than one downlink may be received so we preserve the timeout
-                            maybe_timeout_fut = Some(timeout_fut);
                         }
                     }
+                    maybe_timeout_fut = Some(timeout_fut);
                 }
                 RxcWindowResponse::Timeout(_) => return Ok(response),
-            };
+            }
         }
         Ok(response)
     }
@@ -541,37 +534,61 @@ where
         Ok(self.mac.rx2_complete())
     }
 
+    /// Helper function to handle MAC responses and perform common actions
+    #[allow(unused)]
+    async fn handle_mac_response(
+        radio_buffer: &mut RadioBuffer<N>,
+        mac: &mut Mac,
+        radio: &mut R,
+        rng: &mut G,
+        response: mac::Response,
+    ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
+        match response {
+            mac::Response::NoUpdate => {
+                radio_buffer.clear();
+                Ok(None)
+            }
+            #[cfg(feature = "multicast")]
+            mac::Response::Multicast(response) => {
+                if let multicast::Response::GroupSetupTransmitRequest(group_id) = response {
+                    radio_buffer.clear();
+                    let (tx_config, _fcnt_up) =
+                        mac.multicast_setup_send::<C, G, N>(rng, radio_buffer)?;
+                    radio
+                        .tx(tx_config, radio_buffer.as_ref_for_read())
+                        .await
+                        .map_err(Error::Radio)?;
+                    Ok(Some(multicast::Response::NewSession(group_id).into()))
+                } else {
+                    radio_buffer.clear();
+                    Ok(None)
+                }
+            }
+            r => {
+                radio_buffer.clear();
+                Ok(Some(r))
+            }
+        }
+    }
+
     async fn rx_listen(&mut self) -> Result<Option<mac::Response>, Error<R::PhyError>> {
         let response =
             match self.radio.rx_single(self.radio_buffer.as_mut()).await.map_err(Error::Radio)? {
                 RxStatus::Rx(s, _q) => {
                     self.radio_buffer.set_pos(s);
-                    match self.mac.handle_rx::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)
-                    {
-                        mac::Response::NoUpdate => None,
-                        #[cfg(feature = "multicast")]
-                        mac::Response::Multicast(response) => match response {
-                            multicast::Response::GroupSetupTransmitRequest(group_id) => {
-                                self.radio_buffer.clear();
-                                let (tx_config, _fcnt_up) =
-                                    self.mac.multicast_setup_send::<C, G, N>(
-                                        &mut self.rng,
-                                        &mut self.radio_buffer,
-                                    )?;
-                                self.radio
-                                    .tx(tx_config, self.radio_buffer.as_ref_for_read())
-                                    .await
-                                    .map_err(Error::Radio)?;
-                                Some(multicast::Response::NewSession(group_id).into())
-                            }
-                            _ => None,
-                        },
-                        r => Some(r),
-                    }
+                    let mac_response =
+                        self.mac.handle_rx::<C, N, D>(&mut self.radio_buffer, &mut self.downlink);
+                    Self::handle_mac_response(
+                        &mut self.radio_buffer,
+                        &mut self.mac,
+                        &mut self.radio,
+                        &mut self.rng,
+                        mac_response,
+                    )
+                    .await?
                 }
                 RxStatus::RxTimeout => None,
             };
-        self.radio_buffer.clear();
         self.window_complete().await?;
         Ok(response)
     }
@@ -583,29 +600,18 @@ where
             let (sz, _rx_quality) =
                 self.radio.rx_continuous(self.radio_buffer.as_mut()).await.map_err(Error::Radio)?;
             self.radio_buffer.set_pos(sz);
-            match self.mac.handle_rxc::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)? {
-                mac::Response::NoUpdate => {
-                    self.radio_buffer.clear();
-                }
-                #[cfg(feature = "multicast")]
-                mac::Response::Multicast(response) => {
-                    if let multicast::Response::GroupSetupTransmitRequest(group_id) = response {
-                        self.radio_buffer.clear();
-                        let (tx_config, _fcnt_up) = self.mac.multicast_setup_send::<C, G, N>(
-                            &mut self.rng,
-                            &mut self.radio_buffer,
-                        )?;
-                        self.radio
-                            .tx(tx_config, self.radio_buffer.as_ref_for_read())
-                            .await
-                            .map_err(Error::Radio)?;
-                        return Ok(multicast::Response::NewSession(group_id).into());
-                    }
-                }
-                r => {
-                    self.radio_buffer.clear();
-                    return Ok(r);
-                }
+            let mac_response =
+                self.mac.handle_rxc::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)?;
+            if let Some(response) = Self::handle_mac_response(
+                &mut self.radio_buffer,
+                &mut self.mac,
+                &mut self.radio,
+                &mut self.rng,
+                mac_response,
+            )
+            .await?
+            {
+                return Ok(response);
             }
         }
     }
