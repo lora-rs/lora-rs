@@ -29,6 +29,17 @@ pub enum DownlinkDUTCommand<'a> {
     // NB! Variable length payload without any size indication
     #[cmd(cid = 0x07)]
     TxFramesCtrlReq(TxFramesCtrlReqPayload<'a>),
+
+    /// Request to send firmware version, LoRaWAN version, and regional parameters version
+    #[cmd(cid = 0x7f, len = 0)]
+    DutVersionsReq(DutVersionsReqPayload),
+}
+
+#[derive(Debug, PartialEq, CommandHandler)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum UplinkDUTCommand<'a> {
+    #[cmd(cid = 0x7f, len = 12)]
+    DutVersionsAns(DutVersionsAnsPayload<'a>),
 }
 
 pub fn parse_downlink_certification_messages(
@@ -45,6 +56,13 @@ impl AdrBitChangeReqPayload<'_> {
             1 => Ok(true),
             _ => Err(Error::RFU),
         }
+    }
+}
+
+impl DutVersionsAnsCreator {
+    pub fn set_versions_raw(&mut self, data: [u8; 12]) -> &mut Self {
+        self.data[1..=12].copy_from_slice(&data);
+        self
     }
 }
 
