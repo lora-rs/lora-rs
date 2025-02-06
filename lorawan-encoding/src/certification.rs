@@ -20,6 +20,11 @@ pub enum DownlinkDUTCommand<'a> {
     /// Change uplink periodicity to the provided value
     #[cmd(cid = 0x06, len = 1)]
     TxPeriodicityChangeReq(TxPeriodicityChangeReqPayload<'a>),
+
+    /// Send all subsequent uplinks of the specified type
+    // NB! Variable length payload without any size indication
+    #[cmd(cid = 0x07)]
+    TxFramesCtrlReq(TxFramesCtrlReqPayload<'a>),
 }
 
 pub fn parse_downlink_certification_messages(
@@ -51,6 +56,42 @@ impl TxPeriodicityChangeReqPayload<'_> {
                 0_u8 | 11_u8..=u8::MAX => unreachable!(),
             };
             Ok(Some(seconds))
+        }
+    }
+}
+
+impl<'a> TxFramesCtrlReqPayload<'a> {
+    pub fn new(data: &'a [u8]) -> Result<Self, Error> {
+        if data.is_empty() {
+            return Err(Error::BufferTooShort);
+        }
+        Ok(TxFramesCtrlReqPayload(data))
+    }
+
+    const fn min_len() -> usize {
+        2
+    }
+
+    /// Actual length of the payload
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        // This payload is without a length field, therefore
+        // check whether at least minimum amount of data is present
+        // and consume the whole frame until the end.
+        core::cmp::max(Self::min_len(), self.0.len())
+    }
+
+    /// Whether all subsequent uplinks are overriden as either
+    /// L2 Unconfirmed (`FType = 2`) or L2 Confirmed (`FType = 4`)
+    pub fn frame_type_override(&self) -> Result<Option<bool>, Error> {
+        match self.0[0] {
+            // Switch back to device default
+            0 => Ok(None),
+            // Unconfirmed
+            1 => Ok(Some(false)),
+            // Confirmed
+            2 => Ok(Some(true)),
+            _ => Err(Error::RFU),
         }
     }
 }
