@@ -32,6 +32,7 @@ pub enum Error {
     BufferTooShort,
     InvalidIndex,
     InvalidDataRateRange,
+    RFU,
 }
 
 pub trait SerializableMacCommand {
