@@ -10,6 +10,10 @@ pub enum DownlinkDUTCommand {
     /// Request to reset the Microcontroller Unit
     #[cmd(cid = 0x01, len = 0)]
     DutResetReq(DutResetReqPayload),
+
+    /// Request to reset the LoRaWAN MAC layer and start issuing Join-Request messages
+    #[cmd(cid = 0x02, len = 0)]
+    DutJoinReq(DutJoinReqPayload),
 }
 
 pub fn parse_downlink_certification_messages(
