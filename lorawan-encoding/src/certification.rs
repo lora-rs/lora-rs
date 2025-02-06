@@ -17,6 +17,10 @@ pub enum DownlinkDUTCommand<'a> {
     #[cmd(cid = 0x02, len = 0)]
     DutJoinReq(DutJoinReqPayload),
 
+    /// Request to activate/deactivate Adaptive Data Rate (ADR)
+    #[cmd(cid = 0x04, len = 1)]
+    AdrBitChangeReq(AdrBitChangeReqPayload<'a>),
+
     /// Change uplink periodicity to the provided value
     #[cmd(cid = 0x06, len = 1)]
     TxPeriodicityChangeReq(TxPeriodicityChangeReqPayload<'a>),
@@ -31,6 +35,17 @@ pub fn parse_downlink_certification_messages(
     data: &[u8],
 ) -> MacCommandIterator<'_, DownlinkDUTCommand<'_>> {
     MacCommandIterator::new(data)
+}
+
+impl AdrBitChangeReqPayload<'_> {
+    /// Enable/disable ADR
+    pub fn adr_enable(&self) -> Result<bool, Error> {
+        match self.0[0] {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(Error::RFU),
+        }
+    }
 }
 
 impl TxPeriodicityChangeReqPayload<'_> {
