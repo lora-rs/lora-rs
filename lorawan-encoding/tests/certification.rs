@@ -23,3 +23,16 @@ fn test_parse_variable_txframectrlreq() {
     // ..end there's nothing left
     assert_eq!(c.next(), None);
 }
+
+#[test]
+fn test_dutversionsans() {
+    let mut cmd = DutVersionsAnsCreator::new();
+    let cid = DutVersionsAnsPayload::cid();
+    cmd.set_versions_raw([
+        0, 0, 0, 1, // Firmware version
+        1, 0, 4, 0, // Lorawan version - 1.0.4
+        2, 1, 0, 4, // region version, RP002-1.0.4 == 2.1.0.4
+    ]);
+
+    assert_eq!(cmd.build(), [cid, 0, 0, 0, 1, 1, 0, 4, 0, 2, 1, 0, 4]);
+}
