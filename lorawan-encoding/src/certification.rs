@@ -83,9 +83,14 @@ impl<'a> EchoPayloadAnsPayload<'a> {
         Ok(EchoPayloadAnsPayload(data))
     }
 
+    /// Possible maximum length of the payload not including CID
+    const fn max_len() -> usize {
+        241
+    }
+
+    /// Minimum length of the payload not including CID
     const fn min_len() -> usize {
-        // Minimum length of the of payload including CID
-        2
+        1
     }
 
     /// Actual length of the payload
@@ -102,8 +107,44 @@ impl<'a> EchoPayloadAnsPayload<'a> {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct EchoPayloadAnsCreator {}
-impl UnimplementedCreator for EchoPayloadAnsCreator {}
+pub struct EchoPayloadAnsCreator {
+    pub(crate) data: [u8; EchoPayloadAnsPayload::max_len() + 1],
+    payload_len: usize,
+}
+
+impl Default for EchoPayloadAnsCreator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EchoPayloadAnsCreator {
+    pub fn new() -> Self {
+        let mut data = [0; EchoPayloadAnsPayload::max_len() + 1];
+        data[0] = EchoPayloadAnsPayload::cid();
+        Self { data, payload_len: 0 }
+    }
+    pub fn build(&self) -> &[u8] {
+        &self.data[..=self.payload_len]
+    }
+    pub const fn cid(&self) -> u8 {
+        EchoPayloadAnsPayload::cid()
+    }
+    /// Get the length including CID.
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        self.payload_len + 1
+    }
+
+    /// Fill payload and properly mutate this as required.
+    pub fn payload(&mut self, data: &[u8]) -> &mut Self {
+        self.data[1..=data.len()].iter_mut().zip(data.iter()).for_each(|(dst, &src)| {
+            *dst = src.wrapping_add(1);
+        });
+        self.payload_len = data.len();
+        self
+    }
+}
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]

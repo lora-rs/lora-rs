@@ -53,6 +53,20 @@ fn test_echopayload() {
     // Check that internal payload data actually matches
     let payload = EchoPayloadReqPayload::new(&data[1..]).unwrap();
     assert_eq!(&data[1..], payload.payload());
+
+    let mut cmd = EchoPayloadAnsCreator::new();
+    assert_eq!(cmd.build(), [EchoPayloadAnsPayload::cid()]);
+
+    // Push in data...
+    cmd.payload(&data[1..]);
+
+    // ...and check whether this has been properly mutated
+    let out = cmd.build();
+    assert_eq!(out.len(), 4);
+    assert_eq!(out[1..], [2, 6, 0]);
+
+    cmd.payload(&[]);
+    assert_eq!(cmd.build().len(), 1);
 }
 
 #[test]
