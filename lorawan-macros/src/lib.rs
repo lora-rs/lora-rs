@@ -236,37 +236,41 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                 }
             }
 
-            let payload_creator = Ident::new(&format!("{}Creator", n), Span::call_site());
-            payload_struct_creator_impls.push(quote! {
-                #[derive(Debug)]
-                #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-                #[doc(hidden)]
-                pub struct #payload_creator {
-                    pub(crate) data: [u8; #t::max_len() + 1],
-                }
+            // Only build Creator structs for fixed-length commands
+            if len_opt.is_some() {
+                let payload_creator = Ident::new(&format!("{}Creator", n), Span::call_site());
+                payload_struct_creator_impls.push(quote! {
 
-                impl #payload_creator {
-                    pub fn new() -> Self {
-                        let mut data = [0; #t::max_len() + 1];
-                        data[0] = #cid;
-                        Self { data }
+                    #[derive(Debug)]
+                    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+                    #[doc(hidden)]
+                    pub struct #payload_creator {
+                        pub(crate) data: [u8; #t::max_len() + 1],
                     }
 
-                    pub fn build(&self) -> &[u8] {
-                     &self.data[..self.len()]
-                    }
+                    impl #payload_creator {
+                        pub fn new() -> Self {
+                            let mut data = [0; #t::max_len() + 1];
+                            data[0] = #cid;
+                            Self { data }
+                        }
 
-                    pub const fn cid(&self) -> u8 {
-                        #cid
-                    }
+                        pub fn build(&self) -> &[u8] {
+                         &self.data[..self.len()]
+                        }
 
-                    /// Get the length including CID.
-                    #[allow(clippy::len_without_is_empty)]
-                    pub fn len(&self) -> usize {
-                        #t::max_len() + 1
+                        pub const fn cid(&self) -> u8 {
+                            #cid
+                        }
+
+                        /// Get the length including CID.
+                        #[allow(clippy::len_without_is_empty)]
+                        pub fn len(&self) -> usize {
+                            #t::max_len() + 1
+                        }
                     }
-                }
-            });
+                });
+            }
         }
     }
 
