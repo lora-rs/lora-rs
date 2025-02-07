@@ -23,6 +23,26 @@ pub enum Error {
     FRMPayloadWithFportZero,
 }
 
+/// Helper trait to provide dummy Creator implementation for
+/// variable length commands.
+#[allow(clippy::len_without_is_empty)]
+pub trait UnimplementedCreator {
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        unimplemented!()
+    }
+
+    fn build(&self) -> &[u8] {
+        unimplemented!()
+    }
+
+    fn len(&self) -> usize {
+        unimplemented!()
+    }
+}
+
 const PIGGYBACK_MAC_COMMANDS_MAX_LEN: usize = 15;
 
 /// JoinAcceptCreator serves for creating binary representation of Physical

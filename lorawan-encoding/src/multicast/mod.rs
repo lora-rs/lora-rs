@@ -1,4 +1,5 @@
 mod group_setup;
+use crate::creator::UnimplementedCreator;
 use crate::maccommands::{Error, MacCommandIterator, SerializableMacCommand};
 pub use group_setup::Session;
 use lorawan_macros::CommandHandler;
@@ -73,6 +74,11 @@ impl<'a> McGroupStatusAnsPayload<'a> {
         Self::required_len(self.0[0])
     }
 }
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct McGroupStatusAnsCreator {}
+impl UnimplementedCreator for McGroupStatusAnsCreator {}
 
 pub fn parse_downlink_multicast_messages(
     data: &[u8],
