@@ -1,18 +1,16 @@
+use super::{
+    otaa::{DevNonce, NetworkCredentials},
+    uplink, FcntUp, Response, SendData,
+};
 use crate::radio::RadioBuffer;
 use crate::{region, AppSKey, Downlink, NwkSKey};
 use heapless::Vec;
 use lorawan::keys::CryptoFactory;
+use lorawan::maccommandcreator::{LinkADRAnsCreator, RXTimingSetupAnsCreator};
 use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
 use lorawan::{
     creator::DataPayloadCreator,
-    maccommands::SerializableMacCommand,
     parser::{parse_with_factory as lorawan_parse, *},
-    parser::{DecryptedJoinAcceptPayload, DevAddr},
-};
-
-use super::{
-    otaa::{DevNonce, NetworkCredentials},
-    uplink, FcntUp, Response, SendData,
 };
 
 #[derive(Clone, Debug)]
@@ -213,25 +211,16 @@ impl Session {
             .set_dev_addr(self.devaddr)
             .set_fcnt(fcnt);
 
-        let mut cmds = Vec::new();
-        self.uplink.get_cmds(&mut cmds);
-        let mut dyn_cmds: Vec<&dyn SerializableMacCommand, 8> = Vec::new();
-
-        for cmd in &cmds {
-            if let Err(_e) = dyn_cmds.push(cmd) {
-                panic!("dyn_cmds too small compared to cmds")
-            }
-        }
-
         let crypto_factory = C::default();
         match phy.build(
             data.data,
-            dyn_cmds.as_slice(),
+            self.uplink.mac_commands(),
             &self.nwkskey,
             &self.appskey,
             &crypto_factory,
         ) {
             Ok(packet) => {
+                self.uplink.clear_mac_commands();
                 tx_buffer.clear();
                 tx_buffer.extend_from_slice(packet).unwrap();
             }
@@ -244,22 +233,23 @@ impl Session {
         &mut self,
         configuration: &mut super::Configuration,
         region: &mut region::Configuration,
-        cmds: lorawan::maccommands::MacCommandIterator<'_, DownlinkMacCommand<'_>>,
+        cmds: MacCommandIterator<'_, DownlinkMacCommand<'_>>,
     ) {
-        use uplink::MacAnsTrait;
         for cmd in cmds {
             match cmd {
                 DownlinkMacCommand::LinkADRReq(payload) => {
-                    // TODO: Handle DR and TxPwr
+                    // TODO: Verify with region that these are OK and handle Tx Power adjustment
                     region.set_channel_mask(
                         payload.redundancy().channel_mask_control(),
                         payload.channel_mask(),
                     );
-                    self.uplink.adr_ans.add();
+                    let mut cmd = LinkADRAnsCreator::new();
+                    cmd.set_channel_mask_ack(true).set_data_rate_ack(true).set_tx_power_ack(true);
+                    self.uplink.add_mac_command(cmd);
                 }
                 DownlinkMacCommand::RXTimingSetupReq(payload) => {
                     configuration.rx1_delay = super::del_to_delay_ms(payload.delay());
-                    self.uplink.ack_rx_delay();
+                    self.uplink.add_mac_command(RXTimingSetupAnsCreator::new());
                 }
                 _ => (),
             }

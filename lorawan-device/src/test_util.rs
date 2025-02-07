@@ -1,4 +1,5 @@
 use super::*;
+use lorawan::maccommandcreator::build_mac_commands;
 use lorawan::maccommands::{
     ChannelMask, DownlinkMacCommand, MacCommandIterator, SerializableMacCommand, UplinkMacCommand,
 };
@@ -147,7 +148,10 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
                     LinkADRReqPayload::new(&mac_cmds[1].build()[1..]).unwrap(),
                 ),
             ];
-            let cmd: Vec<&dyn SerializableMacCommand> = vec![&mac_cmds[0], &mac_cmds[1]];
+            let cmds: Vec<&dyn SerializableMacCommand> = vec![&mac_cmds[0], &mac_cmds[1]];
+            let mut cmds_buf = [0u8; 256];
+            let cmds_buf_len = build_mac_commands(&cmds, &mut cmds_buf).unwrap();
+
             let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
             phy.set_confirmed(uplink.is_confirmed());
             phy.set_f_port(4);
@@ -155,7 +159,13 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
             phy.set_uplink(false);
             phy.set_fcnt(FCNT_DOWN);
             let finished = phy
-                .build(&[3, 2, 1], &cmd, &get_key().into(), &get_key().into(), &DefaultFactory)
+                .build(
+                    &[3, 2, 1],
+                    &cmds_buf[..cmds_buf_len],
+                    &get_key().into(),
+                    &get_key().into(),
+                    &DefaultFactory,
+                )
                 .unwrap();
             finished.len()
         } else {
@@ -189,7 +199,7 @@ pub fn handle_class_c_uplink_after_join(
             phy.set_fctrl(&fctrl);
             // set ack bit
             let finished =
-                phy.build(&[], &[], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
+                phy.build(&[], [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
             finished.len()
         } else {
             panic!("Did not decode PhyPayload::Data!");
@@ -243,7 +253,7 @@ pub fn handle_data_uplink_with_link_adr_ans(
             phy.set_fcnt(1);
             // zero out rx_buffer
             let finished =
-                phy.build(&[], &[], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
+                phy.build(&[], [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
             finished.len()
         } else {
             panic!("Unable to parse PhyPayload::Data from uplink in handle_data_uplink_with_link_adr_ans")
@@ -266,6 +276,6 @@ pub fn class_c_downlink<const FCNT_DOWN: u32>(
     phy.set_fcnt(FCNT_DOWN);
 
     let finished =
-        phy.build(&[1, 2, 3], &[], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
+        phy.build(&[1, 2, 3], [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
     finished.len()
 }

@@ -30,7 +30,7 @@ fn handle_multicast_setup_req(
     phy.set_fcnt(0);
 
     let finished =
-        phy.build(setup_req, &[], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
+        phy.build(setup_req, [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
     finished.len()
 }
 
