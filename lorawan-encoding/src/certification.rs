@@ -43,6 +43,10 @@ pub enum DownlinkDUTCommand<'a> {
 #[derive(Debug, PartialEq, CommandHandler)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum UplinkDUTCommand<'a> {
+    /// Returns data sent by EchoPayloadReq, where each byte except the initial CID is incremented by 1
+    #[cmd(cid = 0x08)]
+    EchoPayloadAns(EchoPayloadAnsPayload<'a>),
+
     #[cmd(cid = 0x7f, len = 12)]
     DutVersionsAns(DutVersionsAnsPayload<'a>),
 }
@@ -70,6 +74,36 @@ impl DutVersionsAnsCreator {
         self
     }
 }
+
+impl<'a> EchoPayloadAnsPayload<'a> {
+    pub fn new(data: &'a [u8]) -> Result<Self, Error> {
+        if data.is_empty() {
+            return Err(Error::BufferTooShort);
+        }
+        Ok(EchoPayloadAnsPayload(data))
+    }
+
+    const fn min_len() -> usize {
+        // Minimum length of the of payload including CID
+        2
+    }
+
+    /// Actual length of the payload
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        // Payload should have at least minimum length...
+        core::cmp::max(Self::min_len(), self.0.len())
+    }
+
+    pub fn payload(&self) -> &[u8] {
+        self.0
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct EchoPayloadAnsCreator {}
+impl UnimplementedCreator for EchoPayloadAnsCreator {}
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
