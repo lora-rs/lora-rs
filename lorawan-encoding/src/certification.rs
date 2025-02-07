@@ -1,6 +1,7 @@
 //! LoRaWAN Certification Protocol (TS009) command and payload handling
 use lorawan_macros::CommandHandler;
 
+use crate::creator::UnimplementedCreator;
 use crate::maccommands::MacCommandIterator;
 use crate::maccommands::SerializableMacCommand;
 
@@ -92,6 +93,11 @@ impl TxPeriodicityChangeReqPayload<'_> {
         }
     }
 }
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct TxFramesCtrlReqCreator {}
+impl UnimplementedCreator for TxFramesCtrlReqCreator {}
 
 impl<'a> TxFramesCtrlReqPayload<'a> {
     pub fn new(data: &'a [u8]) -> Result<Self, Error> {
