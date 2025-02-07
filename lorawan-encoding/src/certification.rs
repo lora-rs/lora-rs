@@ -31,6 +31,10 @@ pub enum DownlinkDUTCommand<'a> {
     #[cmd(cid = 0x07)]
     TxFramesCtrlReq(TxFramesCtrlReqPayload<'a>),
 
+    /// Requests the DUT to echo the provided payload, where each byte is incremented by 1
+    #[cmd(cid = 0x08)]
+    EchoPayloadReq(EchoPayloadReqPayload<'a>),
+
     /// Request to send firmware version, LoRaWAN version, and regional parameters version
     #[cmd(cid = 0x7f, len = 0)]
     DutVersionsReq(DutVersionsReqPayload),
@@ -64,6 +68,37 @@ impl DutVersionsAnsCreator {
     pub fn set_versions_raw(&mut self, data: [u8; 12]) -> &mut Self {
         self.data[1..=12].copy_from_slice(&data);
         self
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct EchoPayloadReqCreator {}
+impl UnimplementedCreator for EchoPayloadReqCreator {}
+
+impl<'a> EchoPayloadReqPayload<'a> {
+    pub fn new(data: &'a [u8]) -> Result<Self, Error> {
+        if data.is_empty() {
+            return Err(Error::BufferTooShort);
+        }
+        Ok(EchoPayloadReqPayload(data))
+    }
+
+    /// Minimum length of the payload not including CID
+    const fn min_len() -> usize {
+        1
+    }
+
+    /// Actual length of the payload
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        // Payload should have at least minimum length...
+        core::cmp::max(Self::min_len(), self.0.len())
+    }
+
+    /// Return payload
+    pub fn payload(&self) -> &[u8] {
+        &self.0[0..self.len()]
     }
 }
 
