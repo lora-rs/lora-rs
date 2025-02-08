@@ -342,6 +342,7 @@ impl From<Response> for async_device::SendResponse {
             Response::DownlinkReceived(fcnt) => async_device::SendResponse::DownlinkReceived(fcnt),
             Response::NoAck => async_device::SendResponse::NoAck,
             Response::RxComplete => async_device::SendResponse::RxComplete,
+            #[cfg(feature = "multicast")]
             Response::Multicast(mc) => async_device::SendResponse::Multicast(mc.into()),
             r => panic!("Invalid async_device::SendResponse::from {:?}", r),
         }
