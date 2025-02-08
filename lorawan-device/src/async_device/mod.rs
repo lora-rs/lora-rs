@@ -225,8 +225,7 @@ where
     pub fn set_multicast_ke_key_from_gen_app_key(&mut self, key: GenAppKey) {
         let crypto = C::default();
         let mc_root_key = McRootKey::derive_from_gen_app_key(&crypto, &key);
-        let key = lorawan::keys::McKEKey::derive_from(&crypto, &mc_root_key);
-        self.mac.multicast.mc_k_e_key = Some(key);
+        self.set_multicast_ke_key(mc_root_key);
     }
 
     #[cfg(feature = "multicast")]
@@ -236,8 +235,7 @@ where
     pub fn set_multicast_ke_key_from_app_key(&mut self, key: AppKey) {
         let crypto = C::default();
         let mc_root_key = McRootKey::derive_from_app_key(&crypto, &key);
-        let key = lorawan::keys::McKEKey::derive_from(&crypto, &mc_root_key);
-        self.mac.multicast.mc_k_e_key = Some(key);
+        self.set_multicast_ke_key(mc_root_key);
     }
 
     /// Sets a multicast session for this device for a specific group.
