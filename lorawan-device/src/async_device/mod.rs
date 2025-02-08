@@ -1,6 +1,6 @@
 //! LoRaWAN device which uses async-await for driving the protocol state against pin and timer events,
 //! allowing for asynchronous radio implementations. Requires the `async` feature.
-use super::mac::{self, Frame, Mac, Window};
+use super::mac::{self, FcntDown, Frame, Mac, Window};
 pub use super::{
     mac::{NetworkCredentials, SendData, Session},
     region::{self, Region},
@@ -88,10 +88,12 @@ pub enum Error<R> {
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug)]
 pub enum SendResponse {
-    DownlinkReceived(mac::FcntDown),
+    DownlinkReceived(FcntDown),
     SessionExpired,
     NoAck,
     RxComplete,
+    #[cfg(feature = "multicast")]
+    Multicast(MulticastResponse),
 }
 
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
@@ -99,6 +101,24 @@ pub enum SendResponse {
 pub enum JoinResponse {
     JoinSuccess,
     NoJoinAccept,
+}
+
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[derive(Debug)]
+pub enum ListenResponse {
+    SessionExpired,
+    DownlinkReceived(FcntDown),
+    #[cfg(feature = "multicast")]
+    Multicast(MulticastResponse),
+}
+
+#[cfg(feature = "multicast")]
+#[derive(Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum MulticastResponse {
+    NewSession { group_id: u8 },
+    SessionExpired { group_id: u8 },
+    DownlinkReceived { group_id: u8, fcnt: FcntDown },
 }
 
 impl<R> From<mac::Error> for Error<R> {
@@ -310,7 +330,7 @@ where
 
                 // Receive join response within RX window
                 self.timer.reset();
-                Ok(self.rx_downlink(&Frame::Join, ms).await?.try_into()?)
+                Ok(self.rx_downlink(&Frame::Join, ms).await?.into())
             }
             JoinMode::ABP { nwkskey, appskey, devaddr } => {
                 self.mac.join_abp(*nwkskey, *appskey, *devaddr);
@@ -350,7 +370,7 @@ where
 
         // Wait for received data within window
         self.timer.reset();
-        Ok(self.rx_downlink(&Frame::Data, ms).await?.try_into()?)
+        Ok(self.rx_downlink(&Frame::Data, ms).await?.into())
     }
 
     /// Take the downlink data from the device. This is typically called after a
@@ -471,7 +491,7 @@ where
                             // avoid overwriting new multicast session response
                             #[cfg(feature = "multicast")]
                             if let Some(mac::Response::Multicast(
-                                multicast::Response::NewSession(_),
+                                multicast::Response::NewSession { .. },
                             )) = response
                             {
                                 continue;
@@ -535,7 +555,6 @@ where
     }
 
     /// Helper function to handle MAC responses and perform common actions
-    #[allow(unused)]
     async fn handle_mac_response(
         radio_buffer: &mut RadioBuffer<N>,
         mac: &mut Mac,
@@ -550,7 +569,7 @@ where
             }
             #[cfg(feature = "multicast")]
             mac::Response::Multicast(response) => {
-                if let multicast::Response::GroupSetupTransmitRequest(group_id) = response {
+                if let multicast::Response::GroupSetupTransmitRequest { group_id } = response {
                     radio_buffer.clear();
                     let (tx_config, _fcnt_up) =
                         mac.multicast_setup_send::<C, G, N>(rng, radio_buffer)?;
@@ -558,7 +577,7 @@ where
                         .tx(tx_config, radio_buffer.as_ref_for_read())
                         .await
                         .map_err(Error::Radio)?;
-                    Ok(Some(multicast::Response::NewSession(group_id).into()))
+                    Ok(Some(multicast::Response::NewSession { group_id }.into()))
                 } else {
                     radio_buffer.clear();
                     Ok(None)
@@ -595,7 +614,7 @@ where
 
     /// When not involved in sending and RX1/RX2 windows, a class C configured device will be
     /// listening to RXC frames. The caller is expected to be awaiting this message at all times.
-    pub async fn rxc_listen(&mut self) -> Result<mac::Response, Error<R::PhyError>> {
+    pub async fn rxc_listen(&mut self) -> Result<ListenResponse, Error<R::PhyError>> {
         loop {
             let (sz, _rx_quality) =
                 self.radio.rx_continuous(self.radio_buffer.as_mut()).await.map_err(Error::Radio)?;
@@ -611,7 +630,7 @@ where
             )
             .await?
             {
-                return Ok(response);
+                return Ok(response.into());
             }
         }
     }
