@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    async_device::{multicast::Response, McAddr},
-    mac,
-};
+use crate::async_device::McAddr;
 use lorawan::creator::DataPayloadCreator;
 use lorawan::keys::{McKEKey, McKey};
 use lorawan::multicast::{McGroupSetupAnsPayload, McGroupSetupReqCreator};
@@ -85,11 +82,11 @@ async fn test_multicast_remote_setup() {
 
     let (mut device, response) = task.await.unwrap();
     match response {
-        Ok(mac::Response::Multicast(Response::NewSession(group_id))) => {
+        Ok(ListenResponse::Multicast(MulticastResponse::NewSession { group_id })) => {
             assert_eq!(group_id, 1); // Group ID from the setup request
                                      // Verify the session was created correctly
             let mc_addr = McAddr::from([52, 110, 29, 60]);
-            let stored_session = device
+            let (fetched_group_id, stored_session) = device
                 .mac
                 .multicast
                 .matching_session(McAddr::new(mc_addr.as_ref()).unwrap())
@@ -97,6 +94,7 @@ async fn test_multicast_remote_setup() {
             assert_eq!(stored_session.multicast_addr(), mc_addr);
             assert_eq!(stored_session.fcnt_down, 0x12345678);
             assert_eq!(stored_session.max_fcnt_down(), 0x87654321);
+            assert_eq!(fetched_group_id, 1);
         }
         _ => panic!("Expected NewSession response"),
     }
