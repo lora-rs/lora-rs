@@ -326,7 +326,7 @@ async fn test_class_c_async_down() {
     radio.handle_rxtx(class_c_downlink::<1>).await;
     let (mut device, response) = task.await.unwrap();
     match response {
-        Ok(mac::Response::DownlinkReceived(_)) => (),
+        Ok(ListenResponse::DownlinkReceived(_)) => (),
         _ => {
             panic!()
         }

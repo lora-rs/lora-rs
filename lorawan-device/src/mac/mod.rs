@@ -75,7 +75,6 @@ pub(crate) enum State {
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error {
     NotJoined,
-    InvalidResponse(Response),
     #[cfg(feature = "multicast")]
     Multicast(multicast::Error),
 }
@@ -308,7 +307,7 @@ impl Mac {
 
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug)]
-pub enum Response {
+pub(crate) enum Response {
     NoAck,
     SessionExpired,
     DownlinkReceived(FcntDown),
@@ -336,30 +335,40 @@ impl From<Response> for nb_device::Response {
     }
 }
 
-impl TryFrom<Response> for async_device::SendResponse {
-    type Error = Error;
-
-    fn try_from(r: Response) -> Result<async_device::SendResponse> {
+impl From<Response> for async_device::SendResponse {
+    fn from(r: Response) -> async_device::SendResponse {
         match r {
-            Response::SessionExpired => Ok(async_device::SendResponse::SessionExpired),
-            Response::DownlinkReceived(fcnt) => {
-                Ok(async_device::SendResponse::DownlinkReceived(fcnt))
-            }
-            Response::NoAck => Ok(async_device::SendResponse::NoAck),
-            Response::RxComplete => Ok(async_device::SendResponse::RxComplete),
-            r => Err(Error::InvalidResponse(r)),
+            Response::SessionExpired => async_device::SendResponse::SessionExpired,
+            Response::DownlinkReceived(fcnt) => async_device::SendResponse::DownlinkReceived(fcnt),
+            Response::NoAck => async_device::SendResponse::NoAck,
+            Response::RxComplete => async_device::SendResponse::RxComplete,
+            #[cfg(feature = "multicast")]
+            Response::Multicast(mc) => async_device::SendResponse::Multicast(mc.into()),
+            r => panic!("Invalid async_device::SendResponse::from {:?}", r),
         }
     }
 }
 
-impl TryFrom<Response> for async_device::JoinResponse {
-    type Error = Error;
-
-    fn try_from(r: Response) -> Result<async_device::JoinResponse> {
+impl From<Response> for async_device::JoinResponse {
+    fn from(r: Response) -> async_device::JoinResponse {
         match r {
-            Response::NoJoinAccept => Ok(async_device::JoinResponse::NoJoinAccept),
-            Response::JoinSuccess => Ok(async_device::JoinResponse::JoinSuccess),
-            r => Err(Error::InvalidResponse(r)),
+            Response::NoJoinAccept => async_device::JoinResponse::NoJoinAccept,
+            Response::JoinSuccess => async_device::JoinResponse::JoinSuccess,
+            r => panic!("Invalid async_device::JoinResponse::from {:?}", r),
+        }
+    }
+}
+
+impl From<Response> for async_device::ListenResponse {
+    fn from(r: Response) -> async_device::ListenResponse {
+        match r {
+            Response::SessionExpired => async_device::ListenResponse::SessionExpired,
+            Response::DownlinkReceived(fcnt) => {
+                async_device::ListenResponse::DownlinkReceived(fcnt)
+            }
+            #[cfg(feature = "multicast")]
+            Response::Multicast(mc) => async_device::ListenResponse::Multicast(mc.into()),
+            r => panic!("Invalid async_device::ListenResponse::from {:?}", r),
         }
     }
 }

@@ -1,6 +1,8 @@
-use crate::mac;
+use crate::mac::FcntDown;
 use crate::radio::RadioBuffer;
 use crate::Downlink;
+use crate::{async_device, mac};
+use core::fmt::Debug;
 use core::ops::RangeInclusive;
 use lorawan::keys::{CryptoFactory, McKEKey};
 pub use lorawan::multicast::{self, Session};
@@ -10,14 +12,15 @@ use lorawan::multicast::{
 use lorawan::parser::FRMPayload;
 pub use lorawan::parser::McAddr;
 use lorawan::parser::{DataHeader, EncryptedDataPayload};
+
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Response {
-    NewSession(u8),
-    SessionExpired,
+    NewSession { group_id: u8 },
+    SessionExpired { group_id: u8 },
     NoUpdate,
-    GroupSetupTransmitRequest(u8),
-    DownlinkReceived(u32),
+    GroupSetupTransmitRequest { group_id: u8 },
+    DownlinkReceived { group_id: u8, fcnt: FcntDown },
 }
 
 #[derive(Debug)]
@@ -62,7 +65,7 @@ impl Multicast {
         encrypted_data: EncryptedDataPayload<&mut [u8], C>,
     ) -> Response {
         let mc_addr = encrypted_data.fhdr().mc_addr();
-        if let Some(session) = self.matching_session(mc_addr) {
+        if let Some((group_id, session)) = self.matching_session(mc_addr) {
             let fcnt = encrypted_data.fhdr().fcnt() as u32;
             if encrypted_data.validate_mic(session.mc_net_s_key().inner(), fcnt)
                 && (fcnt > session.fcnt_down || fcnt == 0)
@@ -79,7 +82,7 @@ impl Multicast {
                         .unwrap();
                     if session.fcnt_down == session.max_fcnt_down() {
                         // if the FCnt is used up, the session has expired
-                        Response::SessionExpired
+                        Response::SessionExpired { group_id }
                     } else {
                         if let (Some(fport), FRMPayload::Data(data)) =
                             (decrypted.f_port(), decrypted.frm_payload())
@@ -90,7 +93,7 @@ impl Multicast {
                             // TODO: propagate error when heapless vec is full?
                             let _ = dl.push(Downlink { data, fport });
                         }
-                        Response::DownlinkReceived(fcnt)
+                        Response::DownlinkReceived { group_id, fcnt }
                     }
                 };
             }
@@ -137,7 +140,7 @@ impl Multicast {
                 ans.mc_group_id_header(group_id);
                 buffer.extend_from_slice(ans.build()).unwrap();
                 self.pending_uplinks = Some(buffer);
-                return Response::GroupSetupTransmitRequest(group_id);
+                return Response::GroupSetupTransmitRequest { group_id };
             }
         }
         Response::NoUpdate
@@ -165,11 +168,11 @@ impl Multicast {
     pub(crate) fn matching_session(
         &mut self,
         multicast_addr: McAddr<&[u8]>,
-    ) -> Option<&mut Session> {
-        self.sessions.iter_mut().find_map(|s| {
+    ) -> Option<(u8, &mut Session)> {
+        self.sessions.iter_mut().enumerate().find_map(|(group_id, s)| {
             if let Some(s) = s {
                 if s.multicast_addr() == multicast_addr {
-                    return Some(s);
+                    return Some((group_id as u8, s));
                 }
             }
             None
@@ -180,5 +183,22 @@ impl Multicast {
 impl From<Response> for mac::Response {
     fn from(m: Response) -> Self {
         mac::Response::Multicast(m)
+    }
+}
+
+impl From<Response> for async_device::MulticastResponse {
+    fn from(r: Response) -> async_device::MulticastResponse {
+        match r {
+            Response::NewSession { group_id } => {
+                async_device::MulticastResponse::NewSession { group_id }
+            }
+            Response::SessionExpired { group_id } => {
+                async_device::MulticastResponse::SessionExpired { group_id }
+            }
+            Response::DownlinkReceived { group_id, fcnt } => {
+                async_device::MulticastResponse::DownlinkReceived { group_id, fcnt }
+            }
+            r => panic!("Invalid async_device::MulticastResponse::from {:?}", r),
+        }
     }
 }
