@@ -1,15 +1,14 @@
 //! Provides types and methods for creating LoRaWAN payloads.
 //!
 //! See [JoinAcceptCreator.new](struct.JoinAcceptCreator.html#method.new) for an example.
-
 use super::keys::{AppKey, AppSKey, CryptoFactory, Decrypter, NwkSKey, AES128};
-use super::maccommandcreator;
 use super::maccommands::{mac_commands_len, SerializableMacCommand};
 use super::parser;
 use super::securityhelpers;
 use crate::packet_length::phy::join::{
     JOIN_ACCEPT_LEN, JOIN_ACCEPT_WITH_CFLIST_LEN, JOIN_REQUEST_LEN,
 };
+use crate::packet_length::phy::mac::fhdr::FOPTS_MAX_LEN;
 use crate::packet_length::phy::{MIC_LEN, PHY_PAYLOAD_MIN_LEN};
 use crate::types::{DLSettings, Frequency};
 
@@ -458,24 +457,30 @@ impl<D: AsMut<[u8]>> DataPayloadCreator<D> {
     /// # Example
     ///
     /// ```
+    /// use lorawan::{
+    ///     maccommands::UplinkMacCommand,
+    ///     maccommandcreator::{build_mac_commands, LinkADRAnsCreator},
+    ///     packet_length::phy::mac::fhdr::FOPTS_MAX_LEN,
+    /// };
+    /// use heapless::Vec;
+    ///
     /// let mut buf = [0u8; 255];
     /// let mut phy = lorawan::creator::DataPayloadCreator::new(&mut buf[..]).unwrap();
-    /// let mac_cmd1 = lorawan::maccommands::UplinkMacCommand::LinkCheckReq(
+    /// let link_check_req = UplinkMacCommand::LinkCheckReq(
     ///     lorawan::maccommands::LinkCheckReqPayload(),
     /// );
-    /// let mut mac_cmd2 = lorawan::maccommandcreator::LinkADRAnsCreator::new();
-    /// mac_cmd2.set_channel_mask_ack(true).set_data_rate_ack(false).set_tx_power_ack(true);
-    /// let mut cmds: Vec<&dyn lorawan::maccommands::SerializableMacCommand> = Vec::new();
-    /// cmds.push(&mac_cmd1);
-    /// cmds.push(&mac_cmd2);
+    /// let mut link_adr_ans = LinkADRAnsCreator::new();
+    /// let mut mac_cmds : Vec<u8, FOPTS_MAX_LEN> = Vec::new();
+    /// mac_cmds.extend_from_slice(link_check_req.bytes()).unwrap();
+    /// mac_cmds.extend_from_slice(link_adr_ans.build()).unwrap();
     /// let nwk_skey = lorawan::keys::NwkSKey::from([2; 16]);
     /// let app_skey = lorawan::keys::AppSKey::from([1; 16]);
-    /// phy.build(&[], &cmds, &nwk_skey, &app_skey, &lorawan::default_crypto::DefaultFactory).unwrap();
+    /// phy.build(&[], mac_cmds.as_slice(), &nwk_skey, &app_skey, &lorawan::default_crypto::DefaultFactory).unwrap();
     /// ```
-    pub fn build<F: CryptoFactory>(
+    pub fn build<F: CryptoFactory, M: AsRef<[u8]>>(
         &mut self,
         payload: &[u8],
-        cmds: &[&dyn SerializableMacCommand],
+        mac_cmds: M,
         nwk_skey: &NwkSKey,
         app_skey: &AppSKey,
         factory: &F,
@@ -484,10 +489,9 @@ impl<D: AsMut<[u8]>> DataPayloadCreator<D> {
         let mut last_filled = 8; // MHDR + FHDR without the FOpts
         let has_fport = self.data_f_port.is_some();
         let has_fport_zero = has_fport && self.data_f_port.unwrap() == 0;
-        let mac_cmds_len = mac_commands_len(cmds);
-
+        let mac_cmds_len = mac_cmds.as_ref().len();
         // Set MAC Commands
-        if mac_cmds_len > PIGGYBACK_MAC_COMMANDS_MAX_LEN && !has_fport_zero {
+        if mac_cmds_len > FOPTS_MAX_LEN && !has_fport_zero {
             return Err(Error::MacCommandTooBigForFOpts);
         }
 
@@ -506,11 +510,8 @@ impl<D: AsMut<[u8]>> DataPayloadCreator<D> {
                 return Err(Error::BufferTooShort);
             }
             d[5] |= mac_cmds_len as u8 & 0x0f;
-            maccommandcreator::build_mac_commands(
-                cmds,
-                &mut d[last_filled..last_filled + mac_cmds_len],
-            )
-            .map_err(|_| Error::BufferTooShort)?;
+            // copy mac commmands into d
+            d[last_filled..last_filled + mac_cmds_len].copy_from_slice(mac_cmds.as_ref());
             last_filled += mac_cmds_len;
         }
 
@@ -529,11 +530,7 @@ impl<D: AsMut<[u8]>> DataPayloadCreator<D> {
             if d.len() < last_filled + payload_len + MIC_LEN {
                 return Err(Error::BufferTooShort);
             }
-            maccommandcreator::build_mac_commands(
-                cmds,
-                &mut d[last_filled..last_filled + payload_len],
-            )
-            .map_err(|_| Error::BufferTooShort)?;
+            d[last_filled..last_filled + payload_len].copy_from_slice(mac_cmds.as_ref());
         } else {
             if d.len() < last_filled + payload_len + MIC_LEN {
                 return Err(Error::BufferTooShort);
