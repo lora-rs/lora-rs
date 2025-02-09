@@ -104,7 +104,7 @@ impl Mac {
                 join_accept_delay1: region::constants::JOIN_ACCEPT_DELAY1,
                 join_accept_delay2: region::constants::JOIN_ACCEPT_DELAY2,
             },
-            #[cfg(feature = "multicast")]
+            #[cfg(feature = "certification")]
             certification: certification::Certification {},
             #[cfg(feature = "multicast")]
             multicast: multicast::Multicast::new(),
