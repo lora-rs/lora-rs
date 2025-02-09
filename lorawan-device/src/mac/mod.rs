@@ -25,6 +25,8 @@ use crate::nb_device;
 
 pub(crate) mod uplink;
 
+#[cfg(feature = "certification")]
+pub(crate) mod certification;
 #[cfg(feature = "multicast")]
 pub(crate) mod multicast;
 
@@ -55,6 +57,8 @@ pub(crate) struct Mac {
     pub region: region::Configuration,
     board_eirp: BoardEirp,
     state: State,
+    #[cfg(feature = "certification")]
+    certification: certification::Certification,
     #[cfg(feature = "multicast")]
     pub multicast: multicast::Multicast,
 }
@@ -100,6 +104,8 @@ impl Mac {
                 join_accept_delay1: region::constants::JOIN_ACCEPT_DELAY1,
                 join_accept_delay2: region::constants::JOIN_ACCEPT_DELAY2,
             },
+            #[cfg(feature = "multicast")]
+            certification: certification::Certification {},
             #[cfg(feature = "multicast")]
             multicast: multicast::Multicast::new(),
         }
@@ -210,6 +216,8 @@ impl Mac {
             State::Joined(ref mut session) => session.handle_rx::<C, N, D>(
                 &mut self.region,
                 &mut self.configuration,
+                #[cfg(feature = "certification")]
+                &mut self.certification,
                 #[cfg(feature = "multicast")]
                 &mut self.multicast,
                 buf,
@@ -242,6 +250,8 @@ impl Mac {
             State::Joined(ref mut session) => Ok(session.handle_rx::<C, N, D>(
                 &mut self.region,
                 &mut self.configuration,
+                #[cfg(feature = "certification")]
+                &mut self.certification,
                 #[cfg(feature = "multicast")]
                 &mut self.multicast,
                 buf,

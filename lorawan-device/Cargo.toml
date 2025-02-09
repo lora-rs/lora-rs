@@ -65,6 +65,9 @@ defmt-03 = ["dep:defmt", "lorawan/defmt-03", "lora-modulation/defmt-03"]
 ## Enable support for Class C devices
 class-c = []
 
+## Enable certification protocol handler (`fport = 224`)
+certification = []
+
 ## Provide an `async_device::Timer` impl based on `embassy-time`.
 embassy-time = ["dep:embassy-time"]
 
