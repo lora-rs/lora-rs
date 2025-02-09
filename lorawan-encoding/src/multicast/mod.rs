@@ -1,5 +1,7 @@
 mod group_setup;
-use crate::creator::UnimplementedCreator;
+mod group_status;
+pub use group_status::McGroupStatusAnsCreator;
+
 use crate::maccommands::{Error, MacCommandIterator, SerializableMacCommand};
 pub use group_setup::Session;
 use lorawan_macros::CommandHandler;
@@ -41,48 +43,53 @@ pub enum UplinkRemoteSetup<'a> {
     McClassBSessionAns(McClassBSessionAnsPayload<'a>),
 }
 
-impl<'a> McGroupStatusAnsPayload<'a> {
-    const ITEM_LEN: usize = 5;
-    pub fn new(data: &'a [u8]) -> Result<McGroupStatusAnsPayload<'a>, Error> {
-        if data.is_empty() {
-            return Err(Error::BufferTooShort);
-        }
-        let status = data[0];
-        let required_len = Self::required_len(status);
-        if data.len() < required_len {
-            return Err(Error::BufferTooShort);
-        }
-        Ok(McGroupStatusAnsPayload(&data[0..required_len]))
+impl PackageVersionAnsCreator {
+    /*
+    | PackageIdentifier  | PackageVersion |
+    |         1          |       1        |
+     */
+    pub fn package_identifier(&mut self, package_identifier: u8) -> &mut Self {
+        self.data[1] = package_identifier;
+        self
     }
-
-    pub fn required_len(status: u8) -> usize {
-        // |  RFU  | NbTotalGroups | AnsGroupMask |
-        // | 1 bit |    3 bits     |    4 bits    |
-        // Table 5: McGroupStatusAns
-        let nb_total_groups = (status >> 4) & 0x07;
-        nb_total_groups as usize * Self::ITEM_LEN
-    }
-
-    /// Maximum possible length of the payload
-    pub const fn max_len() -> usize {
-        MAX_GROUPS * Self::ITEM_LEN
-    }
-
-    /// Actual length of this specific payload
-    #[allow(clippy::len_without_is_empty)]
-    pub fn len(&self) -> usize {
-        Self::required_len(self.0[0])
+    pub fn package_version(&mut self, package_version: u8) -> &mut Self {
+        self.data[2] = package_version;
+        self
     }
 }
 
-#[derive(Debug)]
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct McGroupStatusAnsCreator {}
-impl UnimplementedCreator for McGroupStatusAnsCreator {}
+impl PackageVersionAnsPayload<'_> {
+    pub fn package_identifier(&self) -> u8 {
+        self.0[0]
+    }
+    pub fn package_version(&self) -> u8 {
+        self.0[1]
+    }
+}
+
+impl McGroupDeleteReqPayload<'_> {
+    pub fn mc_group_id_header(&self) -> u8 {
+        self.0[0] & 0b11
+    }
+}
+
+impl McGroupDeleteReqCreator {
+    pub fn mc_group_id_header(&mut self, mc_group_id_header: u8) -> &mut Self {
+        const OFFSET: usize = 1;
+        self.data[OFFSET] |= mc_group_id_header & 0b11;
+        self
+    }
+}
 
 pub fn parse_downlink_multicast_messages(
     data: &[u8],
 ) -> MacCommandIterator<'_, DownlinkRemoteSetup<'_>> {
+    MacCommandIterator::new(data)
+}
+
+pub fn parse_uplink_multicast_messages(
+    data: &[u8],
+) -> MacCommandIterator<'_, UplinkRemoteSetup<'_>> {
     MacCommandIterator::new(data)
 }
 
@@ -110,6 +117,37 @@ mod test {
             assert_eq!(mc_group_setup_req.max_mc_fcount(), 0xFFFFFFFF);
         } else {
             panic!("Should have been a McGroupSetupReq");
+        }
+    }
+
+    #[test]
+    fn roundtrip_package_version_ans() {
+        let mut creator = PackageVersionAnsCreator::new();
+        creator.package_identifier(0x01).package_version(0x02);
+        let bytes = creator.build();
+
+        let mut messages = parse_uplink_multicast_messages(bytes);
+        let msg = messages.next().unwrap();
+        if let UplinkRemoteSetup::PackageVersionAns(ans) = msg {
+            assert_eq!(ans.package_identifier(), 0x01);
+            assert_eq!(ans.package_version(), 0x02);
+        } else {
+            panic!("Expected PackageVersionAns. Got {msg:?}");
+        }
+    }
+
+    #[test]
+    fn roundtrip_mc_group_delete() {
+        let mut creator = McGroupDeleteReqCreator::new();
+        creator.mc_group_id_header(3);
+        let bytes = creator.build();
+
+        let mut messages = parse_downlink_multicast_messages(bytes);
+        let msg = messages.next().unwrap();
+        if let DownlinkRemoteSetup::McGroupDeleteReq(req) = msg {
+            assert_eq!(req.mc_group_id_header(), 3);
+        } else {
+            panic!("Expected McGroupDeleteReq. Got {msg:?}");
         }
     }
 }

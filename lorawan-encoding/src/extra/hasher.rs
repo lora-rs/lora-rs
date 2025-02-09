@@ -1,5 +1,4 @@
 use super::std::hash::{Hash, Hasher};
-
 use crate::parser::*;
 
 macro_rules! fixed_len_struct_impl_hash {

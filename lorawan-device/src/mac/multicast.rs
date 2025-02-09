@@ -7,7 +7,8 @@ use core::ops::RangeInclusive;
 use lorawan::keys::{CryptoFactory, McKEKey};
 pub use lorawan::multicast::{self, Session};
 use lorawan::multicast::{
-    parse_downlink_multicast_messages, DownlinkRemoteSetup, McGroupSetupAnsCreator,
+    parse_downlink_multicast_messages, DownlinkRemoteSetup, McGroupDeleteAnsCreator,
+    McGroupSetupAnsCreator, McGroupStatusAnsCreator, PackageVersionAnsCreator,
 };
 use lorawan::parser::FRMPayload;
 pub use lorawan::parser::McAddr;
@@ -20,6 +21,7 @@ pub enum Response {
     SessionExpired { group_id: u8 },
     NoUpdate,
     GroupSetupTransmitRequest { group_id: u8 },
+    TransmitRequest,
     DownlinkReceived { group_id: u8, fcnt: FcntDown },
 }
 
@@ -39,7 +41,7 @@ pub struct Multicast {
     pub(crate) sessions: [Option<Session>; multicast::MAX_GROUPS],
     range: RangeInclusive<u8>,
     remote_setup_port: u8,
-    pending_uplinks: Option<heapless::Vec<u8, 256>>,
+    pending_uplinks: heapless::Vec<u8, 256>,
 }
 
 impl Default for Multicast {
@@ -55,7 +57,7 @@ impl Multicast {
             range: DEFAULT_MC_PORT_RANGE,
             remote_setup_port: REMOTE_MULTICAST_SETUP_PORT,
             sessions: [None, None, None, None],
-            pending_uplinks: None,
+            pending_uplinks: heapless::Vec::new(),
         }
     }
 
@@ -130,20 +132,64 @@ impl Multicast {
         }
         let mc_k_e_key = self.mc_k_e_key.as_ref().unwrap();
         let messages = parse_downlink_multicast_messages(data);
+        let mut new_session = None;
         for message in messages {
-            if let DownlinkRemoteSetup::McGroupSetupReq(mc_group_setup_req) = message {
-                let (group_id, session) =
-                    mc_group_setup_req.derive_session(&C::default(), mc_k_e_key);
-                self.sessions[group_id as usize] = Some(session);
-                let mut buffer: heapless::Vec<u8, 256> = heapless::Vec::new();
-                let mut ans = McGroupSetupAnsCreator::new();
-                ans.mc_group_id_header(group_id);
-                buffer.extend_from_slice(ans.build()).unwrap();
-                self.pending_uplinks = Some(buffer);
-                return Response::GroupSetupTransmitRequest { group_id };
+            match message {
+                DownlinkRemoteSetup::McGroupSetupReq(mc_group_setup_req) => {
+                    let (group_id, session) =
+                        mc_group_setup_req.derive_session(&C::default(), mc_k_e_key);
+                    self.sessions[group_id as usize] = Some(session);
+                    let mut ans = McGroupSetupAnsCreator::new();
+                    ans.mc_group_id_header(group_id);
+                    self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
+                    new_session = Some(Response::GroupSetupTransmitRequest { group_id });
+                }
+                DownlinkRemoteSetup::PackageVersionReq(_) => {
+                    const MULTICAST_CONTROL_PACKAGE: u8 = 2;
+                    const MULTICAST_CONTROL_PACKAGE_VERSION: u8 = 2;
+                    let mut ans = PackageVersionAnsCreator::new();
+                    ans.package_identifier(MULTICAST_CONTROL_PACKAGE);
+                    ans.package_version(MULTICAST_CONTROL_PACKAGE_VERSION);
+                    self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
+                }
+                DownlinkRemoteSetup::McGroupDeleteReq(req) => {
+                    let group_id = req.mc_group_id_header();
+                    self.sessions[group_id as usize] = None;
+                    let ans = McGroupDeleteAnsCreator::new();
+                    self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
+                }
+                DownlinkRemoteSetup::McGroupStatusReq(r) => {
+                    let bm = r.req_group_mask();
+                    let mut ans = McGroupStatusAnsCreator::new();
+                    let mut nb_total_groups = 0;
+                    // enumerate the groups checking if they are active and requested
+                    for (group_id, session) in self.sessions.iter().enumerate() {
+                        if let Some(session) = session {
+                            nb_total_groups += 1;
+                            // check if the group is requested
+                            if bm & (1 << group_id) != 0 {
+                                ans.push(group_id as u8, session.multicast_addr())
+                                    .expect("Failed to push group");
+                            }
+                        }
+                    }
+                    ans.nb_total_groups(nb_total_groups);
+                    self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
+                }
+                m => {
+                    warn!("Unhandled multicast message: {}", m);
+                }
             }
         }
-        Response::NoUpdate
+        if !self.pending_uplinks.is_empty() {
+            if let Some(new_session) = new_session {
+                new_session
+            } else {
+                Response::TransmitRequest
+            }
+        } else {
+            Response::NoUpdate
+        }
     }
 
     pub(crate) fn setup_send<C: CryptoFactory + Default, const N: usize>(
@@ -153,12 +199,14 @@ impl Multicast {
     ) -> mac::Result<mac::FcntUp> {
         let send_data = mac::SendData {
             fport: REMOTE_MULTICAST_SETUP_PORT,
-            data: self.pending_uplinks.as_ref().unwrap(),
+            data: self.pending_uplinks.as_ref(),
             confirmed: false,
         };
         match &mut state {
             mac::State::Joined(ref mut session) => {
-                Ok(session.prepare_buffer::<C, N>(&send_data, buf))
+                let response = session.prepare_buffer::<C, N>(&send_data, buf);
+                self.pending_uplinks.clear();
+                Ok(response)
             }
             mac::State::Otaa(_) => Err(mac::Error::NotJoined),
             mac::State::Unjoined => Err(mac::Error::NotJoined),
@@ -200,5 +248,24 @@ impl From<Response> for async_device::MulticastResponse {
             }
             r => panic!("Invalid async_device::MulticastResponse::from {:?}", r),
         }
+    }
+}
+
+impl Response {
+    pub fn is_for_async_mc_response(&self) -> bool {
+        matches!(
+            self,
+            Response::NewSession { .. }
+                | Response::SessionExpired { .. }
+                | Response::DownlinkReceived { .. }
+        )
+    }
+
+    pub fn is_new_session(&self) -> bool {
+        matches!(self, Response::NewSession { .. })
+    }
+
+    pub fn is_transmit_request(&self) -> bool {
+        matches!(self, Response::TransmitRequest | Response::GroupSetupTransmitRequest { .. })
     }
 }

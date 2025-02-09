@@ -560,39 +560,37 @@ where
         rng: &mut G,
         response: mac::Response,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
+        radio_buffer.clear();
         match response {
-            mac::Response::NoUpdate => {
-                radio_buffer.clear();
-                Ok(None)
-            }
+            mac::Response::NoUpdate => Ok(None),
             #[cfg(feature = "certification")]
             mac::Response::UplinkPrepared => {
-                radio_buffer.clear();
                 let (tx_config, _fcnt_up) =
                     mac.certification_setup_send::<C, G, N>(rng, radio_buffer)?;
                 radio.tx(tx_config, radio_buffer.as_ref_for_read()).await.map_err(Error::Radio)?;
                 Ok(Some(mac.rx2_complete()))
             }
             #[cfg(feature = "multicast")]
-            mac::Response::Multicast(response) => {
-                if let multicast::Response::GroupSetupTransmitRequest { group_id } = response {
-                    radio_buffer.clear();
+            mac::Response::Multicast(mut response) => {
+                if response.is_transmit_request() {
                     let (tx_config, _fcnt_up) =
                         mac.multicast_setup_send::<C, G, N>(rng, radio_buffer)?;
                     radio
                         .tx(tx_config, radio_buffer.as_ref_for_read())
                         .await
                         .map_err(Error::Radio)?;
-                    Ok(Some(multicast::Response::NewSession { group_id }.into()))
+                    // GroupSetupTransmitRequest needs to be transformed into a NewSession response
+                    if let multicast::Response::GroupSetupTransmitRequest { group_id } = response {
+                        response = multicast::Response::NewSession { group_id };
+                    }
+                }
+                if response.is_for_async_mc_response() {
+                    Ok(Some(mac::Response::Multicast(response)))
                 } else {
-                    radio_buffer.clear();
                     Ok(None)
                 }
             }
-            r => {
-                radio_buffer.clear();
-                Ok(Some(r))
-            }
+            r => Ok(Some(r)),
         }
     }
 
