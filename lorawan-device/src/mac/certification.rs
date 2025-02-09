@@ -7,6 +7,7 @@ pub(crate) const CERTIFICATION_PORT: u8 = 224;
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub(crate) enum Response {
     NoUpdate,
+    TxFramesCtrlReq(Option<bool>),
 }
 
 pub(crate) struct Certification {}
@@ -20,10 +21,12 @@ impl Certification {
                 // TODO: Device layer
                 DutResetReq(..) | DutJoinReq(..) | DutVersionsReq(..) => {}
                 // TODO: MAC layer
-                AdrBitChangeReq(..)
-                | TxFramesCtrlReq(..)
-                | EchoPayloadReq(..)
-                | TxPeriodicityChangeReq(..) => {}
+                AdrBitChangeReq(..) | EchoPayloadReq(..) | TxPeriodicityChangeReq(..) => {}
+                TxFramesCtrlReq(payload) => {
+                    if let Ok(frametype) = payload.frame_type_override() {
+                        return Response::TxFramesCtrlReq(frametype);
+                    }
+                }
             }
         }
         Response::NoUpdate

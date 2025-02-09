@@ -26,6 +26,8 @@ pub fn setup_with_session() -> (RadioChannel, TimerChannel, Device) {
         fcnt_down: 0,
         confirmed: false,
         uplink: Default::default(),
+        #[cfg(feature = "certification")]
+        override_confirmed: None,
     }))
 }
 
