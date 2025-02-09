@@ -13,6 +13,9 @@ use lorawan::{
     parser::{parse_with_factory as lorawan_parse, *},
 };
 
+#[cfg(feature = "certification")]
+use super::DeviceEvent;
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -25,7 +28,6 @@ pub struct Session {
     pub fcnt_up: u32,
     pub fcnt_down: u32,
     // TODO: ADR handling
-
     #[cfg(feature = "certification")]
     /// Whether to force ADR bit for subsequent frames
     pub override_adr: bool,
@@ -178,6 +180,11 @@ impl Session {
                                 }
                                 TxFramesCtrlReq(ftype) => {
                                     self.override_confirmed = ftype;
+                                }
+                                TxPeriodicityChange(periodicity) => {
+                                    return Response::DeviceHandler(
+                                        DeviceEvent::TxPeriodicityChange { periodicity },
+                                    )
                                 }
                                 NoUpdate => return Response::NoUpdate,
                             }

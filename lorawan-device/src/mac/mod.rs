@@ -325,8 +325,17 @@ pub(crate) enum Response {
     JoinSuccess,
     NoUpdate,
     RxComplete,
+    #[cfg(feature = "certification")]
+    DeviceHandler(DeviceEvent),
     #[cfg(feature = "multicast")]
     Multicast(multicast::Response),
+}
+
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[derive(Debug)]
+#[cfg(feature = "certification")]
+pub(crate) enum DeviceEvent {
+    TxPeriodicityChange { periodicity: Option<u16> },
 }
 
 impl From<Response> for nb_device::Response {
@@ -339,6 +348,8 @@ impl From<Response> for nb_device::Response {
             Response::JoinSuccess => nb_device::Response::JoinSuccess,
             Response::NoUpdate => nb_device::Response::NoUpdate,
             Response::RxComplete => nb_device::Response::RxComplete,
+            #[cfg(feature = "certification")]
+            Response::DeviceHandler(_) => unimplemented!(),
             #[cfg(feature = "multicast")]
             Response::Multicast(_) => unimplemented!(),
         }
