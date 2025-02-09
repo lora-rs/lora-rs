@@ -96,6 +96,7 @@ impl Session {
         &mut self,
         region: &mut region::Configuration,
         configuration: &mut super::Configuration,
+        #[cfg(feature = "certification")] certification: &mut super::certification::Certification,
         #[cfg(feature = "multicast")] multicast: &mut super::multicast::Multicast,
         rx: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
@@ -154,6 +155,14 @@ impl Session {
                     if let (Some(fport), FRMPayload::Data(data)) =
                         (decrypted.f_port(), decrypted.frm_payload())
                     {
+                        #[cfg(feature = "certification")]
+                        if certification.fport(fport) {
+                            match certification.handle_message(data) {
+                                crate::mac::certification::Response::NoUpdate => {
+                                    return Response::NoUpdate
+                                }
+                            }
+                        }
                         #[cfg(feature = "multicast")]
                         if multicast.is_remote_setup_port(fport) {
                             return multicast.handle_setup_message::<C>(data).into();
