@@ -46,7 +46,7 @@ impl McGroupSetupReqPayload<'_> {
      |       1         |    4    |         16        |   4         |     4       |
     */
     pub fn mc_group_id_header(&self) -> u8 {
-        self.0[0]
+        self.0[0] & 0b11
     }
 
     pub fn mc_addr(&self) -> McAddr<&[u8]> {
@@ -120,13 +120,13 @@ impl McGroupSetupAnsPayload<'_> {
      |       1         |
     */
     pub fn mc_group_id_header(&self) -> u8 {
-        self.0[0]
+        self.0[0] & 0b11
     }
 }
 
 impl McGroupSetupAnsCreator {
     pub fn mc_group_id_header(&mut self, mc_group_id_header: u8) -> &mut Self {
-        self.data[0] = mc_group_id_header;
+        self.data[0] |= mc_group_id_header & 0b11;
         self
     }
 }
