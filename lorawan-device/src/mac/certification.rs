@@ -9,6 +9,7 @@ pub(crate) enum Response {
     NoUpdate,
     AdrBitChange(bool),
     TxFramesCtrlReq(Option<bool>),
+    TxPeriodicityChange(Option<u16>),
 }
 
 pub(crate) struct Certification {}
@@ -19,11 +20,15 @@ impl Certification {
         let messages = parse_downlink_certification_messages(data);
         for message in messages {
             match message {
-                // TODO: Device layer
-                DutResetReq(..) | DutJoinReq(..) | TxPeriodicityChangeReq(..) => {}
+                // Device layer
+                DutResetReq(..) | DutJoinReq(..) => {}
+                TxPeriodicityChangeReq(payload) => {
+                    if let Ok(periodicity) = payload.periodicity() {
+                        return Response::TxPeriodicityChange(periodicity);
+                    }
+                }
                 // Uplink requests
                 EchoPayloadReq(..) | DutVersionsReq(..) => {}
-                // MAC layer
                 AdrBitChangeReq(payload) => {
                     if let Ok(adr) = payload.adr_enable() {
                         return Response::AdrBitChange(adr);
