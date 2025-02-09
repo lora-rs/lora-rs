@@ -24,7 +24,11 @@ pub struct Session {
     pub devaddr: DevAddr<[u8; 4]>,
     pub fcnt_up: u32,
     pub fcnt_down: u32,
+    // TODO: ADR handling
 
+    #[cfg(feature = "certification")]
+    /// Whether to force ADR bit for subsequent frames
+    pub override_adr: bool,
     #[cfg(feature = "certification")]
     /// Whether to override confirmation bit for sent frames
     pub override_confirmed: Option<bool>,
@@ -73,6 +77,8 @@ impl Session {
             fcnt_up: 0,
             uplink: uplink::Uplink::default(),
 
+            #[cfg(feature = "certification")]
+            override_adr: false,
             #[cfg(feature = "certification")]
             override_confirmed: None,
         }
@@ -167,6 +173,9 @@ impl Session {
                         if certification.fport(fport) {
                             use crate::mac::certification::Response::*;
                             match certification.handle_message(data) {
+                                AdrBitChange(adr) => {
+                                    self.override_adr = adr;
+                                }
                                 TxFramesCtrlReq(ftype) => {
                                     self.override_confirmed = ftype;
                                 }
@@ -220,6 +229,11 @@ impl Session {
         if self.uplink.confirms_downlink() {
             fctrl.set_ack();
             self.uplink.clear_downlink_confirmation();
+        }
+
+        #[cfg(feature = "certification")]
+        if self.override_adr {
+            fctrl.set_adr()
         }
 
         self.confirmed = data.confirmed;
