@@ -24,6 +24,10 @@ pub struct Session {
     pub devaddr: DevAddr<[u8; 4]>,
     pub fcnt_up: u32,
     pub fcnt_down: u32,
+
+    #[cfg(feature = "certification")]
+    /// Whether to override confirmation bit for sent frames
+    pub override_confirmed: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
@@ -68,6 +72,9 @@ impl Session {
             fcnt_down: 0,
             fcnt_up: 0,
             uplink: uplink::Uplink::default(),
+
+            #[cfg(feature = "certification")]
+            override_confirmed: None,
         }
     }
 
@@ -92,6 +99,7 @@ impl Session {
 }
 
 impl Session {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn handle_rx<C: CryptoFactory + Default, const N: usize, const D: usize>(
         &mut self,
         region: &mut region::Configuration,
@@ -157,10 +165,12 @@ impl Session {
                     {
                         #[cfg(feature = "certification")]
                         if certification.fport(fport) {
+                            use crate::mac::certification::Response::*;
                             match certification.handle_message(data) {
-                                crate::mac::certification::Response::NoUpdate => {
-                                    return Response::NoUpdate
+                                TxFramesCtrlReq(ftype) => {
+                                    self.override_confirmed = ftype;
                                 }
+                                NoUpdate => return Response::NoUpdate,
                             }
                         }
                         #[cfg(feature = "multicast")]
@@ -213,8 +223,12 @@ impl Session {
         }
 
         self.confirmed = data.confirmed;
+        #[cfg(feature = "certification")]
+        if let Some(v) = self.override_confirmed {
+            self.confirmed = v;
+        }
 
-        phy.set_confirmed(data.confirmed)
+        phy.set_confirmed(self.confirmed)
             .set_fctrl(&fctrl)
             .set_f_port(data.fport)
             .set_dev_addr(self.devaddr)
