@@ -250,3 +250,22 @@ impl From<Response> for async_device::MulticastResponse {
         }
     }
 }
+
+impl Response {
+    pub fn is_for_async_mc_response(&self) -> bool {
+        matches!(
+            self,
+            Response::NewSession { .. }
+                | Response::SessionExpired { .. }
+                | Response::DownlinkReceived { .. }
+        )
+    }
+
+    pub fn is_new_session(&self) -> bool {
+        matches!(self, Response::NewSession { .. })
+    }
+
+    pub fn is_transmit_request(&self) -> bool {
+        matches!(self, Response::TransmitRequest | Response::GroupSetupTransmitRequest { .. })
+    }
+}
