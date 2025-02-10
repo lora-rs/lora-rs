@@ -176,6 +176,24 @@ impl Mac {
         })
     }
 
+    #[cfg(feature = "certification")]
+    pub(crate) fn certification_setup_send<
+        C: CryptoFactory + Default,
+        RNG: RngCore,
+        const N: usize,
+    >(
+        &mut self,
+        rng: &mut RNG,
+        buf: &mut RadioBuffer<N>,
+    ) -> Result<(radio::TxConfig, FcntUp)> {
+        self.certification.setup_send::<C, N>(&mut self.state, buf).map(|fcnt_up| {
+            let mut tx_config =
+                self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
+            tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
+            (tx_config, fcnt_up)
+        })
+    }
+
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
         match frame {
             Frame::Join => match window {
@@ -326,6 +344,8 @@ pub(crate) enum Response {
     NoUpdate,
     RxComplete,
     #[cfg(feature = "certification")]
+    UplinkPrepared,
+    #[cfg(feature = "certification")]
     DeviceHandler(DeviceEvent),
     #[cfg(feature = "multicast")]
     Multicast(multicast::Response),
@@ -350,6 +370,8 @@ impl From<Response> for nb_device::Response {
             Response::JoinSuccess => nb_device::Response::JoinSuccess,
             Response::NoUpdate => nb_device::Response::NoUpdate,
             Response::RxComplete => nb_device::Response::RxComplete,
+            #[cfg(feature = "certification")]
+            Response::UplinkPrepared => unimplemented!(),
             #[cfg(feature = "certification")]
             Response::DeviceHandler(_) => unimplemented!(),
             #[cfg(feature = "multicast")]

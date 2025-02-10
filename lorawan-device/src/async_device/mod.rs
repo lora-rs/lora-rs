@@ -565,6 +565,14 @@ where
                 radio_buffer.clear();
                 Ok(None)
             }
+            #[cfg(feature = "certification")]
+            mac::Response::UplinkPrepared => {
+                radio_buffer.clear();
+                let (tx_config, _fcnt_up) =
+                    mac.certification_setup_send::<C, G, N>(rng, radio_buffer)?;
+                radio.tx(tx_config, radio_buffer.as_ref_for_read()).await.map_err(Error::Radio)?;
+                Ok(Some(mac.rx2_complete()))
+            }
             #[cfg(feature = "multicast")]
             mac::Response::Multicast(response) => {
                 if let multicast::Response::GroupSetupTransmitRequest { group_id } = response {
