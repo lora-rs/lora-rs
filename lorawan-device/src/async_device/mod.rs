@@ -563,7 +563,6 @@ where
         radio_buffer.clear();
         match response {
             mac::Response::NoUpdate => Ok(None),
-            mac::Response::NoUpdate => Ok(None),
             #[cfg(feature = "certification")]
             mac::Response::UplinkPrepared => {
                 let (tx_config, _fcnt_up) =
