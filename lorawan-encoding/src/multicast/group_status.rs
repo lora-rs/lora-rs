@@ -103,12 +103,14 @@ pub struct McGroupStatusAnsCreator {
 }
 
 impl McGroupStatusAnsCreator {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let mut data = [0; McGroupStatusAnsPayload::max_len() + 1];
         data[0] = McGroupStatusAnsPayload::cid();
         Self { data, items: 0 }
     }
 
+    #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
         // cid + status + items * item_len
         1 + 1 + self.items * McGroupStatusItem::len()

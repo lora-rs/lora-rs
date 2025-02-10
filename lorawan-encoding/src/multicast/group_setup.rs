@@ -126,7 +126,8 @@ impl McGroupSetupAnsPayload<'_> {
 
 impl McGroupSetupAnsCreator {
     pub fn mc_group_id_header(&mut self, mc_group_id_header: u8) -> &mut Self {
-        self.data[0] |= mc_group_id_header & 0b11;
+        self.data[1] &= 0b1111_1100;
+        self.data[1] |= mc_group_id_header & 0b11;
         self
     }
 }
