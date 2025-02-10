@@ -335,6 +335,8 @@ pub(crate) enum Response {
 #[derive(Debug)]
 #[cfg(feature = "certification")]
 pub(crate) enum DeviceEvent {
+    ResetDevice,
+    ResetMac,
     TxPeriodicityChange { periodicity: Option<u16> },
 }
 

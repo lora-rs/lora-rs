@@ -8,6 +8,8 @@ pub(crate) const CERTIFICATION_PORT: u8 = 224;
 pub(crate) enum Response {
     NoUpdate,
     AdrBitChange(bool),
+    DutJoinReq,
+    DutResetReq,
     TxFramesCtrlReq(Option<bool>),
     TxPeriodicityChange(Option<u16>),
     UplinkPrepared,
@@ -27,7 +29,8 @@ impl Certification {
         for message in messages {
             match message {
                 // Device layer
-                DutResetReq(..) | DutJoinReq(..) => {}
+                DutJoinReq(..) => return Response::DutJoinReq,
+                DutResetReq(..) => return Response::DutResetReq,
                 TxPeriodicityChangeReq(payload) => {
                     if let Ok(periodicity) = payload.periodicity() {
                         return Response::TxPeriodicityChange(periodicity);

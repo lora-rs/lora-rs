@@ -178,6 +178,12 @@ impl Session {
                                 AdrBitChange(adr) => {
                                     self.override_adr = adr;
                                 }
+                                DutJoinReq => {
+                                    return Response::DeviceHandler(DeviceEvent::ResetMac)
+                                }
+                                DutResetReq => {
+                                    return Response::DeviceHandler(DeviceEvent::ResetDevice)
+                                }
                                 TxFramesCtrlReq(ftype) => {
                                     self.override_confirmed = ftype;
                                 }
