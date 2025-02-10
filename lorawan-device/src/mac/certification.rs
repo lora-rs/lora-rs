@@ -34,7 +34,20 @@ impl Certification {
                     }
                 }
                 // Responses with uplink
-                DutVersionsReq(..) => {}
+                DutVersionsReq(..) => {
+                    let mut buf: heapless::Vec<u8, 256> = heapless::Vec::new();
+                    let mut ans = lorawan::certification::DutVersionsAnsCreator::new();
+                    ans.set_versions_raw([
+                        // TODO: Pass it via session::configuration?
+                        0, 0, 0, 1, 1, 0, 4, 0, // Lorawan version (1.0.4 \o/)
+                        // region version, RP002-1.0.4 == 2.1.0.4
+                        // TODO: define and import from crate::region::constants::REGION_VERSION?
+                        2, 1, 0, 4,
+                    ]);
+                    buf.extend_from_slice(ans.build()).unwrap();
+                    self.pending_uplink = Some(buf);
+                    return Response::UplinkPrepared;
+                }
                 EchoPayloadReq(payload) => {
                     let mut buf: heapless::Vec<u8, 256> = heapless::Vec::new();
                     let mut ans = lorawan::certification::EchoPayloadAnsCreator::new();
