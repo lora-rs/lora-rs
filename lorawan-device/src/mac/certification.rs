@@ -10,11 +10,17 @@ pub(crate) enum Response {
     AdrBitChange(bool),
     TxFramesCtrlReq(Option<bool>),
     TxPeriodicityChange(Option<u16>),
+    UplinkPrepared,
 }
 
-pub(crate) struct Certification {}
+pub(crate) struct Certification {
+    pending_uplink: Option<heapless::Vec<u8, 256>>,
+}
 
 impl Certification {
+    pub fn new() -> Self {
+        Self { pending_uplink: None }
+    }
     pub(crate) fn handle_message(&mut self, data: &[u8]) -> Response {
         use lorawan::certification::DownlinkDUTCommand::*;
         let messages = parse_downlink_certification_messages(data);
@@ -27,8 +33,17 @@ impl Certification {
                         return Response::TxPeriodicityChange(periodicity);
                     }
                 }
-                // Uplink requests
-                EchoPayloadReq(..) | DutVersionsReq(..) => {}
+                // Responses with uplink
+                DutVersionsReq(..) => {}
+                EchoPayloadReq(payload) => {
+                    let mut buf: heapless::Vec<u8, 256> = heapless::Vec::new();
+                    let mut ans = lorawan::certification::EchoPayloadAnsCreator::new();
+                    ans.payload(payload.payload());
+                    buf.extend_from_slice(ans.build()).unwrap();
+                    self.pending_uplink = Some(buf);
+                    return Response::UplinkPrepared;
+                }
+                // MAC layer
                 AdrBitChangeReq(payload) => {
                     if let Ok(adr) = payload.adr_enable() {
                         return Response::AdrBitChange(adr);
