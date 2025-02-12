@@ -376,7 +376,7 @@ fn test_complete_datadown_payload_frm_payload() {
 }
 
 #[test]
-fn test_mac_command_in_downlink() {
+fn mac_command_in_fopts() {
     let data = [
         0x60, 0x5f, 0x3b, 0xd7, 0x4e, 0x0a, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x70, 0x03, 0x00,
         0xff, 0x00, 0x30, 0xcd, 0xdb, 0x22, 0xee,
@@ -393,6 +393,49 @@ fn test_mac_command_in_downlink() {
             DownlinkMacCommand::LinkADRReq(_) => (),
             _ => panic!("incorrect payload type: {:?}", cmd),
         }
+    }
+}
+
+#[test]
+fn mac_command_in_frmpayload() {
+    // Our raw packet with "fixed" MIC
+    let packet = [96, 0, 0, 0, 0, 0, 16, 0, 0, 3, 192, 0, 0, 0, 100, 126, 233, 79];
+
+    // Encrypt packet
+    let mut phy = lorawan::creator::DataPayloadCreator::new(packet).unwrap();
+    phy.set_confirmed(false);
+    phy.set_f_port(0);
+    phy.set_dev_addr(&[0; 4]);
+    phy.set_uplink(false);
+    phy.set_fcnt(16);
+    phy.set_fctrl(&lorawan::parser::FCtrl::new(0x00, true));
+
+    let nwk_skey = [0; 16];
+    let app_skey = [0; 16];
+    let encrypted = {
+        phy.build(&[], [3, 192, 0, 0, 0], &nwk_skey.into(), &app_skey.into(), &DefaultFactory)
+            .unwrap()
+    };
+
+    let encrypted_payload = EncryptedDataPayload::new(encrypted).unwrap();
+
+    let mut encrypted = Vec::new();
+    encrypted.extend_from_slice(encrypted_payload.as_bytes());
+
+    if let Ok(PhyPayload::Data(DataPayload::Encrypted(phy))) = parse(&mut encrypted) {
+        let decrypted = phy.decrypt(Some(&AES128(nwk_skey)), None, 16).unwrap();
+
+        // Check that data round-trip actually works (together with MIC)
+        assert_eq!(packet, decrypted.as_bytes());
+
+        if let FRMPayload::MACCommands(mac_cmds) = decrypted.frm_payload() {
+            let cmds = MacCommandIterator::<DownlinkMacCommand<'_>>::new(mac_cmds.data());
+            assert_eq!(cmds.count(), 1);
+        } else {
+            panic!("Expecting FRMPayload parsed as MACCommands!");
+        }
+    } else {
+        panic!("Unable to parse packet!");
     }
 }
 
