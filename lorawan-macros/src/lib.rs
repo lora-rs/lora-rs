@@ -76,7 +76,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
             match len_opt {
                 Some(_) => {
                     impl_iter_next.push(quote! {
-                        if data[0] == #t::cid() && data.len() >= #t::max_len() {
+                        if data[0] == #t::cid() && data.len() > #t::max_len() {
                             self.index = self.index + #t::max_len() + 1;
                             Some(#handler::#n(#t::new_from_raw(&data[1..1 + #t::max_len()])))
                         } else
