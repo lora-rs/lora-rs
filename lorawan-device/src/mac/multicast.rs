@@ -198,7 +198,7 @@ impl Multicast {
         buf: &mut RadioBuffer<N>,
     ) -> mac::Result<mac::FcntUp> {
         let send_data = mac::SendData {
-            fport: REMOTE_MULTICAST_SETUP_PORT,
+            fport: self.remote_setup_port,
             data: self.pending_uplinks.as_ref(),
             confirmed: false,
         };
