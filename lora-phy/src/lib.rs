@@ -240,7 +240,7 @@ where
                 }
             }
         } else {
-            Err(RadioError::InvalidRadioMode)
+            Err(RadioError::InvalidRadioMode("tx"))
         }
     }
 
@@ -268,7 +268,7 @@ where
         if let RadioMode::Receive(listen_mode) = self.radio_mode {
             self.radio_kind.do_rx(listen_mode).await
         } else {
-            Err(RadioError::InvalidRadioMode)
+            Err(RadioError::InvalidRadioMode("start_tx"))
         }
     }
 
@@ -292,7 +292,7 @@ where
                 }
             }
         } else {
-            Err(RadioError::InvalidRadioMode)
+            Err(RadioError::InvalidRadioMode("wait_for_packet_start"))
         }
     }
 
@@ -327,7 +327,7 @@ where
                 self.wait_for_irq().await?;
             }
         } else {
-            Err(RadioError::InvalidRadioMode)
+            Err(RadioError::InvalidRadioMode("complete_rx"))
         }
     }
 
@@ -400,7 +400,7 @@ where
                 Ok(_) => unreachable!(),
             }
         } else {
-            Err(RadioError::InvalidRadioMode)
+            Err(RadioError::InvalidRadioMode("cad"))
         }
     }
 
