@@ -333,3 +333,42 @@ async fn test_class_c_async_down() {
     }
     let _ = device.take_downlink().unwrap();
 }
+
+#[tokio::test]
+async fn invalid_maccommands_in_frmpayload() {
+    fn prepare_invalid_packet(
+        _uplink: Option<Uplink>,
+        _config: RfConfig,
+        rx_buffer: &mut [u8],
+    ) -> usize {
+        let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
+        phy.set_confirmed(false);
+        phy.set_f_port(0);
+        phy.set_dev_addr(&[0; 4]);
+        phy.set_uplink(false);
+        phy.set_fcnt(16);
+        phy.set_fctrl(&lorawan::parser::FCtrl::new(0x00, true));
+        let finished = phy
+            .build(&[], [3, 192, 0, 0, 0], &get_key().into(), &get_key().into(), &DefaultFactory)
+            .unwrap();
+        finished.len()
+    }
+
+    let (radio, _timer, mut async_device) = util::setup_with_session_class_c().await;
+
+    // Run the device listening for the setup message
+    let task = tokio::spawn(async move {
+        let response = async_device.rxc_listen().await;
+        (async_device, response)
+    });
+
+    radio.handle_rxtx(prepare_invalid_packet).await;
+
+    let (mut device, response) = task.await.unwrap();
+    if let Ok(crate::async_device::ListenResponse::DownlinkReceived(fcnt)) = response {
+        assert_eq!(fcnt, 16);
+        assert!(device.take_downlink().is_none());
+    } else {
+        panic!("Invalid response");
+    }
+}
