@@ -738,6 +738,12 @@ fn test_derive_appskey() {
 }
 
 #[test]
+fn incorrect_frmpayload_with_maccommands() {
+    let cmds: Vec<_> = MacCommandIterator::<DownlinkMacCommand>::new(&[3, 0xc0, 0, 0]).collect();
+    assert_eq!(cmds.len(), 0);
+}
+
+#[test]
 #[cfg(feature = "with-to-string")]
 fn test_eui64_to_string() {
     let eui = EUI64::new(&[0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xff]).unwrap();
