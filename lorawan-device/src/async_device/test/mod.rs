@@ -17,6 +17,8 @@ use radio::TestRadio;
 mod util;
 pub(crate) use util::{setup, setup_with_session};
 
+mod maccommands;
+
 #[cfg(feature = "class-c")]
 mod class_c;
 

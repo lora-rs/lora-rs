@@ -6,7 +6,9 @@ use crate::radio::RadioBuffer;
 use crate::{region, AppSKey, Downlink, NwkSKey};
 use heapless::Vec;
 use lorawan::keys::CryptoFactory;
-use lorawan::maccommandcreator::{LinkADRAnsCreator, RXTimingSetupAnsCreator};
+use lorawan::maccommandcreator::{
+    DevStatusAnsCreator, LinkADRAnsCreator, RXParamSetupAnsCreator, RXTimingSetupAnsCreator,
+};
 use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
 use lorawan::{
     creator::DataPayloadCreator,
@@ -286,9 +288,19 @@ impl Session {
         region: &mut region::Configuration,
         cmds: MacCommandIterator<'_, DownlinkMacCommand<'_>>,
     ) {
+        use DownlinkMacCommand::*;
         for cmd in cmds {
             match cmd {
-                DownlinkMacCommand::LinkADRReq(payload) => {
+                DevStatusReq(..) => {
+                    // TODO: Fill with proper values
+                    // - Battery: (255 - unable to measure, 1..254 - battery level, 0 - external power source)
+                    // - RadioStatus: (SNR: -32..31)
+                    // For now we just return dummy values
+                    let mut cmd = DevStatusAnsCreator::new();
+                    let _ = cmd.set_battery(255).set_margin(0);
+                    self.uplink.add_mac_command(cmd);
+                }
+                LinkADRReq(payload) => {
                     // TODO: Verify with region that these are OK and handle Tx Power adjustment
                     region.set_channel_mask(
                         payload.redundancy().channel_mask_control(),
@@ -298,7 +310,21 @@ impl Session {
                     cmd.set_channel_mask_ack(true).set_data_rate_ack(true).set_tx_power_ack(true);
                     self.uplink.add_mac_command(cmd);
                 }
-                DownlinkMacCommand::RXTimingSetupReq(payload) => {
+                RXParamSetupReq(_payload) => {
+                    // TODO: Implement overrides via self.configuration:
+                    // let dl = payload.dl_settings();
+                    // - rx1_dr_offset: dl.rx1_dr_offset()
+                    // - rx2_data_rate: dl.rx2_data_rate()
+                    // - rx2_frequency: payload.frequency();
+                    /*
+                    let mut cmd = RXParamSetupAnsCreator::new();
+                    cmd.set_rx1_data_rate_offset_ack(true)
+                        .set_rx2_data_rate_ack(true)
+                        .set_channel_ack(true);
+                    self.uplink.add_mac_command(cmd);
+                    */
+                }
+                RXTimingSetupReq(payload) => {
                     configuration.rx1_delay = super::del_to_delay_ms(payload.delay());
                     self.uplink.add_mac_command(RXTimingSetupAnsCreator::new());
                 }
