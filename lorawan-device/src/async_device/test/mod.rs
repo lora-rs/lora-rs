@@ -257,7 +257,7 @@ async fn test_link_adr_ans() {
 
 #[tokio::test]
 async fn invalid_maccommands_in_frmpayload() {
-    fn prepare_invalid_packet(
+    fn packet_with_invalid_maccommand(
         _uplink: Option<Uplink>,
         _config: RfConfig,
         rx_buffer: &mut [u8],
@@ -275,21 +275,31 @@ async fn invalid_maccommands_in_frmpayload() {
         finished.len()
     }
 
-    let (radio, _timer, mut async_device) = util::setup_with_session_class_c().await;
+    let (radio, timer, mut async_device) = util::setup_with_session();
+    let send_await_complete = Arc::new(Mutex::new(false));
 
     // Run the device listening for the setup message
+    let complete = send_await_complete.clone();
     let task = tokio::spawn(async move {
-        let response = async_device.rxc_listen().await;
+        let response = async_device.send(&[1, 2, 3], 3, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
         (async_device, response)
     });
+    // Handle reception in RX2
+    timer.fire_most_recent().await;
+    radio.handle_timeout().await;
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(packet_with_invalid_maccommand).await;
 
-    radio.handle_rxtx(prepare_invalid_packet).await;
-
-    let (mut device, response) = task.await.unwrap();
-    if let Ok(crate::async_device::ListenResponse::DownlinkReceived(fcnt)) = response {
-        assert_eq!(fcnt, 16);
-        assert!(device.take_downlink().is_none());
-    } else {
-        panic!("Invalid response");
+    let (mut device, task) = task.await.unwrap();
+    match task {
+        Ok(SendResponse::DownlinkReceived(16)) => {
+            // Nothing in downlink as expected
+            assert!(device.take_downlink().is_none());
+        }
+        _ => {
+            panic!()
+        }
     }
 }
