@@ -176,39 +176,6 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
     }
 }
 
-/// Handle an uplink and respond with two LinkAdrReq on Port 0
-#[cfg(feature = "class-c")]
-pub fn handle_class_c_uplink_after_join(
-    uplink: Option<Uplink>,
-    _config: RfConfig,
-    rx_buffer: &mut [u8],
-) -> usize {
-    if let Some(mut uplink) = uplink {
-        if let PhyPayload::Data(DataPayload::Encrypted(data)) = uplink.get_payload() {
-            let fcnt = data.fhdr().fcnt() as u32;
-            assert!(data.validate_mic(&get_key().into(), fcnt));
-            let uplink =
-                data.decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt).unwrap();
-            assert_eq!(uplink.fhdr().fcnt(), 0);
-            let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
-            let mut fctrl = parser::FCtrl::new(0, false);
-            fctrl.set_ack();
-            phy.set_confirmed(false);
-            phy.set_dev_addr(&[0; 4]);
-            phy.set_uplink(false);
-            phy.set_fctrl(&fctrl);
-            // set ack bit
-            let finished =
-                phy.build(&[], [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
-            finished.len()
-        } else {
-            panic!("Did not decode PhyPayload::Data!");
-        }
-    } else {
-        panic!("No uplink passed to handle_data_uplink_with_link_adr_req");
-    }
-}
-
 fn link_adr_req_with_bank_ctrl(cm: u16) -> LinkADRReqCreator {
     // prepare a confirmed downlink
     let mut adr_req = LinkADRReqCreator::new();
@@ -261,21 +228,4 @@ pub fn handle_data_uplink_with_link_adr_ans(
     } else {
         panic!("No uplink passed to handle_data_uplink_with_link_adr_ans")
     }
-}
-
-#[cfg(feature = "class-c")]
-pub fn class_c_downlink<const FCNT_DOWN: u32>(
-    _uplink: Option<Uplink>,
-    _config: RfConfig,
-    rx_buffer: &mut [u8],
-) -> usize {
-    let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
-    phy.set_f_port(3);
-    phy.set_dev_addr(&[0; 4]);
-    phy.set_uplink(false);
-    phy.set_fcnt(FCNT_DOWN);
-
-    let finished =
-        phy.build(&[1, 2, 3], [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
-    finished.len()
 }
