@@ -15,7 +15,10 @@ mod radio;
 use radio::TestRadio;
 
 mod util;
-use util::{setup, setup_with_session};
+pub(crate) use util::{setup, setup_with_session};
+
+#[cfg(feature = "class-c")]
+mod class_c;
 
 #[cfg(feature = "multicast")]
 mod multicast;
@@ -250,88 +253,6 @@ async fn test_link_adr_ans() {
             panic!()
         }
     }
-}
-
-#[tokio::test]
-#[cfg(feature = "class-c")]
-async fn test_class_c_data_before_rx1() {
-    let (radio, timer, mut async_device) = util::setup_with_session_class_c().await;
-    // Run the device
-    let task = tokio::spawn(async move {
-        let response = async_device.send(&[1, 2, 3], 3, true).await;
-        (async_device, response)
-    });
-
-    // send first downlink before RX1
-    radio.handle_rxtx(class_c_downlink::<1>).await;
-    // Trigger beginning of RX1
-    timer.fire_most_recent().await;
-    // We expect FCntUp 1 up since the test util for Class C setup sends first frame
-    // We set FcntDown to 2, since ACK to setup (1) and Class C downlink above (2)
-    radio.handle_rxtx(handle_data_uplink_with_link_adr_req::<1, 2>).await;
-    let (mut device, response) = task.await.unwrap();
-    match response {
-        Ok(SendResponse::DownlinkReceived(_)) => (),
-        _ => {
-            panic!()
-        }
-    }
-    let _ = device.take_downlink().unwrap();
-    let _ = device.take_downlink().unwrap();
-}
-
-#[tokio::test]
-#[cfg(feature = "class-c")]
-async fn test_class_c_data_before_rx2() {
-    let (radio, timer, mut async_device) = util::setup_with_session_class_c().await;
-    // Run the device
-    let task = tokio::spawn(async move {
-        let response = async_device.send(&[1, 2, 3], 3, true).await;
-        (async_device, response)
-    });
-
-    // send first downlink before RX1
-    // Trigger beginning of RX1
-    timer.fire_most_recent().await;
-    // Trigger end of RX1
-    radio.handle_timeout().await;
-
-    radio.handle_rxtx(class_c_downlink::<1>).await;
-    // Trigger beginning of RX2
-    timer.fire_most_recent().await;
-    // We expect FCntUp 1 up since the test util for Class C setup sends first frame
-    // We set FcntDown to 2, since ACK to setup (1) and Class C downlink above (2)
-    radio.handle_rxtx(handle_data_uplink_with_link_adr_req::<1, 2>).await;
-    let (mut device, response) = task.await.unwrap();
-    match response {
-        Ok(SendResponse::DownlinkReceived(_)) => (),
-        _ => {
-            panic!()
-        }
-    }
-    let _ = device.take_downlink().unwrap();
-    let _ = device.take_downlink().unwrap();
-}
-
-#[tokio::test]
-#[cfg(feature = "class-c")]
-async fn test_class_c_async_down() {
-    let (radio, _timer, mut async_device) = util::setup_with_session_class_c().await;
-    // Run the device
-    let task = tokio::spawn(async move {
-        let response = async_device.rxc_listen().await;
-        (async_device, response)
-    });
-
-    radio.handle_rxtx(class_c_downlink::<1>).await;
-    let (mut device, response) = task.await.unwrap();
-    match response {
-        Ok(ListenResponse::DownlinkReceived(_)) => (),
-        _ => {
-            panic!()
-        }
-    }
-    let _ = device.take_downlink().unwrap();
 }
 
 #[tokio::test]
