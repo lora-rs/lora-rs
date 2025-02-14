@@ -12,7 +12,10 @@ use lorawan::{self, keys::CryptoFactory};
 use rand_core::RngCore;
 
 pub use crate::region::DR;
-use crate::{radio::RadioBuffer, rng};
+use crate::{
+    radio::{RadioBuffer, RxConfig},
+    rng,
+};
 
 pub mod radio;
 
@@ -478,6 +481,7 @@ where
                         &mut self.radio,
                         &mut self.rng,
                         mac_response,
+                        Some(rx_config),
                     )
                     .await?
                     {
@@ -553,12 +557,14 @@ where
     }
 
     /// Helper function to handle MAC responses and perform common actions
+    #[allow(unused_variables)]
     async fn handle_mac_response(
         radio_buffer: &mut RadioBuffer<N>,
         mac: &mut Mac,
         radio: &mut R,
         rng: &mut G,
         response: mac::Response,
+        rx_config: Option<RxConfig>,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
         radio_buffer.clear();
         match response {
@@ -579,6 +585,9 @@ where
                         .tx(tx_config, radio_buffer.as_ref_for_read())
                         .await
                         .map_err(Error::Radio)?;
+                    if let Some(rx_config) = rx_config {
+                        radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+                    }
                     // GroupSetupTransmitRequest needs to be transformed into a NewSession response
                     if let multicast::Response::GroupSetupTransmitRequest { group_id } = response {
                         response = multicast::Response::NewSession { group_id };
@@ -607,6 +616,7 @@ where
                         &mut self.radio,
                         &mut self.rng,
                         mac_response,
+                        None,
                     )
                     .await?
                 }
@@ -618,7 +628,9 @@ where
 
     /// When not involved in sending and RX1/RX2 windows, a class C configured device will be
     /// listening to RXC frames. The caller is expected to be awaiting this message at all times.
+    #[cfg(feature = "class-c")]
     pub async fn rxc_listen(&mut self) -> Result<ListenResponse, Error<R::PhyError>> {
+        let rx_config = self.mac.get_rxc_config();
         loop {
             let (sz, _rx_quality) =
                 self.radio.rx_continuous(self.radio_buffer.as_mut()).await.map_err(Error::Radio)?;
@@ -631,6 +643,7 @@ where
                 &mut self.radio,
                 &mut self.rng,
                 mac_response,
+                Some(rx_config),
             )
             .await?
             {
