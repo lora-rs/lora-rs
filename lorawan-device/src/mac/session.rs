@@ -310,19 +310,19 @@ impl Session {
                     cmd.set_channel_mask_ack(true).set_data_rate_ack(true).set_tx_power_ack(true);
                     self.uplink.add_mac_command(cmd);
                 }
-                RXParamSetupReq(_payload) => {
-                    // TODO: Implement overrides via self.configuration:
+                RXParamSetupReq(payload) => {
+                    // TODO: Verify with region!
+                    configuration.rx2_frequency = Some(payload.frequency().value());
+                    // TODO: Figure these out...
                     // let dl = payload.dl_settings();
                     // - rx1_dr_offset: dl.rx1_dr_offset()
-                    // - rx2_data_rate: dl.rx2_data_rate()
-                    // - rx2_frequency: payload.frequency();
-                    /*
+                    // - rx2_data_rate = dl.rx2_data_rate());
                     let mut cmd = RXParamSetupAnsCreator::new();
-                    cmd.set_rx1_data_rate_offset_ack(true)
-                        .set_rx2_data_rate_ack(true)
+                    cmd
+                        //.set_rx1_data_rate_offset_ack(true)
+                        //.set_rx2_data_rate_ack(true);
                         .set_channel_ack(true);
                     self.uplink.add_mac_command(cmd);
-                    */
                 }
                 RXTimingSetupReq(payload) => {
                     configuration.rx1_delay = super::del_to_delay_ms(payload.delay());

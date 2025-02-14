@@ -11,7 +11,6 @@ use tokio::sync::Mutex;
 
 #[tokio::test]
 // TODO: Finalize RXParamSetupReq
-#[ignore]
 async fn maccommands_in_frmpayload() {
     fn frmpayload_maccommands(
         _uplink: Option<Uplink>,
@@ -66,8 +65,8 @@ async fn maccommands_in_frmpayload() {
 
     if let Some(session) = device.mac.get_session() {
         let data = session.uplink.mac_commands();
-        let cmds = parse_uplink_mac_commands(data);
-        assert_eq!(cmds.count(), 4);
+        assert_eq!(parse_uplink_mac_commands(data).count(), 4);
+        assert_eq!(device.mac.configuration.rx2_frequency, Some(869525000));
     } else {
         panic!("Session not joined?");
     }
