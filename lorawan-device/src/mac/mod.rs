@@ -50,6 +50,11 @@ pub struct Configuration {
     rx1_delay: u32,
     join_accept_delay1: u32,
     join_accept_delay2: u32,
+
+    // Overriden with RxParamSetupReq
+    // TODO: rx1_data_rate_offset
+    // TODO: rx2_data_rate
+    pub(crate) rx2_frequency: Option<u32>,
 }
 
 pub(crate) struct Mac {
@@ -103,6 +108,7 @@ impl Mac {
                 rx1_delay: region::constants::RECEIVE_DELAY1,
                 join_accept_delay1: region::constants::JOIN_ACCEPT_DELAY1,
                 join_accept_delay2: region::constants::JOIN_ACCEPT_DELAY2,
+                rx2_frequency: None,
             },
             #[cfg(feature = "certification")]
             certification: certification::Certification::new(),
@@ -318,10 +324,25 @@ impl Mac {
     }
 
     pub(crate) fn get_rx_config(&self, buffer_ms: u32, frame: &Frame, window: &Window) -> RxConfig {
-        RxConfig {
+        let mut cfg = RxConfig {
             rf: self.region.get_rx_config(self.configuration.data_rate, frame, window),
             mode: RxMode::Single { ms: buffer_ms },
+        };
+
+        // Handle server-defined Rx parameters:
+        // * rx2 frequency
+        match frame {
+            Frame::Join => {}
+            Frame::Data => match window {
+                Window::_1 => {}
+                Window::_2 => {
+                    if let Some(f) = self.configuration.rx2_frequency {
+                        cfg.rf.frequency = f;
+                    }
+                }
+            },
         }
+        cfg
     }
 
     #[cfg(feature = "class-c")]
