@@ -54,9 +54,9 @@ impl Certification {
                     self.pending_uplink = Some(buf);
                     return Response::UplinkPrepared;
                 }
-                EchoPayloadReq(payload) => {
+                EchoIncPayloadReq(payload) => {
                     let mut buf: heapless::Vec<u8, 256> = heapless::Vec::new();
-                    let mut ans = lorawan::certification::EchoPayloadAnsCreator::new();
+                    let mut ans = lorawan::certification::EchoIncPayloadAnsCreator::new();
                     ans.payload(payload.payload());
                     buf.extend_from_slice(ans.build()).unwrap();
                     self.pending_uplink = Some(buf);

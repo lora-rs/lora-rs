@@ -39,7 +39,7 @@ fn test_dutversionsans() {
 
 #[test]
 fn test_echopayload() {
-    let data = [EchoPayloadReqPayload::cid(), 1, 5, 255];
+    let data = [EchoIncPayloadReqPayload::cid(), 1, 5, 255];
     let mut c = parse_downlink_certification_messages(&data);
 
     let Some(cmd) = c.next() else { panic!() };
@@ -47,15 +47,15 @@ fn test_echopayload() {
     assert_eq!(c.next(), None);
 
     // Check that all data is present...
-    let payload = EchoPayloadReqPayload::new_from_raw(&data[1..]);
-    assert_eq!(cmd, EchoPayloadReq(payload));
+    let payload = EchoIncPayloadReqPayload::new_from_raw(&data[1..]);
+    assert_eq!(cmd, EchoIncPayloadReq(payload));
 
     // Check that internal payload data actually matches
-    let payload = EchoPayloadReqPayload::new(&data[1..]).unwrap();
+    let payload = EchoIncPayloadReqPayload::new(&data[1..]).unwrap();
     assert_eq!(&data[1..], payload.payload());
 
-    let mut cmd = EchoPayloadAnsCreator::new();
-    assert_eq!(cmd.build(), [EchoPayloadAnsPayload::cid()]);
+    let mut cmd = EchoIncPayloadAnsCreator::new();
+    assert_eq!(cmd.build(), [EchoIncPayloadAnsPayload::cid()]);
 
     // Push in data...
     cmd.payload(&data[1..]);
@@ -71,10 +71,10 @@ fn test_echopayload() {
 
 #[test]
 fn test_echopayloadreq() {
-    let data = [EchoPayloadReqPayload::cid(), 1];
+    let data = [EchoIncPayloadReqPayload::cid(), 1];
     let mut c = parse_downlink_certification_messages(&data);
 
-    if let Some(EchoPayloadReq(payload)) = c.next() {
+    if let Some(EchoIncPayloadReq(payload)) = c.next() {
         assert_eq!(payload.payload(), [1]);
     } else {
         panic!()
