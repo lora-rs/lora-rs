@@ -33,7 +33,7 @@ pub enum DownlinkDUTCommand<'a> {
 
     /// Requests the DUT to echo the provided payload, where each byte is incremented by 1
     #[cmd(cid = 0x08)]
-    EchoPayloadReq(EchoPayloadReqPayload<'a>),
+    EchoIncPayloadReq(EchoIncPayloadReqPayload<'a>),
 
     /// Request to send firmware version, LoRaWAN version, and regional parameters version
     #[cmd(cid = 0x7f, len = 0)]
@@ -43,9 +43,9 @@ pub enum DownlinkDUTCommand<'a> {
 #[derive(Debug, PartialEq, CommandHandler)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum UplinkDUTCommand<'a> {
-    /// Returns data sent by EchoPayloadReq, where each byte except the initial CID is incremented by 1
+    /// Returns data sent by EchoIncPayloadReq, where each byte except the initial CID is incremented by 1
     #[cmd(cid = 0x08)]
-    EchoPayloadAns(EchoPayloadAnsPayload<'a>),
+    EchoIncPayloadAns(EchoIncPayloadAnsPayload<'a>),
 
     #[cmd(cid = 0x7f, len = 12)]
     DutVersionsAns(DutVersionsAnsPayload<'a>),
@@ -75,12 +75,12 @@ impl DutVersionsAnsCreator {
     }
 }
 
-impl<'a> EchoPayloadAnsPayload<'a> {
+impl<'a> EchoIncPayloadAnsPayload<'a> {
     pub fn new(data: &'a [u8]) -> Result<Self, Error> {
         if data.is_empty() {
             return Err(Error::BufferTooShort);
         }
-        Ok(EchoPayloadAnsPayload(data))
+        Ok(EchoIncPayloadAnsPayload(data))
     }
 
     /// Possible maximum length of the payload not including CID
@@ -107,28 +107,28 @@ impl<'a> EchoPayloadAnsPayload<'a> {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct EchoPayloadAnsCreator {
-    pub(crate) data: [u8; EchoPayloadAnsPayload::max_len() + 1],
+pub struct EchoIncPayloadAnsCreator {
+    pub(crate) data: [u8; EchoIncPayloadAnsPayload::max_len() + 1],
     payload_len: usize,
 }
 
-impl Default for EchoPayloadAnsCreator {
+impl Default for EchoIncPayloadAnsCreator {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl EchoPayloadAnsCreator {
+impl EchoIncPayloadAnsCreator {
     pub fn new() -> Self {
-        let mut data = [0; EchoPayloadAnsPayload::max_len() + 1];
-        data[0] = EchoPayloadAnsPayload::cid();
+        let mut data = [0; EchoIncPayloadAnsPayload::max_len() + 1];
+        data[0] = EchoIncPayloadAnsPayload::cid();
         Self { data, payload_len: 0 }
     }
     pub fn build(&self) -> &[u8] {
         &self.data[..=self.payload_len]
     }
     pub const fn cid(&self) -> u8 {
-        EchoPayloadAnsPayload::cid()
+        EchoIncPayloadAnsPayload::cid()
     }
     /// Get the length including CID.
     #[allow(clippy::len_without_is_empty)]
@@ -148,15 +148,15 @@ impl EchoPayloadAnsCreator {
 
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-pub struct EchoPayloadReqCreator {}
-impl UnimplementedCreator for EchoPayloadReqCreator {}
+pub struct EchoIncPayloadReqCreator {}
+impl UnimplementedCreator for EchoIncPayloadReqCreator {}
 
-impl<'a> EchoPayloadReqPayload<'a> {
+impl<'a> EchoIncPayloadReqPayload<'a> {
     pub fn new(data: &'a [u8]) -> Result<Self, Error> {
         if data.is_empty() {
             return Err(Error::BufferTooShort);
         }
-        Ok(EchoPayloadReqPayload(data))
+        Ok(EchoIncPayloadReqPayload(data))
     }
 
     /// Minimum length of the payload not including CID
