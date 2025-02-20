@@ -11,7 +11,8 @@ use crate::{AppSKey, NwkSKey};
 fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel, Device) {
     let (radio_channel, mock_radio) = TestRadio::new();
     let (timer_channel, mock_timer) = TestTimer::new();
-    let region = region::US915::default();
+    //let region = region::US915::default();
+    let region = region::EU868::default();
     let async_device = Device::new_with_session(
         region.into(),
         mock_radio,

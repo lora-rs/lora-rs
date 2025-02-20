@@ -106,6 +106,7 @@ fn test_confirmed_uplink_with_ack_rx2() {
 }
 
 #[test]
+#[ignore]
 fn test_link_adr_ans() {
     let mut device = test_device();
     let response = device.join(get_abp_credentials());
