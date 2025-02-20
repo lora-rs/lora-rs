@@ -10,19 +10,25 @@ use super::*;
 
 const JOIN_CHANNELS: [u32; 3] = [868_100_000, 868_300_000, 868_500_000];
 
-pub(crate) type EU868 = DynamicChannelPlan<3, EU868Region>;
+const NUM_DR_OFFSETS: usize = 6;
+
+pub(crate) type EU868 = DynamicChannelPlan<3, NUM_DR_OFFSETS, EU868Region>;
 
 #[derive(Default, Clone)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct EU868Region;
 
-impl ChannelRegion for EU868Region {
+impl ChannelRegion<NUM_DR_OFFSETS> for EU868Region {
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
     }
+
+    fn rx1dr_offsets() -> &'static [Option<[u8; NUM_DR_OFFSETS]>; NUM_DATARATES as usize] {
+        &RX1DR_OFFSETS
+    }
 }
 
-impl DynamicChannelRegion<3> for EU868Region {
+impl DynamicChannelRegion<3, NUM_DR_OFFSETS> for EU868Region {
     fn join_channels() -> [u32; 3] {
         JOIN_CHANNELS
     }
@@ -95,6 +101,24 @@ pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES as usize] = [
     // TODO: DR11: LR-FHSS CR2/3: 336 kHz BW
     None,
     // DR12..DR14: RFU
+    None,
+    None,
+    None,
+];
+
+pub(crate) const RX1DR_OFFSETS: [Option<[u8; NUM_DR_OFFSETS]>; NUM_DATARATES as usize] = [
+    Some([0, 0, 0, 0, 0, 0]),
+    Some([1, 0, 0, 0, 0, 0]),
+    Some([2, 1, 0, 0, 0, 0]),
+    Some([3, 2, 1, 0, 0, 0]),
+    Some([4, 3, 2, 1, 0, 0]),
+    Some([5, 4, 3, 2, 1, 0]),
+    Some([6, 5, 4, 3, 2, 1]),
+    None,
+    None,
+    None,
+    None,
+    None,
     None,
     None,
     None,

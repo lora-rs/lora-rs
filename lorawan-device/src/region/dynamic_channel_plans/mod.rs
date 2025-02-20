@@ -34,7 +34,8 @@ pub(crate) use in865::IN865;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct DynamicChannelPlan<
     const NUM_JOIN_CHANNELS: usize,
-    R: DynamicChannelRegion<NUM_JOIN_CHANNELS>,
+    const NUM_DATARATE_OFFSETS: usize,
+    R: DynamicChannelRegion<NUM_JOIN_CHANNELS, NUM_DATARATE_OFFSETS>,
 > {
     additional_channels: [Option<u32>; 5],
     channel_mask: ChannelMask<9>,
@@ -44,8 +45,11 @@ pub(crate) struct DynamicChannelPlan<
     rx2_dr: usize,
 }
 
-impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
-    DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
+impl<
+        const NUM_JOIN_CHANNELS: usize,
+        const NUM_DATARATE_OFFSETS: usize,
+        R: DynamicChannelRegion<NUM_JOIN_CHANNELS, NUM_DATARATE_OFFSETS>,
+    > DynamicChannelPlan<NUM_JOIN_CHANNELS, NUM_DATARATE_OFFSETS, R>
 {
     fn get_channel(&self, channel: usize) -> Option<u32> {
         if channel < NUM_JOIN_CHANNELS {
@@ -90,15 +94,20 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
     }
 }
 
-pub(crate) trait DynamicChannelRegion<const NUM_JOIN_CHANNELS: usize>:
-    ChannelRegion
+pub(crate) trait DynamicChannelRegion<
+    const NUM_JOIN_CHANNELS: usize,
+    const NUM_DATARATE_OFFSETS: usize,
+>: ChannelRegion<NUM_DATARATE_OFFSETS>
 {
     fn join_channels() -> [u32; NUM_JOIN_CHANNELS];
     fn get_default_rx2() -> u32;
 }
 
-impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>> RegionHandler
-    for DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
+impl<
+        const NUM_JOIN_CHANNELS: usize,
+        const NUM_DATARATE_OFFSETS: usize,
+        R: DynamicChannelRegion<NUM_JOIN_CHANNELS, NUM_DATARATE_OFFSETS>,
+    > RegionHandler for DynamicChannelPlan<NUM_JOIN_CHANNELS, NUM_DATARATE_OFFSETS, R>
 {
     fn process_join_accept<T: AsRef<[u8]>, C>(
         &mut self,
