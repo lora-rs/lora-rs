@@ -51,10 +51,14 @@ pub struct Configuration {
     join_accept_delay1: u32,
     join_accept_delay2: u32,
 
-    // Overriden with RxParamSetupReq
-    // TODO: rx1_data_rate_offset
-    // TODO: rx2_data_rate
+    // Persistence required
+    pub(crate) rx1_dr_offset: u8,
+    pub(crate) rx2_datarate: Option<u8>,
     pub(crate) rx2_frequency: Option<u32>,
+
+    // * DlChannelReq
+    // * RXTimingSetupReq
+    // * TXParamSetupReq
 }
 
 pub(crate) struct Mac {
@@ -108,6 +112,8 @@ impl Mac {
                 rx1_delay: region::constants::RECEIVE_DELAY1,
                 join_accept_delay1: region::constants::JOIN_ACCEPT_DELAY1,
                 join_accept_delay2: region::constants::JOIN_ACCEPT_DELAY2,
+                rx1_dr_offset: 0,
+                rx2_datarate: None,
                 rx2_frequency: None,
             },
             #[cfg(feature = "certification")]
@@ -329,12 +335,13 @@ impl Mac {
             mode: RxMode::Single { ms: buffer_ms },
         };
 
-        // Handle server-defined Rx parameters:
+        // Handle server-defined overridden Rx parameters:
+        // * rx1 datarate offset
         // * rx2 frequency
         match frame {
             Frame::Join => {}
             Frame::Data => match window {
-                Window::_1 => {}
+                Window::_1 => { },
                 Window::_2 => {
                     if let Some(f) = self.configuration.rx2_frequency {
                         cfg.rf.frequency = f;

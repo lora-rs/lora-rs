@@ -41,7 +41,6 @@ pub(crate) struct DynamicChannelPlan<
     channel_mask: ChannelMask<9>,
     last_tx_channel: u8,
     _fixed_channel_region: PhantomData<R>,
-    rx1_offset: usize,
     rx2_dr: usize,
 }
 
@@ -217,7 +216,7 @@ impl<
 
     fn get_rx_datarate(&self, tx_datarate: DR, _frame: &Frame, window: &Window) -> Datarate {
         let datarate = match window {
-            Window::_1 => tx_datarate as usize + self.rx1_offset,
+            Window::_1 => tx_datarate as usize,
             Window::_2 => self.rx2_dr,
         };
         R::datarates()[datarate].clone().unwrap()

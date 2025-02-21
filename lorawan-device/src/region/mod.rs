@@ -462,6 +462,10 @@ impl Configuration {
         mut_region_dispatch!(self, handle_link_adr_channel_mask, channel_mask_control, channel_mask)
     }
 
+    pub(crate) fn set_rx1_datarate(&mut self, offset: usize) -> bool {
+        true
+    }
+
     pub(crate) fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32 {
         region_dispatch!(self, get_rx_frequency, frame, window)
     }
