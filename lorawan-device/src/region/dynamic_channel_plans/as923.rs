@@ -2,24 +2,22 @@ use super::*;
 
 const JOIN_CHANNELS: [u32; 2] = [923200000, 923200000];
 
-pub(crate) type AS923_1 = DynamicChannelPlan<2, 7, AS923Region<923_200_000, 0>>;
-pub(crate) type AS923_2 = DynamicChannelPlan<2, 7, AS923Region<921_400_000, 1800000>>;
-pub(crate) type AS923_3 = DynamicChannelPlan<2, 7, AS923Region<916_600_000, 6600000>>;
-pub(crate) type AS923_4 = DynamicChannelPlan<2, 7, AS923Region<917_300_000, 5900000>>;
+pub(crate) type AS923_1 = DynamicChannelPlan<2, AS923Region<923_200_000, 0>>;
+pub(crate) type AS923_2 = DynamicChannelPlan<2, AS923Region<921_400_000, 1800000>>;
+pub(crate) type AS923_3 = DynamicChannelPlan<2, AS923Region<916_600_000, 6600000>>;
+pub(crate) type AS923_4 = DynamicChannelPlan<2, AS923Region<917_300_000, 5900000>>;
 
 #[derive(Default, Clone)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct AS923Region<const DEFAULT_RX2: u32, const O: u32>;
 
-impl<const DEFAULT_RX2: u32, const OFFSET: u32> ChannelRegion<7>
-    for AS923Region<DEFAULT_RX2, OFFSET>
-{
-    fn datarates() -> &'static [Option<Datarate>; 7] {
+impl<const DEFAULT_RX2: u32, const OFFSET: u32> ChannelRegion for AS923Region<DEFAULT_RX2, OFFSET> {
+    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES] {
         &DATARATES
     }
 }
 
-impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion<2, 7>
+impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion<2>
     for AS923Region<DEFAULT_RX2, OFFSET>
 {
     fn join_channels() -> [u32; 2] {
@@ -33,7 +31,7 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion<2, 7>
 
 use super::{Bandwidth, Datarate, SpreadingFactor};
 
-pub(crate) const DATARATES: [Option<Datarate>; 7] = [
+pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES] = [
     Some(Datarate {
         spreading_factor: SpreadingFactor::_12,
         bandwidth: Bandwidth::_125KHz,
@@ -77,4 +75,13 @@ pub(crate) const DATARATES: [Option<Datarate>; 7] = [
         max_mac_payload_size_with_dwell_time: 250,
     }),
     // TODO: ignore FSK data rate for now
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
 ];

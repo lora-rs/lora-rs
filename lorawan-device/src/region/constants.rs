@@ -10,6 +10,9 @@ pub(crate) const ADR_ACK_LIMIT: usize = 64;
 pub(crate) const ADR_ACK_DELAY: usize = 32;
 pub(crate) const ACK_TIMEOUT: usize = 2; // random delay between 1 and 3 seconds
 
+// TODO: Switch to 15? DR15 is command to use currently active DR
+pub(crate) const NUM_DATARATES: usize = 16;
+
 pub(crate) const DEFAULT_BANDWIDTH: Bandwidth = Bandwidth::_125KHz;
 pub(crate) const DEFAULT_SPREADING_FACTOR: SpreadingFactor = SpreadingFactor::_7;
 pub(crate) const DEFAULT_CODING_RATE: CodingRate = CodingRate::_4_5;

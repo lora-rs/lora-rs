@@ -3,19 +3,19 @@ use super::*;
 
 const JOIN_CHANNELS: [u32; 3] = [865_062_500, 865_402_500, 865_985_000];
 
-pub(crate) type IN865 = DynamicChannelPlan<3, 6, IN865Region>;
+pub(crate) type IN865 = DynamicChannelPlan<3, IN865Region>;
 
 #[derive(Default, Clone)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct IN865Region;
 
-impl ChannelRegion<6> for IN865Region {
-    fn datarates() -> &'static [Option<Datarate>; 6] {
+impl ChannelRegion for IN865Region {
+    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES] {
         &DATARATES
     }
 }
 
-impl DynamicChannelRegion<3, 6> for IN865Region {
+impl DynamicChannelRegion<3> for IN865Region {
     fn join_channels() -> [u32; 3] {
         JOIN_CHANNELS
     }
@@ -27,7 +27,7 @@ impl DynamicChannelRegion<3, 6> for IN865Region {
 
 use super::{Bandwidth, Datarate, SpreadingFactor};
 
-pub(crate) const DATARATES: [Option<Datarate>; 6] = [
+pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES] = [
     Some(Datarate {
         spreading_factor: SpreadingFactor::_12,
         bandwidth: Bandwidth::_125KHz,
@@ -65,4 +65,14 @@ pub(crate) const DATARATES: [Option<Datarate>; 6] = [
         max_mac_payload_size_with_dwell_time: 250,
     }),
     // TODO: ignore FSK data rate for now
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
 ];

@@ -10,21 +10,19 @@ use super::*;
 
 const JOIN_CHANNELS: [u32; 3] = [868_100_000, 868_300_000, 868_500_000];
 
-const NUM_DR: usize = 7;
-
-pub(crate) type EU868 = DynamicChannelPlan<3, NUM_DR, EU868Region>;
+pub(crate) type EU868 = DynamicChannelPlan<3, EU868Region>;
 
 #[derive(Default, Clone)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct EU868Region;
 
-impl ChannelRegion<NUM_DR> for EU868Region {
-    fn datarates() -> &'static [Option<Datarate>; NUM_DR] {
+impl ChannelRegion for EU868Region {
+    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES] {
         &DATARATES
     }
 }
 
-impl DynamicChannelRegion<3, NUM_DR> for EU868Region {
+impl DynamicChannelRegion<3> for EU868Region {
     fn join_channels() -> [u32; 3] {
         JOIN_CHANNELS
     }
@@ -36,7 +34,7 @@ impl DynamicChannelRegion<3, NUM_DR> for EU868Region {
 
 use super::{Bandwidth, Datarate, SpreadingFactor};
 
-pub(crate) const DATARATES: [Option<Datarate>; NUM_DR] = [
+pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES] = [
     // DR0
     Some(Datarate {
         spreading_factor: SpreadingFactor::_12,
@@ -97,4 +95,13 @@ pub(crate) const DATARATES: [Option<Datarate>; NUM_DR] = [
      *       that the end-device SHALL ignore that field and keep the current
      *       parameter values.
      */
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
 ];
