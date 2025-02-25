@@ -57,7 +57,7 @@ impl<'a> McGroupStatusAnsPayload<'a> {
 
     /// NbTotalGroups is the number of multicast groups currently defined in the end-device.
     pub fn nb_total_groups(&self) -> u8 {
-        self.0[0] >> 4 & 0b111
+        (self.0[0] >> 4) & 0b111
     }
 
     /// Maximum possible length of the payload

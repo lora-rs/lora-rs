@@ -203,7 +203,7 @@ impl DLSettings {
     /// The offset between the uplink data rate and the downlink data rate used to communicate with
     /// the end-device on the first reception slot (RX1).
     pub fn rx1_dr_offset(&self) -> u8 {
-        self.0 >> 4 & 0x07
+        (self.0 >> 4) & 0x07
     }
 
     /// The data rate of a downlink using the second receive window.
