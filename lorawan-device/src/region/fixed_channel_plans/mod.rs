@@ -67,6 +67,13 @@ impl<const D: usize, F: FixedChannelRegion<D>> FixedChannelPlan<D, F> {
     pub fn get_max_payload_length(datarate: DR, repeater_compatible: bool, dwell_time: bool) -> u8 {
         F::get_max_payload_length(datarate, repeater_compatible, dwell_time)
     }
+
+    pub fn check_data_rate(&self, datarate: u8) -> Option<DR> {
+        if (datarate as usize) < D && F::datarates()[datarate as usize].is_some() {
+            return Some(DR::try_from(datarate).unwrap());
+        }
+        None
+    }
 }
 
 pub(crate) trait FixedChannelRegion<const D: usize>: ChannelRegion<D> {
