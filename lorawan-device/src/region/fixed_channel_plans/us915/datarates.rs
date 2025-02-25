@@ -1,6 +1,6 @@
-use super::{Bandwidth, Datarate, SpreadingFactor};
+use super::{Bandwidth, Datarate, SpreadingFactor, NUM_DATARATES};
 
-pub(crate) const DATARATES: [Option<Datarate>; 14] = [
+pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES] = [
     Some(Datarate {
         spreading_factor: SpreadingFactor::_10,
         bandwidth: Bandwidth::_125KHz,
@@ -70,4 +70,6 @@ pub(crate) const DATARATES: [Option<Datarate>; 14] = [
         max_mac_payload_size: 250,
         max_mac_payload_size_with_dwell_time: 250,
     }),
+    None,
+    None,
 ];

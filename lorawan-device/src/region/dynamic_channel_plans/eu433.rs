@@ -3,19 +3,19 @@ use super::*;
 
 const JOIN_CHANNELS: [u32; 3] = [433_175_000, 433_375_000, 433_575_000];
 
-pub(crate) type EU433 = DynamicChannelPlan<3, 7, EU433Region>;
+pub(crate) type EU433 = DynamicChannelPlan<3, EU433Region>;
 
 #[derive(Default, Clone)]
 #[allow(clippy::upper_case_acronyms)]
 pub struct EU433Region;
 
-impl ChannelRegion<7> for EU433Region {
-    fn datarates() -> &'static [Option<Datarate>; 7] {
+impl ChannelRegion for EU433Region {
+    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES] {
         &DATARATES
     }
 }
 
-impl DynamicChannelRegion<3, 7> for EU433Region {
+impl DynamicChannelRegion<3> for EU433Region {
     fn join_channels() -> [u32; 3] {
         JOIN_CHANNELS
     }
@@ -27,7 +27,7 @@ impl DynamicChannelRegion<3, 7> for EU433Region {
 
 use super::{Bandwidth, Datarate, SpreadingFactor};
 
-pub(crate) const DATARATES: [Option<Datarate>; 7] = [
+pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES] = [
     Some(Datarate {
         spreading_factor: SpreadingFactor::_12,
         bandwidth: Bandwidth::_125KHz,
@@ -71,4 +71,13 @@ pub(crate) const DATARATES: [Option<Datarate>; 7] = [
         max_mac_payload_size_with_dwell_time: 250,
     }),
     // TODO 7 is defined in rp002-1-0-4
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
+    None,
 ];

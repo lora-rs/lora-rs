@@ -34,8 +34,7 @@ pub(crate) use in865::IN865;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub(crate) struct DynamicChannelPlan<
     const NUM_JOIN_CHANNELS: usize,
-    const NUM_DATARATES: usize,
-    R: DynamicChannelRegion<NUM_JOIN_CHANNELS, NUM_DATARATES>,
+    R: DynamicChannelRegion<NUM_JOIN_CHANNELS>,
 > {
     additional_channels: [Option<u32>; 5],
     channel_mask: ChannelMask<9>,
@@ -45,11 +44,8 @@ pub(crate) struct DynamicChannelPlan<
     rx2_dr: usize,
 }
 
-impl<
-        const NUM_JOIN_CHANNELS: usize,
-        const NUM_DATARATES: usize,
-        R: DynamicChannelRegion<NUM_JOIN_CHANNELS, NUM_DATARATES>,
-    > DynamicChannelPlan<NUM_JOIN_CHANNELS, NUM_DATARATES, R>
+impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
+    DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
 {
     fn get_channel(&self, channel: usize) -> Option<u32> {
         if channel < NUM_JOIN_CHANNELS {
@@ -86,25 +82,23 @@ impl<
     }
 
     pub fn check_data_rate(&self, datarate: u8) -> Option<DR> {
-        if (datarate as usize) < NUM_DATARATES && R::datarates()[datarate as usize].is_some() {
+        if (datarate as usize) < NUM_DATARATES.into() && R::datarates()[datarate as usize].is_some()
+        {
             return Some(DR::try_from(datarate).unwrap());
         }
         None
     }
 }
 
-pub(crate) trait DynamicChannelRegion<const NUM_JOIN_CHANNELS: usize, const NUM_DATARATES: usize>:
-    ChannelRegion<NUM_DATARATES>
+pub(crate) trait DynamicChannelRegion<const NUM_JOIN_CHANNELS: usize>:
+    ChannelRegion
 {
     fn join_channels() -> [u32; NUM_JOIN_CHANNELS];
     fn get_default_rx2() -> u32;
 }
 
-impl<
-        const NUM_JOIN_CHANNELS: usize,
-        const NUM_DATARATES: usize,
-        R: DynamicChannelRegion<NUM_JOIN_CHANNELS, NUM_DATARATES>,
-    > RegionHandler for DynamicChannelPlan<NUM_JOIN_CHANNELS, NUM_DATARATES, R>
+impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>> RegionHandler
+    for DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
 {
     fn process_join_accept<T: AsRef<[u8]>, C>(
         &mut self,
