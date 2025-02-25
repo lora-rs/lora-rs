@@ -301,14 +301,33 @@ impl Session {
                     self.uplink.add_mac_command(cmd);
                 }
                 LinkADRReq(payload) => {
-                    // TODO: Verify with region that these are OK and handle Tx Power adjustment
+                    // Handle DataRate
+                    let dr = {
+                        let rate = payload.data_rate();
+                        // Use currently used data rate in case requested rate is 15 (0xf)...
+                        if rate == 0xf {
+                            Some(configuration.data_rate)
+                        // ..otherwise check whether this is supported by region
+                        } else {
+                            region.check_data_rate(payload.data_rate())
+                        }
+                    };
+                    // TODO: TXPower
+                    // ChannelMask
                     region.set_channel_mask(
                         payload.redundancy().channel_mask_control(),
                         payload.channel_mask(),
                     );
                     let mut cmd = LinkADRAnsCreator::new();
-                    cmd.set_channel_mask_ack(true).set_data_rate_ack(true).set_tx_power_ack(true);
+                    cmd.set_channel_mask_ack(true)
+                        .set_data_rate_ack(dr.is_some())
+                        .set_tx_power_ack(true);
                     self.uplink.add_mac_command(cmd);
+
+                    // TODO: We should only apply settings if all 3 settings are valid!
+                    if dr.is_some() {
+                        configuration.data_rate = dr.unwrap()
+                    }
                 }
                 RXParamSetupReq(payload) => {
                     // TODO: Verify with region!

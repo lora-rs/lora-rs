@@ -84,6 +84,13 @@ impl<
     pub fn get_max_payload_length(datarate: DR, repeater_compatible: bool, dwell_time: bool) -> u8 {
         R::get_max_payload_length(datarate, repeater_compatible, dwell_time)
     }
+
+    pub fn check_data_rate(&self, datarate: u8) -> Option<DR> {
+        if (datarate as usize) < NUM_DATARATES && R::datarates()[datarate as usize].is_some() {
+            return Some(DR::try_from(datarate).unwrap());
+        }
+        None
+    }
 }
 
 pub(crate) trait DynamicChannelRegion<const NUM_JOIN_CHANNELS: usize, const NUM_DATARATES: usize>:

@@ -100,6 +100,34 @@ seq_macro::seq!(
         }
     }
 );
+
+impl TryFrom<u8> for DR {
+    type Error = core::convert::Infallible;
+
+    fn try_from(v: u8) -> Result<Self, Self::Error> {
+        let dr = match v & 0xf {
+            0 => DR::_0,
+            1 => DR::_1,
+            2 => DR::_2,
+            3 => DR::_3,
+            4 => DR::_4,
+            5 => DR::_5,
+            6 => DR::_6,
+            7 => DR::_7,
+            8 => DR::_8,
+            9 => DR::_9,
+            10 => DR::_10,
+            11 => DR::_11,
+            12 => DR::_12,
+            13 => DR::_13,
+            14 => DR::_14,
+            15 => DR::_15,
+            _ => unreachable!(),
+        };
+        Ok(dr)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 /// Regions supported by this crate: AS923_1, AS923_2, AS923_3, AS923_4, AU915, EU868, EU433, IN865, US915.
@@ -390,6 +418,10 @@ impl Configuration {
                 ),
             },
         }
+    }
+
+    pub(crate) fn check_data_rate(&self, data_rate: u8) -> Option<DR> {
+        region_dispatch!(self, check_data_rate, data_rate)
     }
 
     fn get_tx_dr_and_frequency<RNG: RngCore>(
