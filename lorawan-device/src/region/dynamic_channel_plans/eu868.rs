@@ -5,7 +5,7 @@
 /// 2. DR0 to DR7
 /// 3. DR0 to DR11 (all data rates implemented)
 ///
-/// Currently, support for only DR0..D6 is implemented
+/// Current status: DR0..DR6 is supported
 use super::*;
 
 const JOIN_CHANNELS: [u32; 3] = [868_100_000, 868_300_000, 868_500_000];
@@ -84,23 +84,17 @@ pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES] = [
         max_mac_payload_size: 250,
         max_mac_payload_size_with_dwell_time: 250,
     }),
-    /* Notes: FSK and LR-FHSS rates
-     * -  7: FSK: 50 kbps
-     * -  8: LR-FHSS CR1/3: 137 kHz BW
-     * -  9: LR-FHSS CR2/3: 137 kHz BW
-     * - 10: LR-FHSS CR1/3: 336 kHz BW
-     * - 11: LR-FHSS CR2/3: 336 kHz BW
-     * - 12..14: RFU
-     * - 15: The value of 0xF (decimal 15) of either DataRate or TXPower means
-     *       that the end-device SHALL ignore that field and keep the current
-     *       parameter values.
-     */
+    // TODO: DR7: FSK: 50 kbps
     None,
+    // TODO: DR8: LR-FHSS CR1/3: 137 kHz BW
     None,
+    // TODO: DR9: LR-FHSS CR2/3: 137 kHz BW
     None,
+    // TODO: DR10: LR-FHSS CR1/3: 336 kHz BW
     None,
+    // TODO: DR11: LR-FHSS CR2/3: 336 kHz BW
     None,
-    None,
+    // DR12..DR14: RFU
     None,
     None,
     None,

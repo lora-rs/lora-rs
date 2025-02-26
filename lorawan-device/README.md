@@ -16,8 +16,9 @@ Both stacks share a dependency on the internal module, `mac` where LoRaWAN 1.0.x
 - Class C device behavior (async only, enabled by default with the `class-c` feature)
 - Over-the-Air Activation (OTAA) and Activation by Personalization (ABP)
 - CFList is supported for fixed and dynamic channel plans
-- Regional support for AS923_1, AS923_2, AS923_3, AS923_4, AU915, EU868, EU433, IN865, US915 (note: regional power 
-limits are not enforced ([#168](https://github.com/lora-rs/lora-rs/issues/168))
+- Regional support for AS923_1, AS923_2, AS923_3, AS923_4, AU915, EU868, EU433, IN865, US915 with following caveats:
+  * Regional power limits are not enforced ([#168](https://github.com/lora-rs/lora-rs/issues/168))
+  * FSK and LR-FHSS modulations are not supported
 
 **Currently, MAC commands are minimally mocked. For example, an ADRReq is responded with an ADRResp, but not much
 is actually done with the payload**.
