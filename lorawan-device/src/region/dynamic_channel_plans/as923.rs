@@ -19,7 +19,7 @@ pub(crate) type AS923_4 = DynamicChannelPlan<2, AS923Region<917_300_000, 5900000
 pub struct AS923Region<const DEFAULT_RX2: u32, const O: u32>;
 
 impl<const DEFAULT_RX2: u32, const OFFSET: u32> ChannelRegion for AS923Region<DEFAULT_RX2, OFFSET> {
-    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES] {
+    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
     }
 }
@@ -38,7 +38,7 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion<2>
 
 use super::{Bandwidth, Datarate, SpreadingFactor};
 
-pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES] = [
+pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES as usize] = [
     // DR0
     Some(Datarate {
         spreading_factor: SpreadingFactor::_12,

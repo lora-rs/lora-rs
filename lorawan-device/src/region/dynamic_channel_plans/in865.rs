@@ -16,7 +16,7 @@ pub(crate) type IN865 = DynamicChannelPlan<3, IN865Region>;
 pub struct IN865Region;
 
 impl ChannelRegion for IN865Region {
-    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES] {
+    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
     }
 }
@@ -33,7 +33,7 @@ impl DynamicChannelRegion<3> for IN865Region {
 
 use super::{Bandwidth, Datarate, SpreadingFactor};
 
-pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES] = [
+pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES as usize] = [
     // DR0
     Some(Datarate {
         spreading_factor: SpreadingFactor::_12,
