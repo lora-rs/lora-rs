@@ -1,3 +1,10 @@
+/// US915 region support (902..928 MHz)
+///
+/// US902-928 end-devices SHALL support one of the two following data rate options:
+/// 1. DR0 to DR4 and DR8 to DR13 (minimum set supported for certification)
+/// 2. DR0 to DR13 (all data rates implemented)
+///
+/// Current status: DR5 and DR6 are unimplemented (LR-FHSS)
 use super::*;
 
 mod frequencies;

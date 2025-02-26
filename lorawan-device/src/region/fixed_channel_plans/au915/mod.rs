@@ -1,3 +1,10 @@
+/// AU915 region support (915..928 MHz)
+///
+/// AU915-928 end-devices SHALL support one of the two following data rate options:
+/// 1. DR0 to DR6 and DR8 to DR13 (minimum set supported for certification)
+/// 2. DR0 to DR13 (all data rates implemented)
+///
+/// Current status: DR7 is unimplemented (LR-FHSS)
 use super::*;
 
 mod frequencies;
