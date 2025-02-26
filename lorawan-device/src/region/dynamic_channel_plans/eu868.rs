@@ -17,7 +17,7 @@ pub(crate) type EU868 = DynamicChannelPlan<3, EU868Region>;
 pub struct EU868Region;
 
 impl ChannelRegion for EU868Region {
-    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES] {
+    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
     }
 }
@@ -34,7 +34,7 @@ impl DynamicChannelRegion<3> for EU868Region {
 
 use super::{Bandwidth, Datarate, SpreadingFactor};
 
-pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES] = [
+pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES as usize] = [
     // DR0
     Some(Datarate {
         spreading_factor: SpreadingFactor::_12,

@@ -56,7 +56,7 @@ pub use fixed_channel_plans::AU915;
 pub use fixed_channel_plans::US915;
 
 pub(crate) trait ChannelRegion {
-    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES];
+    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize];
 
     fn get_max_payload_length(datarate: DR, repeater_compatible: bool, dwell_time: bool) -> u8 {
         let Some(Some(dr)) = Self::datarates().get(datarate as usize) else {

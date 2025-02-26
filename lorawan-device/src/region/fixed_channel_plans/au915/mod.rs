@@ -50,7 +50,7 @@ impl AU915 {
 pub(crate) struct AU915Region;
 
 impl ChannelRegion for AU915Region {
-    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES] {
+    fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
     }
 }

@@ -11,7 +11,7 @@ pub(crate) const ADR_ACK_DELAY: usize = 32;
 pub(crate) const ACK_TIMEOUT: usize = 2; // random delay between 1 and 3 seconds
 
 // Although there are 16 possible slots, last one is not defined as Datarate
-pub(crate) const NUM_DATARATES: usize = 15;
+pub(crate) const NUM_DATARATES: u8 = 15;
 
 pub(crate) const DEFAULT_BANDWIDTH: Bandwidth = Bandwidth::_125KHz;
 pub(crate) const DEFAULT_SPREADING_FACTOR: SpreadingFactor = SpreadingFactor::_7;

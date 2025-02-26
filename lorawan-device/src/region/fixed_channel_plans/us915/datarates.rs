@@ -1,6 +1,6 @@
 use super::{Bandwidth, Datarate, SpreadingFactor, NUM_DATARATES};
 
-pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES] = [
+pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES as usize] = [
     // DR0
     Some(Datarate {
         spreading_factor: SpreadingFactor::_10,
