@@ -332,14 +332,20 @@ impl Session {
                 RXParamSetupReq(payload) => {
                     // TODO: Verify with region!
                     configuration.rx2_frequency = Some(payload.frequency().value());
-                    // TODO: Figure these out...
-                    // let dl = payload.dl_settings();
-                    // - rx1_dr_offset: dl.rx1_dr_offset()
-                    // - rx2_data_rate = dl.rx2_data_rate());
+                    let dl = payload.dl_settings();
+                    let rx1_dr_offset_ack = {
+                        let index = dl.rx1_dr_offset();
+                        // Ignore field and keep the current parameter value
+                        if index == 15 {
+                            true
+                        } else {
+                            region.set_rx1_datarate(index.into())
+                        }
+                    };
+                    // let rx2_data_rate = dl.rx2_data_rate();
                     let mut cmd = RXParamSetupAnsCreator::new();
-                    cmd
-                        //.set_rx1_data_rate_offset_ack(true)
-                        //.set_rx2_data_rate_ack(true);
+                    cmd.set_rx1_data_rate_offset_ack(rx1_dr_offset_ack)
+                        .set_rx2_data_rate_ack(true)
                         .set_channel_ack(true);
                     self.uplink.add_mac_command(cmd);
                 }
