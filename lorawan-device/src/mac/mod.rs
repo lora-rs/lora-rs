@@ -51,6 +51,7 @@ pub struct Configuration {
     join_accept_delay1: u32,
     join_accept_delay2: u32,
 
+    pub(crate) tx_power: Option<u8>,
     // Overriden with RxParamSetupReq
     // TODO: rx1_data_rate_offset
     // TODO: rx2_data_rate
@@ -109,6 +110,7 @@ impl Mac {
                 join_accept_delay1: region::constants::JOIN_ACCEPT_DELAY1,
                 join_accept_delay2: region::constants::JOIN_ACCEPT_DELAY2,
                 rx2_frequency: None,
+                tx_power: None,
             },
             #[cfg(feature = "certification")]
             certification: certification::Certification::new(),
@@ -164,7 +166,10 @@ impl Mac {
         }?;
         let mut tx_config =
             self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
-        tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
+        tx_config.adjust_power(
+            self.configuration.tx_power.unwrap_or(self.board_eirp.max_power),
+            self.board_eirp.antenna_gain,
+        );
         Ok((tx_config, fcnt))
     }
 
@@ -177,7 +182,10 @@ impl Mac {
         self.multicast.setup_send::<C, N>(&mut self.state, buf).map(|fcnt_up| {
             let mut tx_config =
                 self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
-            tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
+            tx_config.adjust_power(
+                self.configuration.tx_power.unwrap_or(self.board_eirp.max_power),
+                self.board_eirp.antenna_gain,
+            );
             (tx_config, fcnt_up)
         })
     }

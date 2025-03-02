@@ -304,15 +304,23 @@ impl Session {
                     // Handle DataRate
                     let dr = {
                         let rate = payload.data_rate();
-                        // Use currently used data rate in case requested rate is 15 (0xf)...
+                        // Use currently active rate in case requested rate is 15 (0xf)...
                         if rate == 0xf {
                             Some(configuration.data_rate)
-                        // ..otherwise check whether this is supported by region
                         } else {
-                            region.check_data_rate(payload.data_rate())
+                            region.check_data_rate(rate)
                         }
                     };
-                    // TODO: TXPower
+                    // Handle TxPower
+                    let pw = {
+                        let power = payload.tx_power();
+                        // Use currently active power in case requested power is 15 (0xf)...
+                        if power == 0xf {
+                            Some(configuration.tx_power)
+                        } else {
+                            region.check_tx_power(power)
+                        }
+                    };
                     // ChannelMask
                     region.set_channel_mask(
                         payload.redundancy().channel_mask_control(),
@@ -321,12 +329,13 @@ impl Session {
                     let mut cmd = LinkADRAnsCreator::new();
                     cmd.set_channel_mask_ack(true)
                         .set_data_rate_ack(dr.is_some())
-                        .set_tx_power_ack(true);
+                        .set_tx_power_ack(pw.is_some());
                     self.uplink.add_mac_command(cmd);
 
                     // TODO: We should only apply settings if all 3 settings are valid!
-                    if dr.is_some() {
-                        configuration.data_rate = dr.unwrap()
+                    if dr.is_some() && pw.is_some() {
+                        configuration.data_rate = dr.unwrap();
+                        configuration.tx_power = pw.unwrap();
                     }
                 }
                 RXParamSetupReq(payload) => {
