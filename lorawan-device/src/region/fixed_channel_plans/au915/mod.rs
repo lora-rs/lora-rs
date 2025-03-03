@@ -13,7 +13,6 @@ use frequencies::*;
 mod datarates;
 use datarates::*;
 
-const AU_DBM: i8 = 21;
 const MAX_EIRP: u8 = 30;
 const DEFAULT_RX2: u32 = 923_300_000;
 
@@ -102,8 +101,5 @@ impl FixedChannelRegion for AU915Region {
             Window::_2 => DR::_8,
         };
         DATARATES[datarate as usize].clone().unwrap()
-    }
-    fn get_dbm() -> i8 {
-        AU_DBM
     }
 }
