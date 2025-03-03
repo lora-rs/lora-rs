@@ -104,7 +104,4 @@ impl FixedChannelRegion for US915Region {
         };
         DATARATES[datarate as usize].clone().unwrap()
     }
-    fn get_dbm() -> i8 {
-        (US_DBM as u8).try_into().unwrap()
-    }
 }

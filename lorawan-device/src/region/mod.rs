@@ -410,7 +410,8 @@ impl Configuration {
     ) -> TxConfig {
         let (dr, frequency) = self.get_tx_dr_and_frequency(rng, datarate, frame);
         TxConfig {
-            pw: self.get_dbm(),
+            // We can do this safely, as default output power will be positive
+            pw: self.check_tx_power(0).unwrap().unwrap() as i8,
             rf: RfConfig {
                 frequency,
                 bb: BaseBandModulationParams::new(
@@ -495,10 +496,6 @@ impl Configuration {
         }
     }
 
-    pub(crate) fn get_dbm(&self) -> i8 {
-        region_dispatch!(self, get_dbm)
-    }
-
     pub(crate) fn get_coding_rate(&self) -> CodingRate {
         region_dispatch!(self, get_coding_rate)
     }
@@ -568,9 +565,6 @@ pub(crate) trait RegionHandler {
 
     fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32;
     fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate;
-    fn get_dbm(&self) -> i8 {
-        DEFAULT_DBM
-    }
     fn get_coding_rate(&self) -> CodingRate {
         DEFAULT_CODING_RATE
     }
