@@ -9,6 +9,7 @@
 use super::*;
 
 const JOIN_CHANNELS: [u32; 3] = [868_100_000, 868_300_000, 868_500_000];
+const MAX_EIRP: u8 = 16;
 
 pub(crate) type EU868 = DynamicChannelPlan<3, EU868Region>;
 
@@ -31,6 +32,13 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
 impl ChannelRegion for EU868Region {
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
+    }
+
+    fn tx_power_adjust(pw: u8) -> Option<u8> {
+        match pw {
+            0..=7 => Some(MAX_EIRP - (2 * pw)),
+            _ => None,
+        }
     }
 }
 

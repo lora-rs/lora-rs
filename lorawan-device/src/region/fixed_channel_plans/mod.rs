@@ -223,6 +223,10 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         F::get_rx_datarate(tx_datarate, frame, window)
     }
 
+    fn check_tx_power(&self, tx_power: u8) -> Option<u8> {
+        F::tx_power_adjust(tx_power)
+    }
+
     fn frequency_valid(&self, freq: u32) -> bool {
         (self.frequency_valid)(freq)
     }
