@@ -8,11 +8,11 @@
 use super::*;
 
 const JOIN_CHANNELS: [u32; 3] = [865_062_500, 865_402_500, 865_985_000];
+const MAX_EIRP: u8 = 30;
 
 pub(crate) type IN865 = DynamicChannelPlan<3, IN865Region>;
 
 #[derive(Default, Clone)]
-#[allow(clippy::upper_case_acronyms)]
 pub struct IN865Region;
 
 fn in865_freq_check(f: u32) -> bool {
@@ -30,6 +30,13 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
 impl ChannelRegion for IN865Region {
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
+    }
+
+    fn tx_power_adjust(pw: u8) -> Option<u8> {
+        match pw {
+            0..=10 => Some(MAX_EIRP - (2 * pw)),
+            _ => None,
+        }
     }
 }
 

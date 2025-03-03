@@ -14,6 +14,7 @@ mod datarates;
 use datarates::*;
 
 const AU_DBM: i8 = 21;
+const MAX_EIRP: u8 = 30;
 const DEFAULT_RX2: u32 = 923_300_000;
 
 /// State struct for the `AU915` region. This struct may be created directly if you wish to fine-tune some parameters.
@@ -62,6 +63,13 @@ pub(crate) struct AU915Region;
 impl ChannelRegion for AU915Region {
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
+    }
+
+    fn tx_power_adjust(pw: u8) -> Option<u8> {
+        match pw {
+            0..=14 => Some(MAX_EIRP - (2 * pw)),
+            _ => None,
+        }
     }
 }
 

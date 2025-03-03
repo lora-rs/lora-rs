@@ -73,6 +73,8 @@ pub(crate) trait ChannelRegion {
             max_size
         }
     }
+
+    fn tx_power_adjust(pw: u8) -> Option<u8>;
 }
 
 #[derive(Clone)]
@@ -424,6 +426,10 @@ impl Configuration {
         region_dispatch!(self, check_data_rate, data_rate)
     }
 
+    pub(crate) fn check_tx_power(&self, tx_power: u8) -> Option<Option<u8>> {
+        region_dispatch!(self, check_tx_power, tx_power).map(Some)
+    }
+
     fn get_tx_dr_and_frequency<RNG: RngCore>(
         &mut self,
         rng: &mut RNG,
@@ -568,6 +574,8 @@ pub(crate) trait RegionHandler {
     fn get_coding_rate(&self) -> CodingRate {
         DEFAULT_CODING_RATE
     }
+
+    fn check_tx_power(&self, tx_power: u8) -> Option<u8>;
 
     fn frequency_valid(&self, freq: u32) -> bool;
 }

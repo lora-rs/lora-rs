@@ -227,6 +227,10 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
         R::datarates()[datarate].clone().unwrap()
     }
 
+    fn check_tx_power(&self, tx_power: u8) -> Option<u8> {
+        R::tx_power_adjust(tx_power)
+    }
+
     fn frequency_valid(&self, freq: u32) -> bool {
         (self.frequency_valid)(freq)
     }

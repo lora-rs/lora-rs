@@ -8,6 +8,7 @@
 use super::*;
 
 const JOIN_CHANNELS: [u32; 2] = [923200000, 923200000];
+const MAX_EIRP: u8 = 16;
 
 pub(crate) type AS923_1 = DynamicChannelPlan<2, AS923Region<923_200_000, 0>>;
 pub(crate) type AS923_2 = DynamicChannelPlan<2, AS923Region<921_400_000, 1800000>>;
@@ -21,6 +22,13 @@ pub struct AS923Region<const DEFAULT_RX2: u32, const O: u32>;
 impl<const DEFAULT_RX2: u32, const OFFSET: u32> ChannelRegion for AS923Region<DEFAULT_RX2, OFFSET> {
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
+    }
+
+    fn tx_power_adjust(pw: u8) -> Option<u8> {
+        match pw {
+            0..=7 => Some(MAX_EIRP - (2 * pw)),
+            _ => None,
+        }
     }
 }
 

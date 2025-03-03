@@ -13,7 +13,8 @@ use frequencies::*;
 mod datarates;
 use datarates::*;
 
-const US_DBM: i8 = 21;
+const US_DBM: u8 = 21;
+const MAX_EIRP: u8 = 30;
 const DEFAULT_RX2: u32 = 923_300_000;
 
 /// State struct for the `US915` region. This struct may be created directly if you wish to fine-tune some parameters.
@@ -63,6 +64,17 @@ impl ChannelRegion for US915Region {
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
     }
+    fn tx_power_adjust(pw: u8) -> Option<u8> {
+        // Note: FCC regulation requires hopping over at least 50 channels when using
+        // maximum output power. This is achieved either when more than 50
+        // LoRa/125 kHz channels are enabled and/or when at least one LR-FHSS
+        // channel is enabled. It is possible to have end-devices with less channels
+        // when limiting the conducted transmit power of the end-device to 21 dBm.
+        match pw {
+            0..=14 => Some(core::cmp::min(US_DBM, MAX_EIRP - (2 * pw))),
+            _ => None,
+        }
+    }
 }
 
 impl FixedChannelRegion for US915Region {
@@ -93,6 +105,6 @@ impl FixedChannelRegion for US915Region {
         DATARATES[datarate as usize].clone().unwrap()
     }
     fn get_dbm() -> i8 {
-        US_DBM
+        (US_DBM as u8).try_into().unwrap()
     }
 }

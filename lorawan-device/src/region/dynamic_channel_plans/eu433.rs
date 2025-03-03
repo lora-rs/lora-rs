@@ -8,6 +8,7 @@
 use super::*;
 
 const JOIN_CHANNELS: [u32; 3] = [433_175_000, 433_375_000, 433_575_000];
+const MAX_EIRP: u8 = 16;
 
 pub(crate) type EU433 = DynamicChannelPlan<3, EU433Region>;
 
@@ -30,6 +31,13 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
 impl ChannelRegion for EU433Region {
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
+    }
+
+    fn tx_power_adjust(pw: u8) -> Option<u8> {
+        match pw {
+            0..=5 => Some(MAX_EIRP - (2 * pw)),
+            _ => None,
+        }
     }
 }
 
