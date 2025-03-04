@@ -508,6 +508,10 @@ impl Configuration {
     pub(crate) fn get_current_region(&self) -> super::region::Region {
         self.state.region()
     }
+
+    pub(crate) fn skip_newchannelreq(&self) -> bool {
+        region_dispatch!(self, skip_newchannelreq)
+    }
 }
 
 macro_rules! from_region {
@@ -572,6 +576,9 @@ pub(crate) trait RegionHandler {
     fn check_tx_power(&self, tx_power: u8) -> Option<u8>;
 
     fn frequency_valid(&self, freq: u32) -> bool;
+
+    /// Fixed channel plan regions SHALL NOT implement NewChannelReq MAC command.
+    fn skip_newchannelreq(&self) -> bool;
 }
 
 #[cfg(test)]
