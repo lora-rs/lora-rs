@@ -5,7 +5,7 @@
 /// 2. DR0 to DR7
 /// 3. DR0 to DR11 (all data rates implemented)
 ///
-/// Current status: DR0..DR6 is supported
+/// Current status: DR0..DR5 (minimum set is supported)
 use super::*;
 
 const JOIN_CHANNELS: [u32; 3] = [868_100_000, 868_300_000, 868_500_000];
@@ -89,13 +89,16 @@ pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES as usize] = [
         max_mac_payload_size: 250,
         max_mac_payload_size_with_dwell_time: 250,
     }),
-    // DR6
+    None,
+    /*
+    // TODO: DR6: Can be enabled once DR7 is implemented
     Some(Datarate {
         spreading_factor: SpreadingFactor::_7,
         bandwidth: Bandwidth::_250KHz,
         max_mac_payload_size: 250,
         max_mac_payload_size_with_dwell_time: 250,
     }),
+    */
     // TODO: DR7: FSK: 50 kbps
     None,
     // TODO: DR8: LR-FHSS CR1/3: 137 kHz BW
