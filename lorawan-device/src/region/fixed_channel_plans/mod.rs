@@ -231,4 +231,8 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
     fn skip_newchannelreq(&self) -> bool {
         true
     }
+
+    fn handle_new_channel(&mut self, _: u8, _: u32, _: DataRateRange) -> (bool, bool) {
+        unreachable!()
+    }
 }
