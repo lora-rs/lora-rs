@@ -59,7 +59,7 @@ fn main() {
     // Generate LoRaWAN eui and key overrides from environment variables
     {
         let path = &out.join("lorawan_keys.rs");
-        let mut file = BufWriter::new(File::create(&path).unwrap());
+        let mut file = BufWriter::new(File::create(path).unwrap());
 
         // TODO: Figure out how to not generate this file every time...
         write!(
@@ -82,7 +82,7 @@ fn main() {
     // Put linker configuration in our output directory and ensure it's
     // on the linker search path.
     if cfg!(feature = "link-to-ram") {
-        File::create(out.join("link_ram_cortex_m.x"))
+        File::create(out.join("link_ram.x"))
             .unwrap()
             .write_all(include_bytes!("../link_ram_cortex_m.x"))
             .unwrap();
