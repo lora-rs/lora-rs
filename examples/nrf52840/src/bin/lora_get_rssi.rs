@@ -12,8 +12,8 @@ use embassy_time::{Delay, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx126xInterfaceVariant;
 use lora_phy::sx126x::{Sx1262, Sx126x, TcxoCtrlVoltage};
-use lora_phy::{mod_params::*, sx126x};
 use lora_phy::LoRa;
+use lora_phy::{mod_params::*, sx126x};
 use {defmt_rtt as _, panic_probe as _};
 
 const LORA_FREQUENCY_IN_HZ: u32 = 869_400_000; // warning: set this appropriately for the region

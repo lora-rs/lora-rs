@@ -9,15 +9,16 @@ use embassy_executor::Spawner;
 use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pin as _, Pull};
 use embassy_nrf::rng::Rng;
 use embassy_nrf::{bind_interrupts, peripherals, rng, spim};
-use embassy_time::Delay;
+use embassy_time::{Delay, Duration, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx126xInterfaceVariant;
 use lora_phy::lorawan_radio::LorawanRadio;
 use lora_phy::sx126x::{self, Sx1262, Sx126x, TcxoCtrlVoltage};
 use lora_phy::LoRa;
-use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode};
+use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode, JoinResponse};
 use lorawan_device::default_crypto::DefaultFactory as Crypto;
 use lorawan_device::{AppEui, AppKey, DevEui};
+use rand::Rng as _;
 use {defmt_rtt as _, panic_probe as _};
 
 // warning: set these appropriately for the region
@@ -37,6 +38,13 @@ bind_interrupts!(struct Irqs {
     TWISPI1 => spim::InterruptHandler<peripherals::TWISPI1>;
     RNG => rng::InterruptHandler<peripherals::RNG>;
 });
+
+// Generate "jittered" delay for retry attempts up to maximum of 1 hour
+pub fn generate_delay(rng: &mut Rng<'static, peripherals::RNG>, retries: u16) -> u16 {
+    let base = core::cmp::min(10 + (10 * retries), 3600);
+    let jitter = base / 5;
+    (base - jitter).saturating_add(rng.gen_range(jitter..=2 * jitter))
+}
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
@@ -69,16 +77,28 @@ async fn main(_spawner: Spawner) {
 
     defmt::info!("Joining LoRaWAN network");
 
-    let resp = device
-        .join(&JoinMode::OTAA {
-            deveui: DevEui::from(DEVEUI.unwrap_or(DEFAULT_DEVEUI)),
-            appeui: AppEui::from(APPEUI.unwrap_or(DEFAULT_APPEUI)),
-            appkey: AppKey::from(APPKEY.unwrap_or(DEFAULT_APPKEY)),
-        })
-        .await
-        .unwrap();
+    let join_mode = JoinMode::OTAA {
+        deveui: DevEui::from(DEVEUI.unwrap_or(DEFAULT_DEVEUI)),
+        appeui: AppEui::from(APPEUI.unwrap_or(DEFAULT_APPEUI)),
+        appkey: AppKey::from(APPKEY.unwrap_or(DEFAULT_APPKEY)),
+    };
 
-    info!("LoRaWAN network joined: {:?}", resp);
+    let mut retries = 0;
+
+    loop {
+        let join_result = device.join(&join_mode).await;
+        if let Ok(JoinResponse::JoinSuccess) = join_result {
+            info!("LoRaWAN network joined");
+            break;
+        }
+        let delay = generate_delay(&mut device.rng, retries);
+
+        info!("Join failed: {:?}. Retrying in {:?} seconds..", join_result, delay);
+        Timer::after(Duration::from_secs(delay.into())).await;
+        retries += 1;
+    }
+
+    info!("LoRaWAN network joined!");
 
     #[cfg(feature = "teleprobe")]
     cortex_m::asm::bkpt();

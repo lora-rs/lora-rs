@@ -19,6 +19,7 @@ panic-probe = { version = "0.3", features = ["print-defmt"] }
 cortex-m = { version = "0.7.7", features = ["inline-asm", "critical-section-single-core"] }
 cortex-m-rt = "0.7.3"
 embedded-hal-bus = { version = "0.2", features = ["async"]}
+rand = { version = "0.8.4", default-features = false }
 
 [profile.release]
 debug = 2
