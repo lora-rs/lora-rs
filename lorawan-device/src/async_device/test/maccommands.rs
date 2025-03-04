@@ -37,8 +37,40 @@ fn newchannelreq_invalid_eu868(
     // NewChannelReqPayload([0, 24, 79, 132, 80])
     // NewChannelReqPayload([1, 24, 79, 132, 80])
     // NewChannelReqPayload([2, 24, 79, 132, 80])
-    // In EU868 we are not allowed to modify 3 first channels
+    // EU868 - first 3 channels are join channels and readonly
     build_frm_payload(buf, "0700184f84500701184f84500702184f8450")
+}
+
+#[tokio::test]
+#[cfg(feature = "region-eu868")]
+async fn newchannelreq_eu868_readonly() {
+    let (radio, timer, mut async_device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let send_await_complete = Arc::new(Mutex::new(false));
+
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = async_device.send(&[1, 2, 3], 3, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (async_device, response)
+    });
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(newchannelreq_invalid_eu868).await;
+
+    let (device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    if let Some(session) = device.mac.get_session() {
+        let data = session.uplink.mac_commands();
+        assert_eq!(parse_uplink_mac_commands(data).count(), 3);
+    } else {
+        panic!("Session not joined?");
+    }
 }
 
 #[tokio::test]

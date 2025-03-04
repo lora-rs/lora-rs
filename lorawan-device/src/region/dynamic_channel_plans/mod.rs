@@ -239,4 +239,20 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
     fn skip_newchannelreq(&self) -> bool {
         false
     }
+
+    fn handle_new_channel(&mut self, index: u8, freq: u32, _: DataRateRange) -> (bool, bool) {
+        // Join channels are readonly - these cannot be modified!
+        let index = index as usize;
+        if index < NUM_JOIN_CHANNELS {
+            return (false, false);
+        }
+        // Disable channel if frequency is 0
+        // TODO: We currently have only 5 of these?
+        if freq == 0 && index < self.additional_channels.len() {
+            self.additional_channels[index] = None;
+            return (true, true);
+        }
+        // TODO: Implement frequency and data range checks to define new channels
+        (false, false)
+    }
 }

@@ -7,7 +7,8 @@ use crate::{region, AppSKey, Downlink, NwkSKey};
 use heapless::Vec;
 use lorawan::keys::CryptoFactory;
 use lorawan::maccommandcreator::{
-    DevStatusAnsCreator, LinkADRAnsCreator, RXParamSetupAnsCreator, RXTimingSetupAnsCreator,
+    DevStatusAnsCreator, LinkADRAnsCreator, NewChannelAnsCreator, RXParamSetupAnsCreator,
+    RXTimingSetupAnsCreator,
 };
 use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
 use lorawan::{
@@ -338,12 +339,20 @@ impl Session {
                         configuration.tx_power = pw.unwrap();
                     }
                 }
-                NewChannelReq(_payload) => {
+                NewChannelReq(payload) => {
                     // Check whether region should skip handling this command.
                     if region.skip_newchannelreq() {
                         continue;
                     }
-                    // TODO: Handle command
+                    let (ack_f, ack_d) = region.handle_new_channel(
+                        payload.channel_index(),
+                        payload.frequency().value(),
+                        payload.data_rate_range(),
+                    );
+
+                    let mut cmd = NewChannelAnsCreator::new();
+                    cmd.set_channel_frequency_ack(ack_f).set_data_rate_range_ack(ack_d);
+                    self.uplink.add_mac_command(cmd);
                 }
                 RXParamSetupReq(payload) => {
                     let freq = payload.frequency().value();

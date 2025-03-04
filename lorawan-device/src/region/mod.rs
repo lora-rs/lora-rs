@@ -1,6 +1,6 @@
 //! LoRaWAN device region definitions (eg: EU868, US915, etc).
 use lora_modulation::{Bandwidth, BaseBandModulationParams, CodingRate, SpreadingFactor};
-use lorawan::{maccommands::ChannelMask, parser::CfList};
+use lorawan::{maccommands::ChannelMask, parser::CfList, types::DataRateRange};
 use rand_core::RngCore;
 
 use crate::mac::{Frame, Window};
@@ -512,6 +512,15 @@ impl Configuration {
     pub(crate) fn skip_newchannelreq(&self) -> bool {
         region_dispatch!(self, skip_newchannelreq)
     }
+
+    pub(crate) fn handle_new_channel(
+        &mut self,
+        index: u8,
+        freq: u32,
+        data_rates: DataRateRange,
+    ) -> (bool, bool) {
+        mut_region_dispatch!(self, handle_new_channel, index, freq, data_rates)
+    }
 }
 
 macro_rules! from_region {
@@ -556,6 +565,13 @@ pub(crate) trait RegionHandler {
         channel_mask_control: u8,
         channel_mask: ChannelMask<2>,
     );
+
+    fn handle_new_channel(
+        &mut self,
+        index: u8,
+        freq: u32,
+        data_rates: DataRateRange,
+    ) -> (bool, bool);
 
     fn get_default_datarate(&self) -> DR {
         DR::_0
