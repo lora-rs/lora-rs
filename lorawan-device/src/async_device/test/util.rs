@@ -8,6 +8,35 @@ use crate::mac::Session;
 pub(crate) use crate::test_util::{handle_data_uplink_with_link_adr_req, Uplink};
 use crate::{AppSKey, NwkSKey};
 
+fn default_session() -> Session {
+    Session {
+        nwkskey: NwkSKey::from(get_key()),
+        appskey: AppSKey::from(get_key()),
+        devaddr: get_dev_addr(),
+        fcnt_up: 0,
+        fcnt_down: 0,
+        confirmed: false,
+        uplink: Default::default(),
+        #[cfg(feature = "certification")]
+        override_adr: false,
+        #[cfg(feature = "certification")]
+        override_confirmed: None,
+    }
+}
+
+pub fn session_with_region(region: region::Configuration) -> (RadioChannel, TimerChannel, Device) {
+    let (radio_channel, mock_radio) = TestRadio::new();
+    let (timer_channel, mock_timer) = TestTimer::new();
+    let async_device = Device::new_with_session(
+        region,
+        mock_radio,
+        mock_timer,
+        rand::rngs::OsRng,
+        Some(default_session()),
+    );
+    (radio_channel, timer_channel, async_device)
+}
+
 fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel, Device) {
     let (radio_channel, mock_radio) = TestRadio::new();
     let (timer_channel, mock_timer) = TestTimer::new();
@@ -23,19 +52,7 @@ fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel,
 }
 
 pub fn setup_with_session() -> (RadioChannel, TimerChannel, Device) {
-    setup_internal(Some(Session {
-        nwkskey: NwkSKey::from(get_key()),
-        appskey: AppSKey::from(get_key()),
-        devaddr: get_dev_addr(),
-        fcnt_up: 0,
-        fcnt_down: 0,
-        confirmed: false,
-        uplink: Default::default(),
-        #[cfg(feature = "certification")]
-        override_adr: false,
-        #[cfg(feature = "certification")]
-        override_confirmed: None,
-    }))
+    setup_internal(Some(default_session()))
 }
 
 /// Handle an uplink and respond with two LinkAdrReq on Port 0
