@@ -41,6 +41,7 @@ lorawan = { path = "../lorawan-encoding", default-features = false, features = [
     "default-crypto",
     "defmt-03",
 ] }
+hex = "0.4.3"
 
 [features]
 default = ["all-regions", "class-c"]
