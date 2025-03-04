@@ -329,6 +329,13 @@ impl Session {
                         configuration.data_rate = dr.unwrap()
                     }
                 }
+                NewChannelReq(_payload) => {
+                    // Check whether region should skip handling this command.
+                    if region.skip_newchannelreq() {
+                        continue;
+                    }
+                    // TODO: Handle command
+                }
                 RXParamSetupReq(payload) => {
                     let freq = payload.frequency().value();
                     let freq_ack = region.frequency_valid(freq);

@@ -132,7 +132,7 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
                 }
             }
             Some(CfList::FixedChannel(_cf_list)) => {
-                //TODO: dynamic channel plans have corresponding fixed channel lists,
+                // TODO: dynamic channel plans have corresponding fixed channel lists,
                 // however, this feature is entirely optional
             }
             None => {}
@@ -229,5 +229,10 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
 
     fn frequency_valid(&self, freq: u32) -> bool {
         (self.frequency_valid)(freq)
+    }
+
+    // NewChannelReq MAC command is required in dynamic channel regions
+    fn skip_newchannelreq(&self) -> bool {
+        false
     }
 }
