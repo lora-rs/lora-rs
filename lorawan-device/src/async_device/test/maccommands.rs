@@ -19,7 +19,7 @@ async fn maccommands_in_frmpayload() {
     ) -> usize {
         // FRMPayload contains:
         // - DevStatusReq(..)
-        // - RXParamSetupReq(RXParamSetupReqPayload([2, 210, 173, 132]))
+        // - RXParamSetupReq(RXParamSetupReqPayload([2, 210, 173, 132])) - freq: 869525000
         // - RXTimingSetupReq(RXTimingSetupReqPayload([1]))
         // - LinkADRReq(LinkADRReqPayload([80, 0, 0, 97]))
         let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
@@ -66,7 +66,8 @@ async fn maccommands_in_frmpayload() {
     if let Some(session) = device.mac.get_session() {
         let data = session.uplink.mac_commands();
         assert_eq!(parse_uplink_mac_commands(data).count(), 4);
-        assert_eq!(device.mac.configuration.rx2_frequency, Some(869525000));
+        // LinkADRReq sends freq = 869525000, but this is invalid in US915
+        assert_eq!(device.mac.configuration.rx2_frequency, None);
     } else {
         panic!("Session not joined?");
     }
