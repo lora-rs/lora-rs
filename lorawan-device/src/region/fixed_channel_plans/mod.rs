@@ -37,16 +37,27 @@ impl From<Subband> for usize {
     }
 }
 
-#[derive(Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone)]
 pub(crate) struct FixedChannelPlan<F: FixedChannelRegion> {
     last_tx_channel: u8,
     channel_mask: ChannelMask<9>,
     _fixed_channel_region: PhantomData<F>,
     join_channels: JoinChannels,
+
+    frequency_valid: fn(u32) -> bool,
 }
 
 impl<F: FixedChannelRegion> FixedChannelPlan<F> {
+    pub fn new(freq_fn: fn(u32) -> bool) -> Self {
+        Self {
+            last_tx_channel: Default::default(),
+            channel_mask: Default::default(),
+            _fixed_channel_region: Default::default(),
+            join_channels: Default::default(),
+            frequency_valid: freq_fn,
+        }
+    }
+
     pub fn set_125k_channels(&mut self, enabled: bool) {
         let mask = if enabled {
             0xFF

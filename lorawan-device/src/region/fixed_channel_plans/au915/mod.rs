@@ -37,12 +37,22 @@ const DEFAULT_RX2: u32 = 923_300_000;
 /// au915.set_join_bias(Subband::_2);
 /// let configuration: Configuration = au915.into();
 /// ```
-#[derive(Default, Clone)]
+#[derive(Clone)]
 pub struct AU915(pub(crate) FixedChannelPlan<AU915Region>);
 
 impl AU915 {
     pub fn get_max_payload_length(datarate: DR, repeater_compatible: bool, dwell_time: bool) -> u8 {
         AU915Region::get_max_payload_length(datarate, repeater_compatible, dwell_time)
+    }
+}
+
+fn au915_default_freq(f: u32) -> bool {
+    (915_000_000..=928_000_000).contains(&f)
+}
+
+impl Default for AU915 {
+    fn default() -> AU915 {
+        AU915(FixedChannelPlan::new(au915_default_freq))
     }
 }
 
