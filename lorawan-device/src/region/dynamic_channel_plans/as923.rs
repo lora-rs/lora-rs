@@ -24,6 +24,26 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> ChannelRegion for AS923Region<DE
     }
 }
 
+fn as924_generic_freq_check(f: u32) -> bool {
+    (915_000_000..=928_000_000).contains(&f)
+}
+
+fn as924_4_freq_check(f: u32) -> bool {
+    (917_000_000..=920_000_000).contains(&f)
+}
+
+impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
+    DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
+{
+    pub fn new_as924() -> Self {
+        Self::new(as924_generic_freq_check)
+    }
+
+    pub fn new_as924_4() -> Self {
+        Self::new(as924_4_freq_check)
+    }
+}
+
 impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion<2>
     for AS923Region<DEFAULT_RX2, OFFSET>
 {

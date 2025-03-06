@@ -15,6 +15,18 @@ pub(crate) type IN865 = DynamicChannelPlan<3, IN865Region>;
 #[allow(clippy::upper_case_acronyms)]
 pub struct IN865Region;
 
+fn in865_freq_check(f: u32) -> bool {
+    (865_000_000..=867_000_000).contains(&f)
+}
+
+impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
+    DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
+{
+    pub fn new_in865() -> Self {
+        Self::new(in865_freq_check)
+    }
+}
+
 impl ChannelRegion for IN865Region {
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
