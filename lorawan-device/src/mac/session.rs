@@ -330,17 +330,21 @@ impl Session {
                     }
                 }
                 RXParamSetupReq(payload) => {
-                    // TODO: Verify with region!
-                    configuration.rx2_frequency = Some(payload.frequency().value());
+                    let freq = payload.frequency().value();
+                    let freq_ack = region.frequency_valid(freq);
+
                     // TODO: Figure these out...
                     // let dl = payload.dl_settings();
                     // - rx1_dr_offset: dl.rx1_dr_offset()
                     // - rx2_data_rate = dl.rx2_data_rate());
+                    if freq_ack {
+                        configuration.rx2_frequency = Some(freq);
+                    }
+
                     let mut cmd = RXParamSetupAnsCreator::new();
-                    cmd
-                        //.set_rx1_data_rate_offset_ack(true)
-                        //.set_rx2_data_rate_ack(true);
-                        .set_channel_ack(true);
+                    cmd.set_rx1_data_rate_offset_ack(true)
+                        .set_rx2_data_rate_ack(true)
+                        .set_channel_ack(freq_ack);
                     self.uplink.add_mac_command(cmd);
                 }
                 RXTimingSetupReq(payload) => {
