@@ -16,6 +16,18 @@ pub(crate) type EU868 = DynamicChannelPlan<3, EU868Region>;
 #[allow(clippy::upper_case_acronyms)]
 pub struct EU868Region;
 
+fn eu868_freq_check(f: u32) -> bool {
+    (863_000_000..=870_000_000).contains(&f)
+}
+
+impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
+    DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
+{
+    pub fn new_eu868() -> Self {
+        Self::new(eu868_freq_check)
+    }
+}
+
 impl ChannelRegion for EU868Region {
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES

@@ -30,8 +30,7 @@ pub(crate) use eu868::EU868;
 #[cfg(feature = "region-in865")]
 pub(crate) use in865::IN865;
 
-#[derive(Default, Clone)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone)]
 pub(crate) struct DynamicChannelPlan<
     const NUM_JOIN_CHANNELS: usize,
     R: DynamicChannelRegion<NUM_JOIN_CHANNELS>,
@@ -42,11 +41,25 @@ pub(crate) struct DynamicChannelPlan<
     _fixed_channel_region: PhantomData<R>,
     rx1_offset: usize,
     rx2_dr: usize,
+
+    frequency_valid: fn(u32) -> bool,
 }
 
 impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
     DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
 {
+    fn new(freq_fn: fn(u32) -> bool) -> Self {
+        Self {
+            additional_channels: Default::default(),
+            channel_mask: Default::default(),
+            last_tx_channel: Default::default(),
+            _fixed_channel_region: Default::default(),
+            rx1_offset: Default::default(),
+            rx2_dr: Default::default(),
+            frequency_valid: freq_fn,
+        }
+    }
+
     fn get_channel(&self, channel: usize) -> Option<u32> {
         if channel < NUM_JOIN_CHANNELS {
             Some(R::join_channels()[channel])

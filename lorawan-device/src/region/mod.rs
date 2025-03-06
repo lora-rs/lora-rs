@@ -181,21 +181,21 @@ impl State {
     pub fn new(region: Region) -> State {
         match region {
             #[cfg(feature = "region-as923-1")]
-            Region::AS923_1 => State::AS923_1(AS923_1::default()),
+            Region::AS923_1 => State::AS923_1(AS923_1::new_as924()),
             #[cfg(feature = "region-as923-2")]
-            Region::AS923_2 => State::AS923_2(AS923_2::default()),
+            Region::AS923_2 => State::AS923_2(AS923_2::new_as924()),
             #[cfg(feature = "region-as923-3")]
-            Region::AS923_3 => State::AS923_3(AS923_3::default()),
+            Region::AS923_3 => State::AS923_3(AS923_3::new_as924()),
             #[cfg(feature = "region-as923-4")]
-            Region::AS923_4 => State::AS923_4(AS923_4::default()),
+            Region::AS923_4 => State::AS923_4(AS923_4::new_as924_4()),
             #[cfg(feature = "region-au915")]
             Region::AU915 => State::AU915(AU915::default()),
             #[cfg(feature = "region-eu868")]
-            Region::EU868 => State::EU868(EU868::default()),
+            Region::EU868 => State::EU868(EU868::new_eu868()),
             #[cfg(feature = "region-eu433")]
-            Region::EU433 => State::EU433(EU433::default()),
+            Region::EU433 => State::EU433(EU433::new_eu433()),
             #[cfg(feature = "region-in865")]
-            Region::IN865 => State::IN865(IN865::default()),
+            Region::IN865 => State::IN865(IN865::new_in865()),
             #[cfg(feature = "region-us915")]
             Region::US915 => State::US915(US915::default()),
         }

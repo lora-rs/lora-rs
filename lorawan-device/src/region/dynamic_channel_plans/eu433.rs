@@ -15,6 +15,18 @@ pub(crate) type EU433 = DynamicChannelPlan<3, EU433Region>;
 #[allow(clippy::upper_case_acronyms)]
 pub struct EU433Region;
 
+fn eu433_freq_check(f: u32) -> bool {
+    (433_050_000..=434_790_000).contains(&f)
+}
+
+impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
+    DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
+{
+    pub fn new_eu433() -> Self {
+        Self::new(eu433_freq_check)
+    }
+}
+
 impl ChannelRegion for EU433Region {
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
