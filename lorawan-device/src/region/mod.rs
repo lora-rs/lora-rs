@@ -497,6 +497,10 @@ impl Configuration {
         region_dispatch!(self, get_coding_rate)
     }
 
+    pub(crate) fn frequency_valid(&self, f: u32) -> bool {
+        region_dispatch!(self, frequency_valid, f)
+    }
+
     #[allow(dead_code)]
     pub(crate) fn get_current_region(&self) -> super::region::Region {
         self.state.region()
@@ -563,5 +567,50 @@ pub(crate) trait RegionHandler {
     }
     fn get_coding_rate(&self) -> CodingRate {
         DEFAULT_CODING_RATE
+    }
+
+    fn frequency_valid(&self, freq: u32) -> bool;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(feature = "region-eu868")]
+    fn test_dynamic_region_frequency_range() {
+        let r = Configuration::new(Region::EU868);
+        assert!(r.frequency_valid(863_000_000));
+        assert!(r.frequency_valid(868_000_000));
+        assert!(r.frequency_valid(870_000_000));
+
+        assert!(!r.frequency_valid(862_900_000));
+        assert!(!r.frequency_valid(870_000_001));
+
+        // Invalid in default eu868 frequency range, but valid in some areas
+        assert!(!r.frequency_valid(872_000_000));
+    }
+
+    #[test]
+    #[cfg(feature = "region-au915")]
+    fn test_fixed_au915_frequency_range() {
+        let r = Configuration::new(Region::AU915);
+        assert!(r.frequency_valid(915_000_000));
+        assert!(r.frequency_valid(928_000_000));
+
+        assert!(!r.frequency_valid(902_900_000));
+        assert!(!r.frequency_valid(930_000_001));
+    }
+
+    #[test]
+    #[cfg(feature = "region-us915")]
+    fn test_fixed_us915_frequency_range() {
+        let r = Configuration::new(Region::US915);
+        assert!(r.frequency_valid(902_000_000));
+        assert!(r.frequency_valid(915_000_000));
+        assert!(r.frequency_valid(928_000_000));
+
+        assert!(!r.frequency_valid(901_900_000));
+        assert!(!r.frequency_valid(928_000_001));
     }
 }

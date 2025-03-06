@@ -226,4 +226,8 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
         };
         R::datarates()[datarate].clone().unwrap()
     }
+
+    fn frequency_valid(&self, freq: u32) -> bool {
+        (self.frequency_valid)(freq)
+    }
 }
