@@ -225,8 +225,10 @@ where
         if tx_base_addr > 255 || rx_base_addr > 255 {
             return Err(RadioError::InvalidBaseAddress(tx_base_addr, rx_base_addr));
         }
-        self.write_register(Register::RegFifoTxBaseAddr, tx_base_addr as u8).await?;
-        self.write_register(Register::RegFifoRxBaseAddr, rx_base_addr as u8).await
+        self.write_register(Register::RegFifoTxBaseAddr, tx_base_addr as u8)
+            .await?;
+        self.write_register(Register::RegFifoRxBaseAddr, rx_base_addr as u8)
+            .await
     }
 
     // Set parameters associated with power for a send operation.
