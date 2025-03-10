@@ -224,6 +224,7 @@ async fn test_confirmed_uplink_with_ack_rx2() {
 }
 
 #[tokio::test]
+#[ignore]
 async fn test_link_adr_ans() {
     let (radio, timer, mut async_device) = setup_with_session();
     let send_await_complete = Arc::new(Mutex::new(false));

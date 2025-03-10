@@ -10,7 +10,8 @@ use lorawan::default_crypto;
 use region::{Configuration, Region};
 
 pub fn test_device() -> Device<TestRadio, default_crypto::DefaultFactory, rand_core::OsRng, 255> {
-    Device::new(Configuration::new(Region::US915), TestRadio::default(), rand::rngs::OsRng)
+    //Device::new(Configuration::new(Region::US915), TestRadio::default(), rand::rngs::OsRng)
+    Device::new(Configuration::new(Region::EU868), TestRadio::default(), rand::rngs::OsRng)
 }
 
 #[derive(Debug)]
