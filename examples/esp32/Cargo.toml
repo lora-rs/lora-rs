@@ -1,0 +1,23 @@
+[package]
+edition = "2021"
+name = "lora-esp32-examples"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+defmt = "0.3.10"
+embassy-embedded-hal = { version = "0.3.0", features = ["defmt"] }
+embassy-executor = { version = "0.7.0", features = ["defmt", "task-arena-size-16384"] }
+embassy-sync = "0.6.2"
+embassy-time = { version = "0.4.0", features = ["generic-queue-64"] }
+esp-hal = { version = "1.0.0-beta.0", features = ["esp32s3", "defmt", "unstable"] }
+esp-hal-embassy = { version = "0.7.0", features = ["esp32s3"] }
+esp-println = { version = "0.13.1", features = ["esp32s3", "defmt-espflash"] }
+lora-phy = "3.0.1"
+static_cell = "2.1.0"
+
+[profile.release]
+debug = 2
+
+[build-dependencies]
+embuild = "0.33"
