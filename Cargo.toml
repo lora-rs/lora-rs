@@ -7,6 +7,7 @@ members = [
     "lora-phy",
 ]
 exclude = [
+    "examples/esp32",
     "examples/nrf52840",
     "examples/rp",
     "examples/stm32l0",
