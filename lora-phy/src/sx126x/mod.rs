@@ -460,8 +460,10 @@ where
                     }
                     HIGH_POWER_MIN..=14 => {
                         self.set_pa_config(0x02, 0x02, DeviceSel::HighPowerPA).await?;
-                        // table indicates 14 dBm => txp = 22, therefore we add 8 to this range
-                        tx_params_power = txp as u8 + 8;
+                        // table indicates 14 dBm => txp = 22, therefore we should add 8 to this range
+                        // this however seems to be wrong when looking at the reference driver
+                        // https://github.com/STMicroelectronics/STM32CubeWL/blob/139e8d28bcec6af78dec8b52a9b9f9057868cc2e/Middlewares/Third_Party/SubGHz_Phy/stm32_radio_driver/radio_driver.c#L675
+                        tx_params_power = txp as u8;
                     }
                     _ => {
                         unreachable!("Invalid output power value for high power PA!")
