@@ -1,6 +1,6 @@
 use crate::mod_params::RadioError;
 use crate::mod_traits::InterfaceVariant;
-use crate::sx126x::Sx126xVariant::Sx1261;
+use crate::sx126x::Sx1261;
 use crate::sx126x::{Config, Sx126x};
 use embedded_hal::spi::{ErrorKind, Operation};
 use embedded_hal_async::delay::DelayNs;
