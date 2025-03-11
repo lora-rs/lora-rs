@@ -29,12 +29,8 @@ jobs:
           access_token: ${{ github.token }}
 
       - name: Setup apt packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends cmake llvm-dev clang libclang-dev
-          echo "LLVM_CONFIG_PATH=$(which llvm-config)" >> $GITHUB_ENV
-          echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> $GITHUB_ENV
-          
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake llvm-dev clang libclang-dev
+
       - name: Check formatting
         run: cargo fmt  -- --check
 
@@ -91,6 +87,9 @@ jobs:
         uses: styfle/cancel-workflow-action@0.12.1
         with:
           access_token: ${{ github.token }}
+
+      - name: Setup apt packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake llvm-dev clang libclang-dev
 
       - name: Setup Cache
         uses: Swatinem/rust-cache@v2
