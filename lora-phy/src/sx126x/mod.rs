@@ -3,7 +3,6 @@ mod radio_kind_params;
 #[cfg(test)]
 mod test;
 
-use defmt::debug;
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
 pub use radio_kind_params::TcxoCtrlVoltage;

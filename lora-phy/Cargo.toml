@@ -22,10 +22,6 @@ embedded-hal = { version = "1" }
 embedded-hal-async = { version = "1" }
 document-features = "0.2.8"
 
-[dev-dependencies]
-smtc-modem-cores = { path = "../smtc-modem-cores" }
-tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}
-
 [features]
 
 ## Use [`defmt`](https://docs.rs/defmt/0.3.8/defmt/index.html) for logging.
@@ -37,3 +33,5 @@ lorawan-radio = ["dep:lorawan-device"]
 [dev-dependencies]
 # Include lorawan-device unconditionally so all regions are enabled for tests
 lorawan-device = { path = "../lorawan-device" }
+smtc-modem-cores = { path = "../smtc-modem-cores" }
+tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}

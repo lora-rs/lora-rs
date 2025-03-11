@@ -162,7 +162,7 @@ where
     }
 
     async fn do_cold_start(&mut self) -> Result<(), RadioError> {
-        self.radio_kind.init_lora(self.enable_public_network).await?;
+        self.radio_kind.init_lora(self.sync_word).await?;
         self.radio_kind.set_tx_power_and_ramp_time(0, None, false).await?;
         self.radio_kind.set_irq_params(Some(self.radio_mode)).await?;
         self.cold_start = false;
