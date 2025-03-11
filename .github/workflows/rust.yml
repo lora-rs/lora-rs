@@ -29,8 +29,12 @@ jobs:
           access_token: ${{ github.token }}
 
       - name: Setup apt packages
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake llvm-dev clang libclang-dev
-
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake llvm-dev clang libclang-dev
+          echo "LLVM_CONFIG_PATH=$(which llvm-config)" >> $GITHUB_ENV
+          echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> $GITHUB_ENV
+          
       - name: Check formatting
         run: cargo fmt  -- --check
 
