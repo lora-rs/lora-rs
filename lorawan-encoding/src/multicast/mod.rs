@@ -81,6 +81,31 @@ impl McGroupDeleteReqCreator {
     }
 }
 
+impl McGroupDeleteAnsPayload<'_> {
+    pub fn mc_group_id_header(&self) -> u8 {
+        self.0[0] & 0b11
+    }
+    pub fn mc_group_undefined(&self) -> bool {
+        self.0[0] & 0b100 == 0
+    }
+}
+
+impl McGroupDeleteAnsCreator {
+    pub fn mc_group_id_header(&mut self, mc_group_id_header: u8) -> &mut Self {
+        self.data[1] &= 0b1111_1100;
+        self.data[1] |= mc_group_id_header & 0b11;
+        self
+    }
+    pub fn mc_group_undefined(&mut self, mc_group_undefined: bool) -> &mut Self {
+        if mc_group_undefined {
+            self.data[1] &= 0b1111_1011;
+        } else {
+            self.data[1] |= 0b0000_0100;
+        }
+        self
+    }
+}
+
 pub fn parse_downlink_multicast_messages(
     data: &[u8],
 ) -> MacCommandIterator<'_, DownlinkRemoteSetup<'_>> {
@@ -148,6 +173,38 @@ mod test {
             assert_eq!(req.mc_group_id_header(), 3);
         } else {
             panic!("Expected McGroupDeleteReq. Got {msg:?}");
+        }
+    }
+
+    #[test]
+    fn roundtrip_mc_group_delete_ans_success() {
+        let mut creator = McGroupDeleteAnsCreator::new();
+        creator.mc_group_id_header(3).mc_group_undefined(false);
+        let bytes = creator.build();
+
+        let mut messages = parse_uplink_multicast_messages(bytes);
+        let msg = messages.next().unwrap();
+        if let UplinkRemoteSetup::McGroupDeleteAns(ans) = msg {
+            assert_eq!(ans.mc_group_id_header(), 3);
+            assert!(!ans.mc_group_undefined());
+        } else {
+            panic!("Expected McGroupDeleteAns. Got {msg:?}");
+        }
+    }
+
+    #[test]
+    fn roundtrip_mc_group_delete_ans_failure() {
+        let mut creator = McGroupDeleteAnsCreator::new();
+        creator.mc_group_id_header(2).mc_group_undefined(true);
+        let bytes = creator.build();
+
+        let mut messages = parse_uplink_multicast_messages(bytes);
+        let msg = messages.next().unwrap();
+        if let UplinkRemoteSetup::McGroupDeleteAns(ans) = msg {
+            assert_eq!(ans.mc_group_id_header(), 2);
+            assert!(ans.mc_group_undefined());
+        } else {
+            panic!("Expected McGroupDeleteAns. Got {msg:?}");
         }
     }
 }

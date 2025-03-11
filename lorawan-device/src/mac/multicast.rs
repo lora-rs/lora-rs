@@ -154,8 +154,10 @@ impl Multicast {
                 }
                 DownlinkRemoteSetup::McGroupDeleteReq(req) => {
                     let group_id = req.mc_group_id_header();
+                    let mut ans = McGroupDeleteAnsCreator::new();
+                    ans.mc_group_id_header(group_id);
+                    ans.mc_group_undefined(self.sessions[group_id as usize].is_none());
                     self.sessions[group_id as usize] = None;
-                    let ans = McGroupDeleteAnsCreator::new();
                     self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
                 }
                 DownlinkRemoteSetup::McGroupStatusReq(r) => {
