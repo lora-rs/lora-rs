@@ -37,6 +37,9 @@ pub struct Session {
     #[cfg(feature = "certification")]
     /// Whether to override confirmation bit for sent frames
     pub override_confirmed: Option<bool>,
+    #[cfg(feature = "certification")]
+    /// Applicative downlink frame counter
+    pub rx_app_cnt: u16,
 }
 
 #[derive(Clone, Debug)]
@@ -86,6 +89,8 @@ impl Session {
             override_adr: false,
             #[cfg(feature = "certification")]
             override_confirmed: None,
+            #[cfg(feature = "certification")]
+            rx_app_cnt: 0,
         }
     }
 
@@ -124,6 +129,12 @@ impl Session {
         if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
             lorawan_parse(rx.as_mut_for_read(), C::default())
         {
+            #[cfg(feature = "certification")]
+            if let Some(port) = encrypted_data.f_port() {
+                if port > 0 {
+                    self.rx_app_cnt += 1;
+                }
+            }
             #[cfg(feature = "multicast")]
             if let Some(port) = encrypted_data.f_port() {
                 if multicast.is_in_range(port) {
@@ -177,7 +188,9 @@ impl Session {
                         #[cfg(feature = "certification")]
                         if certification.fport(fport) {
                             use crate::mac::certification::Response::*;
-                            match certification.handle_message(data) {
+                            match certification
+                                .handle_message(data, self.fcnt_down.try_into().unwrap())
+                            {
                                 AdrBitChange(adr) => {
                                     self.override_adr = adr;
                                 }

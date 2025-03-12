@@ -21,6 +21,8 @@ fn default_session() -> Session {
         override_adr: false,
         #[cfg(feature = "certification")]
         override_confirmed: None,
+        #[cfg(feature = "certification")]
+        rx_app_cnt: 0,
     }
 }
 

@@ -26,7 +26,7 @@ impl Certification {
     pub fn new() -> Self {
         Self { pending_uplink: None }
     }
-    pub(crate) fn handle_message(&mut self, data: &[u8]) -> Response {
+    pub(crate) fn handle_message(&mut self, data: &[u8], rx_app_cnt: u16) -> Response {
         use lorawan::certification::DownlinkDUTCommand::*;
         let messages = parse_downlink_certification_messages(data);
         for message in messages {
@@ -58,6 +58,14 @@ impl Certification {
                     let mut buf: heapless::Vec<u8, 256> = heapless::Vec::new();
                     let mut ans = lorawan::certification::EchoIncPayloadAnsCreator::new();
                     ans.payload(payload.payload());
+                    buf.extend_from_slice(ans.build()).unwrap();
+                    self.pending_uplink = Some(buf);
+                    return Response::UplinkPrepared;
+                }
+                RxAppCntReq(..) => {
+                    let mut buf: heapless::Vec<u8, 256> = heapless::Vec::new();
+                    let mut ans = lorawan::certification::RxAppCntAnsCreator::new();
+                    ans.set_rx_app_cnt(rx_app_cnt);
                     buf.extend_from_slice(ans.build()).unwrap();
                     self.pending_uplink = Some(buf);
                     return Response::UplinkPrepared;
