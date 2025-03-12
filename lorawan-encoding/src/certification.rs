@@ -35,6 +35,10 @@ pub enum DownlinkDUTCommand<'a> {
     #[cmd(cid = 0x08)]
     EchoIncPayloadReq(EchoIncPayloadReqPayload<'a>),
 
+    /// Requests the DUT to provide the current RxAppCnt value.
+    #[cmd(cid = 0x09, len = 0)]
+    RxAppCntReq(RxAppCntReqPayload),
+
     /// Request to send firmware version, LoRaWAN version, and regional parameters version
     #[cmd(cid = 0x7f, len = 0)]
     DutVersionsReq(DutVersionsReqPayload),
@@ -46,6 +50,10 @@ pub enum UplinkDUTCommand<'a> {
     /// Returns data sent by EchoIncPayloadReq, where each byte except the initial CID is incremented by 1
     #[cmd(cid = 0x08)]
     EchoIncPayloadAns(EchoIncPayloadAnsPayload<'a>),
+
+    /// Return current RxAppCnt value.
+    #[cmd(cid = 0x09, len = 2)]
+    RxAppCntAns(RxAppCntAnsPayload<'a>),
 
     #[cmd(cid = 0x7f, len = 12)]
     DutVersionsAns(DutVersionsAnsPayload<'a>),
@@ -174,6 +182,13 @@ impl<'a> EchoIncPayloadReqPayload<'a> {
     /// Return payload
     pub fn payload(&self) -> &[u8] {
         &self.0[0..self.len()]
+    }
+}
+
+impl RxAppCntAnsCreator {
+    pub fn set_rx_app_cnt(&mut self, value: u16) -> &mut Self {
+        self.data[1..=2].copy_from_slice(&value.to_le_bytes());
+        self
     }
 }
 
