@@ -188,7 +188,10 @@ impl Session {
                                     return Response::DeviceHandler(DeviceEvent::ResetDevice)
                                 }
                                 TxFramesCtrlReq(ftype) => {
-                                    self.override_confirmed = ftype;
+                                    // None is a no-op, allowing network to trigger uplinks
+                                    if ftype.is_some() {
+                                        self.override_confirmed = ftype
+                                    }
                                 }
                                 TxPeriodicityChange(periodicity) => {
                                     return Response::DeviceHandler(
