@@ -29,7 +29,6 @@ fn build_packet(buf: &mut [u8], payload_in_hex: &str, fcnt: u16) -> usize {
 }
 
 #[tokio::test]
-#[ignore]
 async fn txframectrlreq_no_change() {
     // This test will check how TxFrameReqCtrlReq is handled and
     // whether it overrides confirmation flag for packets properly
