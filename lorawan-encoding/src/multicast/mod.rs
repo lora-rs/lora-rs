@@ -86,7 +86,7 @@ impl McGroupDeleteAnsPayload<'_> {
         self.0[0] & 0b11
     }
     pub fn mc_group_undefined(&self) -> bool {
-        self.0[0] & 0b100 == 0
+        self.0[0] & 0b100 != 0
     }
 }
 
@@ -96,11 +96,12 @@ impl McGroupDeleteAnsCreator {
         self.data[1] |= mc_group_id_header & 0b11;
         self
     }
+
     pub fn mc_group_undefined(&mut self, mc_group_undefined: bool) -> &mut Self {
         if mc_group_undefined {
-            self.data[1] &= 0b1111_1011;
+            self.data[1] |= 0b100;
         } else {
-            self.data[1] |= 0b0000_0100;
+            self.data[1] &= 0b1111_1011;
         }
         self
     }
