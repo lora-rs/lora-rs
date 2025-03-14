@@ -1,0 +1,18 @@
+[package]
+name = "smtc-modem-cores"
+version = "0.1.0"
+authors = ["Louis Thiery <thiery.louis@gmail.com>"]
+edition = "2021"
+categories = [
+    "embedded",
+    "hardware-support",
+    "no-std",
+]
+license = "Apache 2.0"
+readme = "README.md"
+description = "Rust Wrapper SX12xx"
+
+[dependencies]
+smtc-modem-cores-sys = { path = "smtc-modem-cores-sys", version = "0.1" }
+thiserror = "1"
+embedded-hal = "1"
