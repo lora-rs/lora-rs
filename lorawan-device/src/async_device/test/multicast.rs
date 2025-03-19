@@ -2,8 +2,12 @@ use super::*;
 use crate::async_device::McAddr;
 use lorawan::creator::DataPayloadCreator;
 use lorawan::keys::{McKEKey, McKey};
-use lorawan::multicast::{McGroupSetupAnsPayload, McGroupSetupReqCreator};
+use lorawan::multicast::{
+    parse_uplink_multicast_messages, McGroupDeleteReqCreator, McGroupSetupReqCreator,
+    UplinkRemoteSetup,
+};
 use lorawan::parser::{DataHeader, DataPayload, FRMPayload, PhyPayload};
+use std::time::Duration;
 
 fn handle_multicast_setup_req(
     _uplink: Option<Uplink>,
@@ -34,10 +38,10 @@ fn handle_multicast_setup_req(
     finished.len()
 }
 
-fn handle_multicast_setup_ans(
+fn verify_multicast_message(
     uplink: Option<Uplink>,
-    _config: RfConfig,
-    _rx_buffer: &mut [u8],
+    expected_port: u8,
+    verify_payload: impl FnOnce(&[u8]) -> bool,
 ) -> usize {
     let mut uplink = uplink.unwrap();
     let payload = uplink.get_payload();
@@ -45,19 +49,36 @@ fn handle_multicast_setup_ans(
         let fcnt = data.fhdr().fcnt() as u32;
         assert!(data.validate_mic(&get_key().into(), fcnt));
         let uplink = data.decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt).unwrap();
-        assert_eq!(uplink.f_port().unwrap(), 200); // Remote multicast setup port
+        assert_eq!(uplink.f_port().unwrap(), expected_port);
 
-        // Parse and verify the McGroupSetupAns
         if let FRMPayload::Data(ans_data) = uplink.frm_payload() {
-            let ans = McGroupSetupAnsPayload::new(ans_data).unwrap();
-            assert_eq!(ans.mc_group_id_header(), 0x01);
+            assert!(verify_payload(ans_data));
         } else {
-            panic!("Expected McGroupSetupAns payload");
+            panic!("Expected data payload");
         }
         0
     } else {
         panic!("Expected encrypted data payload");
     }
+}
+
+fn verify_multicast_setup_ans(
+    uplink: Option<Uplink>,
+    _config: RfConfig,
+    _rx_buffer: &mut [u8],
+) -> usize {
+    verify_multicast_message(uplink, 200, |ans_data| {
+        let mut msgs = parse_uplink_multicast_messages(ans_data);
+        let msg = msgs.next().unwrap();
+        if let UplinkRemoteSetup::McGroupSetupAns(ans) = msg {
+            assert_eq!(ans.mc_group_id_header(), 0x01);
+            assert_eq!(ans.mc_group_id_header(), 0x01);
+        } else {
+            panic!("Expected McGroupSetupAns");
+        }
+        assert!(msgs.next().is_none());
+        true
+    })
 }
 
 #[tokio::test]
@@ -78,7 +99,7 @@ async fn test_multicast_remote_setup() {
     radio.handle_rxtx(handle_multicast_setup_req).await;
 
     // Handle the McGroupSetupAns from the device
-    radio.handle_rxtx(handle_multicast_setup_ans).await;
+    radio.handle_rxtx(verify_multicast_setup_ans).await;
 
     let (mut device, response) = task.await.unwrap();
     match response {
@@ -98,4 +119,137 @@ async fn test_multicast_remote_setup() {
         }
         _ => panic!("Expected NewSession response"),
     }
+}
+
+fn handle_mc_group_delete_req<const GROUP_ID: u8>(
+    _uplink: Option<Uplink>,
+    _config: RfConfig,
+    rx_buffer: &mut [u8],
+) -> usize {
+    let mut req = McGroupDeleteReqCreator::new();
+    req.mc_group_id_header(GROUP_ID);
+    let setup_req = req.build();
+
+    // Create a downlink frame containing the McGroupDeleteReq
+    let mut phy = DataPayloadCreator::new(rx_buffer).unwrap();
+    phy.set_f_port(200); // Remote multicast setup port
+    phy.set_dev_addr(&[0; 4]);
+    phy.set_uplink(false);
+    phy.set_fcnt(1);
+
+    let finished =
+        phy.build(setup_req, [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
+    finished.len()
+}
+
+fn verify_mc_group_delete_ans(
+    uplink: Option<Uplink>,
+    _config: RfConfig,
+    _rx_buffer: &mut [u8],
+) -> usize {
+    verify_multicast_message(uplink, 200, |ans_data| {
+        let mut msgs = parse_uplink_multicast_messages(ans_data);
+        let msg = msgs.next().unwrap();
+        if let UplinkRemoteSetup::McGroupDeleteAns(ans) = msg {
+            assert_eq!(ans.mc_group_id_header(), 0x01);
+            assert!(!ans.mc_group_undefined());
+        } else {
+            panic!("Expected McGroupDeleteAns");
+        }
+        assert!(msgs.next().is_none());
+        true
+    })
+}
+
+fn handle_regular_downlink_msg<const FCNT: u32>(
+    _uplink: Option<Uplink>,
+    _config: RfConfig,
+    rx_buffer: &mut [u8],
+) -> usize {
+    let mut phy = DataPayloadCreator::new(rx_buffer).unwrap();
+    phy.set_f_port(1); // Remote multicast setup port
+    phy.set_dev_addr(&[0; 4]);
+    phy.set_uplink(false);
+    phy.set_fcnt(FCNT);
+
+    let finished =
+        phy.build(&[1, 2, 3], [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
+    finished.len()
+}
+
+#[tokio::test]
+async fn test_multicast_group_delete() {
+    let (radio, _timer, mut async_device) = util::setup_with_session_class_c().await;
+    let mcke_key = McKEKey::from([0x66; 16]);
+    async_device.mac.multicast.mc_k_e_key = Some(mcke_key);
+
+    // Run the device listening for the setup message
+    let task = tokio::spawn(async move {
+        let response = async_device.rxc_listen().await;
+        (async_device, response)
+    });
+
+    // Send the McGroupSetupReq
+    radio.handle_rxtx(handle_multicast_setup_req).await;
+
+    // Handle the McGroupSetupAns from the device
+    radio.handle_rxtx(verify_multicast_setup_ans).await;
+
+    let (mut device, _) = task.await.unwrap();
+    // Run the device again so it may listen to the DeleteReq
+    let task = tokio::spawn(async move { device.rxc_listen().await });
+
+    // Send the McGroupDeleteReq with correct groupID
+    radio.handle_rxtx(handle_mc_group_delete_req::<0x01>).await;
+    radio.handle_rxtx(verify_mc_group_delete_ans).await;
+    radio.handle_rxtx(handle_regular_downlink_msg::<2>).await;
+    let _ = task.await.unwrap();
+}
+
+fn verify_mc_group_delete_ans_undefined(
+    uplink: Option<Uplink>,
+    _config: RfConfig,
+    _rx_buffer: &mut [u8],
+) -> usize {
+    verify_multicast_message(uplink, 200, |ans_data| {
+        let mut msgs = parse_uplink_multicast_messages(ans_data);
+        let msg = msgs.next().unwrap();
+        if let UplinkRemoteSetup::McGroupDeleteAns(ans) = msg {
+            assert_eq!(ans.mc_group_id_header(), 0x00);
+            assert!(ans.mc_group_undefined());
+        } else {
+            panic!("Expected McGroupDeleteAns");
+        }
+        assert!(msgs.next().is_none());
+        true
+    })
+}
+
+#[tokio::test]
+async fn test_multicast_invalid_group_delete() {
+    let (radio, _timer, mut async_device) = util::setup_with_session_class_c().await;
+    let mcke_key = McKEKey::from([0x66; 16]);
+    async_device.mac.multicast.mc_k_e_key = Some(mcke_key);
+
+    // Run the device listening for the setup message
+    let task = tokio::spawn(async move {
+        let response = async_device.rxc_listen().await;
+        (async_device, response)
+    });
+
+    // Send the McGroupSetupReq
+    radio.handle_rxtx(handle_multicast_setup_req).await;
+
+    // Handle the McGroupSetupAns from the device
+    radio.handle_rxtx(verify_multicast_setup_ans).await;
+
+    let (mut device, _) = task.await.unwrap();
+    // Run the device again so it may listen to the DeleteReq
+    let task = tokio::spawn(async move { device.rxc_listen().await });
+
+    // Send the McGroupDeleteReq with correct groupID
+    radio.handle_rxtx(handle_mc_group_delete_req::<0x03>).await;
+    radio.handle_rxtx(verify_mc_group_delete_ans_undefined).await;
+    radio.handle_rxtx(handle_regular_downlink_msg::<2>).await;
+    let _ = task.await.unwrap();
 }
