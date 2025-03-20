@@ -72,7 +72,6 @@ fn verify_multicast_setup_ans(
         let msg = msgs.next().unwrap();
         if let UplinkRemoteSetup::McGroupSetupAns(ans) = msg {
             assert_eq!(ans.mc_group_id_header(), 0x01);
-            assert_eq!(ans.mc_group_id_header(), 0x01);
         } else {
             panic!("Expected McGroupSetupAns");
         }
@@ -167,7 +166,7 @@ fn handle_regular_downlink_msg<const FCNT: u32>(
     rx_buffer: &mut [u8],
 ) -> usize {
     let mut phy = DataPayloadCreator::new(rx_buffer).unwrap();
-    phy.set_f_port(1); // Remote multicast setup port
+    phy.set_f_port(1); // a random fport that's not the multicast port
     phy.set_dev_addr(&[0; 4]);
     phy.set_uplink(false);
     phy.set_fcnt(FCNT);
