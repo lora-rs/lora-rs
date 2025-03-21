@@ -1,0 +1,3 @@
+[submodule "smtc-modem-cores/smtc-modem-cores-sys/SWL2001"]
+	path = smtc-modem-cores/smtc-modem-cores-sys/SWL2001
+	url = https://github.com/Lora-net/SWL2001.git
