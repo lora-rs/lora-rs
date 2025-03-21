@@ -1,8 +1,8 @@
-/Cargo.toml @ivajloip @lthiery @lulf @plaes
-/README.md @ivajloip @lthiery @lulf @plaes
+/Cargo.toml @ivajloip @lthiery @lulf @plaes @lucasgranberg
+/README.md @ivajloip @lthiery @lulf @plaes @lucasgranberg
 
-/lora-modulation/ @lthiery @lulf @ivajloip
+/lora-modulation/ @lthiery @lulf @ivajloip @lucasgranberg
 /lora-phy/ @lucasgranberg @plaes @CBJamo @Dirbaio @lthiery
-/lorawan-device/ @ivajloip @lthiery @lulf @plaes
-/lorawan-encoding/ @ivajloip @lthiery @lulf @plaes
-/lorawan-macros/ @plaes
+/lorawan-device/ @ivajloip @lthiery @lulf @plaes @lucasgranberg
+/lorawan-encoding/ @ivajloip @lthiery @lulf @plaes @lucasgranberg
+/lorawan-macros/ @plaes @lthiery @lucasgranberg
