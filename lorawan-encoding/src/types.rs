@@ -143,6 +143,58 @@ impl<const N: usize> AsRef<[u8]> for ChannelMask<N> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[repr(u8)]
+/// `DR` is a number from `0..=15` to indicate region-specific DataRate.
+/// Value `0xf` (decimal 15) has special meaning of no-op to continue with
+/// currently active setting.
+pub enum DR {
+    _0 = 0,
+    _1 = 1,
+    _2 = 2,
+    _3 = 3,
+    _4 = 4,
+    _5 = 5,
+    _6 = 6,
+    _7 = 7,
+    _8 = 8,
+    _9 = 9,
+    _10 = 10,
+    _11 = 11,
+    _12 = 12,
+    _13 = 13,
+    _14 = 14,
+    _15 = 15,
+}
+
+impl TryFrom<u8> for DR {
+    type Error = core::convert::Infallible;
+
+    fn try_from(v: u8) -> Result<Self, Self::Error> {
+        let dr = match v & 0xf {
+            0 => DR::_0,
+            1 => DR::_1,
+            2 => DR::_2,
+            3 => DR::_3,
+            4 => DR::_4,
+            5 => DR::_5,
+            6 => DR::_6,
+            7 => DR::_7,
+            8 => DR::_8,
+            9 => DR::_9,
+            10 => DR::_10,
+            11 => DR::_11,
+            12 => DR::_12,
+            13 => DR::_13,
+            14 => DR::_14,
+            15 => DR::_15,
+            _ => unreachable!(),
+        };
+        Ok(dr)
+    }
+}
+
 /// DataRateRange represents LoRaWAN DataRateRange.
 #[derive(Debug, PartialEq, Eq)]
 pub struct DataRateRange(u8);
