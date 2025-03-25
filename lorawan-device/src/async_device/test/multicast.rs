@@ -7,7 +7,6 @@ use lorawan::multicast::{
     UplinkRemoteSetup,
 };
 use lorawan::parser::{DataHeader, DataPayload, FRMPayload, PhyPayload};
-use std::time::Duration;
 
 fn handle_multicast_setup_req(
     _uplink: Option<Uplink>,
