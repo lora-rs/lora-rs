@@ -68,24 +68,21 @@ async fn main(spawner: Spawner) {
     }
     let p = embassy_stm32::init(config);
 
-    // Set CTRL1 and CTRL3 for high-power transmission, while CTRL2 acts as an RF switch between tx and rx
-    let _ctrl1 = Output::new(p.PC4.degrade(), Level::Low, Speed::High);
-    let ctrl2 = Output::new(p.PC5.degrade(), Level::High, Speed::High);
-    let _ctrl3 = Output::new(p.PC3.degrade(), Level::High, Speed::High);
+    let ctrl1 = Output::new(p.PC4.degrade(), Level::Low, Speed::High);
+    let ctrl2 = Output::new(p.PC5.degrade(), Level::Low, Speed::High);
+    let ctrl3 = Output::new(p.PC3.degrade(), Level::High, Speed::High);
 
     let spi = Spi::new_subghz(p.SUBGHZSPI, p.DMA1_CH1, p.DMA1_CH2);
     let spi = SubghzSpiDevice(spi);
-
+    let use_high_power_pa = true;
     let config = sx126x::Config {
-        chip: Stm32wl {
-            use_high_power_pa: true,
-        },
+        chip: Stm32wl { use_high_power_pa },
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
         use_dcdc: true,
         rx_boost: false,
     };
-    let iv = Stm32wlInterfaceVariant::new(Irqs, None, Some(ctrl2)).unwrap();
-    let lora = LoRa::new(Sx126x::new(spi, iv, config), true, Delay).await.unwrap();
+    let iv = Stm32wlInterfaceVariant::new(Irqs, use_high_power_pa, Some(ctrl1), Some(ctrl2), Some(ctrl3)).unwrap();
+    let lora = LoRa::new(Sx126x::new(spi, iv, config), false, Delay).await.unwrap();
 
     let _lora_task = spawner.spawn(lora_task(lora, Rng::new(p.RNG, Irqs), CHANNEL.receiver()));
 
