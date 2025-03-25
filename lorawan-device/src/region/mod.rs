@@ -7,6 +7,8 @@ use crate::mac::{Frame, Window};
 pub(crate) mod constants;
 pub(crate) use crate::radio::*;
 use constants::*;
+// For backward compatibility
+pub use lorawan::types::DR;
 
 #[cfg(not(any(
     feature = "region-as923-1",
@@ -84,50 +86,6 @@ pub(crate) trait ChannelRegion {
 /// fine-tuning, like for example [`US915`] or [`AU915`].
 pub struct Configuration {
     state: State,
-}
-
-seq_macro::seq!(
-    N in 0..=15 {
-        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-        #[repr(u8)]
-        /// A restricted data rate type that exposes the number of variants to only what _may_ be
-        /// potentially be possible.
-        ///
-        /// Note that not all data rates are valid in all regions.
-        pub enum DR {
-            #(
-                _~N = N,
-            )*
-        }
-    }
-);
-
-impl TryFrom<u8> for DR {
-    type Error = core::convert::Infallible;
-
-    fn try_from(v: u8) -> Result<Self, Self::Error> {
-        let dr = match v & 0xf {
-            0 => DR::_0,
-            1 => DR::_1,
-            2 => DR::_2,
-            3 => DR::_3,
-            4 => DR::_4,
-            5 => DR::_5,
-            6 => DR::_6,
-            7 => DR::_7,
-            8 => DR::_8,
-            9 => DR::_9,
-            10 => DR::_10,
-            11 => DR::_11,
-            12 => DR::_12,
-            13 => DR::_13,
-            14 => DR::_14,
-            15 => DR::_15,
-            _ => unreachable!(),
-        };
-        Ok(dr)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
