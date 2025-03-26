@@ -7,12 +7,12 @@
 /// Current status: DR0..DR6 is supported
 use super::*;
 
-const JOIN_CHANNELS: [u32; 2] = [923200000, 923200000];
+const JOIN_CHANNELS: [u32; 2] = [923200000, 923400000];
 const MAX_EIRP: u8 = 16;
 
 pub(crate) type AS923_1 = DynamicChannelPlan<2, AS923Region<923_200_000, 0>>;
 pub(crate) type AS923_2 = DynamicChannelPlan<2, AS923Region<921_400_000, 1800000>>;
-pub(crate) type AS923_3 = DynamicChannelPlan<2, AS923Region<916_600_000, 6600000>>;
+pub(crate) type AS923_3 = DynamicChannelPlan<2, AS923Region<916_500_000, 6600000>>;
 pub(crate) type AS923_4 = DynamicChannelPlan<2, AS923Region<917_300_000, 5900000>>;
 
 #[derive(Default, Clone)]
@@ -56,7 +56,7 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion<2>
     for AS923Region<DEFAULT_RX2, OFFSET>
 {
     fn join_channels() -> [u32; 2] {
-        [JOIN_CHANNELS[0] + OFFSET, JOIN_CHANNELS[1] + OFFSET]
+        [JOIN_CHANNELS[0] - OFFSET, JOIN_CHANNELS[1] - OFFSET]
     }
 
     fn get_default_rx2() -> u32 {
