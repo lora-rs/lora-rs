@@ -47,7 +47,7 @@ impl Channel {
 type ChannelPlan = [Option<Channel>; NUM_CHANNELS_DYNAMIC as usize];
 
 #[derive(Clone)]
-pub(crate) struct DynamicChannelPlan<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion> {
+pub(crate) struct DynamicChannelPlan<R: DynamicChannelRegion> {
     channels: ChannelPlan,
     channel_mask: ChannelMask<9>,
     last_tx_channel: u8,
@@ -58,9 +58,7 @@ pub(crate) struct DynamicChannelPlan<const NUM_JOIN_CHANNELS: usize, R: DynamicC
     frequency_valid: fn(u32) -> bool,
 }
 
-impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion>
-    DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
-{
+impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
     fn new(freq_fn: fn(u32) -> bool) -> Self {
         let mut channels = [None; NUM_CHANNELS_DYNAMIC as usize];
         R::init_channels(&mut channels);
@@ -116,9 +114,7 @@ pub(crate) trait DynamicChannelRegion: ChannelRegion {
     fn get_default_rx2() -> u32;
 }
 
-impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion> RegionHandler
-    for DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
-{
+impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
     fn process_join_accept<T: AsRef<[u8]>, C>(
         &mut self,
         join_accept: &DecryptedJoinAcceptPayload<T, C>,

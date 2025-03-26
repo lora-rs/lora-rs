@@ -9,10 +9,10 @@ use super::*;
 
 const MAX_EIRP: u8 = 16;
 
-pub(crate) type AS923_1 = DynamicChannelPlan<2, AS923Region<923_200_000, 0>>;
-pub(crate) type AS923_2 = DynamicChannelPlan<2, AS923Region<921_400_000, 1800000>>;
-pub(crate) type AS923_3 = DynamicChannelPlan<2, AS923Region<916_500_000, 6600000>>;
-pub(crate) type AS923_4 = DynamicChannelPlan<2, AS923Region<917_300_000, 5900000>>;
+pub(crate) type AS923_1 = DynamicChannelPlan<AS923Region<923_200_000, 0>>;
+pub(crate) type AS923_2 = DynamicChannelPlan<AS923Region<921_400_000, 1800000>>;
+pub(crate) type AS923_3 = DynamicChannelPlan<AS923Region<916_500_000, 6600000>>;
+pub(crate) type AS923_4 = DynamicChannelPlan<AS923Region<917_300_000, 5900000>>;
 
 #[derive(Default, Clone)]
 #[allow(clippy::upper_case_acronyms)]
@@ -39,9 +39,7 @@ fn as924_4_freq_check(f: u32) -> bool {
     (917_000_000..=920_000_000).contains(&f)
 }
 
-impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion>
-    DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
-{
+impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
     pub fn new_as924() -> Self {
         Self::new(as924_generic_freq_check)
     }
