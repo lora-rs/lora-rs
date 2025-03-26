@@ -135,7 +135,7 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
                 // CfList of Type 0 may contain up to 5 frequencies, which define
                 // channels J to (J+4). Data rates for these channels is DR0..=DR5
                 for (n, freq) in cf_list.iter().enumerate() {
-                    let index = NUM_JOIN_CHANNELS + n;
+                    let index = R::num_join_channels() as usize + n;
                     let value = freq.value();
                     // unused channels are set to 0
                     if value == 0 {
@@ -202,7 +202,7 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
                 let mut channel = (rng.next_u32() & 0b111) as u8;
                 // keep sampling until we select a join channel depending
                 // on the frequency plan
-                while channel as usize >= NUM_JOIN_CHANNELS {
+                while channel >= R::num_join_channels() {
                     channel = (rng.next_u32() & 0b111) as u8;
                 }
                 self.last_tx_channel = channel;
@@ -257,13 +257,12 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
 
     fn handle_new_channel(&mut self, index: u8, freq: u32, _: DataRateRange) -> (bool, bool) {
         // Join channels are readonly - these cannot be modified!
-        let index = index as usize;
-        if index < NUM_JOIN_CHANNELS {
+        if index < R::num_join_channels() {
             return (false, false);
         }
         // Disable channel if frequency is 0
-        if freq == 0 && index < self.channels.len() {
-            self.channels[index] = None;
+        if freq == 0 && (index as usize) < self.channels.len() {
+            self.channels[index as usize] = None;
             return (true, true);
         }
         // TODO: Implement frequency and data range checks to define new channels
