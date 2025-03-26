@@ -45,6 +45,10 @@ impl DynamicChannelRegion<3> for IN865Region {
         JOIN_CHANNELS
     }
 
+    fn num_join_channels() -> u8 {
+        3
+    }
+
     fn get_default_rx2() -> u32 {
         866_550_000
     }

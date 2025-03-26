@@ -46,6 +46,10 @@ impl DynamicChannelRegion<3> for EU433Region {
         JOIN_CHANNELS
     }
 
+    fn num_join_channels() -> u8 {
+        3
+    }
+
     fn get_default_rx2() -> u32 {
         434_665_000
     }
