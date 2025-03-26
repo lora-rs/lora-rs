@@ -59,6 +59,10 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion<2>
         [JOIN_CHANNELS[0] - OFFSET, JOIN_CHANNELS[1] - OFFSET]
     }
 
+    fn num_join_channels() -> u8 {
+        2
+    }
+
     fn get_default_rx2() -> u32 {
         DEFAULT_RX2
     }

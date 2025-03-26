@@ -47,6 +47,10 @@ impl DynamicChannelRegion<3> for EU868Region {
         JOIN_CHANNELS
     }
 
+    fn num_join_channels() -> u8 {
+        3
+    }
+
     fn get_default_rx2() -> u32 {
         869_525_000
     }

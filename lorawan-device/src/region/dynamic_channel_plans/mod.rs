@@ -117,6 +117,7 @@ pub(crate) trait DynamicChannelRegion<const NUM_JOIN_CHANNELS: usize>:
     ChannelRegion
 {
     fn join_channels() -> [u32; NUM_JOIN_CHANNELS];
+    fn num_join_channels() -> u8;
     fn init_channels(channels: &mut ChannelPlan);
     fn get_default_rx2() -> u32;
 }
@@ -134,7 +135,7 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
                 // CfList of Type 0 may contain up to 5 frequencies, which define
                 // channels J to (J+4). Data rates for these channels is DR0..=DR5
                 for (n, freq) in cf_list.iter().enumerate() {
-                    let index = NUM_JOIN_CHANNELS - 1 + n;
+                    let index = NUM_JOIN_CHANNELS + n;
                     let value = freq.value();
                     // unused channels are set to 0
                     if value == 0 {
