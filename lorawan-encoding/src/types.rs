@@ -196,7 +196,7 @@ impl TryFrom<u8> for DR {
 }
 
 /// DataRateRange represents LoRaWAN DataRateRange.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DataRateRange(u8);
 
 impl DataRateRange {
@@ -210,6 +210,11 @@ impl DataRateRange {
         Self::can_build_from(byte)?;
 
         Ok(Self::new_from_raw(byte))
+    }
+
+    /// Constructs a new DataRateRange from lower and upper bounds (both inclusive)
+    pub fn new_range(min: DR, max: DR) -> Self {
+        DataRateRange(((max as u8) << 4) | min as u8)
     }
 
     /// Check if the byte can be used to create DataRateRange.
