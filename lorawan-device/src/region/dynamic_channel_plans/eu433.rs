@@ -19,7 +19,7 @@ fn eu433_freq_check(f: u32) -> bool {
     (433_050_000..=434_790_000).contains(&f)
 }
 
-impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
+impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion>
     DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
 {
     pub fn new_eu433() -> Self {
@@ -40,7 +40,7 @@ impl ChannelRegion for EU433Region {
     }
 }
 
-impl DynamicChannelRegion<3> for EU433Region {
+impl DynamicChannelRegion for EU433Region {
     fn num_join_channels() -> u8 {
         3
     }

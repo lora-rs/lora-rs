@@ -18,7 +18,7 @@ fn in865_freq_check(f: u32) -> bool {
     (865_000_000..=867_000_000).contains(&f)
 }
 
-impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
+impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion>
     DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
 {
     pub fn new_in865() -> Self {
@@ -39,7 +39,7 @@ impl ChannelRegion for IN865Region {
     }
 }
 
-impl DynamicChannelRegion<3> for IN865Region {
+impl DynamicChannelRegion for IN865Region {
     fn num_join_channels() -> u8 {
         3
     }

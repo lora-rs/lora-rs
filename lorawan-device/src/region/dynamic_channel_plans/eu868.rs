@@ -20,7 +20,7 @@ fn eu868_freq_check(f: u32) -> bool {
     (863_000_000..=870_000_000).contains(&f)
 }
 
-impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
+impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion>
     DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
 {
     pub fn new_eu868() -> Self {
@@ -41,7 +41,7 @@ impl ChannelRegion for EU868Region {
     }
 }
 
-impl DynamicChannelRegion<3> for EU868Region {
+impl DynamicChannelRegion for EU868Region {
     fn num_join_channels() -> u8 {
         3
     }
