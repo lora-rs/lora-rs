@@ -116,7 +116,6 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
 pub(crate) trait DynamicChannelRegion<const NUM_JOIN_CHANNELS: usize>:
     ChannelRegion
 {
-    fn join_channels() -> [u32; NUM_JOIN_CHANNELS];
     fn num_join_channels() -> u8;
     fn init_channels(channels: &mut ChannelPlan);
     fn get_default_rx2() -> u32;
@@ -198,18 +197,17 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
     ) -> (Datarate, u32) {
         match frame {
             Frame::Join => {
-                // there are at most 8 join channels
-                let mut channel = (rng.next_u32() & 0b111) as u8;
-                // keep sampling until we select a join channel depending
-                // on the frequency plan
-                while channel >= R::num_join_channels() {
-                    channel = (rng.next_u32() & 0b111) as u8;
+                // There are at most 3 join channels in dynamic regions,
+                // keep sampling until we get a valid channel.
+                let mut index = (rng.next_u32() & 0b11) as u8;
+                while index >= R::num_join_channels() {
+                    index = (rng.next_u32() & 0b11) as u8;
                 }
-                self.last_tx_channel = channel;
-                (
-                    R::datarates()[datarate as usize].clone().unwrap(),
-                    R::join_channels()[channel as usize],
-                )
+                self.last_tx_channel = index;
+
+                // SAFETY: Join channels SHALL be always present
+                let channel = self.channels[index as usize].unwrap();
+                (R::datarates()[datarate as usize].clone().unwrap(), channel.frequency)
             }
             Frame::Data => {
                 let mut channel = self.get_random_in_range(rng);

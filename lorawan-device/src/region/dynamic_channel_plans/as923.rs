@@ -7,7 +7,6 @@
 /// Current status: DR0..DR6 is supported
 use super::*;
 
-const JOIN_CHANNELS: [u32; 2] = [923200000, 923400000];
 const MAX_EIRP: u8 = 16;
 
 pub(crate) type AS923_1 = DynamicChannelPlan<2, AS923Region<923_200_000, 0>>;
@@ -55,10 +54,6 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
 impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion<2>
     for AS923Region<DEFAULT_RX2, OFFSET>
 {
-    fn join_channels() -> [u32; 2] {
-        [JOIN_CHANNELS[0] - OFFSET, JOIN_CHANNELS[1] - OFFSET]
-    }
-
     fn num_join_channels() -> u8 {
         2
     }

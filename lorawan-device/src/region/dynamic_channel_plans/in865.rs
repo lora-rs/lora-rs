@@ -7,7 +7,6 @@
 /// Current status: DR0..DR5 is supported
 use super::*;
 
-const JOIN_CHANNELS: [u32; 3] = [865_062_500, 865_402_500, 865_985_000];
 const MAX_EIRP: u8 = 30;
 
 pub(crate) type IN865 = DynamicChannelPlan<3, IN865Region>;
@@ -41,10 +40,6 @@ impl ChannelRegion for IN865Region {
 }
 
 impl DynamicChannelRegion<3> for IN865Region {
-    fn join_channels() -> [u32; 3] {
-        JOIN_CHANNELS
-    }
-
     fn num_join_channels() -> u8 {
         3
     }
