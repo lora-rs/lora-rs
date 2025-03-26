@@ -40,7 +40,7 @@ impl ChannelRegion for EU868Region {
 }
 
 impl DynamicChannelRegion for EU868Region {
-    fn num_join_channels() -> u8 {
+    fn join_channels() -> u8 {
         3
     }
 
