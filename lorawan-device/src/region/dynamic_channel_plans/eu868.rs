@@ -8,7 +8,6 @@
 /// Current status: DR0..DR5 (minimum set is supported)
 use super::*;
 
-const JOIN_CHANNELS: [u32; 3] = [868_100_000, 868_300_000, 868_500_000];
 const MAX_EIRP: u8 = 16;
 
 pub(crate) type EU868 = DynamicChannelPlan<3, EU868Region>;
@@ -43,10 +42,6 @@ impl ChannelRegion for EU868Region {
 }
 
 impl DynamicChannelRegion<3> for EU868Region {
-    fn join_channels() -> [u32; 3] {
-        JOIN_CHANNELS
-    }
-
     fn num_join_channels() -> u8 {
         3
     }

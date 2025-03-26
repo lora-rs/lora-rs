@@ -7,7 +7,6 @@
 /// Current status: DR7 (FSK) is unimplemented
 use super::*;
 
-const JOIN_CHANNELS: [u32; 3] = [433_175_000, 433_375_000, 433_575_000];
 const MAX_EIRP: u8 = 16;
 
 pub(crate) type EU433 = DynamicChannelPlan<3, EU433Region>;
@@ -42,10 +41,6 @@ impl ChannelRegion for EU433Region {
 }
 
 impl DynamicChannelRegion<3> for EU433Region {
-    fn join_channels() -> [u32; 3] {
-        JOIN_CHANNELS
-    }
-
     fn num_join_channels() -> u8 {
         3
     }
