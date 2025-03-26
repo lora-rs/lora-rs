@@ -38,7 +38,7 @@ impl ChannelRegion for IN865Region {
 }
 
 impl DynamicChannelRegion for IN865Region {
-    fn num_join_channels() -> u8 {
+    fn join_channels() -> u8 {
         3
     }
 

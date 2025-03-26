@@ -52,7 +52,7 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
 impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion
     for AS923Region<DEFAULT_RX2, OFFSET>
 {
-    fn num_join_channels() -> u8 {
+    fn join_channels() -> u8 {
         2
     }
 

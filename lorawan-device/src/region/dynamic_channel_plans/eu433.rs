@@ -39,7 +39,7 @@ impl ChannelRegion for EU433Region {
 }
 
 impl DynamicChannelRegion for EU433Region {
-    fn num_join_channels() -> u8 {
+    fn join_channels() -> u8 {
         3
     }
 
