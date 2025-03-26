@@ -49,6 +49,12 @@ impl DynamicChannelRegion<3> for EU433Region {
     fn get_default_rx2() -> u32 {
         434_665_000
     }
+
+    fn init_channels(channels: &mut ChannelPlan) {
+        channels[0] = Some(Channel::new(433_175_000, DR::_0, DR::_5));
+        channels[1] = Some(Channel::new(433_375_000, DR::_0, DR::_5));
+        channels[2] = Some(Channel::new(433_575_000, DR::_0, DR::_5));
+    }
 }
 
 use super::{Bandwidth, Datarate, SpreadingFactor};

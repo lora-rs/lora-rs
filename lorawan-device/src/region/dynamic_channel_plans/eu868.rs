@@ -50,6 +50,12 @@ impl DynamicChannelRegion<3> for EU868Region {
     fn get_default_rx2() -> u32 {
         869_525_000
     }
+
+    fn init_channels(channels: &mut ChannelPlan) {
+        channels[0] = Some(Channel::new(868_100_000, DR::_0, DR::_5));
+        channels[1] = Some(Channel::new(868_300_000, DR::_0, DR::_5));
+        channels[2] = Some(Channel::new(868_500_000, DR::_0, DR::_5));
+    }
 }
 
 use super::{Bandwidth, Datarate, SpreadingFactor};

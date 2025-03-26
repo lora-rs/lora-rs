@@ -1,5 +1,6 @@
 use super::*;
 use core::marker::PhantomData;
+use lorawan::types::DataRateRange;
 
 #[cfg(any(
     feature = "region-as923-1",
@@ -30,12 +31,27 @@ pub(crate) use eu868::EU868;
 #[cfg(feature = "region-in865")]
 pub(crate) use in865::IN865;
 
+#[derive(Clone, Copy)]
+pub(crate) struct Channel {
+    frequency: u32,
+    _datarates: DataRateRange,
+}
+
+impl Channel {
+    /// Initialize Channel with frequency and supported minimum and maximum data rates
+    fn new(f: u32, dr_min: DR, dr_max: DR) -> Self {
+        Self { frequency: f, _datarates: DataRateRange::new_range(dr_min, dr_max) }
+    }
+}
+
+type ChannelPlan = [Option<Channel>; NUM_CHANNELS_DYNAMIC as usize];
+
 #[derive(Clone)]
 pub(crate) struct DynamicChannelPlan<
     const NUM_JOIN_CHANNELS: usize,
     R: DynamicChannelRegion<NUM_JOIN_CHANNELS>,
 > {
-    additional_channels: [Option<u32>; 5],
+    channels: ChannelPlan,
     channel_mask: ChannelMask<9>,
     last_tx_channel: u8,
     _fixed_channel_region: PhantomData<R>,
@@ -49,9 +65,12 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
     DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
 {
     fn new(freq_fn: fn(u32) -> bool) -> Self {
+        let mut channels = [None; NUM_CHANNELS_DYNAMIC as usize];
+        R::init_channels(&mut channels);
+
         Self {
-            additional_channels: Default::default(),
             channel_mask: Default::default(),
+            channels,
             last_tx_channel: Default::default(),
             _fixed_channel_region: Default::default(),
             rx1_offset: Default::default(),
@@ -60,26 +79,17 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
         }
     }
 
-    fn get_channel(&self, channel: usize) -> Option<u32> {
-        if channel < NUM_JOIN_CHANNELS {
-            Some(R::join_channels()[channel])
-        } else {
-            self.additional_channels[channel - NUM_JOIN_CHANNELS]
+    fn get_channel(&self, index: usize) -> Option<u32> {
+        if let Some(channel) = self.channels[index] {
+            return Some(channel.frequency);
         }
-    }
-
-    fn highest_additional_channel_index_plus_one(&self) -> usize {
-        let mut index_plus_one = 0;
-        for (i, channel) in self.additional_channels.iter().enumerate() {
-            if channel.is_some() {
-                index_plus_one = i + 1;
-            }
-        }
-        index_plus_one
+        None
     }
 
     fn get_random_in_range<RNG: RngCore>(&self, rng: &mut RNG) -> usize {
-        let range = self.highest_additional_channel_index_plus_one() + NUM_JOIN_CHANNELS;
+        // SAFETY: We will always have at least number of join channels, therefore
+        // unwrap is safe to use.
+        let range = self.channels.iter().rposition(|&x| x.is_some()).unwrap() + 1;
         let cm = if range > 16 {
             0b11111
         } else if range > 8 {
@@ -107,6 +117,7 @@ pub(crate) trait DynamicChannelRegion<const NUM_JOIN_CHANNELS: usize>:
     ChannelRegion
 {
     fn join_channels() -> [u32; NUM_JOIN_CHANNELS];
+    fn init_channels(channels: &mut ChannelPlan);
     fn get_default_rx2() -> u32;
 }
 
@@ -118,19 +129,22 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     ) {
         match join_accept.c_f_list() {
+            // Type 0
             Some(CfList::DynamicChannel(cf_list)) => {
-                // If CfList of Type 0 is present, it may contain up to 5 frequencies
-                // which define channels J to (J+4)
-                for (index, freq) in cf_list.iter().enumerate() {
+                // CfList of Type 0 may contain up to 5 frequencies, which define
+                // channels J to (J+4). Data rates for these channels is DR0..=DR5
+                for (n, freq) in cf_list.iter().enumerate() {
+                    let index = NUM_JOIN_CHANNELS - 1 + n;
                     let value = freq.value();
                     // unused channels are set to 0
-                    if value != 0 {
-                        self.additional_channels[index] = Some(value);
+                    if value == 0 {
+                        self.channels[index] = None;
                     } else {
-                        self.additional_channels[index] = None;
+                        self.channels[index] = Some(Channel::new(value, DR::_0, DR::_5));
                     }
                 }
             }
+            // Type 1
             Some(CfList::FixedChannel(_cf_list)) => {
                 // TODO: dynamic channel plans have corresponding fixed channel lists,
                 // however, this feature is entirely optional
@@ -247,9 +261,8 @@ impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion<NUM_JOIN_CHANNELS>>
             return (false, false);
         }
         // Disable channel if frequency is 0
-        // TODO: We currently have only 5 of these?
-        if freq == 0 && index < self.additional_channels.len() {
-            self.additional_channels[index] = None;
+        if freq == 0 && index < self.channels.len() {
+            self.channels[index] = None;
             return (true, true);
         }
         // TODO: Implement frequency and data range checks to define new channels

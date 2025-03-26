@@ -48,6 +48,12 @@ impl DynamicChannelRegion<3> for IN865Region {
     fn get_default_rx2() -> u32 {
         866_550_000
     }
+
+    fn init_channels(channels: &mut ChannelPlan) {
+        channels[0] = Some(Channel::new(865_062_500, DR::_0, DR::_5));
+        channels[1] = Some(Channel::new(865_402_500, DR::_0, DR::_5));
+        channels[2] = Some(Channel::new(865_985_000, DR::_0, DR::_5));
+    }
 }
 
 use super::{Bandwidth, Datarate, SpreadingFactor};
