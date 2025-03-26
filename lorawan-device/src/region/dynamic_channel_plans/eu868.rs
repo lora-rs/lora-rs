@@ -10,7 +10,7 @@ use super::*;
 
 const MAX_EIRP: u8 = 16;
 
-pub(crate) type EU868 = DynamicChannelPlan<3, EU868Region>;
+pub(crate) type EU868 = DynamicChannelPlan<EU868Region>;
 
 #[derive(Default, Clone)]
 #[allow(clippy::upper_case_acronyms)]
@@ -20,9 +20,7 @@ fn eu868_freq_check(f: u32) -> bool {
     (863_000_000..=870_000_000).contains(&f)
 }
 
-impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion>
-    DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
-{
+impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
     pub fn new_eu868() -> Self {
         Self::new(eu868_freq_check)
     }

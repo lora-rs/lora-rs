@@ -9,7 +9,7 @@ use super::*;
 
 const MAX_EIRP: u8 = 30;
 
-pub(crate) type IN865 = DynamicChannelPlan<3, IN865Region>;
+pub(crate) type IN865 = DynamicChannelPlan<IN865Region>;
 
 #[derive(Default, Clone)]
 pub struct IN865Region;
@@ -18,9 +18,7 @@ fn in865_freq_check(f: u32) -> bool {
     (865_000_000..=867_000_000).contains(&f)
 }
 
-impl<const NUM_JOIN_CHANNELS: usize, R: DynamicChannelRegion>
-    DynamicChannelPlan<NUM_JOIN_CHANNELS, R>
-{
+impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
     pub fn new_in865() -> Self {
         Self::new(in865_freq_check)
     }
