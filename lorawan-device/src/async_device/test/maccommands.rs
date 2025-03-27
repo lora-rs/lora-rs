@@ -41,6 +41,15 @@ fn newchannelreq_invalid_eu868(
     build_frm_payload(buf, "0700184f84500701184f84500702184f8450")
 }
 
+fn newchannelreq_invalid_eu868_dr(
+    _uplink: Option<Uplink>,
+    _config: RfConfig,
+    buf: &mut [u8],
+) -> usize {
+    // NewChannelReq with invalid DataRateRange
+    build_frm_payload(buf, "0703287684cd")
+}
+
 #[tokio::test]
 #[cfg(feature = "region-eu868")]
 async fn newchannelreq_eu868_readonly() {
@@ -68,6 +77,42 @@ async fn newchannelreq_eu868_readonly() {
     if let Some(session) = device.mac.get_session() {
         let data = session.uplink.mac_commands();
         assert_eq!(parse_uplink_mac_commands(data).count(), 3);
+        // For all 3 channels freq and dr are nacked (0b11)
+        assert_eq!(data, [7, 0, 7, 0, 7, 0]);
+    } else {
+        panic!("Session not joined?");
+    }
+}
+
+#[tokio::test]
+#[cfg(feature = "region-eu868")]
+async fn newchannelreq_eu868_invalid_dr() {
+    let (radio, timer, mut async_device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let send_await_complete = Arc::new(Mutex::new(false));
+
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = async_device.send(&[1, 2, 3], 3, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (async_device, response)
+    });
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(newchannelreq_invalid_eu868_dr).await;
+
+    let (device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    if let Some(session) = device.mac.get_session() {
+        let data = session.uplink.mac_commands();
+        assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+        // Frequency is acked (bit 0), dr is invalid (bit 1)
+        assert_eq!(data, [7, 0b01]);
     } else {
         panic!("Session not joined?");
     }
