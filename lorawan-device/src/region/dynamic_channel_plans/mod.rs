@@ -244,17 +244,23 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         false
     }
 
-    fn handle_new_channel(&mut self, index: u8, freq: u32, _: DataRateRange) -> (bool, bool) {
+    fn handle_new_channel(&mut self, index: u8, freq: u32, dr: DataRateRange) -> (bool, bool) {
         // Join channels are readonly - these cannot be modified!
         if index < R::join_channels() {
             return (false, false);
         }
         // Disable channel if frequency is 0
-        if freq == 0 && (index as usize) < self.channels.len() {
+        if freq == 0 {
             self.channels[index as usize] = None;
             return (true, true);
         }
-        // TODO: Implement frequency and data range checks to define new channels
-        (false, false)
+        let freq_valid = self.frequency_valid(freq);
+        let dr_valid = (dr.min_data_rate()..=dr.max_data_rate())
+            .all(|c| (R::datarates()[c as usize]).is_some());
+
+        if freq_valid && dr_valid {
+            self.channels[index as usize] = Some(Channel { frequency: freq, _datarates: dr });
+        }
+        (freq_valid, dr_valid)
     }
 }
