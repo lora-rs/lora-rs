@@ -67,6 +67,7 @@ impl Multicast {
         encrypted_data: EncryptedDataPayload<&mut [u8], C>,
     ) -> Response {
         let mc_addr = encrypted_data.fhdr().mc_addr();
+        debug!("Multicast message received: {:?}", mc_addr);
         if let Some((group_id, session)) = self.matching_session(mc_addr) {
             let fcnt = encrypted_data.fhdr().fcnt() as u32;
             if encrypted_data.validate_mic(session.mc_net_s_key().inner(), fcnt)
@@ -138,6 +139,7 @@ impl Multicast {
                 DownlinkRemoteSetup::McGroupSetupReq(mc_group_setup_req) => {
                     let (group_id, session) =
                         mc_group_setup_req.derive_session(&C::default(), mc_k_e_key);
+                    debug!("Derived session: {:?}", session);
                     self.sessions[group_id as usize] = Some(session);
                     let mut ans = McGroupSetupAnsCreator::new();
                     ans.mc_group_id_header(group_id);
