@@ -372,8 +372,8 @@ impl NewChannelReqPayload<'_> {
     }
 
     /// The data rate range specifies allowed data rates for the new or modified channel.
-    pub fn data_rate_range(&self) -> DataRateRange {
-        DataRateRange::new_from_raw(self.0[4])
+    pub fn data_rate_range(&self) -> Result<DataRateRange, Error> {
+        DataRateRange::new(self.0[4])
     }
 }
 

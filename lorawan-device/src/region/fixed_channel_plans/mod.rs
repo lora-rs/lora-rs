@@ -232,7 +232,7 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         true
     }
 
-    fn handle_new_channel(&mut self, _: u8, _: u32, _: DataRateRange) -> (bool, bool) {
+    fn handle_new_channel(&mut self, _: u8, _: u32, _: Option<DataRateRange>) -> (bool, bool) {
         unreachable!()
     }
 }

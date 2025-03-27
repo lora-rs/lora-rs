@@ -363,7 +363,7 @@ impl Session {
                     let (ack_f, ack_d) = region.handle_new_channel(
                         payload.channel_index(),
                         payload.frequency().value(),
-                        payload.data_rate_range(),
+                        payload.data_rate_range().ok(),
                     );
 
                     let mut cmd = NewChannelAnsCreator::new();

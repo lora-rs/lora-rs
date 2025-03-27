@@ -163,7 +163,7 @@ fn test_new_channel_req() {
         5,
         (channel_index, 3),
         (frequency, Frequency::new_from_raw(&data[1..4])),
-        (data_rate_range, DataRateRange::new_from_raw(data[4])),
+        (data_rate_range, DataRateRange::new(data[4])),
     );
 }
 

@@ -475,7 +475,7 @@ impl Configuration {
         &mut self,
         index: u8,
         freq: u32,
-        data_rates: DataRateRange,
+        data_rates: Option<DataRateRange>,
     ) -> (bool, bool) {
         mut_region_dispatch!(self, handle_new_channel, index, freq, data_rates)
     }
@@ -528,7 +528,7 @@ pub(crate) trait RegionHandler {
         &mut self,
         index: u8,
         freq: u32,
-        data_rates: DataRateRange,
+        data_rates: Option<DataRateRange>,
     ) -> (bool, bool);
 
     fn get_default_datarate(&self) -> DR {

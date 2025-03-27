@@ -244,7 +244,12 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         false
     }
 
-    fn handle_new_channel(&mut self, index: u8, freq: u32, dr: DataRateRange) -> (bool, bool) {
+    fn handle_new_channel(
+        &mut self,
+        index: u8,
+        freq: u32,
+        dr: Option<DataRateRange>,
+    ) -> (bool, bool) {
         // Join channels are readonly - these cannot be modified!
         if index < R::join_channels() {
             return (false, false);
@@ -255,12 +260,17 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
             return (true, true);
         }
         let freq_valid = self.frequency_valid(freq);
-        let dr_valid = (dr.min_data_rate()..=dr.max_data_rate())
-            .all(|c| (R::datarates()[c as usize]).is_some());
 
-        if freq_valid && dr_valid {
-            self.channels[index as usize] = Some(Channel { frequency: freq, _datarates: dr });
+        // Check if DataRateRange is valid and supported
+        if let Some(r) = dr {
+            let dr_supported = (r.min_data_rate()..=r.max_data_rate())
+                .all(|c| (R::datarates()[c as usize]).is_some());
+
+            if freq_valid && dr_supported {
+                self.channels[index as usize] = Some(Channel { frequency: freq, _datarates: r });
+            }
+            return (freq_valid, dr_supported);
         }
-        (freq_valid, dr_valid)
+        (freq_valid, false)
     }
 }
