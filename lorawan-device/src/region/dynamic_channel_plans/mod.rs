@@ -239,8 +239,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         (self.frequency_valid)(freq)
     }
 
-    // NewChannelReq MAC command is required in dynamic channel regions
-    fn skip_newchannelreq(&self) -> bool {
+    fn has_fixed_channel_plan(&self) -> bool {
         false
     }
 
