@@ -323,6 +323,13 @@ impl Session {
                     let _ = cmd.set_battery(255).set_margin(0);
                     self.uplink.add_mac_command(cmd);
                 }
+                DlChannelReq(_payload) => {
+                    if region.has_fixed_channel_plan() {
+                        // Regions with fixed channel plan ignore this command
+                        continue;
+                    }
+                    // TODO...
+                }
                 LinkADRReq(payload) => {
                     // Handle DataRate
                     let dr = {
@@ -362,8 +369,8 @@ impl Session {
                     }
                 }
                 NewChannelReq(payload) => {
-                    // Check whether region should skip handling this command.
-                    if region.skip_newchannelreq() {
+                    if region.has_fixed_channel_plan() {
+                        // Regions with fixed channel plan ignore this command
                         continue;
                     }
                     let (ack_f, ack_d) = region.handle_new_channel(

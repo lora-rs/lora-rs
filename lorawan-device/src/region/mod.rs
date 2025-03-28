@@ -467,8 +467,8 @@ impl Configuration {
         self.state.region()
     }
 
-    pub(crate) fn skip_newchannelreq(&self) -> bool {
-        region_dispatch!(self, skip_newchannelreq)
+    pub(crate) fn has_fixed_channel_plan(&self) -> bool {
+        region_dispatch!(self, has_fixed_channel_plan)
     }
 
     pub(crate) fn handle_new_channel(
@@ -551,8 +551,9 @@ pub(crate) trait RegionHandler {
 
     fn frequency_valid(&self, freq: u32) -> bool;
 
-    /// Fixed channel plan regions SHALL NOT implement NewChannelReq MAC command.
-    fn skip_newchannelreq(&self) -> bool;
+    /// Whether region supports modifying channel plan
+    /// with `NewChannelReq`/`DlSettingsReq` MAC commands
+    fn has_fixed_channel_plan(&self) -> bool;
 }
 
 #[cfg(test)]
