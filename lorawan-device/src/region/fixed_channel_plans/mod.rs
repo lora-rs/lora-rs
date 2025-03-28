@@ -227,8 +227,7 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         (self.frequency_valid)(freq)
     }
 
-    // NewChannelReq MAC command is not implemented in fixed channel regions
-    fn skip_newchannelreq(&self) -> bool {
+    fn has_fixed_channel_plan(&self) -> bool {
         true
     }
 
