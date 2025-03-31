@@ -9,13 +9,13 @@ use lorawan::maccommands::parse_uplink_mac_commands;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-fn build_frm_payload(buf: &mut [u8], payload_in_hex: &str) -> usize {
+fn build_frm_payload(buf: &mut [u8], payload_in_hex: &str, fcnt: u32) -> usize {
     let mut phy = lorawan::creator::DataPayloadCreator::new(buf).unwrap();
     phy.set_confirmed(false);
     phy.set_f_port(0);
     phy.set_dev_addr(&[0; 4]);
     phy.set_uplink(false);
-    phy.set_fcnt(0xd);
+    phy.set_fcnt(fcnt);
     phy.set_fctrl(&lorawan::parser::FCtrl::new(0x20, true));
     let finished = phy
         .build(
@@ -38,7 +38,7 @@ fn newchannelreq_invalid_eu868(
     // NewChannelReqPayload([1, 24, 79, 132, 80])
     // NewChannelReqPayload([2, 24, 79, 132, 80])
     // EU868 - first 3 channels are join channels and readonly
-    build_frm_payload(buf, "0700184f84500701184f84500702184f8450")
+    build_frm_payload(buf, "0700184f84500701184f84500702184f8450", 2)
 }
 
 fn newchannelreq_invalid_eu868_dr(
@@ -47,7 +47,7 @@ fn newchannelreq_invalid_eu868_dr(
     buf: &mut [u8],
 ) -> usize {
     // NewChannelReq with invalid DataRateRange
-    build_frm_payload(buf, "0703287684cd")
+    build_frm_payload(buf, "0703287684cd", 2)
 }
 
 #[tokio::test]
