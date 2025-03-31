@@ -420,12 +420,21 @@ impl Configuration {
         mut_region_dispatch!(self, process_join_accept, join_accept)
     }
 
-    pub(crate) fn set_channel_mask(
-        &mut self,
+    pub(crate) fn channel_mask_get(&self) -> ChannelMask<9> {
+        region_dispatch!(self, channel_mask_get)
+    }
+
+    pub(crate) fn channel_mask_set(&mut self, channel_mask: ChannelMask<9>) {
+        mut_region_dispatch!(self, channel_mask_set, channel_mask)
+    }
+
+    pub(crate) fn channel_mask_update(
+        &self,
+        new_mask: &mut ChannelMask<9>,
         channel_mask_control: u8,
         channel_mask: ChannelMask<2>,
     ) {
-        mut_region_dispatch!(self, handle_link_adr_channel_mask, channel_mask_control, channel_mask)
+        region_dispatch!(self, channel_mask_update, new_mask, channel_mask_control, channel_mask)
     }
 
     pub(crate) fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32 {
@@ -521,8 +530,12 @@ pub(crate) trait RegionHandler {
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     );
 
-    fn handle_link_adr_channel_mask(
-        &mut self,
+    fn channel_mask_get(&self) -> ChannelMask<9>;
+    fn channel_mask_set(&mut self, channel_mask: ChannelMask<9>);
+
+    fn channel_mask_update(
+        &self,
+        channel_mask: &mut ChannelMask<9>,
         channel_mask_control: u8,
         channel_mask: ChannelMask<2>,
     );
