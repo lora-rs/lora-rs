@@ -351,11 +351,14 @@ impl Session {
                             region.check_tx_power(power)
                         }
                     };
-                    // ChannelMask
-                    region.set_channel_mask(
+                    let mut channel_mask = region.channel_mask_get();
+                    region.channel_mask_update(
+                        &mut channel_mask,
                         payload.redundancy().channel_mask_control(),
                         payload.channel_mask(),
                     );
+                    region.channel_mask_set(channel_mask);
+
                     let mut cmd = LinkADRAnsCreator::new();
                     cmd.set_channel_mask_ack(true)
                         .set_data_rate_ack(dr.is_some())
