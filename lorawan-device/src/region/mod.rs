@@ -1,6 +1,9 @@
 //! LoRaWAN device region definitions (eg: EU868, US915, etc).
 use lora_modulation::{Bandwidth, BaseBandModulationParams, CodingRate, SpreadingFactor};
-use lorawan::{maccommands::ChannelMask, parser::CfList, types::DataRateRange};
+use lorawan::{
+    parser::CfList,
+    types::{ChannelMask, DataRateRange},
+};
 use rand_core::RngCore;
 
 use crate::mac::{Frame, Window};
