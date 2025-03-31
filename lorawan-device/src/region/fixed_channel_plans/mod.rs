@@ -59,20 +59,20 @@ impl<F: FixedChannelRegion> FixedChannelPlan<F> {
         }
     }
 
-    pub fn set_125k_channels(&mut self, enabled: bool) {
+    pub fn set_125k_channels(&self, channel_mask: &mut ChannelMask<9>, enabled: bool) {
         let mask = if enabled {
             0xFF
         } else {
             0x00
         };
-        self.channel_mask.set_bank(0, mask);
-        self.channel_mask.set_bank(1, mask);
-        self.channel_mask.set_bank(2, mask);
-        self.channel_mask.set_bank(3, mask);
-        self.channel_mask.set_bank(4, mask);
-        self.channel_mask.set_bank(5, mask);
-        self.channel_mask.set_bank(6, mask);
-        self.channel_mask.set_bank(7, mask);
+        channel_mask.set_bank(0, mask);
+        channel_mask.set_bank(1, mask);
+        channel_mask.set_bank(2, mask);
+        channel_mask.set_bank(3, mask);
+        channel_mask.set_bank(4, mask);
+        channel_mask.set_bank(5, mask);
+        channel_mask.set_bank(6, mask);
+        channel_mask.set_bank(7, mask);
     }
 
     #[allow(unused)]
@@ -102,45 +102,52 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     ) {
         if let Some(CfList::FixedChannel(channel_mask)) = join_accept.c_f_list() {
-            // Reset the join channels state
-            self.join_channels.reset();
-            self.channel_mask = channel_mask;
+            self.channel_mask_set(channel_mask);
         }
     }
 
-    fn handle_link_adr_channel_mask(
-        &mut self,
+    fn channel_mask_get(&self) -> ChannelMask<9> {
+        self.channel_mask.clone()
+    }
+
+    fn channel_mask_set(&mut self, channel_mask: ChannelMask<9>) {
+        self.join_channels.reset();
+        self.channel_mask = channel_mask;
+    }
+
+    fn channel_mask_update(
+        &self,
+        mask: &mut ChannelMask<9>,
         channel_mask_control: u8,
         channel_mask: ChannelMask<2>,
     ) {
-        self.join_channels.reset();
         match channel_mask_control {
             0..=4 => {
                 let base_index = channel_mask_control as usize * 2;
-                self.channel_mask.set_bank(base_index, channel_mask.get_index(0));
-                self.channel_mask.set_bank(base_index + 1, channel_mask.get_index(1));
+                mask.set_bank(base_index, channel_mask.get_index(0));
+                mask.set_bank(base_index + 1, channel_mask.get_index(1));
             }
             5 => {
                 let channel_mask: u16 =
                     channel_mask.get_index(0) as u16 | ((channel_mask.get_index(1) as u16) << 8);
-                self.channel_mask.set_bank(0, ((channel_mask & 0b1) * 0xFF) as u8);
-                self.channel_mask.set_bank(1, ((channel_mask & 0b10) * 0xFF) as u8);
-                self.channel_mask.set_bank(2, ((channel_mask & 0b100) * 0xFF) as u8);
-                self.channel_mask.set_bank(3, ((channel_mask & 0b1000) * 0xFF) as u8);
-                self.channel_mask.set_bank(4, ((channel_mask & 0b10000) * 0xFF) as u8);
-                self.channel_mask.set_bank(5, ((channel_mask & 0b100000) * 0xFF) as u8);
-                self.channel_mask.set_bank(6, ((channel_mask & 0b1000000) * 0xFF) as u8);
-                self.channel_mask.set_bank(7, ((channel_mask & 0b10000000) * 0xFF) as u8);
-                self.channel_mask.set_bank(8, ((channel_mask & 0b100000000) * 0xFF) as u8);
+                mask.set_bank(0, ((channel_mask & 0b1) * 0xFF) as u8);
+                mask.set_bank(1, ((channel_mask & 0b10) * 0xFF) as u8);
+                mask.set_bank(2, ((channel_mask & 0b100) * 0xFF) as u8);
+                mask.set_bank(3, ((channel_mask & 0b1000) * 0xFF) as u8);
+                mask.set_bank(4, ((channel_mask & 0b10000) * 0xFF) as u8);
+                mask.set_bank(5, ((channel_mask & 0b100000) * 0xFF) as u8);
+                mask.set_bank(6, ((channel_mask & 0b1000000) * 0xFF) as u8);
+                mask.set_bank(7, ((channel_mask & 0b10000000) * 0xFF) as u8);
+                mask.set_bank(8, ((channel_mask & 0b100000000) * 0xFF) as u8);
             }
             6 => {
-                self.set_125k_channels(true);
+                self.set_125k_channels(mask, true);
             }
             7 => {
-                self.set_125k_channels(false);
+                self.set_125k_channels(mask, false);
             }
             _ => {
-                //RFU
+                // RFU
             }
         }
     }
