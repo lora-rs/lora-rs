@@ -152,6 +152,11 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         }
     }
 
+    fn channel_mask_validate(&self, _channel_mask: &ChannelMask<9>) -> bool {
+        // TODO: Handle channels
+        true
+    }
+
     fn get_tx_dr_and_frequency<RNG: RngCore>(
         &mut self,
         rng: &mut RNG,

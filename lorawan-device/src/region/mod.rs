@@ -437,6 +437,10 @@ impl Configuration {
         region_dispatch!(self, channel_mask_update, new_mask, channel_mask_control, channel_mask)
     }
 
+    pub(crate) fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>) -> bool {
+        region_dispatch!(self, channel_mask_validate, channel_mask)
+    }
+
     pub(crate) fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32 {
         region_dispatch!(self, get_rx_frequency, frame, window)
     }
@@ -539,6 +543,8 @@ pub(crate) trait RegionHandler {
         channel_mask_control: u8,
         channel_mask: ChannelMask<2>,
     );
+
+    fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>) -> bool;
 
     fn handle_new_channel(
         &mut self,

@@ -189,6 +189,18 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         }
     }
 
+    fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>) -> bool {
+        // TODO: We should also check whether DR and txpower for all(?) channels is valid
+        (0..NUM_CHANNELS_DYNAMIC).any(|i| {
+            if channel_mask.is_enabled(i as usize).unwrap() {
+                self.channels[i as usize].is_some()
+            } else {
+                false
+            }
+        })
+        // (2..9).all(|i| channel_mask.get_index(i) == 0)
+    }
+
     fn get_tx_dr_and_frequency<RNG: RngCore>(
         &mut self,
         rng: &mut RNG,
