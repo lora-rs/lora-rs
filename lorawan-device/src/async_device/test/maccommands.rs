@@ -30,6 +30,73 @@ fn build_frm_payload(buf: &mut [u8], payload_in_hex: &str, fcnt: u32) -> usize {
     finished.len()
 }
 
+#[ignore = "Missing validation for modified channel mask"]
+#[tokio::test]
+#[cfg(feature = "region-eu868")]
+async fn linkadrreq() {
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let send_await_complete = Arc::new(Mutex::new(false));
+
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    fn add_disabled_channel(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // NewChannelReq - add new channel to slot 3
+        // LinkADRReq - channelmask in bank = 1, mask = 0b111 (effectively disabling new channel)
+        build_frm_payload(buf, "0703886684500350070001", 2)
+    }
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(add_disabled_channel).await;
+
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    assert_eq!(parse_uplink_mac_commands(data).count(), 2);
+    assert_eq!(data, [7, 3, 3, 7]);
+
+    // Trigger second uplink which calls "disable_all_channels" LinkADRReq and
+    // our MAC layer effectively does it... This is wrong.
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    fn disable_all_channels(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // LinkADRReq - disable ALL channels in bank 0
+        build_frm_payload(buf, "0350000001", 3)
+    }
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(disable_all_channels).await;
+
+    let (device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+    // We should reject the channel mask setting
+    assert_eq!(data, [3, 0]);
+}
+
 fn newchannelreq_invalid_eu868(
     _uplink: Option<Uplink>,
     _config: RfConfig,
