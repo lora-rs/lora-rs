@@ -30,10 +30,9 @@ fn build_frm_payload(buf: &mut [u8], payload_in_hex: &str, fcnt: u32) -> usize {
     finished.len()
 }
 
-#[ignore = "Missing validation for modified channel mask"]
 #[tokio::test]
 #[cfg(feature = "region-eu868")]
-async fn linkadrreq() {
+async fn linkadrreq_dynamic() {
     let (radio, timer, mut device) =
         util::session_with_region(crate::region::EU868::new_eu868().into());
     let send_await_complete = Arc::new(Mutex::new(false));
@@ -93,8 +92,7 @@ async fn linkadrreq() {
     let session = device.mac.get_session().unwrap();
     let data = session.uplink.mac_commands();
     assert_eq!(parse_uplink_mac_commands(data).count(), 1);
-    // We should reject the channel mask setting
-    assert_eq!(data, [3, 0]);
+    assert_eq!(data, [3, 6]);
 }
 
 fn newchannelreq_invalid_eu868(
