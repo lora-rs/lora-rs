@@ -357,18 +357,19 @@ impl Session {
                         payload.redundancy().channel_mask_control(),
                         payload.channel_mask(),
                     );
-                    region.channel_mask_set(channel_mask);
+
+                    let cm_ack = region.channel_mask_validate(&channel_mask);
 
                     let mut cmd = LinkADRAnsCreator::new();
-                    cmd.set_channel_mask_ack(true)
+                    cmd.set_channel_mask_ack(cm_ack)
                         .set_data_rate_ack(dr.is_some())
                         .set_tx_power_ack(pw.is_some());
                     self.uplink.add_mac_command(cmd);
 
-                    // TODO: We should only apply settings if all 3 settings are valid!
-                    if dr.is_some() && pw.is_some() {
+                    if dr.is_some() && pw.is_some() && cm_ack {
                         configuration.data_rate = dr.unwrap();
                         configuration.tx_power = pw.unwrap();
+                        region.channel_mask_set(channel_mask);
                     }
                 }
                 NewChannelReq(payload) => {
