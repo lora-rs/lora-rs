@@ -159,7 +159,7 @@ async fn linkaddreq_fixed_channel_mask_validation() {
     timer.fire_most_recent().await;
     radio.handle_rxtx(enable_125_disable_500).await;
 
-    let (device, response) = task.await.unwrap();
+    let (mut device, response) = task.await.unwrap();
     match response {
         Ok(SendResponse::DownlinkReceived(_)) => {}
         _ => panic!(),
@@ -169,6 +169,33 @@ async fn linkaddreq_fixed_channel_mask_validation() {
     let data = session.uplink.mac_commands();
     assert_eq!(parse_uplink_mac_commands(data).count(), 1);
     assert_eq!(data, [3, 6]);
+
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 4, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    fn disable_125_switch_to_500(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // LinkADRReq, SF8BW500, MAX, 0100, 71
+        build_frm_payload(buf, "0340010071", 3)
+    }
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(disable_125_switch_to_500).await;
+
+    let (device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+    assert_eq!(data, [3, 7]);
 }
 
 #[tokio::test]
