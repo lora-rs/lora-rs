@@ -59,7 +59,12 @@ impl<F: FixedChannelRegion> FixedChannelPlan<F> {
         }
     }
 
-    pub fn set_125k_channels(&self, channel_mask: &mut ChannelMask<9>, enabled: bool) {
+    pub fn set_125k_channels(
+        &self,
+        channel_mask: &mut ChannelMask<9>,
+        enabled: bool,
+        extra_mask: ChannelMask<2>,
+    ) {
         let mask = if enabled {
             0xFF
         } else {
@@ -73,6 +78,10 @@ impl<F: FixedChannelRegion> FixedChannelPlan<F> {
         channel_mask.set_bank(5, mask);
         channel_mask.set_bank(6, mask);
         channel_mask.set_bank(7, mask);
+
+        channel_mask.set_bank(8, extra_mask.get_index(0));
+        // Bank 9 is not (yet) used for frequencies
+        // channel_mask.set_bank(9, extra_mask.get_index(1));
     }
 
     #[allow(unused)]
@@ -141,10 +150,10 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
                 mask.set_bank(8, ((channel_mask & 0b100000000) * 0xFF) as u8);
             }
             6 => {
-                self.set_125k_channels(mask, true);
+                self.set_125k_channels(mask, true, channel_mask);
             }
             7 => {
-                self.set_125k_channels(mask, false);
+                self.set_125k_channels(mask, false, channel_mask);
             }
             _ => {
                 // RFU
