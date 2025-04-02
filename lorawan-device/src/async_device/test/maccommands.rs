@@ -178,7 +178,11 @@ async fn linkaddreq_fixed_channel_mask_validation() {
         (device, response)
     });
 
-    fn disable_125_switch_to_500(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+    fn disable_125_switch_to_500(
+        _uplink: Option<Uplink>,
+        _config: RfConfig,
+        buf: &mut [u8],
+    ) -> usize {
         // LinkADRReq, SF8BW500, MAX, 0100, 71
         build_frm_payload(buf, "0340010071", 3)
     }
@@ -196,6 +200,145 @@ async fn linkaddreq_fixed_channel_mask_validation() {
     let data = session.uplink.mac_commands();
     assert_eq!(parse_uplink_mac_commands(data).count(), 1);
     assert_eq!(data, [3, 7]);
+}
+
+#[ignore = "This should fail in step 4"]
+#[tokio::test]
+#[cfg(feature = "region-us915")]
+async fn linkaddreq_fixed_invalid_125khz() {
+    // 2.5.8.b.ii.1.2. Invalid Command Processing
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::US915::default().into());
+    let send_await_complete = Arc::new(Mutex::new(false));
+
+    // step 1
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 1, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    fn step1(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_frm_payload(buf, "03000000710300ff0001", 1)
+    }
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(step1).await;
+
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    assert_eq!(parse_uplink_mac_commands(data).count(), 2);
+    assert_eq!(data, [3, 7, 3, 7]);
+
+    assert_eq!(
+        device.mac.region.channel_mask_get(),
+        ChannelMask::<9>::new(&[0xff, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap()
+    );
+
+    // step 2
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 2, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    fn step2(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_frm_payload(buf, "0340000061", 2)
+    }
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(step2).await;
+
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+    assert_eq!(data, [3, 6]);
+
+    assert_eq!(
+        device.mac.region.channel_mask_get(),
+        ChannelMask::<9>::new(&[0xff, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap()
+    );
+
+    // step 3
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    fn step3(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_frm_payload(buf, "0340010071", 3)
+    }
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(step3).await;
+
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+    assert_eq!(data, [3, 7]);
+
+    assert_eq!(
+        device.mac.region.channel_mask_get(),
+        ChannelMask::<9>::new(&[0, 0, 0, 0, 0, 0, 0, 0, 1]).unwrap()
+    );
+
+    // step 4
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 4, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    fn step4(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_frm_payload(buf, "0300000101", 4)
+    }
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(step4).await;
+
+    let (device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+    // TODO: Figure out why we should reject the Req
+    assert_eq!(data, [3, 6]);
+
+    assert_eq!(
+        device.mac.region.channel_mask_get(),
+        ChannelMask::<9>::new(&[0, 0, 0, 0, 0, 0, 0, 0, 1]).unwrap()
+    );
 }
 
 #[tokio::test]
