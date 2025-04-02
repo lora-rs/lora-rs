@@ -6,6 +6,7 @@ use crate::test_util::{get_key, Uplink};
 use lorawan::default_crypto::DefaultFactory;
 use lorawan::maccommands::parse_uplink_mac_commands;
 use lorawan::parser::{DataHeader, DataPayload, PhyPayload};
+use lorawan::types::ChannelMask;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -93,6 +94,46 @@ async fn linkadrreq_dynamic() {
     let data = session.uplink.mac_commands();
     assert_eq!(parse_uplink_mac_commands(data).count(), 1);
     assert_eq!(data, [3, 6]);
+}
+
+#[tokio::test]
+#[cfg(feature = "region-us915")]
+async fn linkadrreq_fixed_125khz_extra_mask() {
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::US915::default().into());
+    let send_await_complete = Arc::new(Mutex::new(false));
+
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    fn single_500_channel(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // LinkADRReq, SF8BW500, MAX, 0100, 71
+        build_frm_payload(buf, "0340010071", 2)
+    }
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(single_500_channel).await;
+
+    let (device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+    assert_eq!(data, [3, 7]);
+    // Make sure that extra mask is properly applied to bank 8
+    assert_eq!(
+        device.mac.region.channel_mask_get(),
+        ChannelMask::<9>::new(&[0, 0, 0, 0, 0, 0, 0, 0, 1]).unwrap()
+    );
 }
 
 #[tokio::test]
