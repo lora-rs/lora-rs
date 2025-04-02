@@ -212,12 +212,12 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
                 } else {
                     // For the data frame, the datarate impacts which channel sets we can choose
                     // from. If the datarate bandwidth is 500 kHz, we must use
-                    // channels 64-71. Else, we must use 0-63
+                    // channels 64..=71. Else, we must use 0-63
                     let datarate = F::datarates()[datarate as usize].clone().unwrap();
                     if datarate.bandwidth == Bandwidth::_500KHz {
                         let mut channel = (rng.next_u32() & 0b111) as u8;
                         // keep selecting a random channel until we find one that is enabled
-                        while !self.channel_mask.is_enabled(channel.into()).unwrap() {
+                        while !self.channel_mask.is_enabled((channel + 64).into()).unwrap() {
                             channel = (rng.next_u32() & 0b111) as u8;
                         }
                         (datarate, 64 + channel)
