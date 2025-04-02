@@ -382,7 +382,7 @@ impl Session {
                         }
                     };
 
-                    let cm_ack = region.channel_mask_validate(&channel_mask);
+                    let cm_ack = region.channel_mask_validate(&channel_mask, dr);
 
                     if dr.is_some() && pw.is_some() && cm_ack {
                         // TODO: handle nbtrans
