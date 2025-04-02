@@ -189,7 +189,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         }
     }
 
-    fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>) -> bool {
+    fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, _dr: Option<DR>) -> bool {
         // TODO: We should also check whether DR and txpower for all(?) channels is valid
         (0..NUM_CHANNELS_DYNAMIC).any(|i| {
             if channel_mask.is_enabled(i as usize).unwrap() {
