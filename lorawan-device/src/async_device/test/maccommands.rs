@@ -95,6 +95,43 @@ async fn linkadrreq_dynamic() {
     assert_eq!(data, [3, 6]);
 }
 
+#[tokio::test]
+#[cfg(feature = "region-eu868")]
+async fn linkadrreq_dynamic_invalid() {
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let send_await_complete = Arc::new(Mutex::new(false));
+
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    fn addreq_chain(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // LinkADRReq, SF8BW125, 4, 0100, 00
+        // LinkADRReq, SF9BW125, 1, 0000, 61
+        // LinkADRReq, SF7BW125, 0, 0000, 01
+        build_frm_payload(buf, "034401000003310000610350000001", 2)
+    }
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(addreq_chain).await;
+
+    let (device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    assert_eq!(parse_uplink_mac_commands(data).count(), 3);
+    assert_eq!(data, [3, 6, 3, 6, 3, 6]);
+}
+
 fn newchannelreq_invalid_eu868(
     _uplink: Option<Uplink>,
     _config: RfConfig,
