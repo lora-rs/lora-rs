@@ -161,9 +161,17 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         }
     }
 
-    fn channel_mask_validate(&self, _channel_mask: &ChannelMask<9>) -> bool {
-        // TODO: Handle channels
-        true
+    fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, dr: Option<DR>) -> bool {
+        if let Some(dr) = dr {
+            if let Some(dr) = &F::datarates()[dr as usize] {
+                return match dr.bandwidth {
+                    Bandwidth::_500KHz => (64..=71).any(|i| channel_mask.is_enabled(i).unwrap()),
+                    Bandwidth::_125KHz => (0..64).any(|i| channel_mask.is_enabled(i).unwrap()),
+                    _ => true,
+                };
+            }
+        }
+        false
     }
 
     fn get_tx_dr_and_frequency<RNG: RngCore>(

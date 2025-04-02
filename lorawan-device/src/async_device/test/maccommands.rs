@@ -137,6 +137,41 @@ async fn linkadrreq_fixed_125khz_extra_mask() {
 }
 
 #[tokio::test]
+#[cfg(feature = "region-us915")]
+async fn linkaddreq_fixed_channel_mask_validation() {
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::US915::default().into());
+    let send_await_complete = Arc::new(Mutex::new(false));
+
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    fn enable_125_disable_500(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // LinkADRReq, SF8BW500, MAX, 0000, 61
+        build_frm_payload(buf, "0340000061", 2)
+    }
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(enable_125_disable_500).await;
+
+    let (device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+    assert_eq!(data, [3, 6]);
+}
+
+#[tokio::test]
 #[cfg(feature = "region-eu868")]
 async fn linkadrreq_dynamic_invalid() {
     let (radio, timer, mut device) =
