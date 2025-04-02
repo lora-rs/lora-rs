@@ -44,7 +44,7 @@ pub(crate) const UPLINK_CHANNEL_MAP: [u32; 72] = [
     922_600_000,
     922_800_000,
     923_000_000,
-    // channels 39-47 (125 kHz)
+    // channels 40-47 (125 kHz)
     923_200_000,
     923_400_000,
     923_600_000,
@@ -53,7 +53,7 @@ pub(crate) const UPLINK_CHANNEL_MAP: [u32; 72] = [
     924_200_000,
     924_400_000,
     924_600_000,
-    // channels 47-55 (125 kHz)
+    // channels 48-55 (125 kHz)
     924_800_000,
     925_000_000,
     925_200_000,
@@ -62,7 +62,7 @@ pub(crate) const UPLINK_CHANNEL_MAP: [u32; 72] = [
     925_800_000,
     926_000_000,
     926_200_000,
-    // channels 55-63 (125 kHz)
+    // channels 56-63 (125 kHz)
     926_400_000,
     926_600_000,
     926_800_000,
@@ -71,7 +71,7 @@ pub(crate) const UPLINK_CHANNEL_MAP: [u32; 72] = [
     927_400_000,
     927_600_000,
     927_800_000,
-    // channels 63-71 (500 kHz)
+    // channels 64-71 (500 kHz pr LR-FHSS 1.523 MHz BW)
     915_900_000,
     917_500_000,
     919_100_000,
@@ -83,7 +83,7 @@ pub(crate) const UPLINK_CHANNEL_MAP: [u32; 72] = [
 ];
 
 pub(crate) const DOWNLINK_CHANNEL_MAP: [u32; 8] = [
-    922_300_000,
+    923_300_000,
     923_900_000,
     924_500_000,
     925_100_000,
