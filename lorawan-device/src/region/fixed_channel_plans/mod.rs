@@ -166,7 +166,11 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
             if let Some(dr) = &F::datarates()[dr as usize] {
                 return match dr.bandwidth {
                     Bandwidth::_500KHz => (64..=71).any(|i| channel_mask.is_enabled(i).unwrap()),
-                    Bandwidth::_125KHz => (0..64).any(|i| channel_mask.is_enabled(i).unwrap()),
+                    Bandwidth::_125KHz => {
+                        // Check that at least two channels are enabled
+                        (0..64).filter(|&i| channel_mask.is_enabled(i).unwrap()).take(2).count()
+                            == 2
+                    }
                     _ => true,
                 };
             }
