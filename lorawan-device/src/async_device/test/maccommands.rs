@@ -202,7 +202,6 @@ async fn linkaddreq_fixed_channel_mask_validation() {
     assert_eq!(data, [3, 7]);
 }
 
-#[ignore = "This should fail in step 4"]
 #[tokio::test]
 #[cfg(feature = "region-us915")]
 async fn linkaddreq_fixed_invalid_125khz() {
@@ -308,6 +307,7 @@ async fn linkaddreq_fixed_invalid_125khz() {
     );
 
     // step 4
+    // Invalid LinkADRReq enables one 125kHz channel with allowed 125kHz datarate
     let complete = send_await_complete.clone();
     let task = tokio::spawn(async move {
         let response = device.send(&[1, 2, 3], 4, false).await;
@@ -332,7 +332,6 @@ async fn linkaddreq_fixed_invalid_125khz() {
     let session = device.mac.get_session().unwrap();
     let data = session.uplink.mac_commands();
     assert_eq!(parse_uplink_mac_commands(data).count(), 1);
-    // TODO: Figure out why we should reject the Req
     assert_eq!(data, [3, 6]);
 
     assert_eq!(
