@@ -151,6 +151,110 @@ async fn newchannelreq_fixed_region_ignore() {
     }
 }
 
+#[ignore = "TODO: RXParamSetupAns ack mechanism"]
+#[tokio::test]
+#[cfg(feature = "region-eu868")]
+async fn rxparamsetup_eu868() {
+    // RXParamSetupAns command SHALL be added in the FOpts field
+    // (if FPort is either missing or >0) or in the FRMPayload field (if FPort=0)
+    // of all uplinks until a Class A downlink is received by the end-device.
+    let (radio, timer, mut async_device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let send_await_complete = Arc::new(Mutex::new(false));
+
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = async_device.send(&[1, 2, 3], 3, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (async_device, response)
+    });
+
+    fn rxparamsetup_1(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // RxParamSetup: RX1DRoffset=2, RX2DataRate=SF10BW125, Frequency=868525000
+        build_frm_payload(buf, "0522c28684", 1)
+    }
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(rxparamsetup_1).await;
+
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+    assert_eq!(data, [5, 7]);
+
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 4, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    // RX1
+    timer.fire_most_recent().await;
+    radio.handle_timeout().await;
+    // RX2
+    timer.fire_most_recent().await;
+    radio.handle_timeout().await;
+    // RxComplete (no answer)
+    assert!(*send_await_complete.lock().await);
+
+    let (mut device, response) = task.await.unwrap();
+
+    let mut uplink = radio.get_last_uplink().await;
+    use lorawan::parser::{DataHeader, DataPayload, PhyPayload};
+    match uplink.get_payload() {
+        PhyPayload::Data(DataPayload::Encrypted(data)) => {
+            assert_eq!(data.fhdr().data(), [5, 7]);
+        }
+        _ => panic!(),
+    }
+
+    match response {
+        Ok(SendResponse::RxComplete) => (),
+        _ => panic!(),
+    }
+
+    // Trigger uplink
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 4, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    // RX1
+    timer.fire_most_recent().await;
+    radio.handle_timeout().await;
+    // RX2
+    timer.fire_most_recent().await;
+    radio.handle_timeout().await;
+    // RxComplete (no answer)
+    assert!(*send_await_complete.lock().await);
+
+    let (_device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::RxComplete) => (),
+        _ => panic!(),
+    }
+
+    let mut uplink = radio.get_last_uplink().await;
+    match uplink.get_payload() {
+        PhyPayload::Data(DataPayload::Encrypted(data)) => {
+            assert_eq!(data.fhdr().data(), [5, 7]);
+        }
+        _ => panic!(),
+    }
+}
+
 #[tokio::test]
 // TODO: Finalize RXParamSetupReq
 async fn maccommands_in_frmpayload() {
