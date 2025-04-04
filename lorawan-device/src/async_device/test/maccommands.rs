@@ -5,6 +5,7 @@ use crate::test_util::{get_key, Uplink};
 
 use lorawan::default_crypto::DefaultFactory;
 use lorawan::maccommands::parse_uplink_mac_commands;
+use lorawan::parser::{DataHeader, DataPayload, PhyPayload};
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -151,7 +152,6 @@ async fn newchannelreq_fixed_region_ignore() {
     }
 }
 
-#[ignore = "TODO: RXParamSetupAns ack mechanism"]
 #[tokio::test]
 #[cfg(feature = "region-eu868")]
 async fn rxparamsetup_eu868() {
@@ -209,7 +209,6 @@ async fn rxparamsetup_eu868() {
     let (mut device, response) = task.await.unwrap();
 
     let mut uplink = radio.get_last_uplink().await;
-    use lorawan::parser::{DataHeader, DataPayload, PhyPayload};
     match uplink.get_payload() {
         PhyPayload::Data(DataPayload::Encrypted(data)) => {
             assert_eq!(data.fhdr().data(), [5, 7]);
@@ -240,12 +239,13 @@ async fn rxparamsetup_eu868() {
     // RxComplete (no answer)
     assert!(*send_await_complete.lock().await);
 
-    let (_device, response) = task.await.unwrap();
+    let (mut device, response) = task.await.unwrap();
     match response {
         Ok(SendResponse::RxComplete) => (),
         _ => panic!(),
     }
 
+    // Check that our uplink still contains required packets
     let mut uplink = radio.get_last_uplink().await;
     match uplink.get_payload() {
         PhyPayload::Data(DataPayload::Encrypted(data)) => {
@@ -253,6 +253,35 @@ async fn rxparamsetup_eu868() {
         }
         _ => panic!(),
     }
+
+    // Trigger uplink
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 5, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    fn add_disabled_channel(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // NewChannelReq - add new channel to slot 3
+        // LinkADRReq - channelmask in bank = 1, mask = 0b111 (effectively disabling new channel)
+        build_frm_payload(buf, "0703886684500350070001", 2)
+    }
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(add_disabled_channel).await;
+
+    let (device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => {}
+        _ => panic!(),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    // LinkADRAns has been dropped...
+    assert_eq!(parse_uplink_mac_commands(data).count(), 2);
+    assert_eq!(data, [7, 3, 3, 7]);
 }
 
 #[tokio::test]
@@ -314,6 +343,8 @@ async fn maccommands_in_frmpayload() {
         assert_eq!(parse_uplink_mac_commands(data).count(), 4);
         // LinkADRReq sends freq = 869525000, but this is invalid in US915
         assert_eq!(device.mac.configuration.rx2_frequency, None);
+        // TODO: Implement RxParamSetup and RxTimingSetup...
+        // assert_eq!(data, [5, 7]);
     } else {
         panic!("Session not joined?");
     }

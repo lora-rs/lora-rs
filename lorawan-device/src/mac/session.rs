@@ -129,6 +129,12 @@ impl Session {
         if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
             lorawan_parse(rx.as_mut_for_read(), C::default())
         {
+            // If ignore_mac is false, we're dealing with Class A downlink and
+            // therefore can clear uplinks which need to be retained for acknowledgment
+            if !ignore_mac {
+                self.uplink.clear_mac_commands(false);
+            }
+
             #[cfg(feature = "certification")]
             if let Some(port) = encrypted_data.f_port() {
                 if port > 0 {
@@ -290,7 +296,7 @@ impl Session {
             &crypto_factory,
         ) {
             Ok(packet) => {
-                self.uplink.clear_mac_commands();
+                self.uplink.clear_mac_commands(true);
                 tx_buffer.clear();
                 tx_buffer.extend_from_slice(packet).unwrap();
             }
@@ -382,11 +388,20 @@ impl Session {
                         configuration.rx2_frequency = Some(freq);
                     }
 
+                    // RXParamSetupReq has its own acknowledgment mechanism, requiring
+                    // RXParamSetupAns with all uplinks until a Class A downlink is received
+                    // by the end-device.
                     let mut cmd = RXParamSetupAnsCreator::new();
                     cmd.set_rx1_data_rate_offset_ack(true)
                         .set_rx2_data_rate_ack(true)
                         .set_channel_ack(freq_ack);
+
                     self.uplink.add_mac_command(cmd);
+
+                    // TODO: An end-device that expects to receive Class C
+                    // downlink frames will send an uplink frame as soon
+                    // as possible after receiving a valid RXParamSetupReq
+                    // that modifies RX2 (Frequency or RX2DataRate fields).
                 }
                 RXTimingSetupReq(payload) => {
                     configuration.rx1_delay = super::del_to_delay_ms(payload.delay());

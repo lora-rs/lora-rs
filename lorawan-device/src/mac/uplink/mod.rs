@@ -1,4 +1,4 @@
-use lorawan::maccommands::SerializableMacCommand;
+use lorawan::maccommands::{parse_uplink_mac_commands, SerializableMacCommand, UplinkMacCommand};
 use lorawan::packet_length::phy::mac::fhdr::FOPTS_MAX_LEN;
 
 #[cfg(feature = "serde")]
@@ -24,9 +24,21 @@ impl Uplink {
         let _ = self.pending.push(cmd.cid());
         self.pending.extend_from_slice(cmd.payload_bytes()).unwrap();
     }
-
-    pub fn clear_mac_commands(&mut self) {
-        self.pending.clear();
+    pub fn clear_mac_commands(&mut self, retain_acks: bool) {
+        // Certain commands have to be retained until their acknowledgment is confirmed
+        if retain_acks {
+            let mut data: heapless::Vec<u8, FOPTS_MAX_LEN> = heapless::Vec::new();
+            let _: heapless::Vec<_, FOPTS_MAX_LEN> = parse_uplink_mac_commands(&self.pending)
+                .filter(|cmd| matches!(cmd, UplinkMacCommand::RXParamSetupAns(_)))
+                .map(|c| {
+                    let _ = data.push(c.cid());
+                    data.extend_from_slice(c.payload_bytes()).unwrap();
+                })
+                .collect();
+            self.pending = data;
+        } else {
+            self.pending.clear();
+        }
     }
     pub fn mac_commands(&self) -> &[u8] {
         &self.pending
