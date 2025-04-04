@@ -109,4 +109,9 @@ impl RadioChannel {
         tokio::time::sleep(time::Duration::from_millis(5)).await;
         self.tx.send(Msg::Timeout).await.unwrap();
     }
+
+    pub async fn get_last_uplink(&self) -> Uplink {
+        let uplink = self.last_uplink.lock().await;
+        uplink.clone().unwrap()
+    }
 }
