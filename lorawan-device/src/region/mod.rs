@@ -430,11 +430,11 @@ impl Configuration {
 
     pub(crate) fn channel_mask_update(
         &self,
-        new_mask: &mut ChannelMask<9>,
-        channel_mask_control: u8,
-        channel_mask: ChannelMask<2>,
-    ) {
-        region_dispatch!(self, channel_mask_update, new_mask, channel_mask_control, channel_mask)
+        channel_mask: &mut ChannelMask<9>,
+        ch_mask_ctl: u8,
+        ch_mask: ChannelMask<2>,
+    ) -> Option<()> {
+        region_dispatch!(self, channel_mask_update, channel_mask, ch_mask_ctl, ch_mask)
     }
 
     pub(crate) fn channel_mask_validate(
@@ -541,12 +541,13 @@ pub(crate) trait RegionHandler {
     fn channel_mask_get(&self) -> ChannelMask<9>;
     fn channel_mask_set(&mut self, channel_mask: ChannelMask<9>);
 
+    // TODO: Switch return type to Result
     fn channel_mask_update(
         &self,
         channel_mask: &mut ChannelMask<9>,
-        channel_mask_control: u8,
-        channel_mask: ChannelMask<2>,
-    );
+        ch_mask_ctl: u8,
+        ch_mask: ChannelMask<2>,
+    ) -> Option<()>;
 
     fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, dr: Option<DR>) -> bool;
 
