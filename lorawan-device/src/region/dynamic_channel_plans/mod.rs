@@ -154,39 +154,41 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
 
     fn channel_mask_update(
         &self,
-        mask: &mut ChannelMask<9>,
-        channel_mask_control: u8,
-        channel_mask: ChannelMask<2>,
-    ) {
-        match channel_mask_control {
+        channel_mask: &mut ChannelMask<9>,
+        ch_mask_ctl: u8,
+        ch_mask: ChannelMask<2>,
+    ) -> Option<()> {
+        match ch_mask_ctl {
             0..=4 => {
-                let base_index = channel_mask_control as usize * 2;
-                mask.set_bank(base_index, channel_mask.get_index(0));
-                mask.set_bank(base_index + 1, channel_mask.get_index(1));
+                let base_index = ch_mask_ctl as usize * 2;
+                channel_mask.set_bank(base_index, ch_mask.get_index(0));
+                channel_mask.set_bank(base_index + 1, ch_mask.get_index(1));
             }
             5 => {
-                let channel_mask: u16 =
-                    channel_mask.get_index(0) as u16 | ((channel_mask.get_index(1) as u16) << 8);
-                mask.set_bank(0, ((channel_mask & 0b1) * 0xFF) as u8);
-                mask.set_bank(1, ((channel_mask & 0b10) * 0xFF) as u8);
-                mask.set_bank(2, ((channel_mask & 0b100) * 0xFF) as u8);
-                mask.set_bank(3, ((channel_mask & 0b1000) * 0xFF) as u8);
-                mask.set_bank(4, ((channel_mask & 0b10000) * 0xFF) as u8);
-                mask.set_bank(5, ((channel_mask & 0b100000) * 0xFF) as u8);
-                mask.set_bank(6, ((channel_mask & 0b1000000) * 0xFF) as u8);
-                mask.set_bank(7, ((channel_mask & 0b10000000) * 0xFF) as u8);
-                mask.set_bank(8, ((channel_mask & 0b100000000) * 0xFF) as u8);
+                let ch_mask: u16 =
+                    ch_mask.get_index(0) as u16 | ((ch_mask.get_index(1) as u16) << 8);
+                channel_mask.set_bank(0, ((ch_mask & 0b1) * 0xFF) as u8);
+                channel_mask.set_bank(1, ((ch_mask & 0b10) * 0xFF) as u8);
+                channel_mask.set_bank(2, ((ch_mask & 0b100) * 0xFF) as u8);
+                channel_mask.set_bank(3, ((ch_mask & 0b1000) * 0xFF) as u8);
+                channel_mask.set_bank(4, ((ch_mask & 0b10000) * 0xFF) as u8);
+                channel_mask.set_bank(5, ((ch_mask & 0b100000) * 0xFF) as u8);
+                channel_mask.set_bank(6, ((ch_mask & 0b1000000) * 0xFF) as u8);
+                channel_mask.set_bank(7, ((ch_mask & 0b10000000) * 0xFF) as u8);
+                channel_mask.set_bank(8, ((ch_mask & 0b100000000) * 0xFF) as u8);
             }
             6 => {
                 // all channels on
                 for i in 0..8 {
-                    mask.set_bank(i, 0xFF);
+                    channel_mask.set_bank(i, 0xFF);
                 }
             }
             _ => {
                 // RFU
+                return None;
             }
         }
+        Some(())
     }
 
     fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, _dr: Option<DR>) -> bool {

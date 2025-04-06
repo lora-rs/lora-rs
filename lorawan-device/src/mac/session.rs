@@ -346,8 +346,8 @@ impl Session {
                     // commands.
                     num_adrreq += 1;
 
-                    // TODO: This should return Result!
-                    region.channel_mask_update(
+                    // TODO: Validate that input is not RFU
+                    let _ = region.channel_mask_update(
                         &mut channel_mask,
                         payload.redundancy().channel_mask_control(),
                         payload.channel_mask(),
