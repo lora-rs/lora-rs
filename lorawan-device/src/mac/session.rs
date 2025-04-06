@@ -306,7 +306,10 @@ impl Session {
         cmds: MacCommandIterator<'_, DownlinkMacCommand<'_>>,
     ) {
         use DownlinkMacCommand::*;
-        for cmd in cmds {
+        let mut channel_mask = region.channel_mask_get();
+        let mut cmd_iter = cmds.into_iter().peekable();
+        let mut num_adrreq = 0;
+        while let Some(cmd) = cmd_iter.next() {
             match cmd {
                 DevStatusReq(..) => {
                     // TODO: Fill with proper values
@@ -317,7 +320,41 @@ impl Session {
                     let _ = cmd.set_battery(255).set_margin(0);
                     self.uplink.add_mac_command(cmd);
                 }
+                DlChannelReq(_payload) => {
+                    if region.has_fixed_channel_plan() {
+                        // Regions with fixed channel plan ignore this command
+                        continue;
+                    }
+                    // TODO...
+                }
                 LinkADRReq(payload) => {
+                    // Contiguous LinkADRReq commands shall be processed in the
+                    // order present in the downlink frame as a single atomic block
+                    // command. For each command channel_mask is processed until
+                    // reaching the last command of the block, when it's verified.
+                    //
+                    // DataRate, TxPower and NbTrans are processed only from the
+                    // last LinkADRReq command.
+                    //
+                    // Number of LinkADRAns must match the number of LinkADRReq
+                    // commands.
+                    num_adrreq += 1;
+
+                    // TODO: Validate that input is not RFU
+                    let _ = region.channel_mask_update(
+                        &mut channel_mask,
+                        payload.redundancy().channel_mask_control(),
+                        payload.channel_mask(),
+                    );
+
+                    // Check whether LinkADRReq commands continue...
+                    if let Some(LinkADRReq(..)) = cmd_iter.peek() {
+                        continue;
+                    }
+
+                    // ..if not, handle DataRate, TxPower and NbTrans and
+                    // validate channel_mask.
+
                     // Handle DataRate
                     let dr = {
                         let rate = payload.data_rate();
@@ -338,26 +375,29 @@ impl Session {
                             region.check_tx_power(power)
                         }
                     };
-                    // ChannelMask
-                    region.set_channel_mask(
-                        payload.redundancy().channel_mask_control(),
-                        payload.channel_mask(),
-                    );
-                    let mut cmd = LinkADRAnsCreator::new();
-                    cmd.set_channel_mask_ack(true)
-                        .set_data_rate_ack(dr.is_some())
-                        .set_tx_power_ack(pw.is_some());
-                    self.uplink.add_mac_command(cmd);
 
-                    // TODO: We should only apply settings if all 3 settings are valid!
-                    if dr.is_some() && pw.is_some() {
+                    let cm_ack = region.channel_mask_validate(&channel_mask, dr);
+
+                    if dr.is_some() && pw.is_some() && cm_ack {
+                        // TODO: handle nbtrans
                         configuration.data_rate = dr.unwrap();
                         configuration.tx_power = pw.unwrap();
+                        region.channel_mask_set(channel_mask.clone());
                     }
+
+                    // Add matching number of LinkADRAns responses
+                    for _ in 0..num_adrreq {
+                        let mut cmd = LinkADRAnsCreator::new();
+                        cmd.set_channel_mask_ack(cm_ack)
+                            .set_data_rate_ack(dr.is_some())
+                            .set_tx_power_ack(pw.is_some());
+                        self.uplink.add_mac_command(cmd);
+                    }
+                    num_adrreq = 0;
                 }
                 NewChannelReq(payload) => {
-                    // Check whether region should skip handling this command.
-                    if region.skip_newchannelreq() {
+                    if region.has_fixed_channel_plan() {
+                        // Regions with fixed channel plan ignore this command
                         continue;
                     }
                     let (ack_f, ack_d) = region.handle_new_channel(

@@ -59,20 +59,29 @@ impl<F: FixedChannelRegion> FixedChannelPlan<F> {
         }
     }
 
-    pub fn set_125k_channels(&mut self, enabled: bool) {
+    pub fn set_125k_channels(
+        &self,
+        channel_mask: &mut ChannelMask<9>,
+        enabled: bool,
+        extra_mask: ChannelMask<2>,
+    ) {
         let mask = if enabled {
             0xFF
         } else {
             0x00
         };
-        self.channel_mask.set_bank(0, mask);
-        self.channel_mask.set_bank(1, mask);
-        self.channel_mask.set_bank(2, mask);
-        self.channel_mask.set_bank(3, mask);
-        self.channel_mask.set_bank(4, mask);
-        self.channel_mask.set_bank(5, mask);
-        self.channel_mask.set_bank(6, mask);
-        self.channel_mask.set_bank(7, mask);
+        channel_mask.set_bank(0, mask);
+        channel_mask.set_bank(1, mask);
+        channel_mask.set_bank(2, mask);
+        channel_mask.set_bank(3, mask);
+        channel_mask.set_bank(4, mask);
+        channel_mask.set_bank(5, mask);
+        channel_mask.set_bank(6, mask);
+        channel_mask.set_bank(7, mask);
+
+        channel_mask.set_bank(8, extra_mask.get_index(0));
+        // Bank 9 is not (yet) used for frequencies
+        // channel_mask.set_bank(9, extra_mask.get_index(1));
     }
 
     #[allow(unused)]
@@ -102,47 +111,73 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     ) {
         if let Some(CfList::FixedChannel(channel_mask)) = join_accept.c_f_list() {
-            // Reset the join channels state
-            self.join_channels.reset();
-            self.channel_mask = channel_mask;
+            self.channel_mask_set(channel_mask);
         }
     }
 
-    fn handle_link_adr_channel_mask(
-        &mut self,
-        channel_mask_control: u8,
-        channel_mask: ChannelMask<2>,
-    ) {
+    fn channel_mask_get(&self) -> ChannelMask<9> {
+        self.channel_mask.clone()
+    }
+
+    fn channel_mask_set(&mut self, channel_mask: ChannelMask<9>) {
         self.join_channels.reset();
-        match channel_mask_control {
+        self.channel_mask = channel_mask;
+    }
+
+    fn channel_mask_update(
+        &self,
+        channel_mask: &mut ChannelMask<9>,
+        ch_mask_ctl: u8,
+        ch_mask: ChannelMask<2>,
+    ) -> Option<()> {
+        match ch_mask_ctl {
             0..=4 => {
-                let base_index = channel_mask_control as usize * 2;
-                self.channel_mask.set_bank(base_index, channel_mask.get_index(0));
-                self.channel_mask.set_bank(base_index + 1, channel_mask.get_index(1));
+                let base_index = ch_mask_ctl as usize * 2;
+                channel_mask.set_bank(base_index, ch_mask.get_index(0));
+                channel_mask.set_bank(base_index + 1, ch_mask.get_index(1));
             }
             5 => {
-                let channel_mask: u16 =
-                    channel_mask.get_index(0) as u16 | ((channel_mask.get_index(1) as u16) << 8);
-                self.channel_mask.set_bank(0, ((channel_mask & 0b1) * 0xFF) as u8);
-                self.channel_mask.set_bank(1, ((channel_mask & 0b10) * 0xFF) as u8);
-                self.channel_mask.set_bank(2, ((channel_mask & 0b100) * 0xFF) as u8);
-                self.channel_mask.set_bank(3, ((channel_mask & 0b1000) * 0xFF) as u8);
-                self.channel_mask.set_bank(4, ((channel_mask & 0b10000) * 0xFF) as u8);
-                self.channel_mask.set_bank(5, ((channel_mask & 0b100000) * 0xFF) as u8);
-                self.channel_mask.set_bank(6, ((channel_mask & 0b1000000) * 0xFF) as u8);
-                self.channel_mask.set_bank(7, ((channel_mask & 0b10000000) * 0xFF) as u8);
-                self.channel_mask.set_bank(8, ((channel_mask & 0b100000000) * 0xFF) as u8);
+                let ch_mask: u16 =
+                    ch_mask.get_index(0) as u16 | ((ch_mask.get_index(1) as u16) << 8);
+                channel_mask.set_bank(0, ((ch_mask & 0b1) * 0xFF) as u8);
+                channel_mask.set_bank(1, ((ch_mask & 0b10) * 0xFF) as u8);
+                channel_mask.set_bank(2, ((ch_mask & 0b100) * 0xFF) as u8);
+                channel_mask.set_bank(3, ((ch_mask & 0b1000) * 0xFF) as u8);
+                channel_mask.set_bank(4, ((ch_mask & 0b10000) * 0xFF) as u8);
+                channel_mask.set_bank(5, ((ch_mask & 0b100000) * 0xFF) as u8);
+                channel_mask.set_bank(6, ((ch_mask & 0b1000000) * 0xFF) as u8);
+                channel_mask.set_bank(7, ((ch_mask & 0b10000000) * 0xFF) as u8);
+                channel_mask.set_bank(8, ((ch_mask & 0b100000000) * 0xFF) as u8);
             }
             6 => {
-                self.set_125k_channels(true);
+                self.set_125k_channels(channel_mask, true, ch_mask);
             }
             7 => {
-                self.set_125k_channels(false);
+                self.set_125k_channels(channel_mask, false, ch_mask);
             }
             _ => {
-                //RFU
+                // RFU
+                return None;
             }
         }
+        Some(())
+    }
+
+    fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, dr: Option<DR>) -> bool {
+        if let Some(dr) = dr {
+            if let Some(dr) = &F::datarates()[dr as usize] {
+                return match dr.bandwidth {
+                    Bandwidth::_500KHz => (64..=71).any(|i| channel_mask.is_enabled(i).unwrap()),
+                    Bandwidth::_125KHz => {
+                        // Check that at least two channels are enabled
+                        (0..64).filter(|&i| channel_mask.is_enabled(i).unwrap()).take(2).count()
+                            == 2
+                    }
+                    _ => true,
+                };
+            }
+        }
+        false
     }
 
     fn get_tx_dr_and_frequency<RNG: RngCore>(
@@ -183,12 +218,12 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
                 } else {
                     // For the data frame, the datarate impacts which channel sets we can choose
                     // from. If the datarate bandwidth is 500 kHz, we must use
-                    // channels 64-71. Else, we must use 0-63
+                    // channels 64..=71. Else, we must use 0-63
                     let datarate = F::datarates()[datarate as usize].clone().unwrap();
                     if datarate.bandwidth == Bandwidth::_500KHz {
                         let mut channel = (rng.next_u32() & 0b111) as u8;
                         // keep selecting a random channel until we find one that is enabled
-                        while !self.channel_mask.is_enabled(channel.into()).unwrap() {
+                        while !self.channel_mask.is_enabled((channel + 64).into()).unwrap() {
                             channel = (rng.next_u32() & 0b111) as u8;
                         }
                         (datarate, 64 + channel)
@@ -227,8 +262,7 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         (self.frequency_valid)(freq)
     }
 
-    // NewChannelReq MAC command is not implemented in fixed channel regions
-    fn skip_newchannelreq(&self) -> bool {
+    fn has_fixed_channel_plan(&self) -> bool {
         true
     }
 

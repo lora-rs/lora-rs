@@ -1,6 +1,9 @@
 //! LoRaWAN device region definitions (eg: EU868, US915, etc).
 use lora_modulation::{Bandwidth, BaseBandModulationParams, CodingRate, SpreadingFactor};
-use lorawan::{maccommands::ChannelMask, parser::CfList, types::DataRateRange};
+use lorawan::{
+    parser::CfList,
+    types::{ChannelMask, DataRateRange},
+};
 use rand_core::RngCore;
 
 use crate::mac::{Frame, Window};
@@ -417,12 +420,29 @@ impl Configuration {
         mut_region_dispatch!(self, process_join_accept, join_accept)
     }
 
-    pub(crate) fn set_channel_mask(
-        &mut self,
-        channel_mask_control: u8,
-        channel_mask: ChannelMask<2>,
-    ) {
-        mut_region_dispatch!(self, handle_link_adr_channel_mask, channel_mask_control, channel_mask)
+    pub(crate) fn channel_mask_get(&self) -> ChannelMask<9> {
+        region_dispatch!(self, channel_mask_get)
+    }
+
+    pub(crate) fn channel_mask_set(&mut self, channel_mask: ChannelMask<9>) {
+        mut_region_dispatch!(self, channel_mask_set, channel_mask)
+    }
+
+    pub(crate) fn channel_mask_update(
+        &self,
+        channel_mask: &mut ChannelMask<9>,
+        ch_mask_ctl: u8,
+        ch_mask: ChannelMask<2>,
+    ) -> Option<()> {
+        region_dispatch!(self, channel_mask_update, channel_mask, ch_mask_ctl, ch_mask)
+    }
+
+    pub(crate) fn channel_mask_validate(
+        &self,
+        channel_mask: &ChannelMask<9>,
+        dr: Option<DR>,
+    ) -> bool {
+        region_dispatch!(self, channel_mask_validate, channel_mask, dr)
     }
 
     pub(crate) fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32 {
@@ -467,8 +487,8 @@ impl Configuration {
         self.state.region()
     }
 
-    pub(crate) fn skip_newchannelreq(&self) -> bool {
-        region_dispatch!(self, skip_newchannelreq)
+    pub(crate) fn has_fixed_channel_plan(&self) -> bool {
+        region_dispatch!(self, has_fixed_channel_plan)
     }
 
     pub(crate) fn handle_new_channel(
@@ -518,11 +538,18 @@ pub(crate) trait RegionHandler {
         join_accept: &DecryptedJoinAcceptPayload<T, C>,
     );
 
-    fn handle_link_adr_channel_mask(
-        &mut self,
-        channel_mask_control: u8,
-        channel_mask: ChannelMask<2>,
-    );
+    fn channel_mask_get(&self) -> ChannelMask<9>;
+    fn channel_mask_set(&mut self, channel_mask: ChannelMask<9>);
+
+    // TODO: Switch return type to Result
+    fn channel_mask_update(
+        &self,
+        channel_mask: &mut ChannelMask<9>,
+        ch_mask_ctl: u8,
+        ch_mask: ChannelMask<2>,
+    ) -> Option<()>;
+
+    fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, dr: Option<DR>) -> bool;
 
     fn handle_new_channel(
         &mut self,
@@ -551,8 +578,9 @@ pub(crate) trait RegionHandler {
 
     fn frequency_valid(&self, freq: u32) -> bool;
 
-    /// Fixed channel plan regions SHALL NOT implement NewChannelReq MAC command.
-    fn skip_newchannelreq(&self) -> bool;
+    /// Whether region supports modifying channel plan
+    /// with `NewChannelReq`/`DlSettingsReq` MAC commands
+    fn has_fixed_channel_plan(&self) -> bool;
 }
 
 #[cfg(test)]
