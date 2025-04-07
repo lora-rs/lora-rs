@@ -8,10 +8,15 @@ use tokio::{
 impl TestRadio {
     pub fn new() -> (RadioChannel, Self) {
         let (tx, rx) = mpsc::channel(2);
+        let last_rxconfig = Arc::new(Mutex::new(None));
         let last_uplink = Arc::new(Mutex::new(None));
         (
-            RadioChannel { tx, last_uplink: last_uplink.clone() },
-            Self { rx, last_uplink, current_config: None },
+            RadioChannel {
+                tx,
+                last_uplink: last_uplink.clone(),
+                last_rxconfig: last_rxconfig.clone(),
+            },
+            Self { rx, last_rxconfig, last_uplink, current_config: None },
         )
     }
 }
@@ -24,6 +29,7 @@ enum Msg {
 
 pub struct TestRadio {
     current_config: Option<RxConfig>,
+    last_rxconfig: Arc<Mutex<Option<RxConfig>>>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
     rx: mpsc::Receiver<Msg>,
 }
@@ -45,6 +51,9 @@ impl PhyRxTx for TestRadio {
 
     async fn setup_rx(&mut self, config: RxConfig) -> Result<(), Self::PhyError> {
         self.current_config = Some(config);
+        // Make current rx configuration available for test harness
+        let mut last_rxconfig = self.last_rxconfig.lock().await;
+        *last_rxconfig = Some(config);
         Ok(())
     }
 
@@ -96,6 +105,7 @@ impl Timings for TestRadio {
 /// A channel for the test fixture to trigger fires and to check calls.
 pub struct RadioChannel {
     #[allow(unused)]
+    last_rxconfig: Arc<Mutex<Option<RxConfig>>>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
     tx: mpsc::Sender<Msg>,
 }
@@ -108,6 +118,11 @@ impl RadioChannel {
     pub async fn handle_timeout(&self) {
         tokio::time::sleep(time::Duration::from_millis(5)).await;
         self.tx.send(Msg::Timeout).await.unwrap();
+    }
+
+    pub async fn get_rxconfig(&self) -> Option<RxConfig> {
+        let rxconf = self.last_rxconfig.lock().await;
+        *rxconf
     }
 
     pub async fn get_last_uplink(&self) -> Uplink {
