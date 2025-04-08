@@ -77,6 +77,9 @@ multicast = []
 ## Enable [`serde`](https://docs.rs/serde/latest/serde/) serialization/deserialization for data structures.
 serde = ["dep:serde", "lorawan/serde"]
 
+## Experimental (For testing WIP MAC-commands)
+experimental = []
+
 ## Enable support for AS923-1 region (by default all regions are enabled).
 region-as923-1 = []
 ## Enable support for AS923-2 region (by default all regions are enabled).
