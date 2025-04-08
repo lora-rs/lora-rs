@@ -200,9 +200,21 @@ async fn rxparamsetup_eu868() {
     // RX1
     timer.fire_most_recent().await;
     radio.handle_timeout().await;
+    // TODO: Check for RX1 data rate once RX1DROffset is implemented
+    // let rx_conf = radio.get_rxconfig().await.unwrap();
+    // assert_eq!(rx_conf.rf.bb.sf, SpreadingFactor::..);
+    // assert_eq!(rx_conf.rf.bb.bw, Bandwidth::..);
     // RX2
     timer.fire_most_recent().await;
     radio.handle_timeout().await;
+    let rx_conf = radio.get_rxconfig().await.unwrap();
+
+    assert_eq!(rx_conf.rf.frequency, 868525000);
+    // TODO: Test that rx2 data rate override works
+    // SF10BW125
+    // assert_eq!(rx_conf.rf.bb.sf, SpreadingFactor::_10);
+    // assert_eq!(rx_conf.rf.bb.bw, Bandwidth::_125KHz);
+
     // RxComplete (no answer)
     assert!(*send_await_complete.lock().await);
 
