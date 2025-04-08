@@ -494,22 +494,12 @@ where
         self.intf.iv.await_irq().await
     }
 
-    /// Process the radio IRQ. Log unexpected interrupts. Packets from other
-    /// devices can cause unexpected interrupts.
-    ///
-    /// NB! Do not await this future in a select branch as interrupting it
-    /// mid-flow could cause radio lock up.
-    async fn process_irq_event(
+    async fn get_irq_state(
         &mut self,
         radio_mode: RadioMode,
         cad_activity_detected: Option<&mut bool>,
-        clear_interrupts: bool,
     ) -> Result<Option<IrqState>, RadioError> {
         let irq_flags = self.read_register(Register::RegIrqFlags).await?;
-        if clear_interrupts {
-            self.write_register(Register::RegIrqFlags, 0xffu8).await?; // clear all interrupts
-        }
-
         match radio_mode {
             RadioMode::Transmit => {
                 if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
@@ -553,6 +543,29 @@ where
         // If no specific IRQ condition is met, return None
         Ok(None)
     }
+
+    async fn clear_irq_status(&mut self) -> Result<(), RadioError> {
+        self.write_register(Register::RegIrqFlags, 0xffu8).await // clear all interrupts
+    }
+
+    /// Process the radio IRQ. Log unexpected interrupts. Packets from other
+    /// devices can cause unexpected interrupts.
+    ///
+    /// NB! Do not await this future in a select branch as interrupting it
+    /// mid-flow could cause radio lock up.
+    async fn process_irq_event(
+        &mut self,
+        radio_mode: RadioMode,
+        cad_activity_detected: Option<&mut bool>,
+        clear_interrupts: bool,
+    ) -> Result<Option<IrqState>, RadioError> {
+        let irq_state = self.get_irq_state(radio_mode, cad_activity_detected).await;
+        if clear_interrupts && irq_state.as_ref().is_ok_and(|state| state.is_some()) {
+            self.clear_irq_status().await?;
+        }
+        irq_state
+    }
+
     /// Set the LoRa chip into the TxContinuousWave mode
     async fn set_tx_continuous_wave_mode(&mut self) -> Result<(), RadioError> {
         C::set_tx_continuous_wave_mode(self).await

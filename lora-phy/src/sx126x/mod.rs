@@ -174,6 +174,38 @@ where
         (steps_int << SX126X_PLL_STEP_SHIFT_AMOUNT)
             + (((steps_frac << SX126X_PLL_STEP_SHIFT_AMOUNT) + (SX126X_PLL_STEP_SCALED >> 1)) / SX126X_PLL_STEP_SCALED)
     }
+
+    async fn handle_implicit_header_mode(&mut self) -> Result<(), RadioError> {
+        // implicit header mode timeout behavior (see DS_SX1261-2_V1.2 datasheet chapter 15.3)
+        let register_and_clear = [
+            OpCode::WriteRegister.value(),
+            Register::RTCCtrl.addr1(),
+            Register::RTCCtrl.addr2(),
+            0x00u8,
+        ];
+        self.intf.write(&register_and_clear, false).await?;
+
+        let mut evt_clr = [0x00u8];
+        self.intf
+            .read(
+                &[
+                    OpCode::ReadRegister.value(),
+                    Register::EvtClr.addr1(),
+                    Register::EvtClr.addr2(),
+                    0x00u8,
+                ],
+                &mut evt_clr,
+            )
+            .await?;
+        evt_clr[0] |= 1 << 1;
+        let register_and_evt_clear = [
+            OpCode::WriteRegister.value(),
+            Register::EvtClr.addr1(),
+            Register::EvtClr.addr2(),
+            evt_clr[0],
+        ];
+        self.intf.write(&register_and_evt_clear, false).await
+    }
 }
 
 // Convert u8 sync word to two byte value expected by sx126x
@@ -841,27 +873,16 @@ where
         self.intf.iv.await_irq().await
     }
 
-    /// Process the radio IRQ. Log unexpected interrupts. Packets from other
-    /// devices can cause unexpected interrupts.
-    ///
-    /// NB! Do not await this future in a select branch as interrupting it
-    /// mid-flow could cause radio lock up.
-    async fn process_irq_event(
+    async fn get_irq_state(
         &mut self,
         radio_mode: RadioMode,
         cad_activity_detected: Option<&mut bool>,
-        clear_interrupts: bool,
     ) -> Result<Option<IrqState>, RadioError> {
         let op_code = [OpCode::GetIrqStatus.value()];
         let mut irq_status = [0x00u8, 0x00u8];
         // Assuming intf.read_with_status is an existing async method that reads the IRQ status.
         let read_status = self.intf.read_with_status(&op_code, &mut irq_status).await?;
         let irq_flags = ((irq_status[0] as u16) << 8) | (irq_status[1] as u16);
-
-        if clear_interrupts && irq_flags != 0 {
-            let op_code_and_irq_status = [OpCode::ClrIrqStatus.value(), irq_status[0], irq_status[1]];
-            self.intf.write(&op_code_and_irq_status, false).await?;
-        }
 
         if OpStatusErrorMask::is_error(read_status) {
             debug!(
@@ -894,7 +915,7 @@ where
                     return Err(RadioError::TransmitTimeout);
                 }
             }
-            RadioMode::Receive(rx_mode) => {
+            RadioMode::Receive(_) => {
                 if IrqMask::HeaderError.is_set(irq_flags) {
                     debug!("HeaderError in radio mode {}", radio_mode);
                 }
@@ -903,37 +924,6 @@ where
                 }
                 if IrqMask::RxDone.is_set(irq_flags) {
                     debug!("RxDone in radio mode {}", radio_mode);
-                    if rx_mode != RxMode::Continuous {
-                        // implicit header mode timeout behavior (see DS_SX1261-2_V1.2 datasheet chapter 15.3)
-                        let register_and_clear = [
-                            OpCode::WriteRegister.value(),
-                            Register::RTCCtrl.addr1(),
-                            Register::RTCCtrl.addr2(),
-                            0x00u8,
-                        ];
-                        self.intf.write(&register_and_clear, false).await?;
-
-                        let mut evt_clr = [0x00u8];
-                        self.intf
-                            .read(
-                                &[
-                                    OpCode::ReadRegister.value(),
-                                    Register::EvtClr.addr1(),
-                                    Register::EvtClr.addr2(),
-                                    0x00u8,
-                                ],
-                                &mut evt_clr,
-                            )
-                            .await?;
-                        evt_clr[0] |= 1 << 1;
-                        let register_and_evt_clear = [
-                            OpCode::WriteRegister.value(),
-                            Register::EvtClr.addr1(),
-                            Register::EvtClr.addr2(),
-                            evt_clr[0],
-                        ];
-                        self.intf.write(&register_and_evt_clear, false).await?;
-                    }
                     return Ok(Some(IrqState::Done));
                 }
                 if IrqMask::RxTxTimeout.is_set(irq_flags) {
@@ -959,6 +949,35 @@ where
 
         // If none of the specific conditions are met, return None to indicate no IRQ state change.
         Ok(None)
+    }
+
+    async fn clear_irq_status(&mut self) -> Result<(), RadioError> {
+        let op_code_and_irq_status = [OpCode::ClrIrqStatus.value(), 0xffu8, 0xffu8]; // clear all interrupts
+        self.intf.write(&op_code_and_irq_status, false).await
+    }
+
+    /// Process the radio IRQ. Log unexpected interrupts. Packets from other
+    /// devices can cause unexpected interrupts.
+    ///
+    /// NB! Do not await this future in a select branch as interrupting it
+    /// mid-flow could cause radio lock up.
+    async fn process_irq_event(
+        &mut self,
+        radio_mode: RadioMode,
+        cad_activity_detected: Option<&mut bool>,
+        clear_interrupts: bool,
+    ) -> Result<Option<IrqState>, RadioError> {
+        let irq_state = self.get_irq_state(radio_mode, cad_activity_detected).await;
+
+        if clear_interrupts && irq_state.as_ref().is_ok_and(|state| state.is_some()) {
+            self.clear_irq_status().await?;
+        }
+
+        if let (RadioMode::Receive(RxMode::Single(_)), Ok(Some(IrqState::Done))) = (radio_mode, &irq_state) {
+            self.handle_implicit_header_mode().await?;
+        }
+
+        irq_state
     }
 }
 
