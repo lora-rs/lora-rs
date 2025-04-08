@@ -33,3 +33,5 @@ lorawan-radio = ["dep:lorawan-device"]
 [dev-dependencies]
 # Include lorawan-device unconditionally so all regions are enabled for tests
 lorawan-device = { path = "../lorawan-device" }
+smtc-modem-cores = { path = "../smtc-modem-cores" }
+tokio = { version = "1", features = ["rt", "macros", "time", "sync"]}

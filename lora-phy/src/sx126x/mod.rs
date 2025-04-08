@@ -1,5 +1,8 @@
 mod radio_kind_params;
 
+#[cfg(test)]
+mod test;
+
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
 pub use radio_kind_params::TcxoCtrlVoltage;
@@ -173,6 +176,11 @@ where
 
         (steps_int << SX126X_PLL_STEP_SHIFT_AMOUNT)
             + (((steps_frac << SX126X_PLL_STEP_SHIFT_AMOUNT) + (SX126X_PLL_STEP_SCALED >> 1)) / SX126X_PLL_STEP_SCALED)
+    }
+
+    #[cfg(test)]
+    fn take_spi(self) -> SPI {
+        self.intf.spi
     }
 }
 

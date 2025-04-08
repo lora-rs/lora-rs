@@ -1,5 +1,6 @@
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 #![deny(rust_2018_idioms)]
+#![allow(async_fn_in_trait)]
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
