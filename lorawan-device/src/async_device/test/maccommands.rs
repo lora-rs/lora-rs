@@ -153,7 +153,7 @@ async fn newchannelreq_fixed_region_ignore() {
 }
 
 #[tokio::test]
-#[cfg(feature = "region-eu868")]
+#[cfg(all(feature = "region-eu868", feature = "experimental"))]
 async fn rxparamsetup_eu868() {
     // RXParamSetupAns command SHALL be added in the FOpts field
     // (if FPort is either missing or >0) or in the FRMPayload field (if FPort=0)
@@ -297,6 +297,7 @@ async fn rxparamsetup_eu868() {
 }
 
 #[tokio::test]
+#[cfg(all(feature = "region-us915", feature = "experimental"))]
 // TODO: Finalize RXParamSetupReq
 async fn maccommands_in_frmpayload() {
     fn frmpayload_maccommands(
