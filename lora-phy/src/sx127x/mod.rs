@@ -292,7 +292,7 @@ where
 
         C::set_packet_params(self, pkt_params).await?;
 
-        // Set the expected packet recieve size
+        // Set the expected packet receive size
         self.write_register(Register::RegPayloadLength, pkt_params.payload_length)
             .await?;
 
