@@ -969,7 +969,7 @@ where
     ) -> Result<Option<IrqState>, RadioError> {
         let irq_state = self.get_irq_state(radio_mode, cad_activity_detected).await;
 
-        if clear_interrupts && irq_state.as_ref().is_ok_and(|state| state.is_some()) {
+        if clear_interrupts {
             self.clear_irq_status().await?;
         }
 
