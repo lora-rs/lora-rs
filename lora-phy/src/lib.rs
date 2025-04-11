@@ -331,6 +331,32 @@ where
         }
     }
 
+    /// Returns the current IRQ state
+    pub async fn get_irq_state(&mut self) -> Result<Option<IrqState>, RadioError> {
+        self.radio_kind.get_irq_state(self.radio_mode, None).await
+    }
+
+    /// Clears the IRQ status
+    pub async fn clear_irq_status(&mut self) -> Result<(), RadioError> {
+        self.radio_kind.clear_irq_status().await
+    }
+
+    /// Extracts the received payload and packet status after a completed RX IRQ event.
+    /// Should be called after receiving `IrqState::Done`.
+    pub async fn get_rx_result(
+        &mut self,
+        packet_params: &PacketParams,
+        receiving_buffer: &mut [u8],
+    ) -> Result<(u8, PacketStatus), RadioError> {
+        if let RadioMode::Receive(_) = self.radio_mode {
+            let received_len = self.radio_kind.get_rx_payload(packet_params, receiving_buffer).await?;
+            let rx_pkt_status = self.radio_kind.get_rx_packet_status().await?;
+            Ok((received_len, rx_pkt_status))
+        } else {
+            Err(RadioError::InvalidRadioMode)
+        }
+    }
+
     /// Start reception and wait for its completion by calling
     /// [`LoRa::start_rx`]  and [`LoRa::complete_rx`] in succession.
     pub async fn rx(
