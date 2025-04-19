@@ -95,6 +95,10 @@ where
     }
 
     /// Process an IRQ event and return the new state of the radio
+    ///
+    /// # Warning
+    /// This function is not safe to drop or cancel, as it calls `process_irq_event`, which must run to completion to avoid radio lockups.
+    /// Do not call this function within a select branch or in any context where it may be prematurely canceled.
     pub async fn process_irq_event(&mut self) -> Result<Option<IrqState>, RadioError> {
         self.radio_kind.process_irq_event(self.radio_mode, None, false).await
     }
@@ -220,6 +224,10 @@ where
     }
 
     /// Execute a transmit operation
+    ///
+    /// # Warning
+    /// This function is not safe to drop or cancel, as it calls `process_irq_event`, which must run to completion to avoid radio lockups.
+    /// Do not call this function within a select branch or in any context where it may be prematurely canceled.
     pub async fn tx(&mut self) -> Result<(), RadioError> {
         if let RadioMode::Transmit = self.radio_mode {
             self.radio_kind.do_tx().await?;
@@ -272,31 +280,11 @@ where
         }
     }
 
-    /// Wait for the radio to detect either a preamble or full packet
-    pub async fn wait_for_packet_start(&mut self) -> Result<IrqState, RadioError> {
-        if let RadioMode::Receive(_) = self.radio_mode {
-            loop {
-                self.wait_for_irq().await?;
-                match self.radio_kind.process_irq_event(self.radio_mode, None, false).await {
-                    Ok(Some(state)) => break Ok(state),
-                    Ok(None) => continue,
-                    Err(err) => {
-                        // if in rx continuous mode, allow the caller to determine whether to keep receiving
-                        if self.radio_mode != RadioMode::Receive(RxMode::Continuous) {
-                            self.radio_kind.ensure_ready(self.radio_mode).await?;
-                            self.radio_kind.set_standby().await?;
-                            self.radio_mode = RadioMode::Standby;
-                        }
-                        return Err(err);
-                    }
-                }
-            }
-        } else {
-            Err(RadioError::InvalidRadioMode)
-        }
-    }
-
     /// Wait for a previously started receive to complete
+    ///
+    /// # Warning
+    /// This function is not safe to drop or cancel, as it calls `process_irq_event`, which must run to completion to avoid radio lockups.
+    /// Do not call this function within a select branch or in any context where it may be prematurely canceled.
     pub async fn complete_rx(
         &mut self,
         packet_params: &PacketParams,
@@ -326,6 +314,32 @@ where
                 }
                 self.wait_for_irq().await?;
             }
+        } else {
+            Err(RadioError::InvalidRadioMode)
+        }
+    }
+
+    /// Returns the current IRQ state
+    pub async fn get_irq_state(&mut self) -> Result<Option<IrqState>, RadioError> {
+        self.radio_kind.get_irq_state(self.radio_mode, None).await
+    }
+
+    /// Clears the IRQ status
+    pub async fn clear_irq_status(&mut self) -> Result<(), RadioError> {
+        self.radio_kind.clear_irq_status().await
+    }
+
+    /// Extracts the received payload and packet status after a completed RX IRQ event.
+    /// Should be called after receiving `IrqState::Done`.
+    pub async fn get_rx_result(
+        &mut self,
+        packet_params: &PacketParams,
+        receiving_buffer: &mut [u8],
+    ) -> Result<(u8, PacketStatus), RadioError> {
+        if let RadioMode::Receive(_) = self.radio_mode {
+            let received_len = self.radio_kind.get_rx_payload(packet_params, receiving_buffer).await?;
+            let rx_pkt_status = self.radio_kind.get_rx_packet_status().await?;
+            Ok((received_len, rx_pkt_status))
         } else {
             Err(RadioError::InvalidRadioMode)
         }
@@ -380,6 +394,10 @@ where
     }
 
     /// Start channel activity detection (CAD) operation and return the result
+    ///
+    /// # Warning
+    /// This function is not safe to drop or cancel, as it calls `process_irq_event`, which must run to completion to avoid radio lockups.
+    /// Do not call this function within a select branch or in any context where it may be prematurely canceled.
     pub async fn cad(&mut self, mdltn_params: &ModulationParams) -> Result<bool, RadioError> {
         if self.radio_mode == RadioMode::ChannelActivityDetection {
             self.radio_kind.do_cad(mdltn_params).await?;
