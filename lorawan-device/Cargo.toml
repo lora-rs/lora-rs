@@ -77,7 +77,10 @@ multicast = []
 ## Enable [`serde`](https://docs.rs/serde/latest/serde/) serialization/deserialization for data structures.
 serde = ["dep:serde", "lorawan/serde"]
 
-## Experimental (For testing WIP MAC-commands)
+## Experimental support for partially-implemetned MAC-commands:
+## - DevStatusReq: TODO: Battery state reporting, SNR
+## - LinkADRReq - TODO: nbtrans support
+## - RxParamSetupReq - TODO: RX1 DR offset, RX2 DR
 experimental = []
 
 ## Enable support for AS923-1 region (by default all regions are enabled).
