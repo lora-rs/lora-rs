@@ -317,6 +317,7 @@ impl Session {
         let mut num_adrreq = 0;
         while let Some(cmd) = cmd_iter.next() {
             match cmd {
+                #[cfg(feature = "experimental")]
                 DevStatusReq(..) => {
                     // TODO: Fill with proper values
                     // - Battery: (255 - unable to measure, 1..254 - battery level, 0 - external power source)
@@ -333,6 +334,7 @@ impl Session {
                     }
                     // TODO...
                 }
+                #[cfg(feature = "experimental")]
                 LinkADRReq(payload) => {
                     // Contiguous LinkADRReq commands shall be processed in the
                     // order present in the downlink frame as a single atomic block
