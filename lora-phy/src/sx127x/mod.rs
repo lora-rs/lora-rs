@@ -234,7 +234,6 @@ where
     // Set parameters associated with power for a send operation.
     //   p_out                   desired RF output power (dBm)
     //   mdltn_params            needed for a power vs channel frequency validation
-    //   tx_boosted_if_possible  determine if transmit boost is requested
     //   is_tx_prep              indicates which ramp up time to use
     async fn set_tx_power_and_ramp_time(
         &mut self,
