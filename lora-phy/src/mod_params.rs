@@ -32,6 +32,7 @@ pub enum RadioError {
 
 /// Status for a received packet
 #[derive(Clone, Copy)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[allow(missing_docs)]
 pub struct PacketStatus {
     pub rssi: i16,
