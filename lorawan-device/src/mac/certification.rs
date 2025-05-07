@@ -1,7 +1,6 @@
 use crate::mac;
 use crate::radio::RadioBuffer;
 use lorawan::certification::parse_downlink_certification_messages;
-use lorawan::keys::CryptoFactory;
 
 /// Certification protocol uses `fport = 224`
 pub(crate) const CERTIFICATION_PORT: u8 = 224;
@@ -90,7 +89,7 @@ impl Certification {
         CERTIFICATION_PORT == fport
     }
 
-    pub(crate) fn setup_send<C: CryptoFactory + Default, const N: usize>(
+    pub(crate) fn setup_send<const N: usize>(
         &mut self,
         mut state: &mut mac::State,
         buf: &mut RadioBuffer<N>,
@@ -101,9 +100,7 @@ impl Certification {
             confirmed: false,
         };
         match &mut state {
-            mac::State::Joined(ref mut session) => {
-                Ok(session.prepare_buffer::<C, N>(&send_data, buf))
-            }
+            mac::State::Joined(ref mut session) => Ok(session.prepare_buffer::<N>(&send_data, buf)),
             mac::State::Otaa(_) => Err(mac::Error::NotJoined),
             mac::State::Unjoined => Err(mac::Error::NotJoined),
         }

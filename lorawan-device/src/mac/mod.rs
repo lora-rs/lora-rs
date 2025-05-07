@@ -8,7 +8,6 @@ use crate::{
 };
 use heapless::Vec;
 use lorawan::parser::DevAddr;
-use lorawan::{self, keys::CryptoFactory};
 
 pub type FcntDown = u32;
 pub type FcntUp = u32;
@@ -121,14 +120,14 @@ impl Mac {
 
     /// Prepare the radio buffer with transmitting a join request frame and provides the radio
     /// configuration for the transmission.
-    pub(crate) fn join_otaa<C: CryptoFactory + Default, RNG: RngCore, const N: usize>(
+    pub(crate) fn join_otaa<RNG: RngCore, const N: usize>(
         &mut self,
         rng: &mut RNG,
         credentials: NetworkCredentials,
         buf: &mut RadioBuffer<N>,
     ) -> (radio::TxConfig, u16) {
         let mut otaa = otaa::Otaa::new(credentials);
-        let dev_nonce = otaa.prepare_buffer::<C, RNG, N>(rng, buf);
+        let dev_nonce = otaa.prepare_buffer::<RNG, N>(rng, buf);
         self.state = State::Otaa(otaa);
         let mut tx_config =
             self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Join);
@@ -153,14 +152,14 @@ impl Mac {
 
     /// Prepare the radio buffer for transmitting a data frame and provide the radio configuration
     /// for the transmission. Returns an error if the device is not joined.
-    pub(crate) fn send<C: CryptoFactory + Default, RNG: RngCore, const N: usize>(
+    pub(crate) fn send<RNG: RngCore, const N: usize>(
         &mut self,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
         send_data: &SendData<'_>,
     ) -> Result<(radio::TxConfig, FcntUp)> {
         let fcnt = match &mut self.state {
-            State::Joined(ref mut session) => Ok(session.prepare_buffer::<C, N>(send_data, buf)),
+            State::Joined(ref mut session) => Ok(session.prepare_buffer::<N>(send_data, buf)),
             State::Otaa(_) => Err(Error::NotJoined),
             State::Unjoined => Err(Error::NotJoined),
         }?;
@@ -174,12 +173,12 @@ impl Mac {
     }
 
     #[cfg(feature = "multicast")]
-    pub(crate) fn multicast_setup_send<C: CryptoFactory + Default, RNG: RngCore, const N: usize>(
+    pub(crate) fn multicast_setup_send<RNG: RngCore, const N: usize>(
         &mut self,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
     ) -> Result<(radio::TxConfig, FcntUp)> {
-        self.multicast.setup_send::<C, N>(&mut self.state, buf).map(|fcnt_up| {
+        self.multicast.setup_send::<N>(&mut self.state, buf).map(|fcnt_up| {
             let mut tx_config =
                 self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
             tx_config.adjust_power(
@@ -191,16 +190,12 @@ impl Mac {
     }
 
     #[cfg(feature = "certification")]
-    pub(crate) fn certification_setup_send<
-        C: CryptoFactory + Default,
-        RNG: RngCore,
-        const N: usize,
-    >(
+    pub(crate) fn certification_setup_send<RNG: RngCore, const N: usize>(
         &mut self,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
     ) -> Result<(radio::TxConfig, FcntUp)> {
-        self.certification.setup_send::<C, N>(&mut self.state, buf).map(|fcnt_up| {
+        self.certification.setup_send::<N>(&mut self.state, buf).map(|fcnt_up| {
             let mut tx_config =
                 self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
             tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
@@ -239,13 +234,13 @@ impl Mac {
     /// verification. Upon successful join, provides Response::JoinSuccess. Upon successful data
     /// rx, provides Response::DownlinkReceived. User must take the downlink from vec for
     /// application data.
-    pub(crate) fn handle_rx<C: CryptoFactory + Default, const N: usize, const D: usize>(
+    pub(crate) fn handle_rx<const N: usize, const D: usize>(
         &mut self,
         buf: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
     ) -> Response {
         match &mut self.state {
-            State::Joined(ref mut session) => session.handle_rx::<C, N, D>(
+            State::Joined(ref mut session) => session.handle_rx::<N, D>(
                 &mut self.region,
                 &mut self.configuration,
                 #[cfg(feature = "certification")]
@@ -258,7 +253,7 @@ impl Mac {
             ),
             State::Otaa(ref mut otaa) => {
                 if let Some(session) =
-                    otaa.handle_rx::<C, N>(&mut self.region, &mut self.configuration, buf)
+                    otaa.handle_rx::<N>(&mut self.region, &mut self.configuration, buf)
                 {
                     self.state = State::Joined(session);
                     Response::JoinSuccess
@@ -274,13 +269,13 @@ impl Mac {
     /// or fails MIC verification. Upon successful data rx, provides Response::DownlinkReceived.
     /// User must later call `take_downlink()` on the device to get the application data.
     #[cfg(feature = "class-c")]
-    pub(crate) fn handle_rxc<C: CryptoFactory + Default, const N: usize, const D: usize>(
+    pub(crate) fn handle_rxc<const N: usize, const D: usize>(
         &mut self,
         buf: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
     ) -> Result<Response> {
         match &mut self.state {
-            State::Joined(ref mut session) => Ok(session.handle_rx::<C, N, D>(
+            State::Joined(ref mut session) => Ok(session.handle_rx::<N, D>(
                 &mut self.region,
                 &mut self.configuration,
                 #[cfg(feature = "certification")]

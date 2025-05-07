@@ -4,7 +4,8 @@ use crate::Downlink;
 use crate::{async_device, mac};
 use core::fmt::Debug;
 use core::ops::RangeInclusive;
-use lorawan::keys::{CryptoFactory, McKEKey};
+use lorawan::default_crypto::DefaultFactory;
+use lorawan::keys::McKEKey;
 pub use lorawan::multicast::{self, Session};
 use lorawan::multicast::{
     parse_downlink_multicast_messages, DownlinkRemoteSetup, McGroupDeleteAnsCreator,
@@ -61,15 +62,15 @@ impl Multicast {
         }
     }
 
-    pub(crate) fn handle_rx<C: CryptoFactory + Default, const D: usize>(
+    pub(crate) fn handle_rx<const D: usize>(
         &mut self,
         dl: &mut heapless::Vec<Downlink, D>,
-        encrypted_data: EncryptedDataPayload<&mut [u8], C>,
+        encrypted_data: EncryptedDataPayload<&mut [u8]>,
     ) -> Response {
         let mc_addr = encrypted_data.fhdr().mc_addr();
         if let Some((group_id, session)) = self.matching_session(mc_addr) {
             let fcnt = encrypted_data.fhdr().fcnt() as u32;
-            if encrypted_data.validate_mic(session.mc_net_s_key().inner(), fcnt)
+            if encrypted_data.validate_mic(session.mc_net_s_key().inner(), fcnt, &DefaultFactory)
                 && (fcnt > session.fcnt_down || fcnt == 0)
             {
                 return {
@@ -80,6 +81,7 @@ impl Multicast {
                             Some(session.mc_net_s_key().inner()),
                             Some(session.mc_app_s_key().inner()),
                             session.fcnt_down,
+                            &DefaultFactory,
                         )
                         .unwrap();
                     if session.fcnt_down == session.max_fcnt_down() {
@@ -123,10 +125,7 @@ impl Multicast {
         self.remote_setup_port == port
     }
 
-    pub(crate) fn handle_setup_message<C: CryptoFactory + Default>(
-        &mut self,
-        data: &[u8],
-    ) -> Response {
+    pub(crate) fn handle_setup_message(&mut self, data: &[u8]) -> Response {
         if self.mc_k_e_key.is_none() {
             return Response::NoUpdate;
         }
@@ -136,8 +135,9 @@ impl Multicast {
         for message in messages {
             match message {
                 DownlinkRemoteSetup::McGroupSetupReq(mc_group_setup_req) => {
+                    let crypto = DefaultFactory;
                     let (group_id, session) =
-                        mc_group_setup_req.derive_session(&C::default(), mc_k_e_key);
+                        mc_group_setup_req.derive_session(&crypto, mc_k_e_key);
                     self.sessions[group_id as usize] = Some(session);
                     let mut ans = McGroupSetupAnsCreator::new();
                     ans.mc_group_id_header(group_id);
@@ -197,7 +197,7 @@ impl Multicast {
         }
     }
 
-    pub(crate) fn setup_send<C: CryptoFactory + Default, const N: usize>(
+    pub(crate) fn setup_send<const N: usize>(
         &mut self,
         mut state: &mut mac::State,
         buf: &mut RadioBuffer<N>,
@@ -209,7 +209,7 @@ impl Multicast {
         };
         match &mut state {
             mac::State::Joined(ref mut session) => {
-                let response = session.prepare_buffer::<C, N>(&send_data, buf);
+                let response = session.prepare_buffer::<N>(&send_data, buf);
                 self.pending_uplinks.clear();
                 Ok(response)
             }

@@ -6,9 +6,7 @@ pub use super::{
     region::{self, Region},
     Downlink, JoinMode,
 };
-use core::marker::PhantomData;
 use heapless::Vec;
-use lorawan::{self, keys::CryptoFactory};
 use rand_core::RngCore;
 
 pub use crate::region::DR;
@@ -18,6 +16,7 @@ use crate::{
 };
 
 pub mod radio;
+use lorawan::default_crypto::DefaultFactory;
 
 #[cfg(feature = "embassy-time")]
 mod embassy_time;
@@ -52,7 +51,6 @@ use self::radio::RxStatus;
 /// A device is bound to the following types:
 /// - R: An asynchronous radio implementation
 /// - T: An asynchronous timer implementation
-/// - C: A CryptoFactory implementation
 /// - RNG: A random number generator implementation. An external RNG may be provided, or you may use a builtin PRNG by
 ///   providing a random seed
 /// - N: The size of the radio buffer. Generally, this should be set to 256 to support the largest possible LoRa frames.
@@ -62,14 +60,12 @@ use self::radio::RxStatus;
 /// that may be buffered. The defaults are 256 and 1 respectively which should be fine for Class A devices. **For Class
 /// C operation**, it is recommended to increase D to at least 2, if not 3. This is because during the RX1/RX2 windows
 /// after a Class A transmit, it is possible to receive Class C downlinks (in additional to any RX1/RX2 responses!).
-pub struct Device<R, C, T, G, const N: usize = 256, const D: usize = 1>
+pub struct Device<R, T, G, const N: usize = 256, const D: usize = 1>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
-    C: CryptoFactory + Default,
     G: RngCore,
 {
-    crypto: PhantomData<C>,
     radio: R,
     /// Access to provided (pseudo)-random number generator.
     pub rng: G,
@@ -130,10 +126,9 @@ impl<R> From<mac::Error> for Error<R> {
     }
 }
 
-impl<R, C, T, const N: usize> Device<R, C, T, rng::Prng, N>
+impl<R, T, const N: usize> Device<R, T, rng::Prng, N>
 where
     R: radio::PhyRxTx + Timings,
-    C: CryptoFactory + Default,
     T: radio::Timer,
 {
     /// Create a new [`Device`] by providing your own random seed. Using this method, [`Device`] will internally
@@ -170,10 +165,9 @@ where
     }
 }
 
-impl<R, C, T, G, const N: usize, const D: usize> Device<R, C, T, G, N, D>
+impl<R, T, G, const N: usize, const D: usize> Device<R, T, G, N, D>
 where
     R: radio::PhyRxTx + Timings,
-    C: CryptoFactory + Default,
     T: radio::Timer,
     G: RngCore,
 {
@@ -199,7 +193,6 @@ where
             mac.set_session(session);
         }
         Self {
-            crypto: PhantomData,
             radio,
             rng,
             mac,
@@ -237,7 +230,8 @@ where
     #[cfg(feature = "multicast")]
     /// Set the McKEKey for multicast session key derivation by providing a McRootKey.
     pub fn set_multicast_ke_key(&mut self, mc_root_key: McRootKey) {
-        let key = lorawan::keys::McKEKey::derive_from(&C::default(), &mc_root_key);
+        let crypto = DefaultFactory;
+        let key = lorawan::keys::McKEKey::derive_from(&crypto, &mc_root_key);
         self.mac.multicast.mc_k_e_key = Some(key);
     }
 
@@ -246,7 +240,7 @@ where
     /// GenAppKey. The McRootKey is derived from this using `McRootKey = aes128_encrypt(GenAppKey, 0x00 | pad16) `
     /// and then the McKEKey is derived from the McRootKey.
     pub fn set_multicast_ke_key_from_gen_app_key(&mut self, key: GenAppKey) {
-        let crypto = C::default();
+        let crypto = DefaultFactory;
         let mc_root_key = McRootKey::derive_from_gen_app_key(&crypto, &key);
         self.set_multicast_ke_key(mc_root_key);
     }
@@ -256,7 +250,7 @@ where
     /// GenAppKey. The McRootKey is derived from this using `McRootKey = aes128_encrypt(AppKey, 0x20 | pad16) `
     /// and then the McKEKey is derived from the McRootKey.
     pub fn set_multicast_ke_key_from_app_key(&mut self, key: AppKey) {
-        let crypto = C::default();
+        let crypto = DefaultFactory;
         let mc_root_key = McRootKey::derive_from_app_key(&crypto, &key);
         self.set_multicast_ke_key(mc_root_key);
     }
@@ -316,7 +310,7 @@ where
     pub async fn join(&mut self, join_mode: &JoinMode) -> Result<JoinResponse, Error<R::PhyError>> {
         match join_mode {
             JoinMode::OTAA { deveui, appeui, appkey } => {
-                let (tx_config, _) = self.mac.join_otaa::<C, G, N>(
+                let (tx_config, _) = self.mac.join_otaa::<G, N>(
                     &mut self.rng,
                     NetworkCredentials::new(*appeui, *deveui, *appkey),
                     &mut self.radio_buffer,
@@ -357,7 +351,7 @@ where
         confirmed: bool,
     ) -> Result<SendResponse, Error<R::PhyError>> {
         // Prepare transmission buffer
-        let (tx_config, _fcnt_up) = self.mac.send::<C, G, N>(
+        let (tx_config, _fcnt_up) = self.mac.send::<G, N>(
             &mut self.rng,
             &mut self.radio_buffer,
             &SendData { data, fport, confirmed },
@@ -472,9 +466,8 @@ where
                 RxcWindowResponse::Rx(sz, _, timeout_fut) => {
                     debug!("RXC window received {} bytes.", sz);
                     self.radio_buffer.set_pos(sz);
-                    let mac_response = self
-                        .mac
-                        .handle_rxc::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)?;
+                    let mac_response =
+                        self.mac.handle_rxc::<N, D>(&mut self.radio_buffer, &mut self.downlink)?;
                     match Self::handle_mac_response(
                         &mut self.radio_buffer,
                         &mut self.mac,
@@ -572,7 +565,7 @@ where
             #[cfg(feature = "certification")]
             mac::Response::UplinkPrepared => {
                 let (tx_config, _fcnt_up) =
-                    mac.certification_setup_send::<C, G, N>(rng, radio_buffer)?;
+                    mac.certification_setup_send::<G, N>(rng, radio_buffer)?;
                 radio.tx(tx_config, radio_buffer.as_ref_for_read()).await.map_err(Error::Radio)?;
                 Ok(Some(mac.rx2_complete()))
             }
@@ -580,7 +573,7 @@ where
             mac::Response::Multicast(mut response) => {
                 if response.is_transmit_request() {
                     let (tx_config, _fcnt_up) =
-                        mac.multicast_setup_send::<C, G, N>(rng, radio_buffer)?;
+                        mac.multicast_setup_send::<G, N>(rng, radio_buffer)?;
                     radio
                         .tx(tx_config, radio_buffer.as_ref_for_read())
                         .await
@@ -609,7 +602,7 @@ where
                 RxStatus::Rx(s, _q) => {
                     self.radio_buffer.set_pos(s);
                     let mac_response =
-                        self.mac.handle_rx::<C, N, D>(&mut self.radio_buffer, &mut self.downlink);
+                        self.mac.handle_rx::<N, D>(&mut self.radio_buffer, &mut self.downlink);
                     Self::handle_mac_response(
                         &mut self.radio_buffer,
                         &mut self.mac,
@@ -636,7 +629,7 @@ where
                 self.radio.rx_continuous(self.radio_buffer.as_mut()).await.map_err(Error::Radio)?;
             self.radio_buffer.set_pos(sz);
             let mac_response =
-                self.mac.handle_rxc::<C, N, D>(&mut self.radio_buffer, &mut self.downlink)?;
+                self.mac.handle_rxc::<N, D>(&mut self.radio_buffer, &mut self.downlink)?;
             if let Some(response) = Self::handle_mac_response(
                 &mut self.radio_buffer,
                 &mut self.mac,

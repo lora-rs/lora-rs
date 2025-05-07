@@ -35,11 +35,6 @@ embassy-time = { version = ">=0.3, <0.5", optional = true }
 tokio = { version = "1", features = ["rt", "macros", "time", "sync"] }
 rand = { version = "0", features = ["getrandom"] }
 serde_json = "1"
-# Pull in lorawan/default-crypto which is required for tests
-lorawan = { path = "../lorawan-encoding", default-features = false, features = [
-    "default-crypto",
-    "defmt-03",
-] }
 hex = "0.4.3"
 
 [features]
@@ -55,9 +50,6 @@ all-regions = [
     "region-in865",
     "region-us915",
 ]
-
-## Use pure Rust implementations of [`AES`](https://docs.rs/aes/latest/aes/) and [`CMAC`](https://docs.rs/cmac/latest/cmac/) for the LoRaWAN crypto layer.
-default-crypto = ["lorawan/default-crypto"]
 
 ## Use [`defmt`](https://docs.rs/defmt/latest/defmt/) for logging.
 defmt-03 = ["dep:defmt", "lorawan/defmt-03", "lora-modulation/defmt-03"]

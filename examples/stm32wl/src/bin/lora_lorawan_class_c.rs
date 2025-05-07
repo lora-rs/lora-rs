@@ -27,7 +27,6 @@ use lora_phy::lorawan_radio::LorawanRadio;
 use lora_phy::sx126x::{self, Stm32wl, Sx126x, TcxoCtrlVoltage};
 use lora_phy::LoRa;
 use lorawan_device::async_device::{Device, EmbassyTimer, JoinMode, JoinResponse, SendResponse};
-use lorawan_device::default_crypto::DefaultFactory as Crypto;
 use lorawan_device::region::{Subband, US915};
 use lorawan_device::{AppEui, AppKey, DevEui};
 use {defmt_rtt as _, panic_probe as _};
@@ -104,8 +103,7 @@ async fn lora_task(
     // Setting join bias causes the device to attempt the first join on subband 2.
     // If it fails, it will proceed with the other subbands sequentially.
     us915.set_join_bias(Subband::_2);
-    let mut device: Device<_, Crypto, _, _, 256, DOWNLINK_BUFFER> =
-        Device::new(us915.into(), radio, EmbassyTimer::new(), rng);
+    let mut device: Device<_, _, _, 256, DOWNLINK_BUFFER> = Device::new(us915.into(), radio, EmbassyTimer::new(), rng);
     device.enable_class_c();
 
     // TODO: Adjust the EUI and Keys according to your network credentials

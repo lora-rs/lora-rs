@@ -14,26 +14,22 @@ mod test;
 
 type TimestampMs = u32;
 
-pub struct Device<R, C, RNG, const N: usize, const D: usize = 1>
+pub struct Device<R, RNG, const N: usize, const D: usize = 1>
 where
     R: PhyRxTx + Timings,
-    C: CryptoFactory + Default,
     RNG: RngCore,
 {
     state: State,
     shared: Shared<R, RNG, N, D>,
-    crypto: PhantomData<C>,
 }
 
-impl<R, C, RNG, const N: usize, const D: usize> Device<R, C, RNG, N, D>
+impl<R, RNG, const N: usize, const D: usize> Device<R, RNG, N, D>
 where
     R: PhyRxTx + Timings,
-    C: CryptoFactory + Default,
     RNG: RngCore,
 {
-    pub fn new(region: region::Configuration, radio: R, rng: RNG) -> Device<R, C, RNG, N, D> {
+    pub fn new(region: region::Configuration, radio: R, rng: RNG) -> Device<R, RNG, N, D> {
         Device {
-            crypto: PhantomData,
             state: State::default(),
             shared: Shared {
                 radio,
@@ -98,7 +94,7 @@ where
     }
 
     pub fn handle_event(&mut self, event: Event<'_, R>) -> Result<Response, Error<R>> {
-        let (new_state, result) = self.state.handle_event::<R, C, RNG, N, D>(
+        let (new_state, result) = self.state.handle_event::<R, RNG, N, D>(
             &mut self.shared.mac,
             &mut self.shared.radio,
             &mut self.shared.rng,

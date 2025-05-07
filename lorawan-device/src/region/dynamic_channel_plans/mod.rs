@@ -115,10 +115,7 @@ pub(crate) trait DynamicChannelRegion: ChannelRegion {
 }
 
 impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
-    fn process_join_accept<T: AsRef<[u8]>, C>(
-        &mut self,
-        join_accept: &DecryptedJoinAcceptPayload<T, C>,
-    ) {
+    fn process_join_accept<T: AsRef<[u8]>>(&mut self, join_accept: &DecryptedJoinAcceptPayload<T>) {
         match join_accept.c_f_list() {
             // Type 0
             Some(CfList::DynamicChannel(cf_list)) => {
