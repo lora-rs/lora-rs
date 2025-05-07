@@ -15,7 +15,6 @@ use lora_phy::lorawan_radio::LorawanRadio;
 use lora_phy::sx126x::{self, Sx1262, Sx126x, TcxoCtrlVoltage};
 use lora_phy::LoRa;
 use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode};
-use lorawan_device::default_crypto::DefaultFactory as Crypto;
 use lorawan_device::{AppEui, AppKey, DevEui};
 use {defmt_rtt as _, panic_probe as _};
 
@@ -54,7 +53,7 @@ async fn main(_spawner: Spawner) {
 
     let radio: LorawanRadio<_, _, MAX_TX_POWER> = lora.into();
     let region: region::Configuration = region::Configuration::new(LORAWAN_REGION);
-    let mut device: Device<_, Crypto, _, _> =
+    let mut device: Device<_, _, _> =
         Device::new(region, radio, EmbassyTimer::new(), embassy_rp::clocks::RoscRng);
 
     defmt::info!("Joining LoRaWAN network");

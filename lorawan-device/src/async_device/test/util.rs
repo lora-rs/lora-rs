@@ -66,9 +66,10 @@ pub fn handle_class_c_uplink_after_join(
     if let Some(mut uplink) = uplink {
         if let PhyPayload::Data(DataPayload::Encrypted(data)) = uplink.get_payload() {
             let fcnt = data.fhdr().fcnt() as u32;
-            assert!(data.validate_mic(&get_key().into(), fcnt));
-            let uplink =
-                data.decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt).unwrap();
+            assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
+            let uplink = data
+                .decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt, &DefaultFactory)
+                .unwrap();
             assert_eq!(uplink.fhdr().fcnt(), 0);
             let mut phy = DataPayloadCreator::new(rx_buffer).unwrap();
             let mut fctrl = FCtrl::new(0, false);

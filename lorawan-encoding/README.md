@@ -61,7 +61,7 @@ fn main() {
     0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
     if let Ok(PhyPayload::Data(DataPayload::Encrypted(phy))) = parse(data) {
         let key = AES128([1; 16]);
-        let decrypted = phy.decrypt(None, Some(&key), 1).unwrap();
+        let decrypted = phy.decrypt(None, Some(&key), 1, &lorawan::default_crypto::DefaultFactory).unwrap();
         if let FRMPayload::Data(data_payload) = decrypted.frm_payload() {
                 println!("{}", String::from_utf8_lossy(data_payload));
         }

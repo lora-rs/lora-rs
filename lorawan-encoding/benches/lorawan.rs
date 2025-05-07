@@ -6,6 +6,7 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
+use crate::CryptoFactory;
 use aes::cipher::{generic_array::GenericArray, KeyInit};
 use aes::Aes128;
 use criterion::{criterion_group, criterion_main, Criterion};
@@ -73,10 +74,10 @@ fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
         b.iter(|| {
             cnt.fetch_add(1usize, Ordering::SeqCst);
             let mut data = data_payload();
-            let phy = parse_with_factory(&mut data, &factory).unwrap();
+            let phy = parse(&mut data).unwrap();
 
             if let PhyPayload::Data(DataPayload::Encrypted(data_payload)) = phy {
-                assert!(data_payload.validate_mic(&mic_key, 1));
+                assert!(data_payload.validate_mic(&mic_key, 1, &factory));
             } else {
                 panic!("failed to parse DataPayload");
             }
@@ -97,11 +98,11 @@ fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
         b.iter(|| {
             cnt.fetch_add(1usize, Ordering::SeqCst);
             let mut data = data_payload();
-            let phy = parse_with_factory(&mut data, &factory).unwrap();
+            let phy = parse(&mut data).unwrap();
 
             if let PhyPayload::Data(DataPayload::Encrypted(data_payload)) = phy {
                 assert_eq!(
-                    data_payload.decrypt(None, Some(&key), 1).unwrap().frm_payload(),
+                    data_payload.decrypt(None, Some(&key), 1, &factory).unwrap().frm_payload(),
                     FRMPayload::Data(&payload[..])
                 );
             }
@@ -131,7 +132,7 @@ impl ConstFactory {
     }
 }
 
-impl CryptoFactory for &ConstFactory {
+impl CryptoFactory for ConstFactory {
     type E = Aes128;
     type D = Aes128;
     type M = Cmac;

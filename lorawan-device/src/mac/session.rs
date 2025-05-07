@@ -5,7 +5,7 @@ use super::{
 use crate::radio::RadioBuffer;
 use crate::{region, AppSKey, Downlink, NwkSKey};
 use heapless::Vec;
-use lorawan::keys::CryptoFactory;
+use lorawan::default_crypto::DefaultFactory;
 use lorawan::maccommandcreator::{
     DevStatusAnsCreator, LinkADRAnsCreator, NewChannelAnsCreator, RXParamSetupAnsCreator,
     RXTimingSetupAnsCreator,
@@ -13,7 +13,7 @@ use lorawan::maccommandcreator::{
 use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
 use lorawan::{
     creator::DataPayloadCreator,
-    parser::{parse_with_factory as lorawan_parse, *},
+    parser::{parse as lorawan_parse, *},
 };
 
 #[cfg(feature = "certification")]
@@ -57,14 +57,14 @@ impl From<Session> for SessionKeys {
 }
 
 impl Session {
-    pub fn derive_new<T: AsRef<[u8]>, F: CryptoFactory>(
-        decrypt: &DecryptedJoinAcceptPayload<T, F>,
+    pub fn derive_new<T: AsRef<[u8]>>(
+        decrypt: &DecryptedJoinAcceptPayload<T>,
         devnonce: DevNonce,
         credentials: &NetworkCredentials,
     ) -> Self {
         Self::new(
-            decrypt.derive_nwkskey(&devnonce, credentials.appkey()),
-            decrypt.derive_appskey(&devnonce, credentials.appkey()),
+            decrypt.derive_nwkskey(&devnonce, credentials.appkey(), &DefaultFactory),
+            decrypt.derive_appskey(&devnonce, credentials.appkey(), &DefaultFactory),
             DevAddr::new([
                 decrypt.dev_addr().as_ref()[0],
                 decrypt.dev_addr().as_ref()[1],
@@ -116,7 +116,7 @@ impl Session {
 
 impl Session {
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn handle_rx<C: CryptoFactory + Default, const N: usize, const D: usize>(
+    pub(crate) fn handle_rx<const N: usize, const D: usize>(
         &mut self,
         region: &mut region::Configuration,
         configuration: &mut super::Configuration,
@@ -127,7 +127,7 @@ impl Session {
         ignore_mac: bool,
     ) -> Response {
         if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
-            lorawan_parse(rx.as_mut_for_read(), C::default())
+            lorawan_parse(rx.as_mut_for_read())
         {
             // If ignore_mac is false, we're dealing with Class A downlink and
             // therefore can clear uplinks which need to be retained for acknowledgment
@@ -149,7 +149,7 @@ impl Session {
             }
             let fcnt = encrypted_data.fhdr().fcnt() as u32;
             let confirmed = encrypted_data.is_confirmed();
-            if encrypted_data.validate_mic(self.nwkskey().inner(), fcnt)
+            if encrypted_data.validate_mic(self.nwkskey().inner(), fcnt, &DefaultFactory)
                 && (fcnt > self.fcnt_down || fcnt == 0)
             {
                 self.fcnt_down = fcnt;
@@ -159,6 +159,7 @@ impl Session {
                         Some(self.nwkskey().inner()),
                         Some(self.appskey().inner()),
                         self.fcnt_down,
+                        &DefaultFactory,
                     )
                     .unwrap();
 
@@ -223,7 +224,7 @@ impl Session {
                         }
                         #[cfg(feature = "multicast")]
                         if multicast.is_remote_setup_port(fport) {
-                            return multicast.handle_setup_message::<C>(data).into();
+                            return multicast.handle_setup_message(data).into();
                         }
 
                         // heapless Vec from slice fails only if slice is too large.
@@ -254,7 +255,7 @@ impl Session {
         }
     }
 
-    pub(crate) fn prepare_buffer<C: CryptoFactory + Default, const N: usize>(
+    pub(crate) fn prepare_buffer<const N: usize>(
         &mut self,
         data: &SendData<'_>,
         tx_buffer: &mut RadioBuffer<N>,
@@ -287,7 +288,7 @@ impl Session {
             .set_dev_addr(self.devaddr)
             .set_fcnt(fcnt);
 
-        let crypto_factory = C::default();
+        let crypto_factory = DefaultFactory;
         match phy.build(
             data.data,
             self.uplink.mac_commands(),
