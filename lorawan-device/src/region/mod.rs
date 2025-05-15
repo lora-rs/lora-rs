@@ -413,9 +413,9 @@ impl Configuration {
         }
     }
 
-    pub(crate) fn process_join_accept<T: AsRef<[u8]>, C>(
+    pub(crate) fn process_join_accept<T: AsRef<[u8]>>(
         &mut self,
-        join_accept: &DecryptedJoinAcceptPayload<T, C>,
+        join_accept: &DecryptedJoinAcceptPayload<T>,
     ) {
         mut_region_dispatch!(self, process_join_accept, join_accept)
     }
@@ -533,10 +533,7 @@ from_region!(US915);
 use lorawan::parser::DecryptedJoinAcceptPayload;
 
 pub(crate) trait RegionHandler {
-    fn process_join_accept<T: AsRef<[u8]>, C>(
-        &mut self,
-        join_accept: &DecryptedJoinAcceptPayload<T, C>,
-    );
+    fn process_join_accept<T: AsRef<[u8]>>(&mut self, join_accept: &DecryptedJoinAcceptPayload<T>);
 
     fn channel_mask_get(&self) -> ChannelMask<9>;
     fn channel_mask_set(&mut self, channel_mask: ChannelMask<9>);

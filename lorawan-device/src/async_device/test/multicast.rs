@@ -46,8 +46,10 @@ fn verify_multicast_message(
     let payload = uplink.get_payload();
     if let PhyPayload::Data(DataPayload::Encrypted(data)) = payload {
         let fcnt = data.fhdr().fcnt() as u32;
-        assert!(data.validate_mic(&get_key().into(), fcnt));
-        let uplink = data.decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt).unwrap();
+        assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
+        let uplink = data
+            .decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt, &DefaultFactory)
+            .unwrap();
         assert_eq!(uplink.f_port().unwrap(), expected_port);
 
         if let FRMPayload::Data(ans_data) = uplink.frm_payload() {

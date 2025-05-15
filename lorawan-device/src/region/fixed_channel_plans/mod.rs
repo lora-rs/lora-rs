@@ -106,10 +106,7 @@ pub(crate) trait FixedChannelRegion: ChannelRegion {
 }
 
 impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
-    fn process_join_accept<T: AsRef<[u8]>, C>(
-        &mut self,
-        join_accept: &DecryptedJoinAcceptPayload<T, C>,
-    ) {
+    fn process_join_accept<T: AsRef<[u8]>>(&mut self, join_accept: &DecryptedJoinAcceptPayload<T>) {
         if let Some(CfList::FixedChannel(channel_mask)) = join_accept.c_f_list() {
             self.channel_mask_set(channel_mask);
         }

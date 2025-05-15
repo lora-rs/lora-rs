@@ -2,10 +2,10 @@ use super::{del_to_delay_ms, session::Session, Response};
 use crate::radio::RadioBuffer;
 use crate::region::Configuration;
 use crate::{AppEui, AppKey, DevEui};
-use lorawan::keys::CryptoFactory;
+use lorawan::default_crypto::DefaultFactory;
 use lorawan::{
     creator::JoinRequestCreator,
-    parser::{parse_with_factory as lorawan_parse, *},
+    parser::{parse as lorawan_parse, *},
 };
 use rand_core::RngCore;
 
@@ -30,7 +30,7 @@ impl Otaa {
 
     /// Prepare a join request to be sent. This populates the radio buffer with the request to be
     /// sent, and returns the radio config to use for transmitting.
-    pub(crate) fn prepare_buffer<C: CryptoFactory + Default, G: RngCore, const N: usize>(
+    pub(crate) fn prepare_buffer<G: RngCore, const N: usize>(
         &mut self,
         rng: &mut G,
         buf: &mut RadioBuffer<N>,
@@ -41,25 +41,25 @@ impl Otaa {
         phy.set_app_eui(self.network_credentials.appeui)
             .set_dev_eui(self.network_credentials.deveui)
             .set_dev_nonce(self.dev_nonce);
-        let crypto_factory = C::default();
+        let crypto_factory = DefaultFactory;
         let len = phy.build(&self.network_credentials.appkey, &crypto_factory).len();
         buf.set_pos(len);
         u16::from(self.dev_nonce)
     }
 
-    pub(crate) fn handle_rx<C: CryptoFactory + Default, const N: usize>(
+    pub(crate) fn handle_rx<const N: usize>(
         &mut self,
         region: &mut Configuration,
         configuration: &mut super::Configuration,
         rx: &mut RadioBuffer<N>,
     ) -> Option<Session> {
         if let Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(encrypted))) =
-            lorawan_parse(rx.as_mut_for_read(), C::default())
+            lorawan_parse(rx.as_mut_for_read())
         {
-            let decrypt = encrypted.decrypt(&self.network_credentials.appkey);
+            let decrypt = encrypted.decrypt(&self.network_credentials.appkey, &DefaultFactory);
             region.process_join_accept(&decrypt);
             configuration.rx1_delay = del_to_delay_ms(decrypt.rx_delay());
-            if decrypt.validate_mic(&self.network_credentials.appkey) {
+            if decrypt.validate_mic(&self.network_credentials.appkey, &DefaultFactory) {
                 return Some(Session::derive_new(
                     &decrypt,
                     self.dev_nonce,

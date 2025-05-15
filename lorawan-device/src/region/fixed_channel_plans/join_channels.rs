@@ -220,7 +220,6 @@ mod test {
         AppEui, AppKey, DevEui, NetworkCredentials,
     };
     use heapless::Vec;
-    use lorawan::default_crypto::DefaultFactory;
 
     #[test]
     fn test_join_channels_standard() {
@@ -300,7 +299,7 @@ mod test {
         let mut mac = Mac::new(us915.into(), 21, 2);
 
         let mut buf: RadioBuffer<255> = RadioBuffer::new();
-        let (tx_config, _len) = mac.join_otaa::<DefaultFactory, _, 255>(
+        let (tx_config, _len) = mac.join_otaa::<_, 255>(
             &mut rand::rngs::OsRng,
             NetworkCredentials::new(
                 AppEui::from([0x0; 8]),
@@ -329,13 +328,13 @@ mod test {
         let len = handle_join_request::<0>(Some(uplink), tx_config.rf, &mut rx_buf);
         buf.clear();
         buf.extend_from_slice(&rx_buf[..len]).unwrap();
-        let response = mac.handle_rx::<DefaultFactory, 255, 3>(&mut buf, &mut downlinks);
+        let response = mac.handle_rx::<255, 3>(&mut buf, &mut downlinks);
         if let Response::JoinSuccess = response {
         } else {
             panic!("Did not receive join success");
         }
         let (tx_config, _len) = mac
-            .send::<DefaultFactory, _, 255>(
+            .send::<_, 255>(
                 &mut rand::rngs::OsRng,
                 &mut buf,
                 &SendData { fport: 1, data: &[0x0; 1], confirmed: false },
@@ -361,7 +360,7 @@ mod test {
         let mut mac = Mac::new(us915.into(), 21, 2);
 
         let mut buf: RadioBuffer<255> = RadioBuffer::new();
-        let (tx_config, _len) = mac.join_otaa::<DefaultFactory, _, 255>(
+        let (tx_config, _len) = mac.join_otaa::<_, 255>(
             &mut rand::rngs::OsRng,
             NetworkCredentials::new(
                 AppEui::from([0x0; 8]),
@@ -390,14 +389,14 @@ mod test {
         let len = handle_join_request::<0>(Some(uplink), tx_config.rf, &mut rx_buf);
         buf.clear();
         buf.extend_from_slice(&rx_buf[..len]).unwrap();
-        let response = mac.handle_rx::<DefaultFactory, 255, 3>(&mut buf, &mut downlinks);
+        let response = mac.handle_rx::<255, 3>(&mut buf, &mut downlinks);
         if let Response::JoinSuccess = response {
         } else {
             panic!("Did not receive JoinSuccess")
         }
         for _ in 0..8 {
             let (tx_config, _len) = mac
-                .send::<DefaultFactory, _, 255>(
+                .send::<_, 255>(
                     &mut rand::rngs::OsRng,
                     &mut buf,
                     &SendData { fport: 1, data: &[0x0; 1], confirmed: false },

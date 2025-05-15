@@ -28,8 +28,7 @@ mod class_c;
 #[cfg(feature = "multicast")]
 mod multicast;
 
-type Device =
-    crate::async_device::Device<TestRadio, DefaultFactory, TestTimer, rand_core::OsRng, 512, 4>;
+type Device = crate::async_device::Device<TestRadio, TestTimer, rand_core::OsRng, 512, 4>;
 
 #[tokio::test]
 async fn test_join_rx1() {

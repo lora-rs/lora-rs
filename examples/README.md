@@ -8,11 +8,11 @@ When starting a project locally, you will want to use a cargo version (these exa
 
 ```
 lora-phy = { version = "3" , features = ["lorawan-radio", "defmt-03"] }
-lorawan-device = { version = "0.12", default-features = false, features = ["embassy-time", "default-crypto", "defmt-03"] }
+lorawan-device = { version = "0.12", default-features = false, features = ["embassy-time", "defmt-03"] }
 ```
 
 Or a git reference:
 ```
 lora-phy = { git = "https://github.com/lora-rs/lora-rs.git", features = ["lorawan-radio", "defmt-03"] }
-lorawan-device = { git = "https://github.com/lora-rs/lora-rs.git", default-features = false, features = ["embassy-time", "default-crypto", "defmt-03"] }
+lorawan-device = { git = "https://github.com/lora-rs/lora-rs.git", default-features = false, features = ["embassy-time", "defmt-03"] }
 ```
