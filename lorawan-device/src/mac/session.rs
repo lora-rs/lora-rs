@@ -124,6 +124,7 @@ impl Session {
         #[cfg(feature = "multicast")] multicast: &mut super::multicast::Multicast,
         rx: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
+        snr: i8,
         ignore_mac: bool,
     ) -> Response {
         if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
@@ -169,12 +170,14 @@ impl Session {
                         configuration,
                         region,
                         MacCommandIterator::<DownlinkMacCommand<'_>>::new(decrypted.fhdr().data()),
+                        snr,
                     );
                     if let FRMPayload::MACCommands(mac_cmds) = decrypted.frm_payload() {
                         self.handle_downlink_macs(
                             configuration,
                             region,
                             MacCommandIterator::<DownlinkMacCommand<'_>>::new(mac_cmds.data()),
+                            snr,
                         );
                     }
                 }
@@ -314,6 +317,7 @@ impl Session {
         configuration: &mut super::Configuration,
         region: &mut region::Configuration,
         cmds: MacCommandIterator<'_, DownlinkMacCommand<'_>>,
+        snr: i8,
     ) {
         use DownlinkMacCommand::*;
         let mut channel_mask = region.channel_mask_get();
@@ -321,14 +325,12 @@ impl Session {
         let mut num_adrreq = 0;
         while let Some(cmd) = cmd_iter.next() {
             match cmd {
-                #[cfg(feature = "experimental")]
                 DevStatusReq(..) => {
-                    // TODO: Fill with proper values
-                    // - Battery: (255 - unable to measure, 1..254 - battery level, 0 - external power source)
-                    // - RadioStatus: (SNR: -32..31)
-                    // For now we just return dummy values
+                    // TODO: Battery information should come from device/application
+                    // Battery: (255 - unable to measure, 1..254 - battery level, 0 - external power source)
+                    // For now we just return dummy value of "255"
                     let mut cmd = DevStatusAnsCreator::new();
-                    let _ = cmd.set_battery(255).set_margin(0);
+                    let _ = cmd.set_battery(255).set_margin(snr);
                     self.uplink.add_mac_command(cmd);
                 }
                 DlChannelReq(_payload) => {

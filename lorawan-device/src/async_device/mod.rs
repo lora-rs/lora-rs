@@ -463,11 +463,14 @@ where
             )
             .await
             {
-                RxcWindowResponse::Rx(sz, _, timeout_fut) => {
+                RxcWindowResponse::Rx(sz, q, timeout_fut) => {
                     debug!("RXC window received {} bytes.", sz);
                     self.radio_buffer.set_pos(sz);
-                    let mac_response =
-                        self.mac.handle_rxc::<N, D>(&mut self.radio_buffer, &mut self.downlink)?;
+                    let mac_response = self.mac.handle_rxc::<N, D>(
+                        &mut self.radio_buffer,
+                        &mut self.downlink,
+                        q.snr(),
+                    )?;
                     match Self::handle_mac_response(
                         &mut self.radio_buffer,
                         &mut self.mac,
@@ -604,10 +607,13 @@ where
     async fn rx_listen(&mut self) -> Result<Option<mac::Response>, Error<R::PhyError>> {
         let response =
             match self.radio.rx_single(self.radio_buffer.as_mut()).await.map_err(Error::Radio)? {
-                RxStatus::Rx(s, _q) => {
+                RxStatus::Rx(s, q) => {
                     self.radio_buffer.set_pos(s);
-                    let mac_response =
-                        self.mac.handle_rx::<N, D>(&mut self.radio_buffer, &mut self.downlink);
+                    let mac_response = self.mac.handle_rx::<N, D>(
+                        &mut self.radio_buffer,
+                        &mut self.downlink,
+                        q.snr(),
+                    );
                     Self::handle_mac_response(
                         &mut self.radio_buffer,
                         &mut self.mac,
@@ -630,11 +636,11 @@ where
     pub async fn rxc_listen(&mut self) -> Result<ListenResponse, Error<R::PhyError>> {
         let rx_config = self.mac.get_rxc_config();
         loop {
-            let (sz, _rx_quality) =
+            let (sz, q) =
                 self.radio.rx_continuous(self.radio_buffer.as_mut()).await.map_err(Error::Radio)?;
             self.radio_buffer.set_pos(sz);
             let mac_response =
-                self.mac.handle_rxc::<N, D>(&mut self.radio_buffer, &mut self.downlink)?;
+                self.mac.handle_rxc::<N, D>(&mut self.radio_buffer, &mut self.downlink, q.snr())?;
             if let Some(response) = Self::handle_mac_response(
                 &mut self.radio_buffer,
                 &mut self.mac,
