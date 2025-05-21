@@ -563,6 +563,11 @@ where
         match response {
             mac::Response::NoUpdate => Ok(None),
             #[cfg(feature = "certification")]
+            mac::Response::LinkCheckReq => {
+                let _ = mac.add_uplink(lorawan::maccommandcreator::LinkCheckReqCreator::new());
+                Ok(Some(mac.rx2_complete()))
+            }
+            #[cfg(feature = "certification")]
             mac::Response::UplinkPrepared => {
                 let (tx_config, _fcnt_up) =
                     mac.certification_setup_send::<G, N>(rng, radio_buffer)?;

@@ -12,6 +12,7 @@ pub(crate) enum Response {
     AdrBitChange(bool),
     DutJoinReq,
     DutResetReq,
+    LinkCheckReq,
     TxFramesCtrlReq(Option<bool>),
     TxPeriodicityChange(Option<u16>),
     UplinkPrepared,
@@ -39,6 +40,7 @@ impl Certification {
                     }
                 }
                 // Responses with uplink
+                LinkCheckReq(..) => return Response::LinkCheckReq,
                 DutVersionsReq(..) => {
                     let mut buf: heapless::Vec<u8, 256> = heapless::Vec::new();
                     let mut ans = lorawan::certification::DutVersionsAnsCreator::new();

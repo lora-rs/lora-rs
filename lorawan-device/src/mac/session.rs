@@ -207,6 +207,9 @@ impl Session {
                                 DutResetReq => {
                                     return Response::DeviceHandler(DeviceEvent::ResetDevice)
                                 }
+                                LinkCheckReq => {
+                                    return Response::LinkCheckReq;
+                                }
                                 TxFramesCtrlReq(ftype) => {
                                     // None is a no-op, allowing network to trigger uplinks
                                     if ftype.is_some() {
@@ -403,6 +406,14 @@ impl Session {
                         self.uplink.add_mac_command(cmd);
                     }
                     num_adrreq = 0;
+                }
+                LinkCheckAns(..) => {
+                    /* TODO: Payload contents are not consumed/handled
+                     * by MAC layer, instead these might be useful to
+                     * application layer.
+                     * Therefore keep this as a placeholder until a proper
+                     * device <-> mac integration has been implemented.
+                     */
                 }
                 NewChannelReq(payload) => {
                     if region.has_fixed_channel_plan() {
