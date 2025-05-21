@@ -20,8 +20,8 @@ Both stacks share a dependency on the internal module, `mac` where LoRaWAN 1.0.x
   * Regional power limits are not enforced ([#168](https://github.com/lora-rs/lora-rs/issues/168))
   * FSK and LR-FHSS modulations are not supported
 
-**Currently, MAC commands are minimally mocked. For example, an ADRReq is responded with an ADRResp, but not much
-is actually done with the payload**.
+**Currently, not all MAC commands are fully implemented**. These commands
+are gated behind the "experimental" feature.
 
 Furthermore, both async and non-blocking implementation do not implement any retries for failed joins or failed
 confirmed uplinks. It is up to the client to implement retry behavior; see the examples for more.
