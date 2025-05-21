@@ -39,6 +39,10 @@ pub enum DownlinkDUTCommand<'a> {
     #[cmd(cid = 0x09, len = 0)]
     RxAppCntReq(RxAppCntReqPayload),
 
+    /// Requests the DUT to send a LinkCheckReq MAC command.
+    #[cmd(cid = 0x20, len = 0)]
+    LinkCheckReq(LinkCheckReqPayload),
+
     /// Request to send firmware version, LoRaWAN version, and regional parameters version
     #[cmd(cid = 0x7f, len = 0)]
     DutVersionsReq(DutVersionsReqPayload),

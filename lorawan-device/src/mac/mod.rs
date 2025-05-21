@@ -13,6 +13,7 @@ pub type FcntDown = u32;
 pub type FcntUp = u32;
 
 mod session;
+use lorawan::maccommands::SerializableMacCommand;
 use rand_core::RngCore;
 pub use session::{Session, SessionKeys};
 
@@ -170,6 +171,18 @@ impl Mac {
             self.board_eirp.antenna_gain,
         );
         Ok((tx_config, fcnt))
+    }
+
+    pub(crate) fn add_uplink<M: SerializableMacCommand>(&mut self, cmd: M) -> Result<()> {
+        let _fcnt = match &mut self.state {
+            State::Joined(ref mut session) => {
+                session.uplink.add_mac_command(cmd);
+                Ok(())
+            }
+            State::Otaa(_) => Err(Error::NotJoined),
+            State::Unjoined => Err(Error::NotJoined),
+        };
+        Ok(())
     }
 
     #[cfg(feature = "multicast")]
@@ -368,6 +381,7 @@ pub(crate) enum Response {
     JoinSuccess,
     NoUpdate,
     RxComplete,
+    LinkCheckReq,
     #[cfg(feature = "certification")]
     UplinkPrepared,
     #[cfg(feature = "certification")]
@@ -395,6 +409,7 @@ impl From<Response> for nb_device::Response {
             Response::JoinSuccess => nb_device::Response::JoinSuccess,
             Response::NoUpdate => nb_device::Response::NoUpdate,
             Response::RxComplete => nb_device::Response::RxComplete,
+            Response::LinkCheckReq => unimplemented!(),
             #[cfg(feature = "certification")]
             Response::UplinkPrepared => unimplemented!(),
             #[cfg(feature = "certification")]
