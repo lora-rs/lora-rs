@@ -16,8 +16,17 @@ impl TestRadio {
                 last_uplink: last_uplink.clone(),
                 last_rxconfig: last_rxconfig.clone(),
             },
-            Self { rx, last_rxconfig, last_uplink, current_config: None },
+            Self { rx, last_rxconfig, last_uplink, current_config: None, snr: 0 },
         )
+    }
+
+    pub fn set_snr(&mut self, snr: i8) {
+        self.snr = snr
+    }
+
+    /// Return snr in a 6-bit scaled format as in DevStatusAns
+    pub fn snr_scaled(&self) -> u8 {
+        ((self.snr << 2) as u8) >> 2
     }
 }
 
@@ -32,6 +41,7 @@ pub struct TestRadio {
     last_rxconfig: Arc<Mutex<Option<RxConfig>>>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
     rx: mpsc::Receiver<Msg>,
+    snr: i8,
 }
 
 impl PhyRxTx for TestRadio {
@@ -69,7 +79,7 @@ impl PhyRxTx for TestRadio {
                 time::sleep(time::Duration::from_millis(5)).await;
                 if let Some(config) = &self.current_config {
                     let length = handler(last_uplink.clone(), config.rf, rx_buf);
-                    Ok((length, RxQuality::new(-80, 0)))
+                    Ok((length, RxQuality::new(-80, self.snr)))
                 } else {
                     panic!("Trying to rx before settings config!")
                 }
@@ -86,7 +96,7 @@ impl PhyRxTx for TestRadio {
                 time::sleep(time::Duration::from_millis(5)).await;
                 if let Some(config) = &self.current_config {
                     let length = handler(last_uplink.clone(), config.rf, rx_buf);
-                    Ok(RxStatus::Rx(length, RxQuality::new(-80, 0)))
+                    Ok(RxStatus::Rx(length, RxQuality::new(-80, self.snr)))
                 } else {
                     panic!("Trying to rx before settings config!")
                 }

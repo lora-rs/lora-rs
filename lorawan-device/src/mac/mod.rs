@@ -251,6 +251,7 @@ impl Mac {
         &mut self,
         buf: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
+        snr: i8,
     ) -> Response {
         match &mut self.state {
             State::Joined(ref mut session) => session.handle_rx::<N, D>(
@@ -262,6 +263,7 @@ impl Mac {
                 &mut self.multicast,
                 buf,
                 dl,
+                snr,
                 false,
             ),
             State::Otaa(ref mut otaa) => {
@@ -286,6 +288,7 @@ impl Mac {
         &mut self,
         buf: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
+        snr: i8,
     ) -> Result<Response> {
         match &mut self.state {
             State::Joined(ref mut session) => Ok(session.handle_rx::<N, D>(
@@ -297,6 +300,7 @@ impl Mac {
                 &mut self.multicast,
                 buf,
                 dl,
+                snr,
                 true,
             )),
             State::Otaa(_) => Err(Error::NotJoined),

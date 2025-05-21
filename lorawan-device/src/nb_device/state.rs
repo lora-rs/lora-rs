@@ -318,7 +318,7 @@ impl WaitingForRx {
                 // send the transmit request to the radio
                 match radio.handle_event(radio_event) {
                     Ok(response) => match response {
-                        radio::Response::RxDone(_quality) => {
+                        radio::Response::RxDone(quality) => {
                             // copy from radio buffer to mac buffer
                             buf.clear();
                             if let Err(()) =
@@ -329,7 +329,7 @@ impl WaitingForRx {
                                     Err(Error::BufferTooSmall.into()),
                                 );
                             }
-                            match mac.handle_rx::<N, D>(buf, dl) {
+                            match mac.handle_rx::<N, D>(buf, dl, quality.snr()) {
                                 // NoUpdate can occur when a stray radio packet is received. Maintain state
                                 mac::Response::NoUpdate => {
                                     (State::WaitingForRx(self), Ok(Response::NoUpdate))

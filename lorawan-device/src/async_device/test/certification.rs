@@ -141,6 +141,67 @@ async fn txframectrlreq_no_change() {
 }
 
 #[tokio::test]
+/// 2.5.1. DevStatusReq test
+/// Same scenario is used for all regions.
+async fn eu868_devstatusreq_test() {
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let send_await_complete = Arc::new(Mutex::new(false));
+
+    device.radio.set_snr(-15);
+
+    // Step 1: send uplink, TCL responds with CP:DevStatusReq
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 1, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    timer.fire_most_recent().await;
+    fn fp_devstatusreq(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_mac(buf, "06", 1)
+    }
+    radio.handle_rxtx(fp_devstatusreq).await;
+
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(1)) => {}
+        _ => panic!(),
+    }
+
+    let expected_mac = [0x06, 255, device.radio.snr_scaled()];
+
+    // Check whether uplink has been populated with requested MAC:DevstatusAns command
+    if let Some(session) = device.mac.get_session() {
+        let data = session.uplink.mac_commands();
+        assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+        // TODO: Battery value is hardcoded to 255 in MAC for now
+        assert_eq!(session.uplink.mac_commands(), &expected_mac);
+    }
+
+    // Step 2: send uplink, check whether DevStatusAns is present in MAC
+    let complete = send_await_complete.clone();
+    let _task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 1, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+    timer.fire_most_recent().await;
+
+    // Check whether sent uplink contained required DevStatusAns data
+    let mut uplink = radio.get_last_uplink().await;
+    match uplink.get_payload() {
+        PhyPayload::Data(DataPayload::Encrypted(data)) => {
+            assert_eq!(data.fhdr().data(), &expected_mac)
+        }
+        _ => panic!(),
+    }
+}
+
+#[tokio::test]
 /// 2.5.7. LinkCheckReq test
 /// Same scenario is used for all regions.
 async fn eu868_linkcheckreq_test() {
