@@ -12,6 +12,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 mod mac_common;
+
 mod newchannelreq_eu868;
 
 /// Decrypts the payload allowing access to payload contents

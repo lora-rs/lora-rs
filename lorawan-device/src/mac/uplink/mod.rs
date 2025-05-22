@@ -21,8 +21,11 @@ impl Uplink {
         self.confirmed
     }
     pub fn add_mac_command<M: SerializableMacCommand>(&mut self, cmd: M) {
-        let _ = self.pending.push(cmd.cid());
-        self.pending.extend_from_slice(cmd.payload_bytes()).unwrap();
+        // Check that there's still enough room for MAC commands
+        if self.pending.len() + cmd.payload_len() < FOPTS_MAX_LEN {
+            let _ = self.pending.push(cmd.cid());
+            self.pending.extend_from_slice(cmd.payload_bytes()).unwrap();
+        }
     }
     pub fn clear_mac_commands(&mut self, retain_acks: bool) {
         // Certain commands have to be retained until their acknowledgment is confirmed
