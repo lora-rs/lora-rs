@@ -32,7 +32,12 @@ impl Uplink {
         if retain_acks {
             let mut data: heapless::Vec<u8, FOPTS_MAX_LEN> = heapless::Vec::new();
             let _: heapless::Vec<_, FOPTS_MAX_LEN> = parse_uplink_mac_commands(&self.pending)
-                .filter(|cmd| matches!(cmd, UplinkMacCommand::RXParamSetupAns(_)))
+                .filter(|cmd| {
+                    matches!(
+                        cmd,
+                        UplinkMacCommand::DlChannelAns(_) | UplinkMacCommand::RXParamSetupAns(_)
+                    )
+                })
                 .map(|c| {
                     let _ = data.push(c.cid());
                     data.extend_from_slice(c.payload_bytes()).unwrap();
