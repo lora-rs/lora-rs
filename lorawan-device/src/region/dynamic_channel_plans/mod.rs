@@ -35,12 +35,25 @@ pub(crate) use in865::IN865;
 pub(crate) struct Channel {
     frequency: u32,
     _datarates: DataRateRange,
+    dl_frequency: Option<u32>,
 }
 
 impl Channel {
     /// Initialize Channel with frequency and supported minimum and maximum data rates
     fn new(f: u32, dr_min: DR, dr_max: DR) -> Self {
-        Self { frequency: f, _datarates: DataRateRange::new_range(dr_min, dr_max) }
+        Self::new_with_dr(f, DataRateRange::new_range(dr_min, dr_max))
+    }
+
+    fn new_with_dr(f: u32, dr: DataRateRange) -> Self {
+        Self { frequency: f, _datarates: dr, dl_frequency: None }
+    }
+
+    fn rx1_frequency(&self) -> u32 {
+        self.dl_frequency.unwrap_or(self.frequency)
+    }
+
+    fn ul_frequency(&self) -> u32 {
+        self.frequency
     }
 }
 
@@ -72,13 +85,6 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
             rx2_dr: Default::default(),
             frequency_valid: freq_fn,
         }
-    }
-
-    fn get_channel(&self, index: usize) -> Option<u32> {
-        if let Some(channel) = self.channels[index] {
-            return Some(channel.frequency);
-        }
-        None
     }
 
     fn get_random_in_range<RNG: RngCore>(&self, rng: &mut RNG) -> usize {
@@ -224,9 +230,12 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
                 let mut channel = self.get_random_in_range(rng);
                 loop {
                     if self.channel_mask.is_enabled(channel).unwrap() {
-                        if let Some(freq) = self.get_channel(channel) {
+                        if let Some(ch) = self.channels[channel] {
                             self.last_tx_channel = channel as u8;
-                            return (R::datarates()[datarate as usize].clone().unwrap(), freq);
+                            return (
+                                R::datarates()[datarate as usize].clone().unwrap(),
+                                ch.ul_frequency(),
+                            );
                         }
                     }
                     channel = self.get_random_in_range(rng)
@@ -237,8 +246,8 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
 
     fn get_rx_frequency(&self, _frame: &Frame, window: &Window) -> u32 {
         match window {
-            // TODO: implement RxOffset but first need to implement RxOffset MacCommand
-            Window::_1 => self.get_channel(self.last_tx_channel as usize).unwrap(),
+            // SAFETY: self.last_tx_channel will be populated after correct channel is chosen
+            Window::_1 => self.channels[self.last_tx_channel as usize].unwrap().rx1_frequency(),
             Window::_2 => R::get_default_rx2(),
         }
     }
@@ -261,6 +270,29 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
 
     fn has_fixed_channel_plan(&self) -> bool {
         false
+    }
+
+    /// Update channel's downlink frequency for RX1 slot
+    fn channel_dl_update(&mut self, index: u8, freq: u32) -> (bool, bool) {
+        let freq_valid = self.frequency_valid(freq);
+        if self.channel_mask.is_enabled(index as usize).is_ok()
+            && self.channel_mask.is_enabled(index as usize).unwrap()
+        {
+            if let Some(mut channel) = self.channels[index as usize] {
+                if channel.frequency != 0 {
+                    channel.dl_frequency = if freq == channel.frequency {
+                        // Reset downlink frequency
+                        None
+                    } else {
+                        // Update downlink frequency
+                        Some(freq)
+                    };
+                    self.channels[index as usize] = Some(channel);
+                    return (freq_valid, true);
+                }
+            }
+        }
+        (freq_valid, false)
     }
 
     fn handle_new_channel(
@@ -287,7 +319,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
                 .all(|c| (R::datarates()[c as usize]).is_some());
 
             if freq_valid && dr_supported {
-                self.channels[index as usize] = Some(Channel { frequency: freq, _datarates: r });
+                self.channels[index as usize] = Some(Channel::new_with_dr(freq, r));
                 self.channel_mask.set_channel(index as usize, true);
             }
             return (freq_valid, dr_supported);
