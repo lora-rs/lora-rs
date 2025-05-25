@@ -340,7 +340,6 @@ impl Session {
                     }
                     // TODO...
                 }
-                #[cfg(feature = "experimental")]
                 LinkADRReq(payload) => {
                     // Contiguous LinkADRReq commands shall be processed in the
                     // order present in the downlink frame as a single atomic block

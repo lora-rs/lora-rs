@@ -70,7 +70,6 @@ multicast = []
 serde = ["dep:serde", "lorawan/serde"]
 
 ## Experimental support for partially-implemented MAC-commands:
-## - LinkADRReq - TODO: nbtrans support
 ## - LinkCheckAns - TODO: Missing "application" layer integration
 ## - RxParamSetupReq - TODO: RX1 DR offset, RX2 DR
 experimental = []
