@@ -276,6 +276,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         // Disable channel if frequency is 0
         if freq == 0 {
             self.channels[index as usize] = None;
+            self.channel_mask.set_channel(index as usize, false);
             return (true, true);
         }
         let freq_valid = self.frequency_valid(freq);
@@ -287,6 +288,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
 
             if freq_valid && dr_supported {
                 self.channels[index as usize] = Some(Channel { frequency: freq, _datarates: r });
+                self.channel_mask.set_channel(index as usize, true);
             }
             return (freq_valid, dr_supported);
         }
