@@ -289,6 +289,9 @@ where
         self.write_register(Register::RegPreambleLsb, (pkt_params.preamble_length & 0x00ff) as u8)
             .await?;
 
+        self.write_register(Register::RegPayloadLength, pkt_params.payload_length)
+            .await?;
+
         C::set_packet_params(self, pkt_params).await?;
 
         // IQ inversion:
@@ -357,7 +360,6 @@ where
         self.write_register(Register::RegLna, lna_gain).await?;
 
         self.write_register(Register::RegFifoAddrPtr, 0x00u8).await?;
-        self.write_register(Register::RegPayloadLength, 0xffu8).await?;
 
         self.write_register(Register::RegOpMode, mode.value()).await
     }
