@@ -292,9 +292,11 @@ where
 
         C::set_packet_params(self, pkt_params).await?;
 
-        // Set the expected packet receive size
-        self.write_register(Register::RegPayloadLength, pkt_params.payload_length)
-            .await?;
+        if pkt_params.implicit_header {
+            // Set the expected packet receive size, which is only applicable for implicit header mode
+            self.write_register(Register::RegPayloadLength, pkt_params.payload_length)
+                .await?;
+        }
 
         // IQ inversion:
         // RegInvertiq - [0x33]
