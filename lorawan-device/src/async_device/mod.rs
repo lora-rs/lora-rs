@@ -324,7 +324,6 @@ where
                     .map_err(Error::Radio)?;
 
                 // Receive join response within RX window
-                self.timer.reset();
                 Ok(self.rx_downlink(&Frame::Join, ms).await?.into())
             }
             JoinMode::ABP { nwkskey, appskey, devaddr } => {
@@ -364,8 +363,18 @@ where
             .map_err(Error::Radio)?;
 
         // Wait for received data within window
-        self.timer.reset();
-        Ok(self.rx_downlink(&Frame::Data, ms).await?.into())
+        loop {
+            let r = self.rx_downlink(&Frame::Data, ms).await?;
+            println!("rx_downlink result: {:?}", r);
+            match r {
+                mac::Response::UplinkReady => {
+                    continue;
+                }
+                r => {
+                    return Ok(r.into());
+                }
+            }
+        }
     }
 
     /// Take the downlink data from the device. This is typically called after a
@@ -512,7 +521,10 @@ where
         frame: &Frame,
         window_delay: u32,
     ) -> Result<mac::Response, Error<R::PhyError>> {
+        self.timer.reset();
         self.radio_buffer.clear();
+
+        println!("rx_downlink: INIT!");
 
         let rx1_start_delay = self.mac.get_rx_delay(frame, &Window::_1) + window_delay
             - self.radio.get_rx_window_lead_time_ms();
@@ -527,8 +539,9 @@ where
         debug!("Configuring RX1 window with config {}.", rx_config);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
 
+        println!("rx_downlink: RX1!");
         if let Some(response) = self.rx_listen().await? {
-            debug!("RX1 received {}", response);
+            println!("RX1 received {:?}", response);
             return Ok(response);
         }
 
@@ -562,20 +575,25 @@ where
         response: mac::Response,
         rx_config: Option<RxConfig>,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
+        println!("Handle mac response!");
         radio_buffer.clear();
         match response {
-            mac::Response::NoUpdate => Ok(None),
+            mac::Response::NoUpdate => {
+                return Ok(None)
+            }
             #[cfg(feature = "certification")]
             mac::Response::LinkCheckReq => {
                 let _ = mac.add_uplink(lorawan::maccommandcreator::LinkCheckReqCreator::new());
                 Ok(Some(mac.rx2_complete()))
             }
             #[cfg(feature = "certification")]
-            mac::Response::UplinkPrepared => {
-                let (tx_config, _fcnt_up) =
+            mac::Response::UplinkReady => {
+                let (tx_config, fcnt_up) =
                     mac.certification_setup_send::<G, N>(rng, radio_buffer)?;
                 radio.tx(tx_config, radio_buffer.as_ref_for_read()).await.map_err(Error::Radio)?;
-                Ok(Some(mac.rx2_complete()))
+                // Signal device that Uplink is now ready and switch
+                // to listen...
+                Ok(Some(mac::Response::UplinkReady))
             }
             #[cfg(feature = "multicast")]
             mac::Response::Multicast(mut response) => {

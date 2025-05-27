@@ -1,5 +1,5 @@
 #![deny(rust_2018_idioms)]
-#![cfg_attr(not(test), no_std)]
+// #![cfg_attr(not(test), no_std)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 //! ## Feature flags

@@ -224,7 +224,7 @@ impl Session {
                                         DeviceEvent::TxPeriodicityChange { periodicity },
                                     )
                                 }
-                                UplinkPrepared => return Response::UplinkPrepared,
+                                UplinkPrepared => return Response::UplinkReady,
                                 NoUpdate => return Response::NoUpdate,
                             }
                         }

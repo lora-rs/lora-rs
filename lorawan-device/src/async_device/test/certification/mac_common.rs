@@ -164,17 +164,44 @@ async fn eu868_linkcheckreq_test() {
         (device, response)
     });
 
+    fn verify_response(uplink: Option<Uplink>, _config: RfConfig, _rx_buffer: &mut [u8]) -> usize {
+        println!("XXX: {:?}", uplink);
+        0
+    }
+
     fn fp_echopayloadreq(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
         build_packet(buf, "08010203", 3)
     }
     timer.fire_most_recent().await;
+    println!("RX: about to receive echo..");
     radio.handle_rxtx(fp_echopayloadreq).await;
-    let (_device, response) = task.await.unwrap();
 
+    println!("RX: about to send out response..");
+    radio.handle_rxtx(verify_response).await;
+
+    timer.fire_most_recent().await;
+
+    println!("???");
+
+    let mut uplink = radio.get_last_uplink().await;
+    match uplink.get_payload() {
+        PhyPayload::Data(DataPayload::Encrypted(data)) => {
+            assert_eq!(data.f_port(), Some(224));
+            let dl = decrypt(data, 3);
+            assert_eq!(dl.frm_payload(), FRMPayload::Data(&[0x08, 0x02, 0x03, 0x04]));
+        }
+        _ => panic!(),
+    }
+
+    println!(" --> X");
+    let (device, response) = task.await.unwrap();
+    println!("Y");
     match response {
         Ok(SendResponse::RxComplete) => {}
         _ => panic!(),
     }
+
+    /*
 
     // Step 4: DUT will automatically respond with FP:EchoPayloadAns
     let _complete = send_await_complete.clone();
@@ -188,4 +215,5 @@ async fn eu868_linkcheckreq_test() {
         }
         _ => panic!(),
     }
+    */
 }

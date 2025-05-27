@@ -387,7 +387,7 @@ pub(crate) enum Response {
     RxComplete,
     LinkCheckReq,
     #[cfg(feature = "certification")]
-    UplinkPrepared,
+    UplinkReady,
     #[cfg(feature = "certification")]
     DeviceHandler(DeviceEvent),
     #[cfg(feature = "multicast")]
@@ -415,7 +415,7 @@ impl From<Response> for nb_device::Response {
             Response::RxComplete => nb_device::Response::RxComplete,
             Response::LinkCheckReq => unimplemented!(),
             #[cfg(feature = "certification")]
-            Response::UplinkPrepared => unimplemented!(),
+            Response::UplinkReady => unimplemented!(),
             #[cfg(feature = "certification")]
             Response::DeviceHandler(_) => unimplemented!(),
             #[cfg(feature = "multicast")]
