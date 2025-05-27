@@ -69,6 +69,13 @@ pub fn parse_downlink_certification_messages(
     MacCommandIterator::new(data)
 }
 
+pub fn parse_uplink_certification_messages(
+    data: &[u8],
+) -> MacCommandIterator<'_, UplinkDUTCommand<'_>> {
+    MacCommandIterator::new(data)
+}
+
+
 impl AdrBitChangeReqPayload<'_> {
     /// Enable/disable ADR
     pub fn adr_enable(&self) -> Result<bool, Error> {

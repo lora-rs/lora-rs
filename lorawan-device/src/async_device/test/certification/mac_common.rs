@@ -19,6 +19,7 @@ use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
 use crate::test_util::Uplink;
 
+use lorawan::certification::{parse_uplink_certification_messages, UplinkDUTCommand};
 use lorawan::maccommands::parse_uplink_mac_commands;
 use lorawan::parser::{DataHeader, DataPayload, FRMPayload, PhyPayload};
 
@@ -26,6 +27,28 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use super::{build_mac, build_packet, decrypt};
+
+fn verify_certification_message(
+    uplink: Option<Uplink>,
+    expected_port: u8,
+    verify_payload: impl FnOnce(&[u8]) -> bool,
+) -> usize {
+    let mut uplink = uplink.unwrap();
+    let payload = uplink.get_payload();
+    if let PhyPayload::Data(DataPayload::Encrypted(data)) = payload {
+        let fcnt = data.fhdr().fcnt() as u32;
+        let uplink = decrypt(data, fcnt);
+        assert_eq!(uplink.f_port().unwrap(), expected_port);
+        if let FRMPayload::Data(ans_data) = uplink.frm_payload() {
+            assert!(verify_payload(ans_data));
+        } else {
+            panic!("Expected data payload");
+        }
+        0
+    } else {
+        panic!("Expected encrypted data payload");
+    }
+}
 
 #[tokio::test]
 /// 2.5.1. DevStatusReq test
@@ -165,47 +188,40 @@ async fn eu868_linkcheckreq_test() {
     });
 
     fn verify_response(uplink: Option<Uplink>, _config: RfConfig, _rx_buffer: &mut [u8]) -> usize {
-        println!("XXX: {:?}", uplink);
+        verify_certification_message(uplink.clone(), 224, |ans_data| {
+            let mut msgs = parse_uplink_certification_messages(ans_data);
+            let msg = msgs.next().unwrap();
+            if let UplinkDUTCommand::EchoIncPayloadAns(ans) = msg {
+                assert_eq!(ans.payload(), [0x02, 0x03, 0x04]);
+            } else {
+                panic!("Expected EchoIncPayloadAns message");
+            }
+            assert!(msgs.next().is_none());
+            true
+        });
         0
     }
 
     fn fp_echopayloadreq(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
         build_packet(buf, "08010203", 3)
     }
-    timer.fire_most_recent().await;
-    println!("RX: about to receive echo..");
-    radio.handle_rxtx(fp_echopayloadreq).await;
 
-    println!("RX: about to send out response..");
+    radio.handle_rxtx(fp_echopayloadreq).await;
     radio.handle_rxtx(verify_response).await;
 
     timer.fire_most_recent().await;
+    radio.handle_timeout().await;
+    timer.fire_most_recent().await;
+    radio.handle_timeout().await;
+    timer.fire_most_recent().await;
+    radio.handle_timeout().await;
 
-    println!("???");
-
-    let mut uplink = radio.get_last_uplink().await;
-    match uplink.get_payload() {
-        PhyPayload::Data(DataPayload::Encrypted(data)) => {
-            assert_eq!(data.f_port(), Some(224));
-            let dl = decrypt(data, 3);
-            assert_eq!(dl.frm_payload(), FRMPayload::Data(&[0x08, 0x02, 0x03, 0x04]));
-        }
-        _ => panic!(),
-    }
-
-    println!(" --> X");
-    let (device, response) = task.await.unwrap();
-    println!("Y");
+    let (_device, response) = task.await.unwrap();
     match response {
         Ok(SendResponse::RxComplete) => {}
         _ => panic!(),
     }
 
-    /*
-
-    // Step 4: DUT will automatically respond with FP:EchoPayloadAns
-    let _complete = send_await_complete.clone();
-
     let mut uplink = radio.get_last_uplink().await;
     match uplink.get_payload() {
         PhyPayload::Data(DataPayload::Encrypted(data)) => {
@@ -215,5 +231,4 @@ async fn eu868_linkcheckreq_test() {
         }
         _ => panic!(),
     }
-    */
 }

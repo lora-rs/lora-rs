@@ -545,6 +545,8 @@ where
             return Ok(response);
         }
 
+        println!("rx_downlink: Rx2 passed!");
+
         let rx2_start_delay = self.mac.get_rx_delay(frame, &Window::_2) + window_delay
             - self.radio.get_rx_window_lead_time_ms();
         debug!("RX1 did not receive anything. Awaiting RX2 for {} ms.", rx2_start_delay);
@@ -561,7 +563,7 @@ where
             debug!("RX2 received {}", response);
             return Ok(response);
         }
-        debug!("RX2 did not receive anything.");
+        println!("RX2 did not receive anything.");
         Ok(self.mac.rx2_complete())
     }
 
@@ -578,9 +580,7 @@ where
         println!("Handle mac response!");
         radio_buffer.clear();
         match response {
-            mac::Response::NoUpdate => {
-                return Ok(None)
-            }
+            mac::Response::NoUpdate => return Ok(None),
             #[cfg(feature = "certification")]
             mac::Response::LinkCheckReq => {
                 let _ = mac.add_uplink(lorawan::maccommandcreator::LinkCheckReqCreator::new());
