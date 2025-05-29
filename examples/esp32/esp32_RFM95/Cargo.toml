@@ -1,0 +1,44 @@
+[package]
+edition = "2021"
+name    = "lora_lorawan"
+version = "0.1.0"
+
+[[bin]]
+name = "lora_lorawan"
+path = "./src/bin/async_main.rs"
+
+[dependencies]
+critical-section = "1.2.0"
+embassy-executor = { version = "0.7.0", features = ["task-arena-size-20480"] }
+embassy-time = { version = "0.4.0", features = ["generic-queue-8"] }
+esp-backtrace = { version = "0.15.0", features = [
+  "esp32",
+  "exception-handler",
+  "panic-handler",
+  "defmt"
+] }
+esp-hal = { version = "0.23.1", features = ["esp32", "unstable"] }
+esp-hal-embassy = { version = "0.6.0", features = ["esp32"] }
+esp-println = { version = "0.13.0", features = ["esp32", "log"] }
+static_cell = { version = "2.1.0", features = ["nightly"] }
+lora-phy = { git = "https://github.com/lora-rs/lora-rs.git", features = ["lorawan-radio", "defmt-03"] }
+lorawan-device = { git = "https://github.com/lora-rs/lora-rs.git", default-features = false, features = ["embassy-time", "defmt-03", "region-eu868"] }
+defmt = "1.0.1"
+embedded-hal = { version = "1.0.0", features = ["defmt-03"] }
+embedded-hal-bus = { version = "0.3.0", features = ["defmt-03"] }
+embassy-futures = { version = "0.1.1", features = ["defmt"] }
+embedded-hal-async = { version = "1.0.0", features = ["defmt-03"] }
+embassy-sync = { version = "0.6.2", features = ["defmt"] }
+embassy-embedded-hal = { version = "0.3.0", features = ["defmt"] }
+
+[profile.dev]
+opt-level = "s"
+
+[profile.release]
+codegen-units    = 1
+debug            = 2
+debug-assertions = false
+incremental      = false
+lto              = 'fat'
+opt-level        = 's'
+overflow-checks  = false
