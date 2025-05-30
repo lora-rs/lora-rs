@@ -58,6 +58,7 @@ impl Otaa {
         {
             let decrypt = encrypted.decrypt(&self.network_credentials.appkey, &DefaultFactory);
             region.process_join_accept(&decrypt);
+            // TODO: dlsettings (rx1_dr_offset / rx2_datarate)
             configuration.rx1_delay = del_to_delay_ms(decrypt.rx_delay());
             if decrypt.validate_mic(&self.network_credentials.appkey, &DefaultFactory) {
                 return Some(Session::derive_new(
