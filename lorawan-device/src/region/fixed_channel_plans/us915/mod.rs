@@ -84,7 +84,7 @@ impl FixedChannelRegion for US915Region {
     fn downlink_channels() -> &'static [u32; 8] {
         &DOWNLINK_CHANNEL_MAP
     }
-    fn get_default_rx2() -> u32 {
+    fn default_rx2_freq() -> u32 {
         DEFAULT_RX2
     }
     fn get_rx_datarate(tx_datarate: DR, _frame: &Frame, window: &Window) -> Datarate {
