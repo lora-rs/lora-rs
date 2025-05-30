@@ -43,7 +43,7 @@ impl DynamicChannelRegion for EU433Region {
         3
     }
 
-    fn get_default_rx2() -> u32 {
+    fn default_rx2_freq() -> u32 {
         434_665_000
     }
 

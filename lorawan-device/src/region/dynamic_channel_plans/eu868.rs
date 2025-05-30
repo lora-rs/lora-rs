@@ -44,7 +44,7 @@ impl DynamicChannelRegion for EU868Region {
         3
     }
 
-    fn get_default_rx2() -> u32 {
+    fn default_rx2_freq() -> u32 {
         869_525_000
     }
 
