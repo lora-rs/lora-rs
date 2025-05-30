@@ -8,13 +8,14 @@ use crate::{
 };
 use heapless::Vec;
 use lora_modulation::BaseBandModulationParams;
+use lorawan::maccommands::SerializableMacCommand;
 use lorawan::parser::DevAddr;
+use lorawan::types::DR;
 
 pub type FcntDown = u32;
 pub type FcntUp = u32;
 
 mod session;
-use lorawan::maccommands::SerializableMacCommand;
 use rand_core::RngCore;
 pub use session::{Session, SessionKeys};
 
@@ -55,7 +56,7 @@ pub struct Configuration {
     pub(crate) tx_power: Option<u8>,
     // Overriden with RxParamSetupReq
     // TODO: rx1_data_rate_offset
-    // TODO: rx2_data_rate
+    rx2_data_rate: Option<DR>,
     pub(crate) rx2_frequency: Option<u32>,
 }
 
@@ -110,6 +111,7 @@ impl Mac {
                 rx1_delay: region::constants::RECEIVE_DELAY1,
                 join_accept_delay1: region::constants::JOIN_ACCEPT_DELAY1,
                 join_accept_delay2: region::constants::JOIN_ACCEPT_DELAY2,
+                rx2_data_rate: None,
                 rx2_frequency: None,
                 tx_power: None,
             },
@@ -345,12 +347,15 @@ impl Mac {
                 )
             }
             Window::_2 => {
-                // TODO: RX2 datarate override
                 (
+                    // RX2 frequency override
                     self.configuration
                         .rx2_frequency
                         .unwrap_or_else(|| self.region.get_rx_frequency(frame, window)),
-                    self.region.get_rx_datarate(self.configuration.data_rate, window),
+                    // RX2 datarate override
+                    self.configuration.rx2_data_rate.unwrap_or_else(|| {
+                        self.region.get_rx_datarate(self.configuration.data_rate, window)
+                    }),
                 )
             }
         };
@@ -359,9 +364,14 @@ impl Mac {
         let datarate = match self.region.get_datarate(dr as u8) {
             Some(d) => d,
             None => {
+                warn!(
+                    "Unsupported DR: {:?} (TX DR: {:?}, Window: {:?})",
+                    dr, self.configuration.data_rate, window
+                );
                 self.region
                     .get_datarate(
-                        self.region.get_rx_datarate(self.configuration.data_rate, &Window::_2) as u8
+                        self.region.get_rx_datarate(self.configuration.data_rate, &Window::_2)
+                            as u8,
                     )
                     .unwrap()
             }

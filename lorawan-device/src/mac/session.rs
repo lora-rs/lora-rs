@@ -14,6 +14,7 @@ use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
 use lorawan::{
     creator::DataPayloadCreator,
     parser::{parse as lorawan_parse, *},
+    types::DR,
 };
 
 #[cfg(feature = "certification")]
@@ -446,20 +447,26 @@ impl Session {
                     let freq = payload.frequency().value();
                     let freq_ack = region.frequency_valid(freq);
 
-                    // TODO: Figure these out...
-                    // let dl = payload.dl_settings();
-                    // - rx1_dr_offset: dl.rx1_dr_offset()
-                    // - rx2_data_rate = dl.rx2_data_rate());
-                    if freq_ack {
+                    let dl = payload.dl_settings();
+                    // TODO: rx1_dr_offset = dl.rx1_dr_offset();
+                    let rx2_dr = match dl.rx2_data_rate() {
+                        DR::_15 => Some(configuration.rx2_data_rate),
+                        n => {
+                            if region.get_datarate(n as u8).is_some() {
+                                Some(Some(n))
+                            } else {
+                                None
+                            }
+                        }
+                    };
+                    if freq_ack && rx2_dr.is_some() {
+                        configuration.rx2_data_rate = rx2_dr.unwrap();
                         configuration.rx2_frequency = Some(freq);
                     }
 
-                    // RXParamSetupReq has its own acknowledgment mechanism, requiring
-                    // RXParamSetupAns with all uplinks until a Class A downlink is received
-                    // by the end-device.
                     let mut cmd = RXParamSetupAnsCreator::new();
                     cmd.set_rx1_data_rate_offset_ack(true)
-                        .set_rx2_data_rate_ack(true)
+                        .set_rx2_data_rate_ack(rx2_dr.is_some())
                         .set_channel_ack(freq_ack);
 
                     self.uplink.add_mac_command(cmd);

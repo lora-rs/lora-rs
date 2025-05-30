@@ -1,10 +1,13 @@
 use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
 use crate::test_util::Uplink;
+
+use lora_modulation::{Bandwidth, SpreadingFactor};
+use lorawan::maccommands::parse_uplink_mac_commands;
 use lorawan::parser::{DataHeader, DataPayload, PhyPayload};
 
 use super::{build_mac, util};
-use lorawan::maccommands::parse_uplink_mac_commands;
+
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -63,10 +66,9 @@ async fn rxparamsetup_eu868() {
     let rx_conf = radio.get_rxconfig().await.unwrap();
     assert_eq!(rx_conf.rf.frequency, 868525000);
 
-    // SF10BW125
-    // TODO: RX2 DR override
-    // assert_eq!(rx_conf.rf.bb.sf, SpreadingFactor::_10);
-    // assert_eq!(rx_conf.rf.bb.bw, Bandwidth::_125KHz);
+    // Test for RX2 DR override
+    assert_eq!(rx_conf.rf.bb.sf, SpreadingFactor::_10);
+    assert_eq!(rx_conf.rf.bb.bw, Bandwidth::_125KHz);
 
     // RxComplete (no answer)
     assert!(*send_await_complete.lock().await);
