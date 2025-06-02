@@ -47,6 +47,20 @@ impl DynamicChannelRegion for EU433Region {
         434_665_000
     }
 
+    fn get_rx_datarate(tx_dr: DR, _frame: &Frame, window: &Window) -> Datarate {
+        // TODO: Handle RX1 offset
+        let dr = match window {
+            Window::_1 => match tx_dr {
+                DR::_0 | DR::_1 | DR::_2 | DR::_3 | DR::_4 | DR::_5 | DR::_6 | DR::_7 => tx_dr,
+                DR::_8 | DR::_9 | DR::_10 | DR::_11 | DR::_12 | DR::_13 | DR::_14 | DR::_15 => {
+                    DR::_0
+                }
+            },
+            Window::_2 => DR::_0,
+        };
+        DATARATES[dr as usize].clone().unwrap()
+    }
+
     fn init_channels(channels: &mut ChannelPlan) {
         channels[0] = Some(Channel::new(433_175_000, DR::_0, DR::_5));
         channels[1] = Some(Channel::new(433_375_000, DR::_0, DR::_5));
