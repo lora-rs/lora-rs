@@ -70,7 +70,7 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion
                     DR::_0
                 }
             },
-            Window::_2 => DR::_0,
+            Window::_2 => DR::_2,
         };
         DATARATES[dr as usize].clone().unwrap()
     }
