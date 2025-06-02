@@ -61,7 +61,7 @@ impl DynamicChannelRegion for IN865Region {
                 | DR::_14
                 | DR::_15 => DR::_0,
             },
-            Window::_2 => DR::_0,
+            Window::_2 => DR::_2,
         };
         DATARATES[dr as usize].clone().unwrap()
     }
