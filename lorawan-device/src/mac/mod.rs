@@ -7,6 +7,7 @@ use crate::{
     region, AppSKey, Downlink, NwkSKey,
 };
 use heapless::Vec;
+use lora_modulation::BaseBandModulationParams;
 use lorawan::parser::DevAddr;
 
 pub type FcntDown = u32;
@@ -237,10 +238,7 @@ impl Mac {
         frame: &Frame,
         window: &Window,
     ) -> (RfConfig, u32) {
-        (
-            self.region.get_rx_config(self.configuration.data_rate, frame, window),
-            self.get_rx_delay(frame, window),
-        )
+        (self.get_rf_config(frame, window), self.get_rx_delay(frame, window))
     }
 
     /// Handles a received RF frame. Returns None is unparseable, fails decryption, or fails MIC
@@ -344,34 +342,45 @@ impl Mac {
         }
     }
 
-    pub(crate) fn get_rx_config(&self, buffer_ms: u32, frame: &Frame, window: &Window) -> RxConfig {
-        let mut cfg = RxConfig {
-            rf: self.region.get_rx_config(self.configuration.data_rate, frame, window),
-            mode: RxMode::Single { ms: buffer_ms },
+    /// Build RfConfig for given `Frame` and `Window` and apply
+    /// network-specific overrides.
+    fn get_rf_config(&self, frame: &Frame, window: &Window) -> RfConfig {
+        let (frequency, datarate) = match window {
+            Window::_1 => {
+                // TODO: RX1 DR offset
+                (
+                    self.region.get_rx_frequency(frame, window),
+                    self.region.get_rx_datarate(self.configuration.data_rate, window),
+                )
+            }
+            Window::_2 => {
+                // TODO: RX2 datarate override
+                (
+                    self.configuration
+                        .rx2_frequency
+                        .unwrap_or_else(|| self.region.get_rx_frequency(frame, window)),
+                    self.region.get_rx_datarate(self.configuration.data_rate, window),
+                )
+            }
         };
 
-        // Handle server-defined Rx parameters:
-        // * rx2 frequency
-        match frame {
-            Frame::Join => {}
-            Frame::Data => match window {
-                Window::_1 => {}
-                Window::_2 => {
-                    if let Some(f) = self.configuration.rx2_frequency {
-                        cfg.rf.frequency = f;
-                    }
-                }
-            },
+        RfConfig {
+            frequency,
+            bb: BaseBandModulationParams::new(
+                datarate.spreading_factor,
+                datarate.bandwidth,
+                self.region.get_coding_rate(),
+            ),
         }
-        cfg
+    }
+
+    pub(crate) fn get_rx_config(&self, buffer_ms: u32, frame: &Frame, window: &Window) -> RxConfig {
+        RxConfig { rf: self.get_rf_config(frame, window), mode: RxMode::Single { ms: buffer_ms } }
     }
 
     #[cfg(feature = "class-c")]
     pub(crate) fn get_rxc_config(&self) -> RxConfig {
-        RxConfig {
-            rf: self.region.get_rxc_config(self.configuration.data_rate),
-            mode: RxMode::Continuous,
-        }
+        RxConfig { rf: self.get_rf_config(&Frame::Data, &Window::_2), mode: RxMode::Continuous }
     }
 }
 

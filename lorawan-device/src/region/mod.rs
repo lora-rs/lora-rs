@@ -193,8 +193,8 @@ impl State {
 /// region.
 #[derive(Debug, Clone)]
 pub(crate) struct Datarate {
-    bandwidth: Bandwidth,
-    spreading_factor: SpreadingFactor,
+    pub(crate) bandwidth: Bandwidth,
+    pub(crate) spreading_factor: SpreadingFactor,
     max_mac_payload_size: u8,
     max_mac_payload_size_with_dwell_time: u8,
 }
@@ -401,18 +401,6 @@ impl Configuration {
         mut_region_dispatch!(self, get_tx_dr_and_frequency, rng, datarate, frame)
     }
 
-    pub(crate) fn get_rx_config(&self, datarate: DR, frame: &Frame, window: &Window) -> RfConfig {
-        let dr = self.get_rx_datarate(datarate, window);
-        RfConfig {
-            frequency: self.get_rx_frequency(frame, window),
-            bb: BaseBandModulationParams::new(
-                dr.spreading_factor,
-                dr.bandwidth,
-                self.get_coding_rate(),
-            ),
-        }
-    }
-
     pub(crate) fn process_join_accept<T: AsRef<[u8]>>(
         &mut self,
         join_accept: &DecryptedJoinAcceptPayload<T>,
@@ -445,33 +433,16 @@ impl Configuration {
         region_dispatch!(self, channel_mask_validate, channel_mask, dr)
     }
 
+    pub(crate) fn get_rx_datarate(&self, tx_datarate: DR, window: &Window) -> Datarate {
+        region_dispatch!(self, get_rx_datarate, tx_datarate, window)
+    }
+
     pub(crate) fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32 {
         region_dispatch!(self, get_rx_frequency, frame, window)
     }
 
     pub(crate) fn get_default_datarate(&self) -> DR {
         region_dispatch!(self, get_default_datarate)
-    }
-
-    pub(crate) fn get_rx_datarate(&self, datarate: DR, window: &Window) -> Datarate {
-        region_dispatch!(self, get_rx_datarate, datarate, window)
-    }
-
-    // Unicast: The RXC parameters are identical to the RX2 parameters, and they use the same
-    // channel and data rate. Modifying the RX2 parameters using the appropriate MAC
-    // commands also modifies the RXC parameters.
-    #[cfg(feature = "class-c")]
-    pub(crate) fn get_rxc_config(&self, datarate: DR) -> RfConfig {
-        let dr = self.get_rx_datarate(datarate, &Window::_2);
-        let frequency = self.get_rx_frequency(&Frame::Data, &Window::_2);
-        RfConfig {
-            frequency,
-            bb: BaseBandModulationParams::new(
-                dr.spreading_factor,
-                dr.bandwidth,
-                self.get_coding_rate(),
-            ),
-        }
     }
 
     pub(crate) fn get_coding_rate(&self) -> CodingRate {
