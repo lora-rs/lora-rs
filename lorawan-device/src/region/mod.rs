@@ -384,8 +384,8 @@ impl Configuration {
         }
     }
 
-    pub(crate) fn check_data_rate(&self, data_rate: u8) -> Option<DR> {
-        region_dispatch!(self, check_data_rate, data_rate)
+    pub(crate) fn get_datarate(&self, dr: u8) -> Option<&Datarate> {
+        region_dispatch!(self, get_datarate, dr)
     }
 
     pub(crate) fn check_tx_power(&self, tx_power: u8) -> Option<Option<u8>> {
@@ -561,9 +561,12 @@ pub(crate) trait RegionHandler {
         data_rates: Option<DataRateRange>,
     ) -> (bool, bool);
 
+    fn get_datarate(&self, dr: u8) -> Option<&Datarate>;
+
     fn get_default_datarate(&self) -> DR {
         DR::_0
     }
+
     fn get_tx_dr_and_frequency<RNG: RngCore>(
         &mut self,
         rng: &mut RNG,

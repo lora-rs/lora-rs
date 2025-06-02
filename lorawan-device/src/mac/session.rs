@@ -380,7 +380,12 @@ impl Session {
                         if rate == 0xf {
                             Some(configuration.data_rate)
                         } else {
-                            region.check_data_rate(rate)
+                            // Check whether datarate is defined, and return its index
+                            if region.get_datarate(rate).is_some() {
+                                Some(u8::try_into(rate).unwrap())
+                            } else {
+                                None
+                            }
                         }
                     };
                     // Handle TxPower

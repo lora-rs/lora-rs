@@ -104,14 +104,6 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
     pub fn get_max_payload_length(datarate: DR, repeater_compatible: bool, dwell_time: bool) -> u8 {
         R::get_max_payload_length(datarate, repeater_compatible, dwell_time)
     }
-
-    pub fn check_data_rate(&self, datarate: u8) -> Option<DR> {
-        if (datarate as usize) < NUM_DATARATES.into() && R::datarates()[datarate as usize].is_some()
-        {
-            return Some(DR::try_from(datarate).unwrap());
-        }
-        None
-    }
 }
 
 pub(crate) trait DynamicChannelRegion: ChannelRegion {
@@ -204,6 +196,10 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
             }
         })
         // (2..9).all(|i| channel_mask.get_index(i) == 0)
+    }
+
+    fn get_datarate(&self, dr: u8) -> Option<&Datarate> {
+        R::datarates()[dr as usize].as_ref()
     }
 
     fn get_tx_dr_and_frequency<RNG: RngCore>(
