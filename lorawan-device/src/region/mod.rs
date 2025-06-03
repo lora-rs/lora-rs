@@ -402,7 +402,7 @@ impl Configuration {
     }
 
     pub(crate) fn get_rx_config(&self, datarate: DR, frame: &Frame, window: &Window) -> RfConfig {
-        let dr = self.get_rx_datarate(datarate, frame, window);
+        let dr = self.get_rx_datarate(datarate, window);
         RfConfig {
             frequency: self.get_rx_frequency(frame, window),
             bb: BaseBandModulationParams::new(
@@ -453,8 +453,8 @@ impl Configuration {
         region_dispatch!(self, get_default_datarate)
     }
 
-    pub(crate) fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate {
-        region_dispatch!(self, get_rx_datarate, datarate, frame, window)
+    pub(crate) fn get_rx_datarate(&self, datarate: DR, window: &Window) -> Datarate {
+        region_dispatch!(self, get_rx_datarate, datarate, window)
     }
 
     // Unicast: The RXC parameters are identical to the RX2 parameters, and they use the same
@@ -462,7 +462,7 @@ impl Configuration {
     // commands also modifies the RXC parameters.
     #[cfg(feature = "class-c")]
     pub(crate) fn get_rxc_config(&self, datarate: DR) -> RfConfig {
-        let dr = self.get_rx_datarate(datarate, &Frame::Data, &Window::_2);
+        let dr = self.get_rx_datarate(datarate, &Window::_2);
         let frequency = self.get_rx_frequency(&Frame::Data, &Window::_2);
         RfConfig {
             frequency,
@@ -575,7 +575,7 @@ pub(crate) trait RegionHandler {
     ) -> (Datarate, u32);
 
     fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32;
-    fn get_rx_datarate(&self, datarate: DR, frame: &Frame, window: &Window) -> Datarate;
+    fn get_rx_datarate(&self, datarate: DR, window: &Window) -> Datarate;
     fn get_coding_rate(&self) -> CodingRate {
         DEFAULT_CODING_RATE
     }

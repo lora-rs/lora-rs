@@ -46,7 +46,7 @@ impl DynamicChannelRegion for IN865Region {
         866_550_000
     }
 
-    fn get_rx_datarate(tx_dr: DR, _frame: &Frame, window: &Window) -> Datarate {
+    fn get_rx_datarate(tx_dr: DR, window: &Window) -> Datarate {
         // TODO: Handle RX1 offset
         let dr = match window {
             Window::_1 => match tx_dr {
