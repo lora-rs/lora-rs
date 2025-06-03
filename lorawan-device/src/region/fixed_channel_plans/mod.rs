@@ -263,6 +263,10 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         true
     }
 
+    fn channel_dl_update(&mut self, _: u8, _: u32) -> (bool, bool) {
+        unreachable!()
+    }
+
     fn handle_new_channel(&mut self, _: u8, _: u32, _: Option<DataRateRange>) -> (bool, bool) {
         unreachable!()
     }

@@ -7,8 +7,8 @@ use crate::{region, AppSKey, Downlink, NwkSKey};
 use heapless::Vec;
 use lorawan::default_crypto::DefaultFactory;
 use lorawan::maccommandcreator::{
-    DevStatusAnsCreator, LinkADRAnsCreator, NewChannelAnsCreator, RXParamSetupAnsCreator,
-    RXTimingSetupAnsCreator,
+    DevStatusAnsCreator, DlChannelAnsCreator, LinkADRAnsCreator, NewChannelAnsCreator,
+    RXParamSetupAnsCreator, RXTimingSetupAnsCreator,
 };
 use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
 use lorawan::{
@@ -333,12 +333,17 @@ impl Session {
                     let _ = cmd.set_battery(255).set_margin(snr);
                     self.uplink.add_mac_command(cmd);
                 }
-                DlChannelReq(_payload) => {
+                DlChannelReq(payload) => {
                     if region.has_fixed_channel_plan() {
                         // Regions with fixed channel plan ignore this command
                         continue;
                     }
-                    // TODO...
+                    let (ack_f, ack_c) = region
+                        .channel_dl_update(payload.channel_index(), payload.frequency().value());
+
+                    let mut cmd = DlChannelAnsCreator::new();
+                    cmd.set_channel_frequency_ack(ack_f).set_uplink_frequency_exists_ack(ack_c);
+                    self.uplink.add_mac_command(cmd);
                 }
                 LinkADRReq(payload) => {
                     // Contiguous LinkADRReq commands shall be processed in the

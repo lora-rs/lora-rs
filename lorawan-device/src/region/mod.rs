@@ -491,6 +491,10 @@ impl Configuration {
         region_dispatch!(self, has_fixed_channel_plan)
     }
 
+    pub(crate) fn channel_dl_update(&mut self, index: u8, freq: u32) -> (bool, bool) {
+        mut_region_dispatch!(self, channel_dl_update, index, freq)
+    }
+
     pub(crate) fn handle_new_channel(
         &mut self,
         index: u8,
@@ -547,6 +551,8 @@ pub(crate) trait RegionHandler {
     ) -> Option<()>;
 
     fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, dr: Option<DR>) -> bool;
+
+    fn channel_dl_update(&mut self, index: u8, freq: u32) -> (bool, bool);
 
     fn handle_new_channel(
         &mut self,
