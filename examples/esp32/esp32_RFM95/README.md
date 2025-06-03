@@ -1,7 +1,7 @@
 # ESP32 + RFM95 LoRaWAN
 ## Example code for connecting to and transmitting data using LoRaWAN for ESP32 (2016 original ESP32) together with an RFM95(W) Lora Module (868MHz)
 
-## This example works as of 2025-05-29 - no guaratees of working code provided after this date.
+## This example works as of 2025-06-03 - no guaratees of working code provided after this date.
 
 ### IMPORTANT:
 The RFM95(W) module is a bit wonky, as it does not have it's RFO (low transmission power) amplifer connected.
