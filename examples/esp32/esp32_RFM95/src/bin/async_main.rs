@@ -131,7 +131,7 @@ async fn main(_spawner: Spawner) {
         info!("Counter {}", counter);
         let buffer = counter.to_be_bytes();
 
-        let result = device.send(&buffer, 1, true);
+        let result = device.send(&buffer, 1, true).await;
         info!("{}", result);
 
         counter += 1;
