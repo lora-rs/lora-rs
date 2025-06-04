@@ -257,15 +257,19 @@ impl DLSettings {
         DLSettings(byte)
     }
 
-    /// The offset between the uplink data rate and the downlink data rate used to communicate with
-    /// the end-device on the first reception slot (RX1).
+    /// The offset between the uplink data rate and the downlink data rate
+    /// used to communicate with the end-device on the first reception
+    /// slot (RX1).
+    ///
+    /// Note that the offset value is region-specific and has to be validated
+    /// against the region.
     pub fn rx1_dr_offset(&self) -> u8 {
         (self.0 >> 4) & 0x07
     }
 
-    /// The data rate of a downlink using the second receive window.
-    pub fn rx2_data_rate(&self) -> u8 {
-        self.0 & 0x0f
+    /// The downlink DR for second receive window (RX2)
+    pub fn rx2_data_rate(&self) -> DR {
+        DR::try_from(self.0 & 0xf).unwrap()
     }
 
     /// The integer value of the DL Settings.

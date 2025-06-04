@@ -1,6 +1,6 @@
 use lorawan::maccommandcreator::*;
 use lorawan::maccommands::*;
-use lorawan::types::{DLSettings, DataRateRange, Frequency, Redundancy};
+use lorawan::types::{DLSettings, DataRateRange, Frequency, Redundancy, DR};
 
 macro_rules! test_helper {
     ( $cmd:ident, $data:ident, $name:ident, $type:ident, $size:expr, $( ( $method:ident, $val:expr ) ,)*) => {{
@@ -305,7 +305,7 @@ fn mac_cmds_payload() -> Vec<u8> {
 fn test_dl_settings() {
     let dl_settings = DLSettings::new(0x5b);
     assert_eq!(dl_settings.rx1_dr_offset(), 0x05);
-    assert_eq!(dl_settings.rx2_data_rate(), 0x0b);
+    assert_eq!(dl_settings.rx2_data_rate(), DR::_11);
 }
 
 #[test]
