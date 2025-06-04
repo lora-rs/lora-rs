@@ -60,10 +60,10 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion
         DEFAULT_RX2
     }
 
-    fn get_rx_datarate(tx_dr: DR, window: &Window) -> Datarate {
+    fn get_rx_datarate(tx_dr: DR, window: &Window) -> DR {
         // TODO: Handle DwellTime, current values correspond to Dwelltime = 0
         // TODO: Handle RX1 offset
-        let dr = match window {
+        match window {
             Window::_1 => match tx_dr {
                 DR::_0 | DR::_1 | DR::_2 | DR::_3 | DR::_4 | DR::_5 | DR::_6 | DR::_7 => tx_dr,
                 DR::_8 | DR::_9 | DR::_10 | DR::_11 | DR::_12 | DR::_13 | DR::_14 | DR::_15 => {
@@ -71,8 +71,7 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion
                 }
             },
             Window::_2 => DR::_2,
-        };
-        DATARATES[dr as usize].clone().unwrap()
+        }
     }
 
     // Although Network gateways SHALL always listen on following frequencies
