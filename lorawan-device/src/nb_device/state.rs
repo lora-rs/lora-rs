@@ -248,10 +248,10 @@ impl WaitingForRxWindow {
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
-                let (rx_config, window_start) =
-                    mac.get_rx_parameters_legacy(&self.frame, &self.window.into());
+                let rf_config = mac.get_rf_config(&self.frame, &self.window.into());
+                let window_start = mac.get_rx_delay(&self.frame, &self.window.into());
                 // configure the radio for the RX
-                match radio.handle_event(radio::Event::RxRequest(rx_config)) {
+                match radio.handle_event(radio::Event::RxRequest(rf_config)) {
                     Ok(_) => {
                         let window_close: u32 = match self.window {
                             // RxWindow1 one must timeout before RxWindow2

@@ -232,15 +232,6 @@ impl Mac {
         }
     }
 
-    /// Gets the radio configuration and timing for a given frame type and window.
-    pub(crate) fn get_rx_parameters_legacy(
-        &mut self,
-        frame: &Frame,
-        window: &Window,
-    ) -> (RfConfig, u32) {
-        (self.get_rf_config(frame, window), self.get_rx_delay(frame, window))
-    }
-
     /// Handles a received RF frame. Returns None is unparseable, fails decryption, or fails MIC
     /// verification. Upon successful join, provides Response::JoinSuccess. Upon successful data
     /// rx, provides Response::DownlinkReceived. User must take the downlink from vec for
@@ -344,7 +335,7 @@ impl Mac {
 
     /// Build RfConfig for given `Frame` and `Window` and apply
     /// network-specific overrides.
-    fn get_rf_config(&self, frame: &Frame, window: &Window) -> RfConfig {
+    pub(crate) fn get_rf_config(&self, frame: &Frame, window: &Window) -> RfConfig {
         let (frequency, datarate) = match window {
             Window::_1 => {
                 // TODO: RX1 DR offset
