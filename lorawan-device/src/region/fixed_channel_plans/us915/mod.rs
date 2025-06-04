@@ -87,8 +87,8 @@ impl FixedChannelRegion for US915Region {
     fn default_rx2_freq() -> u32 {
         DEFAULT_RX2
     }
-    fn get_rx_datarate(tx_datarate: DR, window: &Window) -> Datarate {
-        let datarate = match window {
+    fn get_rx_datarate(tx_datarate: DR, window: &Window) -> DR {
+        match window {
             Window::_1 => {
                 // no support for RX1 DR Offset
                 match tx_datarate {
@@ -97,11 +97,13 @@ impl FixedChannelRegion for US915Region {
                     DR::_2 => DR::_12,
                     DR::_3 => DR::_13,
                     DR::_4 => DR::_13,
-                    _ => panic!("Invalid TX datarate"),
+                    DR::_5 => DR::_10,
+                    DR::_6 => DR::_11,
+                    // TODO: Figure out the best fallback DR
+                    _ => DR::_10,
                 }
             }
             Window::_2 => DR::_8,
-        };
-        DATARATES[datarate as usize].clone().unwrap()
+        }
     }
 }

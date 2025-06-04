@@ -336,7 +336,7 @@ impl Mac {
     /// Build RfConfig for given `Frame` and `Window` and apply
     /// network-specific overrides.
     pub(crate) fn get_rf_config(&self, frame: &Frame, window: &Window) -> RfConfig {
-        let (frequency, datarate) = match window {
+        let (frequency, dr) = match window {
             Window::_1 => {
                 // TODO: RX1 DR offset
                 (
@@ -352,6 +352,18 @@ impl Mac {
                         .unwrap_or_else(|| self.region.get_rx_frequency(frame, window)),
                     self.region.get_rx_datarate(self.configuration.data_rate, window),
                 )
+            }
+        };
+
+        // Handle possibly unsupported datarates by falling back to RX2 datarate
+        let datarate = match self.region.get_datarate(dr as u8) {
+            Some(d) => d,
+            None => {
+                self.region
+                    .get_datarate(
+                        self.region.get_rx_datarate(self.configuration.data_rate, &Window::_2) as u8
+                    )
+                    .unwrap()
             }
         };
 

@@ -46,9 +46,9 @@ impl DynamicChannelRegion for IN865Region {
         866_550_000
     }
 
-    fn get_rx_datarate(tx_dr: DR, window: &Window) -> Datarate {
+    fn get_rx_datarate(tx_dr: DR, window: &Window) -> DR {
         // TODO: Handle RX1 offset
-        let dr = match window {
+        match window {
             Window::_1 => match tx_dr {
                 DR::_0 | DR::_1 | DR::_2 | DR::_3 | DR::_4 | DR::_5 | DR::_7 => tx_dr,
                 DR::_6
@@ -62,8 +62,7 @@ impl DynamicChannelRegion for IN865Region {
                 | DR::_15 => DR::_0,
             },
             Window::_2 => DR::_2,
-        };
-        DATARATES[dr as usize].clone().unwrap()
+        }
     }
 
     fn init_channels(channels: &mut ChannelPlan) {
