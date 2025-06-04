@@ -10,11 +10,11 @@ More info on this issue can be found [here](https://www.disk91.com/2019/technolo
 
 ### Example pin configuration:
 | ESP32 pin | RFM 95 pin | Function              |
-| --------- | ---------- | --------------------- |
-| 17        | RST        | Reset                 |
-| 5         | SCK        | SPI Clock             |
-| 18        | NSS        | SPI chip select       |
-| 19        | MI         | SPI MISO              |
-| 23        | MO         | SPI MOSI              |
-| 21        | D0         | Tx done interrupt     |
-| 22        | D1         | Rx timeout interrupt  |
+| --------- | -----------| --------------------- |
+| 17        | 6 (RESET)  | Reset                 |
+| 5         | 4 (SCK)    | SPI Clock             |
+| 18        | 5 (NSS)    | SPI Chip select       |
+| 19        | 2 (MISO)   | SPI MISO              |
+| 23        | 3 (MOSI)   | SPI MOSI              |
+| 21        | 14 (DIO0)  | Tx Done interrupt     |
+| 22        | 15 (DIO1)  | Rx Timeout interrupt  |
