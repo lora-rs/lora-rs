@@ -4,7 +4,7 @@ use lorawan::keys::*;
 use lorawan::maccommandcreator::*;
 use lorawan::maccommands::*;
 use lorawan::parser::*;
-use lorawan::types::{DLSettings, Frequency};
+use lorawan::types::{DLSettings, Frequency, DR};
 
 fn phy_join_request_payload() -> Vec<u8> {
     let mut res = Vec::new();
@@ -249,7 +249,7 @@ fn test_join_accept_dl_settings_extraction() {
 fn test_dl_settings() {
     let dl_settings = DLSettings::new(0xcb);
     assert_eq!(dl_settings.rx1_dr_offset(), 4);
-    assert_eq!(dl_settings.rx2_data_rate(), 11);
+    assert_eq!(dl_settings.rx2_data_rate(), DR::_11);
 }
 
 #[test]
