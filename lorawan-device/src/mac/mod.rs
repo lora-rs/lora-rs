@@ -39,6 +39,7 @@ pub(crate) enum Frame {
 }
 
 #[derive(Copy, Clone, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub(crate) enum Window {
     _1,
     _2,
