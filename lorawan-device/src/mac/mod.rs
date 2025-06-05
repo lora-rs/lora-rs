@@ -55,9 +55,8 @@ pub struct Configuration {
     join_accept_delay2: u32,
 
     pub(crate) tx_power: Option<u8>,
-    // Overriden with RxParamSetupReq
-    // TODO: rx1_data_rate_offset
-    rx2_data_rate: Option<DR>,
+    pub(crate) rx1_dr_offset: u8,
+    pub(crate) rx2_data_rate: Option<DR>,
     pub(crate) rx2_frequency: Option<u32>,
 }
 
@@ -110,6 +109,7 @@ impl Mac {
             configuration: Configuration {
                 data_rate,
                 rx1_delay: region::constants::RECEIVE_DELAY1,
+                rx1_dr_offset: 0,
                 join_accept_delay1: region::constants::JOIN_ACCEPT_DELAY1,
                 join_accept_delay2: region::constants::JOIN_ACCEPT_DELAY2,
                 rx2_data_rate: None,
