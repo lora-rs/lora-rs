@@ -17,7 +17,6 @@ Both stacks share a dependency on the internal module, `mac` where LoRaWAN 1.0.x
 - Over-the-Air Activation (OTAA) and Activation by Personalization (ABP)
 - CFList is supported for fixed and dynamic channel plans
 - Regional support for AS923_1, AS923_2, AS923_3, AS923_4, AU915, EU868, EU433, IN865, US915 with following caveats:
-  * Regional power limits are not enforced ([#168](https://github.com/lora-rs/lora-rs/issues/168))
   * FSK and LR-FHSS modulations are not supported
 
 **Currently, not all MAC commands are fully implemented**. These commands
