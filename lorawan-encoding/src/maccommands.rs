@@ -2,6 +2,7 @@
 //!
 //! A MAC command consists of a command identifier (CID) of 1 octet followed
 //! by a possibly empty command-specific sequence of octets (payload).
+use crate::types::DR;
 use core::marker::PhantomData;
 use lorawan_macros::CommandHandler;
 
@@ -239,8 +240,8 @@ impl<'a> From<&'a [u8; 2]> for LinkCheckAnsPayload<'a> {
 
 impl LinkADRReqPayload<'_> {
     /// Data Rate that the device should use for its next transmissions.
-    pub fn data_rate(&self) -> u8 {
-        self.0[0] >> 4
+    pub fn data_rate(&self) -> DR {
+        DR::try_from(self.0[0] >> 4).unwrap()
     }
 
     /// TX Power that the device should use for its next transmissions.

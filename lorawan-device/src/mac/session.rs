@@ -375,15 +375,11 @@ impl Session {
                     // validate channel_mask.
 
                     // Handle DataRate
-                    let dr = {
-                        let rate = payload.data_rate();
-                        // Use currently active rate in case requested rate is 15 (0xf)...
-                        if rate == 0xf {
-                            Some(configuration.data_rate)
-                        } else {
-                            // Check whether datarate is defined, and return its index
-                            if region.get_datarate(rate).is_some() {
-                                Some(u8::try_into(rate).unwrap())
+                    let dr = match payload.data_rate() {
+                        DR::_15 => Some(configuration.data_rate),
+                        n => {
+                            if region.get_datarate(n as u8).is_some() {
+                                Some(n)
                             } else {
                                 None
                             }

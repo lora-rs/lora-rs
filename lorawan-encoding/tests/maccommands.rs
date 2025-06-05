@@ -52,7 +52,7 @@ fn test_link_adr_req_new() {
         LinkADRReq,
         LinkADRReqPayload,
         4,
-        (data_rate, 1),
+        (data_rate, DR::_1),
         (tx_power, 2),
         (channel_mask, expected_channel_mask),
         (redundancy, Redundancy::new(0x45)),
