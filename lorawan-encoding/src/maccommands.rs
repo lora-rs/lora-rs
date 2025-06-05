@@ -245,8 +245,8 @@ impl LinkADRReqPayload<'_> {
     }
 
     /// TX Power that the device should use for its next transmissions.
-    pub fn tx_power(&self) -> u8 {
-        self.0[0] & 0x0f
+    pub fn tx_power(&self) -> DR {
+        DR::try_from(self.0[0] & 0x0f).unwrap()
     }
 
     /// Usable channels for next transmissions.

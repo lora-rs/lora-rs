@@ -386,14 +386,9 @@ impl Session {
                         }
                     };
                     // Handle TxPower
-                    let pw = {
-                        let power = payload.tx_power();
-                        // Use currently active power in case requested power is 15 (0xf)...
-                        if power == 0xf {
-                            Some(configuration.tx_power)
-                        } else {
-                            region.check_tx_power(power)
-                        }
+                    let pw = match payload.tx_power() {
+                        DR::_15 => Some(configuration.tx_power),
+                        p => region.check_tx_power(p as u8),
                     };
 
                     let cm_ack = region.channel_mask_validate(&channel_mask, dr);
