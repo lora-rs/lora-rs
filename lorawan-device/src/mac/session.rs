@@ -433,7 +433,6 @@ impl Session {
                     cmd.set_channel_frequency_ack(ack_f).set_data_rate_range_ack(ack_d);
                     self.uplink.add_mac_command(cmd);
                 }
-                #[cfg(feature = "experimental")]
                 RXParamSetupReq(payload) => {
                     let freq = payload.frequency().value();
                     let freq_ack = region.frequency_valid(freq);

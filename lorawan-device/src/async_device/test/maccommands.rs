@@ -500,7 +500,7 @@ async fn newchannelreq_fixed_region_ignore() {
 
 #[tokio::test]
 #[cfg(all(feature = "region-us915", feature = "experimental"))]
-// TODO: Finalize RXParamSetupReq
+// TODO: Finalize RXParamSetupReq/RXTimingSetupReq
 async fn maccommands_in_frmpayload() {
     fn frmpayload_maccommands(
         _uplink: Option<Uplink>,
