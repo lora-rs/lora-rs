@@ -474,6 +474,10 @@ impl Configuration {
     ) -> (bool, bool) {
         mut_region_dispatch!(self, handle_new_channel, index, freq, data_rates)
     }
+
+    pub(crate) fn rx1_dr_offset_validate(&self, value: u8) -> Option<u8> {
+        region_dispatch!(self, rx1_dr_offset_validate, value)
+    }
 }
 
 macro_rules! from_region {
@@ -558,6 +562,8 @@ pub(crate) trait RegionHandler {
     /// Whether region supports modifying channel plan
     /// with `NewChannelReq`/`DlSettingsReq` MAC commands
     fn has_fixed_channel_plan(&self) -> bool;
+
+    fn rx1_dr_offset_validate(&self, value: u8) -> Option<u8>;
 }
 
 #[cfg(test)]

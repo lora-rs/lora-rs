@@ -78,6 +78,8 @@ impl ChannelRegion for US915Region {
 }
 
 impl FixedChannelRegion for US915Region {
+    const MAX_RX1_DR_OFFSET: u8 = 3;
+
     fn uplink_channels() -> &'static [u32; 72] {
         &UPLINK_CHANNEL_MAP
     }
