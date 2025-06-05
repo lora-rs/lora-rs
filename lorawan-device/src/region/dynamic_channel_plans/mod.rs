@@ -102,6 +102,7 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
 }
 
 pub(crate) trait DynamicChannelRegion: ChannelRegion {
+    const MAX_RX1_DR_OFFSET: u8;
     fn join_channels() -> u8;
     fn init_channels(channels: &mut ChannelPlan);
     fn default_rx2_freq() -> u32;
@@ -313,5 +314,13 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
             return (freq_valid, dr_supported);
         }
         (freq_valid, false)
+    }
+
+    fn rx1_dr_offset_validate(&self, value: u8) -> Option<u8> {
+        if value <= R::MAX_RX1_DR_OFFSET {
+            Some(value)
+        } else {
+            None
+        }
     }
 }

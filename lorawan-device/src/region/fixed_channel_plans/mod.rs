@@ -91,6 +91,7 @@ impl<F: FixedChannelRegion> FixedChannelPlan<F> {
 }
 
 pub(crate) trait FixedChannelRegion: ChannelRegion {
+    const MAX_RX1_DR_OFFSET: u8;
     fn uplink_channels() -> &'static [u32; 72];
     fn downlink_channels() -> &'static [u32; 8];
     fn default_rx2_freq() -> u32;
@@ -265,5 +266,13 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
 
     fn handle_new_channel(&mut self, _: u8, _: u32, _: Option<DataRateRange>) -> (bool, bool) {
         unreachable!()
+    }
+
+    fn rx1_dr_offset_validate(&self, value: u8) -> Option<u8> {
+        if value <= F::MAX_RX1_DR_OFFSET {
+            Some(value)
+        } else {
+            None
+        }
     }
 }

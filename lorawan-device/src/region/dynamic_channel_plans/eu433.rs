@@ -39,6 +39,8 @@ impl ChannelRegion for EU433Region {
 }
 
 impl DynamicChannelRegion for EU433Region {
+    const MAX_RX1_DR_OFFSET: u8 = 5;
+
     fn join_channels() -> u8 {
         3
     }

@@ -38,6 +38,8 @@ impl ChannelRegion for IN865Region {
 }
 
 impl DynamicChannelRegion for IN865Region {
+    const MAX_RX1_DR_OFFSET: u8 = 7;
+
     fn join_channels() -> u8 {
         3
     }
