@@ -1,0 +1,18 @@
+[target.xtensa-esp32-none-elf]
+runner = "espflash flash --monitor --no-stub --log-format defmt"
+
+[env]
+DEFMT_LOG = "info"
+DEFMT_RTT_BUFFER_SIZE = "1024"
+
+[build]
+rustflags = [
+  # "-C", "link-arg=-Tlinkall.x",
+  "-C", "link-arg=-nostartfiles",
+  "-C", "link-arg=-Tdefmt.x",
+]
+
+target = "xtensa-esp32-none-elf"
+
+[unstable]
+build-std = ["core"]
