@@ -5,6 +5,7 @@ use crate::test_util::Uplink;
 use lora_modulation::{Bandwidth, SpreadingFactor};
 use lorawan::maccommands::parse_uplink_mac_commands;
 use lorawan::parser::{DataHeader, DataPayload, PhyPayload};
+use lorawan::types::DR;
 
 use super::{build_mac, util};
 
@@ -27,7 +28,7 @@ async fn rxparamsetup_eu868() {
     });
 
     fn rxparamsetup_1(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
-        // RxParamSetupReq: RX1DRoffset=2, RX2DataRate=SF10BW125, Frequency=868525000
+        // RxParamSetupReq: RX1DRoffset=2, RX2DataRate=DR2 (SF10BW125), Frequency=868525000
         build_mac(buf, "0522c28684", 1)
     }
 
@@ -41,6 +42,10 @@ async fn rxparamsetup_eu868() {
     }
 
     let session = device.mac.get_session().unwrap();
+    assert_eq!(device.mac.configuration.rx1_dr_offset, 2);
+    assert_eq!(device.mac.configuration.rx2_data_rate, Some(DR::_2));
+    assert_eq!(device.mac.configuration.rx2_frequency, Some(868525000));
+
     let data = session.uplink.mac_commands();
     assert_eq!(parse_uplink_mac_commands(data).count(), 1);
     assert_eq!(data, [5, 7]);

@@ -439,7 +439,7 @@ impl Session {
                     let freq_ack = region.frequency_valid(freq);
 
                     let dl = payload.dl_settings();
-                    // TODO: rx1_dr_offset = dl.rx1_dr_offset();
+                    let rx1_dr_offset = region.rx1_dr_offset_validate(dl.rx1_dr_offset());
                     let rx2_dr = match dl.rx2_data_rate() {
                         DR::_15 => Some(configuration.rx2_data_rate),
                         n => {
@@ -450,13 +450,14 @@ impl Session {
                             }
                         }
                     };
-                    if freq_ack && rx2_dr.is_some() {
+                    if freq_ack && rx2_dr.is_some() && rx1_dr_offset.is_some() {
                         configuration.rx2_data_rate = rx2_dr.unwrap();
                         configuration.rx2_frequency = Some(freq);
+                        configuration.rx1_dr_offset = rx1_dr_offset.unwrap();
                     }
 
                     let mut cmd = RXParamSetupAnsCreator::new();
-                    cmd.set_rx1_data_rate_offset_ack(true)
+                    cmd.set_rx1_data_rate_offset_ack(rx1_dr_offset.is_some())
                         .set_rx2_data_rate_ack(rx2_dr.is_some())
                         .set_channel_ack(freq_ack);
 
