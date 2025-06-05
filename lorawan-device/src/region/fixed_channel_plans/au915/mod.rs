@@ -84,21 +84,23 @@ impl FixedChannelRegion for AU915Region {
     fn default_rx2_freq() -> u32 {
         DEFAULT_RX2
     }
-    fn get_rx_datarate(tx_datarate: DR, _rx1_dr_offset: u8, window: &Window) -> DR {
+    fn get_rx_datarate(tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {
         match window {
             Window::_1 => {
-                // no support for RX1 DR Offset
-                match tx_datarate {
-                    DR::_0 => DR::_8,
-                    DR::_1 => DR::_9,
-                    DR::_2 => DR::_10,
-                    DR::_3 => DR::_11,
-                    DR::_4 => DR::_12,
-                    DR::_5 => DR::_13,
-                    DR::_6 => DR::_13,
-                    DR::_7 => DR::_9,
-                    // TODO: Figure out the best default DR
-                    _ => DR::_10,
+                match tx_dr {
+                    DR::_0 | DR::_1 | DR::_2 | DR::_3 | DR::_4 | DR::_5 | DR::_6 => {
+                        let dr = DR::_8 as u8 + tx_dr as u8 - rx1_dr_offset;
+                        u8::try_into(dr.clamp(DR::_8 as u8, DR::_13 as u8)).unwrap()
+                    }
+                    DR::_7 => {
+                        if rx1_dr_offset == 0 {
+                            DR::_9
+                        } else {
+                            DR::_8
+                        }
+                    }
+                    // Fall back to DR::_8 in this region
+                    _ => DR::_8,
                 }
             }
             Window::_2 => DR::_8,

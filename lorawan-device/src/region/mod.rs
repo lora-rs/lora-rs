@@ -617,6 +617,21 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "region-au915")]
+    fn test_rx1_dr_offset_au915() {
+        let r = Configuration::new(Region::AU915);
+        assert_eq!(r.get_rx_datarate(DR::_0, 4, &Window::_1), DR::_8);
+        assert_eq!(r.get_rx_datarate(DR::_1, 0, &Window::_1), DR::_9);
+        assert_eq!(r.get_rx_datarate(DR::_6, 0, &Window::_1), DR::_13);
+        assert_eq!(r.get_rx_datarate(DR::_6, 1, &Window::_1), DR::_13);
+        assert_eq!(r.get_rx_datarate(DR::_6, 2, &Window::_1), DR::_12);
+        assert_eq!(r.get_rx_datarate(DR::_7, 0, &Window::_1), DR::_9);
+        assert_eq!(r.get_rx_datarate(DR::_7, 1, &Window::_1), DR::_8);
+        // Invalid DR should return DR::_8
+        assert_eq!(r.get_rx_datarate(DR::_12, 0, &Window::_1), DR::_8);
+    }
+
+    #[test]
     #[cfg(feature = "region-us915")]
     fn test_fixed_us915_frequency_range() {
         let r = Configuration::new(Region::US915);
@@ -626,5 +641,22 @@ mod tests {
 
         assert!(!r.frequency_valid(901_900_000));
         assert!(!r.frequency_valid(928_000_001));
+    }
+
+    #[test]
+    #[cfg(feature = "region-us915")]
+    fn test_rx1_dr_offset_us915() {
+        let r = Configuration::new(Region::US915);
+        assert_eq!(r.get_rx_datarate(DR::_0, 3, &Window::_1), DR::_8);
+        assert_eq!(r.get_rx_datarate(DR::_1, 0, &Window::_1), DR::_11);
+        assert_eq!(r.get_rx_datarate(DR::_4, 0, &Window::_1), DR::_13);
+        assert_eq!(r.get_rx_datarate(DR::_4, 1, &Window::_1), DR::_13);
+        assert_eq!(r.get_rx_datarate(DR::_4, 2, &Window::_1), DR::_12);
+        assert_eq!(r.get_rx_datarate(DR::_5, 0, &Window::_1), DR::_10);
+        assert_eq!(r.get_rx_datarate(DR::_5, 1, &Window::_1), DR::_9);
+        assert_eq!(r.get_rx_datarate(DR::_6, 0, &Window::_1), DR::_11);
+        assert_eq!(r.get_rx_datarate(DR::_6, 1, &Window::_1), DR::_10);
+        // Invalid DR should return DR::_8
+        assert_eq!(r.get_rx_datarate(DR::_12, 0, &Window::_1), DR::_8);
     }
 }
