@@ -46,7 +46,7 @@ impl DynamicChannelRegion for EU868Region {
         3
     }
 
-    fn get_rx_datarate(tx_dr: DR, window: &Window) -> DR {
+    fn get_rx_datarate(tx_dr: DR, _rx1_dr_offset: u8, window: &Window) -> DR {
         // TODO: Handle RX1 offset
         match window {
             Window::_1 => match tx_dr {

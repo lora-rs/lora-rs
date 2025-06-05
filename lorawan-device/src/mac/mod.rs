@@ -344,7 +344,11 @@ impl Mac {
                 // TODO: RX1 DR offset
                 (
                     self.region.get_rx_frequency(frame, window),
-                    self.region.get_rx_datarate(self.configuration.data_rate, window),
+                    self.region.get_rx_datarate(
+                        self.configuration.data_rate,
+                        self.configuration.rx1_dr_offset,
+                        window,
+                    ),
                 )
             }
             Window::_2 => {
@@ -355,7 +359,11 @@ impl Mac {
                         .unwrap_or_else(|| self.region.get_rx_frequency(frame, window)),
                     // RX2 datarate override
                     self.configuration.rx2_data_rate.unwrap_or_else(|| {
-                        self.region.get_rx_datarate(self.configuration.data_rate, window)
+                        self.region.get_rx_datarate(
+                            self.configuration.data_rate,
+                            self.configuration.rx1_dr_offset,
+                            window,
+                        )
                     }),
                 )
             }
@@ -370,10 +378,11 @@ impl Mac {
                     dr, self.configuration.data_rate, window
                 );
                 self.region
-                    .get_datarate(
-                        self.region.get_rx_datarate(self.configuration.data_rate, &Window::_2)
-                            as u8,
-                    )
+                    .get_datarate(self.region.get_rx_datarate(
+                        self.configuration.data_rate,
+                        self.configuration.rx1_dr_offset,
+                        &Window::_2,
+                    ) as u8)
                     .unwrap()
             }
         };
