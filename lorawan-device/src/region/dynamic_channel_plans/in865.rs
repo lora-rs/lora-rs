@@ -48,11 +48,31 @@ impl DynamicChannelRegion for IN865Region {
         866_550_000
     }
 
-    fn get_rx_datarate(tx_dr: DR, _rx1_dr_offset: u8, window: &Window) -> DR {
-        // TODO: Handle RX1 offset
+    fn get_rx_datarate(tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {
         match window {
             Window::_1 => match tx_dr {
-                DR::_0 | DR::_1 | DR::_2 | DR::_3 | DR::_4 | DR::_5 | DR::_7 => tx_dr,
+                DR::_0 | DR::_1 | DR::_2 | DR::_3 | DR::_4 | DR::_5 | DR::_7 => {
+                    if rx1_dr_offset < 6 {
+                        tx_dr.offset_sub(rx1_dr_offset)
+                    } else {
+                        match tx_dr {
+                            // DR5 and DR7 are special cases
+                            DR::_5 => {
+                                if rx1_dr_offset == 6 {
+                                    DR::_5
+                                } else {
+                                    DR::_7
+                                }
+                            }
+                            DR::_7 => DR::_7,
+                            _ => u8::try_into(core::cmp::min(
+                                tx_dr as u8 + rx1_dr_offset - 5,
+                                DR::_7 as u8,
+                            ))
+                            .unwrap(),
+                        }
+                    }
+                }
                 DR::_6
                 | DR::_8
                 | DR::_9
