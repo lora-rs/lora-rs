@@ -146,9 +146,10 @@ impl<const N: usize> AsRef<[u8]> for ChannelMask<N> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[repr(u8)]
-/// `DR` is a number from `0..=15` to indicate region-specific DataRate.
-/// Value `0xf` (decimal 15) has special meaning of no-op to continue with
-/// currently active setting.
+/// `DR` is a number from `0..=15` used to specify DataRate and TxPower
+/// fields in various MAC commands.
+/// Value `0xf` (decimal 15 / `DR::_15`) has special meaning of no-op to
+/// continue with currently active parameter value.
 pub enum DR {
     _0 = 0,
     _1 = 1,
