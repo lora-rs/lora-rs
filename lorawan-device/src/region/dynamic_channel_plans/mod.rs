@@ -10,9 +10,9 @@ use lorawan::types::DataRateRange;
 ))]
 mod as923;
 #[cfg(feature = "region-eu433")]
-mod eu433;
+pub(crate) mod eu433;
 #[cfg(feature = "region-eu868")]
-mod eu868;
+pub(crate) mod eu868;
 #[cfg(feature = "region-in865")]
 mod in865;
 

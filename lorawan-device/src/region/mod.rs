@@ -571,6 +571,14 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(feature = "region-eu433")]
+    fn test_rx1_dr_offset_eu433() {
+        let r = Configuration::new(Region::EU433);
+        assert_eq!(r.get_rx_datarate(DR::_0, 4, &Window::_1), DR::_0);
+        assert_eq!(r.get_rx_datarate(DR::_5, 4, &Window::_1), DR::_1);
+    }
+
+    #[test]
     #[cfg(feature = "region-eu868")]
     fn test_dynamic_region_frequency_range() {
         let r = Configuration::new(Region::EU868);
@@ -583,6 +591,18 @@ mod tests {
 
         // Invalid in default eu868 frequency range, but valid in some areas
         assert!(!r.frequency_valid(872_000_000));
+    }
+
+    #[test]
+    #[cfg(feature = "region-eu868")]
+    fn test_rx1_dr_offset_eu868() {
+        let r = Configuration::new(Region::EU868);
+        assert_eq!(r.get_rx_datarate(DR::_0, 4, &Window::_1), DR::_0);
+        assert_eq!(r.get_rx_datarate(DR::_5, 4, &Window::_1), DR::_1);
+        assert_eq!(r.get_rx_datarate(DR::_11, 0, &Window::_1), DR::_2);
+        assert_eq!(r.get_rx_datarate(DR::_11, 1, &Window::_1), DR::_1);
+        // Invalid DR should return DR::_0
+        assert_eq!(r.get_rx_datarate(DR::_12, 0, &Window::_1), DR::_0);
     }
 
     #[test]
