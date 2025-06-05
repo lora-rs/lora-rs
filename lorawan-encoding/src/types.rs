@@ -169,6 +169,12 @@ pub enum DR {
     _15 = 15,
 }
 
+impl DR {
+    pub fn offset_sub(&self, val: u8) -> DR {
+        u8::try_into((*self as u8).saturating_sub(val)).unwrap()
+    }
+}
+
 impl TryFrom<u8> for DR {
     type Error = core::convert::Infallible;
 

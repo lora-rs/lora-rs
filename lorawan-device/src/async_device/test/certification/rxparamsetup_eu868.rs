@@ -61,10 +61,10 @@ async fn rxparamsetup_eu868() {
     // RX1
     timer.fire_most_recent().await;
     radio.handle_timeout().await;
-    // TODO: Check for RX1 data rate once RX1DROffset is implemented
-    // let rx_conf = radio.get_rxconfig().await.unwrap();
-    // assert_eq!(rx_conf.rf.bb.sf, SpreadingFactor::..);
-    // assert_eq!(rx_conf.rf.bb.bw, Bandwidth::..);
+    // Validate RX1 data rate (RX1DROffset = 2)
+    let rx_conf = radio.get_rxconfig().await.unwrap();
+    assert_eq!(rx_conf.rf.bb.sf, SpreadingFactor::_12);
+    assert_eq!(rx_conf.rf.bb.bw, Bandwidth::_125KHz);
     // RX2
     timer.fire_most_recent().await;
     radio.handle_timeout().await;
