@@ -571,6 +571,39 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(any(
+        feature = "region-as923-1",
+        feature = "region-as923-2",
+        feature = "region-as923-3",
+        feature = "region-as923-4"
+    ))]
+    fn test_rx1_dr_offset_as923() {
+        let r = Configuration::new(Region::AS923_1);
+        assert_eq!(r.get_rx_datarate(DR::_0, 5, &Window::_1), DR::_0);
+        assert_eq!(r.get_rx_datarate(DR::_1, 0, &Window::_1), DR::_1);
+        assert_eq!(r.get_rx_datarate(DR::_1, 1, &Window::_1), DR::_0);
+        assert_eq!(r.get_rx_datarate(DR::_2, 0, &Window::_1), DR::_2);
+        assert_eq!(r.get_rx_datarate(DR::_2, 2, &Window::_1), DR::_0);
+        assert_eq!(r.get_rx_datarate(DR::_3, 0, &Window::_1), DR::_3);
+        assert_eq!(r.get_rx_datarate(DR::_3, 2, &Window::_1), DR::_1);
+        assert_eq!(r.get_rx_datarate(DR::_4, 0, &Window::_1), DR::_4);
+        assert_eq!(r.get_rx_datarate(DR::_4, 2, &Window::_1), DR::_2);
+        assert_eq!(r.get_rx_datarate(DR::_5, 0, &Window::_1), DR::_5);
+        assert_eq!(r.get_rx_datarate(DR::_5, 2, &Window::_1), DR::_3);
+        assert_eq!(r.get_rx_datarate(DR::_6, 0, &Window::_1), DR::_6);
+        assert_eq!(r.get_rx_datarate(DR::_6, 2, &Window::_1), DR::_4);
+        assert_eq!(r.get_rx_datarate(DR::_7, 0, &Window::_1), DR::_7);
+        assert_eq!(r.get_rx_datarate(DR::_7, 5, &Window::_1), DR::_2);
+        // Extra rates for offsets 6 and 7
+        assert_eq!(r.get_rx_datarate(DR::_0, 6, &Window::_1), DR::_1);
+        assert_eq!(r.get_rx_datarate(DR::_0, 7, &Window::_1), DR::_2);
+        assert_eq!(r.get_rx_datarate(DR::_6, 6, &Window::_1), DR::_7);
+        assert_eq!(r.get_rx_datarate(DR::_6, 7, &Window::_1), DR::_7);
+        assert_eq!(r.get_rx_datarate(DR::_7, 6, &Window::_1), DR::_7);
+        assert_eq!(r.get_rx_datarate(DR::_7, 7, &Window::_1), DR::_7);
+    }
+
+    #[test]
     #[cfg(feature = "region-eu433")]
     fn test_rx1_dr_offset_eu433() {
         let r = Configuration::new(Region::EU433);

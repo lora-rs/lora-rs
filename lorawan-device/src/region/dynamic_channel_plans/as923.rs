@@ -62,12 +62,19 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion
         DEFAULT_RX2
     }
 
-    fn get_rx_datarate(tx_dr: DR, _rx1_dr_offset: u8, window: &Window) -> DR {
+    fn get_rx_datarate(tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {
         // TODO: Handle DwellTime, current values correspond to Dwelltime = 0
-        // TODO: Handle RX1 offset
+        // In case DwellTime is 1, minimum data rate is DR::_2
         match window {
             Window::_1 => match tx_dr {
-                DR::_0 | DR::_1 | DR::_2 | DR::_3 | DR::_4 | DR::_5 | DR::_6 | DR::_7 => tx_dr,
+                DR::_0 | DR::_1 | DR::_2 | DR::_3 | DR::_4 | DR::_5 | DR::_6 | DR::_7 => {
+                    if rx1_dr_offset < 6 {
+                        tx_dr.offset_sub(rx1_dr_offset)
+                    } else {
+                        u8::try_into(core::cmp::min(tx_dr as u8 + rx1_dr_offset - 5, DR::_7 as u8))
+                            .unwrap()
+                    }
+                }
                 DR::_8 | DR::_9 | DR::_10 | DR::_11 | DR::_12 | DR::_13 | DR::_14 | DR::_15 => {
                     DR::_0
                 }
