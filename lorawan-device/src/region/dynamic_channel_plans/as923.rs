@@ -62,7 +62,7 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion
         DEFAULT_RX2
     }
 
-    fn get_rx_datarate(tx_dr: DR, window: &Window) -> DR {
+    fn get_rx_datarate(tx_dr: DR, _rx1_dr_offset: u8, window: &Window) -> DR {
         // TODO: Handle DwellTime, current values correspond to Dwelltime = 0
         // TODO: Handle RX1 offset
         match window {

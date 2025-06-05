@@ -95,7 +95,7 @@ pub(crate) trait FixedChannelRegion: ChannelRegion {
     fn uplink_channels() -> &'static [u32; 72];
     fn downlink_channels() -> &'static [u32; 8];
     fn default_rx2_freq() -> u32;
-    fn get_rx_datarate(tx_datarate: DR, window: &Window) -> DR;
+    fn get_rx_datarate(tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR;
 }
 
 impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
@@ -244,8 +244,8 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         }
     }
 
-    fn get_rx_datarate(&self, tx_datarate: DR, window: &Window) -> DR {
-        F::get_rx_datarate(tx_datarate, window)
+    fn get_rx_datarate(&self, tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {
+        F::get_rx_datarate(tx_dr, rx1_dr_offset, window)
     }
 
     fn check_tx_power(&self, tx_power: u8) -> Option<u8> {

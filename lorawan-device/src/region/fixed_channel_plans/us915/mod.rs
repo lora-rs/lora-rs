@@ -89,7 +89,7 @@ impl FixedChannelRegion for US915Region {
     fn default_rx2_freq() -> u32 {
         DEFAULT_RX2
     }
-    fn get_rx_datarate(tx_datarate: DR, window: &Window) -> DR {
+    fn get_rx_datarate(tx_datarate: DR, _rx1_dr_offset: u8, window: &Window) -> DR {
         match window {
             Window::_1 => {
                 // no support for RX1 DR Offset
