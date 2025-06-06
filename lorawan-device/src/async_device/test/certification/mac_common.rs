@@ -3,13 +3,15 @@
 //!
 //! MAC testcases common for all regions:
 //! * DevStatusReq (2.5.1)
+//! * RXTimingSetupReq (2.5.5)
 //! * LinkCheckReq (2.5.7)
 //!
-//! TODO:
+//! Region-specific tests (in separate files):
 //! * NewChannelReq (2.5.2)
 //! * DlChannelReq (2.5.3)
 //! * RXParamSetupReq (2.5.4)
-//! * RXTimingSetupReq (2.5.5)
+//!
+//! TODO:
 //! * TXParamSetupReq (2.5.6)
 //! * LinkADRReq (2.5.8)
 //! * DutyCycleReq (2.5.9)
@@ -85,6 +87,113 @@ async fn eu868_devstatusreq_test() {
             assert_eq!(data.fhdr().data(), &expected_ans)
         }
         _ => panic!(),
+    }
+}
+
+#[tokio::test]
+/// 2.5.5. RxTimingSetup test
+/// Same scenario is used for all regions.
+async fn rxtimingsetup_eu868() {
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let send_await_complete = Arc::new(Mutex::new(false));
+
+    // Step 1: send uplink, TCL responds with CP:DevStatusReq
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 1, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    timer.fire_most_recent().await;
+    // RXTimingSetupReq del=15
+    fn fp_rxtimingsetupreq(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_mac(buf, "080F", 1)
+    }
+    radio.handle_rxtx(fp_rxtimingsetupreq).await;
+
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(1)) => {}
+        _ => panic!(),
+    }
+
+    // Check whether uplink has been populated with requested MAC:DevstatusAns command
+    if let Some(session) = device.mac.get_session() {
+        let data = session.uplink.mac_commands();
+        assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+        assert_eq!(session.uplink.mac_commands(), [0x08]);
+    }
+
+    // Step 2: send uplink, check whether response is present in MAC
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 2, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    // RX1
+    timer.fire_most_recent().await;
+    radio.handle_timeout().await;
+
+    // RX2
+    timer.fire_most_recent().await;
+    radio.handle_timeout().await;
+
+    let (mut device, response) = task.await.unwrap();
+
+    // Check whether sent uplink contained required DevStatusAns data
+    let mut uplink = radio.get_last_uplink().await;
+    match uplink.get_payload() {
+        PhyPayload::Data(DataPayload::Encrypted(data)) => {
+            assert_eq!(data.fhdr().data(), [0x08])
+        }
+        _ => panic!(),
+    }
+
+    match response {
+        Ok(SendResponse::RxComplete) => (),
+        _ => panic!(),
+    }
+
+    // Check whether uplink still contains required data
+    if let Some(session) = device.mac.get_session() {
+        let data = session.uplink.mac_commands();
+        assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+        assert_eq!(session.uplink.mac_commands(), [0x08]);
+    }
+
+    // Step 3: trigger uplink with no data
+    let complete = send_await_complete.clone();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[], 2, false).await;
+        let mut complete = complete.lock().await;
+        *complete = true;
+        (device, response)
+    });
+
+    fn fp_echopayloadreq(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_packet(buf, "08010203", 2)
+    }
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(fp_echopayloadreq).await;
+    let (device, response) = task.await.unwrap();
+
+    match response {
+        Ok(SendResponse::RxComplete) => {}
+        _ => panic!(),
+    }
+
+    // Check that uplink has been cleared after receiving frame
+    // Check whether uplink still contains required data
+    if let Some(session) = device.mac.get_session() {
+        let data = session.uplink.mac_commands();
+        assert_eq!(parse_uplink_mac_commands(data).count(), 0);
     }
 }
 
