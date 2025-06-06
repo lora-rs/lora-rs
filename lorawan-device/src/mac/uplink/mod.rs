@@ -30,13 +30,11 @@ impl Uplink {
     pub fn clear_mac_commands(&mut self, retain_acks: bool) {
         // Certain commands have to be retained until their acknowledgment is confirmed
         if retain_acks {
+            use UplinkMacCommand::*;
             let mut data: heapless::Vec<u8, FOPTS_MAX_LEN> = heapless::Vec::new();
             let _: heapless::Vec<_, FOPTS_MAX_LEN> = parse_uplink_mac_commands(&self.pending)
                 .filter(|cmd| {
-                    matches!(
-                        cmd,
-                        UplinkMacCommand::DlChannelAns(_) | UplinkMacCommand::RXParamSetupAns(_)
-                    )
+                    matches!(cmd, DlChannelAns(_) | RXParamSetupAns(_) | RXTimingSetupAns(_))
                 })
                 .map(|c| {
                     let _ = data.push(c.cid());

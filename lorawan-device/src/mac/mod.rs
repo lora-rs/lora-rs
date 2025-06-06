@@ -50,7 +50,7 @@ pub(crate) enum Window {
 /// LoRaWAN Session and Network Configurations
 pub struct Configuration {
     pub(crate) data_rate: region::DR,
-    rx1_delay: u32,
+    pub(crate) rx1_delay: u32,
     join_accept_delay1: u32,
     join_accept_delay2: u32,
 
