@@ -15,6 +15,7 @@ mod mac_common;
 
 mod dlchannelreq_eu868;
 mod newchannelreq_eu868;
+mod oversized_payload_eu868;
 mod rxparamsetup_eu868;
 
 /// Decrypts the payload allowing access to payload contents
