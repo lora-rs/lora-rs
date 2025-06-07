@@ -5,6 +5,7 @@ pub use lora_modulation::BaseBandModulationParams;
 pub struct RfConfig {
     pub frequency: u32,
     pub bb: BaseBandModulationParams,
+    pub max_payload_len: u8,
 }
 
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]

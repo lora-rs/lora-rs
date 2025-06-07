@@ -195,7 +195,7 @@ impl State {
 pub(crate) struct Datarate {
     pub(crate) bandwidth: Bandwidth,
     pub(crate) spreading_factor: SpreadingFactor,
-    max_mac_payload_size: u8,
+    pub(crate) max_mac_payload_size: u8,
     max_mac_payload_size_with_dwell_time: u8,
 }
 macro_rules! mut_region_dispatch {
@@ -380,6 +380,7 @@ impl Configuration {
                     dr.bandwidth,
                     self.get_coding_rate(),
                 ),
+                max_payload_len: dr.max_mac_payload_size,
             },
         }
     }
