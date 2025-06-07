@@ -340,17 +340,14 @@ impl Mac {
     /// network-specific overrides.
     pub(crate) fn get_rf_config(&self, frame: &Frame, window: &Window) -> RfConfig {
         let (frequency, dr) = match window {
-            Window::_1 => {
-                // TODO: RX1 DR offset
-                (
-                    self.region.get_rx_frequency(frame, window),
-                    self.region.get_rx_datarate(
-                        self.configuration.data_rate,
-                        self.configuration.rx1_dr_offset,
-                        window,
-                    ),
-                )
-            }
+            Window::_1 => (
+                self.region.get_rx_frequency(frame, window),
+                self.region.get_rx_datarate(
+                    self.configuration.data_rate,
+                    self.configuration.rx1_dr_offset,
+                    window,
+                ),
+            ),
             Window::_2 => {
                 (
                     // RX2 frequency override
