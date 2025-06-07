@@ -244,11 +244,13 @@ impl Mac {
         buf: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
         snr: i8,
+        rf_config: &RfConfig,
     ) -> Response {
         match &mut self.state {
             State::Joined(ref mut session) => session.handle_rx::<N, D>(
                 &mut self.region,
                 &mut self.configuration,
+                rf_config,
                 #[cfg(feature = "certification")]
                 &mut self.certification,
                 #[cfg(feature = "multicast")]
@@ -281,11 +283,13 @@ impl Mac {
         buf: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
         snr: i8,
+        rf_config: &RfConfig,
     ) -> Result<Response> {
         match &mut self.state {
             State::Joined(ref mut session) => Ok(session.handle_rx::<N, D>(
                 &mut self.region,
                 &mut self.configuration,
+                rf_config,
                 #[cfg(feature = "certification")]
                 &mut self.certification,
                 #[cfg(feature = "multicast")]
@@ -391,6 +395,7 @@ impl Mac {
                 datarate.bandwidth,
                 self.region.get_coding_rate(),
             ),
+            max_payload_len: datarate.max_mac_payload_size,
         }
     }
 

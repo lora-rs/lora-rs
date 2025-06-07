@@ -2,10 +2,9 @@ use super::{
     otaa::{DevNonce, NetworkCredentials},
     uplink, FcntUp, Response, SendData,
 };
-use crate::radio::RadioBuffer;
+use crate::radio::{RadioBuffer, RfConfig};
 use crate::{region, AppSKey, Downlink, NwkSKey};
 use heapless::Vec;
-use lorawan::default_crypto::DefaultFactory;
 use lorawan::maccommandcreator::{
     DevStatusAnsCreator, DlChannelAnsCreator, LinkADRAnsCreator, NewChannelAnsCreator,
     RXParamSetupAnsCreator, RXTimingSetupAnsCreator,
@@ -13,6 +12,8 @@ use lorawan::maccommandcreator::{
 use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
 use lorawan::{
     creator::DataPayloadCreator,
+    default_crypto::DefaultFactory,
+    packet_length::phy::{MHDR_LEN, MIC_LEN},
     parser::{parse as lorawan_parse, *},
     types::DR,
 };
@@ -121,6 +122,7 @@ impl Session {
         &mut self,
         region: &mut region::Configuration,
         configuration: &mut super::Configuration,
+        rf_config: &RfConfig,
         #[cfg(feature = "certification")] certification: &mut super::certification::Certification,
         #[cfg(feature = "multicast")] multicast: &mut super::multicast::Multicast,
         rx: &mut RadioBuffer<N>,
@@ -131,6 +133,12 @@ impl Session {
         if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
             lorawan_parse(rx.as_mut_for_read())
         {
+            if encrypted_data.as_bytes().len()
+                > (rf_config.max_payload_len as usize + MHDR_LEN + MIC_LEN)
+            {
+                return self.rx2_complete();
+            }
+
             // If ignore_mac is false, we're dealing with Class A downlink and
             // therefore can clear uplinks which need to be retained for acknowledgment
             if !ignore_mac {
