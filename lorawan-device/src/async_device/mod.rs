@@ -11,7 +11,7 @@ use rand_core::RngCore;
 
 pub use crate::region::DR;
 use crate::{
-    radio::{RadioBuffer, RxConfig},
+    radio::{RadioBuffer, RfConfig, RxConfig},
     rng,
 };
 
@@ -470,6 +470,7 @@ where
                         &mut self.radio_buffer,
                         &mut self.downlink,
                         q.snr(),
+                        &rx_config.rf,
                     )?;
                     match Self::handle_mac_response(
                         &mut self.radio_buffer,
@@ -527,7 +528,7 @@ where
         debug!("Configuring RX1 window with config {}.", rx_config);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
 
-        if let Some(response) = self.rx_listen().await? {
+        if let Some(response) = self.rx_listen(&rx_config.rf).await? {
             debug!("RX1 received {}", response);
             return Ok(response);
         }
@@ -544,7 +545,7 @@ where
         debug!("Configuring RX2 window with config {}.", rx_config);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
 
-        if let Some(response) = self.rx_listen().await? {
+        if let Some(response) = self.rx_listen(&rx_config.rf).await? {
             debug!("RX2 received {}", response);
             return Ok(response);
         }
@@ -604,7 +605,10 @@ where
         }
     }
 
-    async fn rx_listen(&mut self) -> Result<Option<mac::Response>, Error<R::PhyError>> {
+    async fn rx_listen(
+        &mut self,
+        rf_config: &RfConfig,
+    ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
         let response =
             match self.radio.rx_single(self.radio_buffer.as_mut()).await.map_err(Error::Radio)? {
                 RxStatus::Rx(s, q) => {
@@ -613,6 +617,7 @@ where
                         &mut self.radio_buffer,
                         &mut self.downlink,
                         q.snr(),
+                        rf_config,
                     );
                     Self::handle_mac_response(
                         &mut self.radio_buffer,
@@ -639,8 +644,12 @@ where
             let (sz, q) =
                 self.radio.rx_continuous(self.radio_buffer.as_mut()).await.map_err(Error::Radio)?;
             self.radio_buffer.set_pos(sz);
-            let mac_response =
-                self.mac.handle_rxc::<N, D>(&mut self.radio_buffer, &mut self.downlink, q.snr())?;
+            let mac_response = self.mac.handle_rxc::<N, D>(
+                &mut self.radio_buffer,
+                &mut self.downlink,
+                q.snr(),
+                &rx_config.rf,
+            )?;
             if let Some(response) = Self::handle_mac_response(
                 &mut self.radio_buffer,
                 &mut self.mac,

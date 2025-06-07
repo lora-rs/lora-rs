@@ -268,7 +268,11 @@ impl WaitingForRxWindow {
                             Rx::_2(time) => time + radio.get_rx_window_duration_ms(),
                         };
                         (
-                            State::WaitingForRx(self.into()),
+                            State::WaitingForRx(WaitingForRx {
+                                frame: self.frame,
+                                window: self.window,
+                                rf_config,
+                            }),
                             Ok(Response::TimeoutRequest(window_close)),
                         )
                     }
@@ -291,16 +295,11 @@ impl WaitingForRxWindow {
     }
 }
 
-impl From<WaitingForRxWindow> for WaitingForRx {
-    fn from(val: WaitingForRxWindow) -> WaitingForRx {
-        WaitingForRx { frame: val.frame, window: val.window }
-    }
-}
-
 #[derive(Copy, Clone)]
 pub struct WaitingForRx {
     frame: Frame,
     window: Rx,
+    rf_config: radio::RfConfig,
 }
 
 impl WaitingForRx {
@@ -329,7 +328,7 @@ impl WaitingForRx {
                                     Err(Error::BufferTooSmall.into()),
                                 );
                             }
-                            match mac.handle_rx::<N, D>(buf, dl, quality.snr()) {
+                            match mac.handle_rx::<N, D>(buf, dl, quality.snr(), &self.rf_config) {
                                 // NoUpdate can occur when a stray radio packet is received. Maintain state
                                 mac::Response::NoUpdate => {
                                     (State::WaitingForRx(self), Ok(Response::NoUpdate))
