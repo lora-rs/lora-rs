@@ -3,24 +3,21 @@ use crate::mod_traits::InterfaceVariant;
 use crate::sx127x::radio_kind_params::{
     coding_rate_denominator_value, spreading_factor_value, OcpTrim, PaConfig, PaDac, RampTime, Register, Sx127xVariant,
 };
-use crate::sx127x::{
-    pll_step_to_freq, Sx127x, SX1276_RF_MID_BAND_THRESH, SX1276_RSSI_OFFSET_HF, SX1276_RSSI_OFFSET_LF,
-};
+use crate::sx127x::{pll_step_to_freq, Sx127x};
 use embedded_hal_async::spi::SpiDevice;
 use lora_modulation::Bandwidth;
 
-/// Sx1276 implements the Sx127xVariant trait
-pub struct Sx1276;
+const SX1276_RSSI_OFFSET_LF: i16 = -164;
+const SX1276_RSSI_OFFSET_HF: i16 = -157;
+const SX1276_RF_MID_BAND_THRESH: u32 = 525_000_000;
 
-#[derive(Default)]
-pub struct Sx1276Data {
-    /// flag to indicate the Errata 2.1: Sensitivity optimization with 500 kHz bandwidth is required
+/// Sx1276 implements the Sx127xVariant trait
+pub struct Sx1276 {
+    /// Errata 2.1 - sensitivity optimization with 500 kHz bandwidth
     sensitivity_quirk: bool,
 }
 
 impl Sx127xVariant for Sx1276 {
-    type Data = Sx1276Data;
-
     async fn init_lora<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
         radio: &mut Sx127x<SPI, IV, Self>,
         _sync_word: u8,
@@ -28,8 +25,8 @@ impl Sx127xVariant for Sx1276 {
         let chip_version = radio.read_register(Register::RegVersion).await?;
         debug!("Detected sx1276 v{}", chip_version);
 
-        // Errata 2.1: Sensitivity optimization only applies to version 0x12
-        radio.data.sensitivity_quirk = chip_version == 0x12;
+        // Check whether our radio needs to apply Errata 2.1
+        radio.config.chip.sensitivity_quirk = chip_version == 0x12;
 
         Ok(())
     }
@@ -131,7 +128,7 @@ impl Sx127xVariant for Sx1276 {
         config_3 = (config_3 & 0xf3u8) | ldro_agc_auto_flags;
         radio.write_register(Register::RegModemConfig3, config_3).await?;
 
-        if radio.data.sensitivity_quirk {
+        if radio.config.chip.sensitivity_quirk {
             // apply Errata 2.1: Sensitivity optimization with 500 kHz bandwidth
 
             if mdltn_params.bandwidth == Bandwidth::_500KHz {
