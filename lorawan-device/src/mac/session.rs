@@ -133,10 +133,17 @@ impl Session {
         if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
             lorawan_parse(rx.as_mut_for_read())
         {
-            if encrypted_data.as_bytes().len()
-                > (rf_config.max_payload_len as usize + MHDR_LEN + MIC_LEN)
             {
-                return self.rx2_complete();
+                // Drop oversized packets which exceed the maximum allowed
+                // transmission time defined by PHY layer.
+                // Note that maximum defined size applies to MacPayload, but
+                // DataPayload includes MHDR and MIC.
+                let payload_len = encrypted_data.as_bytes().len();
+                let allowed_len = rf_config.max_payload_len as usize + MHDR_LEN + MIC_LEN;
+                if payload_len > allowed_len {
+                    info!("Dropping oversized payload.");
+                    return self.rx2_complete();
+                }
             }
 
             // If ignore_mac is false, we're dealing with Class A downlink and
