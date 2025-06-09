@@ -2,7 +2,7 @@ use super::{
     otaa::{DevNonce, NetworkCredentials},
     uplink, FcntUp, Response, SendData,
 };
-use crate::radio::{RadioBuffer, RfConfig};
+use crate::radio::RadioBuffer;
 use crate::{region, AppSKey, Downlink, NwkSKey};
 use heapless::Vec;
 use lorawan::maccommandcreator::{
@@ -122,11 +122,11 @@ impl Session {
         &mut self,
         region: &mut region::Configuration,
         configuration: &mut super::Configuration,
-        rf_config: &RfConfig,
         #[cfg(feature = "certification")] certification: &mut super::certification::Certification,
         #[cfg(feature = "multicast")] multicast: &mut super::multicast::Multicast,
         rx: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
+        max_payload_len: u8,
         snr: i8,
         ignore_mac: bool,
     ) -> Response {
@@ -139,8 +139,7 @@ impl Session {
                 // Note that maximum defined size applies to MacPayload, but
                 // DataPayload includes MHDR and MIC.
                 let payload_len = encrypted_data.as_bytes().len();
-                let allowed_len = rf_config.max_payload_len as usize + MHDR_LEN + MIC_LEN;
-                if payload_len > allowed_len {
+                if payload_len > max_payload_len as usize + MHDR_LEN + MIC_LEN {
                     info!("Dropping oversized payload.");
                     return self.rx2_complete();
                 }
