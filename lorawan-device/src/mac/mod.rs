@@ -250,13 +250,13 @@ impl Mac {
             State::Joined(ref mut session) => session.handle_rx::<N, D>(
                 &mut self.region,
                 &mut self.configuration,
-                rf_config,
                 #[cfg(feature = "certification")]
                 &mut self.certification,
                 #[cfg(feature = "multicast")]
                 &mut self.multicast,
                 buf,
                 dl,
+                rf_config.max_payload_len,
                 snr,
                 false,
             ),
@@ -289,13 +289,13 @@ impl Mac {
             State::Joined(ref mut session) => Ok(session.handle_rx::<N, D>(
                 &mut self.region,
                 &mut self.configuration,
-                rf_config,
                 #[cfg(feature = "certification")]
                 &mut self.certification,
                 #[cfg(feature = "multicast")]
                 &mut self.multicast,
                 buf,
                 dl,
+                rf_config.max_payload_len,
                 snr,
                 true,
             )),
