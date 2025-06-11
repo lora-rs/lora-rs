@@ -42,7 +42,7 @@ fn pll_step_to_freq(pll_step: u32) -> u32 {
 }
 
 // RSSI requires linearization when SNR >= 0
-// Section 5.5.5 - Note 3
+// Section 3.5.5 - Note 3
 fn linearize_rssi(rssi: u8) -> i16 {
     // Integer approximation for RSSI * 16.0 / 15.0
     (rssi as i16 * 16 + 7) / 15
