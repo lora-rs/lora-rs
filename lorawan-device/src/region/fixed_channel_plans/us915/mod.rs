@@ -61,6 +61,7 @@ impl Default for US915 {
 pub(crate) struct US915Region;
 
 impl ChannelRegion for US915Region {
+    const DEFAULT_RX2_FREQ: u32 = 923_300_000;
     const MAX_RX1_DR_OFFSET: u8 = 3;
 
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {

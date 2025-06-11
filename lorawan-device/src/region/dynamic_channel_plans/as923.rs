@@ -19,6 +19,7 @@ pub(crate) type AS923_4 = DynamicChannelPlan<AS923Region<917_300_000, 5900000>>;
 pub struct AS923Region<const DEFAULT_RX2: u32, const O: u32>;
 
 impl<const DEFAULT_RX2: u32, const OFFSET: u32> ChannelRegion for AS923Region<DEFAULT_RX2, OFFSET> {
+    const DEFAULT_RX2_FREQ: u32 = DEFAULT_RX2;
     const MAX_RX1_DR_OFFSET: u8 = 7;
 
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
