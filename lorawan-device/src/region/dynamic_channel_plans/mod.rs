@@ -104,7 +104,6 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
 pub(crate) trait DynamicChannelRegion: ChannelRegion {
     fn join_channels() -> u8;
     fn init_channels(channels: &mut ChannelPlan);
-    fn default_rx2_freq() -> u32;
     fn get_rx_datarate(tx_datarate: DR, rx1_dr_offset: u8, window: &Window) -> DR;
 }
 
@@ -240,7 +239,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         match window {
             // SAFETY: self.last_tx_channel will be populated after correct channel is chosen
             Window::_1 => self.channels[self.last_tx_channel as usize].unwrap().rx1_frequency(),
-            Window::_2 => R::default_rx2_freq(),
+            Window::_2 => R::DEFAULT_RX2_FREQ,
         }
     }
 

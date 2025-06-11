@@ -46,10 +46,6 @@ impl DynamicChannelRegion for EU433Region {
         3
     }
 
-    fn default_rx2_freq() -> u32 {
-        434_665_000
-    }
-
     fn get_rx_datarate(tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {
         match window {
             Window::_1 => {

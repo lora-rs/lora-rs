@@ -45,10 +45,6 @@ impl DynamicChannelRegion for IN865Region {
         3
     }
 
-    fn default_rx2_freq() -> u32 {
-        866_550_000
-    }
-
     fn get_rx_datarate(tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {
         match window {
             Window::_1 => match tx_dr {

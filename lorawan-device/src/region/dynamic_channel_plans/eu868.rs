@@ -64,10 +64,6 @@ impl DynamicChannelRegion for EU868Region {
         }
     }
 
-    fn default_rx2_freq() -> u32 {
-        869_525_000
-    }
-
     fn init_channels(channels: &mut ChannelPlan) {
         channels[0] = Some(Channel::new(868_100_000, DR::_0, DR::_5));
         channels[1] = Some(Channel::new(868_300_000, DR::_0, DR::_5));

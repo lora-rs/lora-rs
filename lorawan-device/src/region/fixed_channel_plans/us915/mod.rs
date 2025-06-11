@@ -15,7 +15,6 @@ use datarates::*;
 
 const US_DBM: u8 = 21;
 const MAX_EIRP: u8 = 30;
-const DEFAULT_RX2: u32 = 923_300_000;
 
 /// State struct for the `US915` region. This struct may be created directly if you wish to fine-tune some parameters.
 /// At this time specifying a bias for the subband used during the join process is supported using
@@ -86,9 +85,6 @@ impl FixedChannelRegion for US915Region {
     }
     fn downlink_channels() -> &'static [u32; 8] {
         &DOWNLINK_CHANNEL_MAP
-    }
-    fn default_rx2_freq() -> u32 {
-        DEFAULT_RX2
     }
     fn get_rx_datarate(tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {
         match window {
