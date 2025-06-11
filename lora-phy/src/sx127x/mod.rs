@@ -369,10 +369,14 @@ where
 
     async fn get_rx_payload(
         &mut self,
-        _rx_pkt_params: &PacketParams,
+        rx_pkt_params: &PacketParams,
         receiving_buffer: &mut [u8],
     ) -> Result<u8, RadioError> {
-        let payload_length = self.read_register(Register::RegRxNbBytes).await?;
+        let payload_length = if rx_pkt_params.implicit_header {
+            rx_pkt_params.payload_length
+        } else {
+            self.read_register(Register::RegRxNbBytes).await?
+        };
         if (payload_length as usize) > receiving_buffer.len() {
             return Err(RadioError::PayloadSizeMismatch(
                 payload_length as usize,
