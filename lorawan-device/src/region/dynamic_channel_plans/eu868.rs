@@ -27,6 +27,8 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
 }
 
 impl ChannelRegion for EU868Region {
+    const MAX_RX1_DR_OFFSET: u8 = 5;
+
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
     }
@@ -40,8 +42,6 @@ impl ChannelRegion for EU868Region {
 }
 
 impl DynamicChannelRegion for EU868Region {
-    const MAX_RX1_DR_OFFSET: u8 = 5;
-
     fn join_channels() -> u8 {
         3
     }

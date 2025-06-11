@@ -60,6 +60,8 @@ impl Default for AU915 {
 pub(crate) struct AU915Region;
 
 impl ChannelRegion for AU915Region {
+    const MAX_RX1_DR_OFFSET: u8 = 5;
+
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
     }
@@ -73,8 +75,6 @@ impl ChannelRegion for AU915Region {
 }
 
 impl FixedChannelRegion for AU915Region {
-    const MAX_RX1_DR_OFFSET: u8 = 5;
-
     fn uplink_channels() -> &'static [u32; 72] {
         &UPLINK_CHANNEL_MAP
     }

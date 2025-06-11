@@ -91,7 +91,6 @@ impl<F: FixedChannelRegion> FixedChannelPlan<F> {
 }
 
 pub(crate) trait FixedChannelRegion: ChannelRegion {
-    const MAX_RX1_DR_OFFSET: u8;
     fn uplink_channels() -> &'static [u32; 72];
     fn downlink_channels() -> &'static [u32; 8];
     fn default_rx2_freq() -> u32;
