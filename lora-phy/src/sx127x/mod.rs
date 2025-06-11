@@ -45,7 +45,10 @@ fn pll_step_to_freq(pll_step: u32) -> u32 {
 // Section 3.5.5 - Note 3
 fn linearize_rssi(rssi: u8) -> i16 {
     // Integer approximation for RSSI * 16.0 / 15.0
-    (rssi as i16 * 16 + 7) / 15
+    // General formula for integer division with rounding:
+    // x / d == floor((x + floor(d / 2)) / d), when d > 0
+    const DIVISOR: i16 = 15;
+    (rssi as i16 * 16 + (DIVISOR / 2)) / DIVISOR
 }
 
 /// Configuration for SX127x-based boards
@@ -606,10 +609,14 @@ mod tests {
 
     #[test]
     fn test_rssi_linearization() {
-        // Ensure error is within +/- 0.5 for all RSSI values
-        for rssi in 0..=u8::MAX {
-            let expected_rssi = rssi as f32 * 16.0 / 15.0;
-            assert_eq!(expected_rssi.round() as i16, linearize_rssi(rssi));
+        const DELTA: f32 = 0.5;
+        for offset in [SX1272_RSSI_OFFSET, SX1276_RSSI_OFFSET_LF, SX1276_RSSI_OFFSET_HF] {
+            for rssi in 0..=u8::MAX {
+                let float_rssi = offset as f32 + rssi as f32 * 16.0 / 15.0;
+                let approx_rssi = offset + linearize_rssi(rssi);
+                let error = float_rssi - approx_rssi as f32;
+                assert!(error.abs() < DELTA);
+            }
         }
     }
 }
