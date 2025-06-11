@@ -102,7 +102,7 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
 }
 
 pub(crate) trait DynamicChannelRegion: ChannelRegion {
-    fn join_channels() -> u8;
+    const NUM_JOIN_CHANNELS: u8;
     fn init_channels(channels: &mut ChannelPlan);
     fn get_rx_datarate(tx_datarate: DR, rx1_dr_offset: u8, window: &Window) -> DR;
 }
@@ -115,7 +115,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
                 // CfList of Type 0 may contain up to 5 frequencies, which define
                 // channels J to (J+4). Data rates for these channels is DR0..=DR5
                 for (n, freq) in cf_list.iter().enumerate() {
-                    let index = R::join_channels() as usize + n;
+                    let index = R::NUM_JOIN_CHANNELS as usize + n;
                     let value = freq.value();
                     // unused channels are set to 0
                     if value == 0 {
@@ -208,7 +208,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
                 // There are at most 3 join channels in dynamic regions,
                 // keep sampling until we get a valid channel.
                 let mut index = (rng.next_u32() & 0b11) as u8;
-                while index >= R::join_channels() {
+                while index >= R::NUM_JOIN_CHANNELS {
                     index = (rng.next_u32() & 0b11) as u8;
                 }
                 self.last_tx_channel = index;
@@ -289,7 +289,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         dr: Option<DataRateRange>,
     ) -> (bool, bool) {
         // Join channels are readonly - these cannot be modified!
-        if index < R::join_channels() {
+        if index < R::NUM_JOIN_CHANNELS {
             return (false, false);
         }
         // Disable channel if frequency is 0

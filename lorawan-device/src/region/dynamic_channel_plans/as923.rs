@@ -55,9 +55,7 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
 impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion
     for AS923Region<DEFAULT_RX2, OFFSET>
 {
-    fn join_channels() -> u8 {
-        2
-    }
+    const NUM_JOIN_CHANNELS: u8 = 2;
 
     fn get_rx_datarate(tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {
         // TODO: Handle DwellTime, current values correspond to Dwelltime = 0

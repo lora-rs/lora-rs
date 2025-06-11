@@ -43,9 +43,7 @@ impl ChannelRegion for EU868Region {
 }
 
 impl DynamicChannelRegion for EU868Region {
-    fn join_channels() -> u8 {
-        3
-    }
+    const NUM_JOIN_CHANNELS: u8 = 3;
 
     fn get_rx_datarate(tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {
         match window {
