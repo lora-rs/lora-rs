@@ -41,6 +41,13 @@ fn pll_step_to_freq(pll_step: u32) -> u32 {
     (pll_step >> SCALE) * STEP_SCALED
 }
 
+// RSSI requires linearization when SNR >= 0
+// Section 5.5.5 - Note 3
+fn linearize_rssi(rssi: u8) -> i16 {
+    // Integer approximation for RSSI * 16.0 / 15.0
+    (rssi as i16 * 16 + 7) / 15
+}
+
 /// Configuration for SX127x-based boards
 pub struct Config<C: Sx127xVariant> {
     /// LoRa chip used on specific board
@@ -400,7 +407,7 @@ where
             let rssi_offset = C::rssi_offset(self).await?;
 
             if snr >= 0 {
-                rssi_offset + (packet_rssi as f32 * 16.0 / 15.0) as i16
+                rssi_offset + linearize_rssi(packet_rssi)
             } else {
                 rssi_offset + (packet_rssi as i16) + snr
             }
@@ -594,6 +601,15 @@ mod tests {
             let pll = freq_to_pll_step(f);
             assert_eq!(pll, (f as f64 / FREQUENCY_SYNTHESIZER_STEP) as u32);
             assert_eq!(pll_step_to_freq(pll), f);
+        }
+    }
+
+    #[test]
+    fn test_rssi_linearization() {
+        // Ensure error is within +/- 0.5 for all RSSI values
+        for rssi in 0..=u8::MAX {
+            let expected_rssi = rssi as f32 * 16.0 / 15.0;
+            assert_eq!(expected_rssi.round() as i16, linearize_rssi(rssi));
         }
     }
 }
