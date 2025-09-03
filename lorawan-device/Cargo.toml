@@ -20,7 +20,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 [dependencies]
 lora-modulation = { path = "../lora-modulation", version = ">=0.1.2", default-features = false }
 lorawan = { path = "../lorawan-encoding", version = "0.9", default-features = false }
-heapless = "0.8"
+heapless = "0.9"
 defmt = { version = "0.3", optional = true }
 fastrand = { version = "2", default-features = false }
 futures = { version = "0.3", default-features = false }
