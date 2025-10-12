@@ -38,6 +38,10 @@ async fn main(_spawner: Spawner) {
     );
     let spi = ExclusiveDevice::new(spi, nss, Delay).unwrap();
 
+    // IMPORTANT: The TCXO configuration must match your board's hardware.
+    // If your board does not have a TCXO (Temperature-Compensated Crystal Oscillator),
+    // set `tcxo_ctrl` to `None`. An incorrect setting will cause receiving
+    // functions (e.g., `lora.rx()`) to hang indefinitely.
     let config = sx126x::Config {
         chip: Sx1262,
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl1V7),
