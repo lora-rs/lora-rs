@@ -83,21 +83,23 @@ pub enum RxMode {
 }
 
 /// Modulation parameters for a send and/or receive communication channel
+#[allow(missing_docs)]
 pub struct ModulationParams {
-    pub(crate) spreading_factor: SpreadingFactor,
-    pub(crate) bandwidth: Bandwidth,
-    pub(crate) coding_rate: CodingRate,
-    pub(crate) low_data_rate_optimize: u8,
-    pub(crate) frequency_in_hz: u32,
+    pub spreading_factor: SpreadingFactor,
+    pub bandwidth: Bandwidth,
+    pub coding_rate: CodingRate,
+    pub low_data_rate_optimize: u8,
+    pub frequency_in_hz: u32,
 }
 
 /// Packet parameters for a send or receive communication channel
+#[allow(missing_docs)]
 pub struct PacketParams {
-    pub(crate) preamble_length: u16,  // number of LoRa symbols in the preamble
-    pub(crate) implicit_header: bool, // if the header is explicit, it will be transmitted in the LoRa packet, but is not transmitted if the header is implicit (known fixed length)
-    pub(crate) payload_length: u8,
-    pub(crate) crc_on: bool,
-    pub(crate) iq_inverted: bool,
+    pub preamble_length: u16,  // number of LoRa symbols in the preamble
+    pub implicit_header: bool, // if the header is explicit, it will be transmitted in the LoRa packet, but is not transmitted if the header is implicit (known fixed length)
+    pub payload_length: u8,
+    pub crc_on: bool,
+    pub iq_inverted: bool,
 }
 
 impl PacketParams {
