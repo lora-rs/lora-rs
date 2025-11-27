@@ -241,12 +241,12 @@ impl<'a> From<&'a [u8; 2]> for LinkCheckAnsPayload<'a> {
 impl LinkADRReqPayload<'_> {
     /// Data Rate that the device should use for its next transmissions.
     pub fn data_rate(&self) -> DR {
-        DR::try_from(self.0[0] >> 4).unwrap()
+        DR::from(self.0[0] >> 4)
     }
 
     /// TX Power that the device should use for its next transmissions.
     pub fn tx_power(&self) -> DR {
-        DR::try_from(self.0[0] & 0x0f).unwrap()
+        DR::from(self.0[0] & 0x0f)
     }
 
     /// Usable channels for next transmissions.

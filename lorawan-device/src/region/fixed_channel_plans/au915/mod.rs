@@ -90,7 +90,7 @@ impl FixedChannelRegion for AU915Region {
                 match tx_dr {
                     DR::_0 | DR::_1 | DR::_2 | DR::_3 | DR::_4 | DR::_5 | DR::_6 => {
                         let dr = DR::_8 as u8 + tx_dr as u8 - rx1_dr_offset;
-                        u8::try_into(dr.clamp(DR::_8 as u8, DR::_13 as u8)).unwrap()
+                        u8::into(dr.clamp(DR::_8 as u8, DR::_13 as u8))
                     }
                     DR::_7 => {
                         if rx1_dr_offset == 0 {
