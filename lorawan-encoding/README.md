@@ -30,24 +30,22 @@ use lorawan::{creator::JoinAcceptCreator, keys};
 use lorawan::default_crypto::DefaultFactory;
 use lorawan::types::Frequency;
 
-fn main() {
-    let mut data = [0; 33];
-    let mut phy = JoinAcceptCreator::new(&mut data).unwrap();
-    let key = keys::AES128([1; 16]);
-    let app_nonce_bytes = [1; 3];
-    phy.set_app_nonce(&app_nonce_bytes);
-    phy.set_net_id(&[1; 3]);
-    phy.set_dev_addr(&[1; 4]);
-    phy.set_dl_settings(2);
-    phy.set_rx_delay(1);
-    let mut freqs = [
-        Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap(),
-        Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()
-    ];
-    phy.set_c_f_list(freqs).unwrap();
-    let payload = phy.build(&key,&DefaultFactory).unwrap();
-    println!("Payload: {:x?}", payload);
-}
+let mut data = [0; 33];
+let mut phy = JoinAcceptCreator::new(&mut data).unwrap();
+let key = keys::AES128([1; 16]);
+let app_nonce_bytes = [1; 3];
+phy.set_app_nonce(&app_nonce_bytes);
+phy.set_net_id(&[1; 3]);
+phy.set_dev_addr(&[1; 4]);
+phy.set_dl_settings(2);
+phy.set_rx_delay(1);
+let mut freqs = [
+    Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap(),
+    Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()
+];
+phy.set_c_f_list(freqs).unwrap();
+let payload = phy.build(&key,&DefaultFactory).unwrap();
+println!("Payload: {:x?}", payload);
 ```
 
 ### Packet parsing
@@ -56,18 +54,16 @@ fn main() {
 use lorawan::parser::*;
 use lorawan::keys::*;
 
-fn main() {
-    let data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
-    0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
-    if let Ok(PhyPayload::Data(DataPayload::Encrypted(phy))) = parse(data) {
-        let key = AES128([1; 16]);
-        let decrypted = phy.decrypt(None, Some(&key), 1, &lorawan::default_crypto::DefaultFactory).unwrap();
-        if let FRMPayload::Data(data_payload) = decrypted.frm_payload() {
-                println!("{}", String::from_utf8_lossy(data_payload));
-        }
-    } else {
-        panic!("failed to parse data payload");
+let data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
+0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
+if let Ok(PhyPayload::Data(DataPayload::Encrypted(phy))) = parse(data) {
+    let key = AES128([1; 16]);
+    let decrypted = phy.decrypt(None, Some(&key), 1, &lorawan::default_crypto::DefaultFactory).unwrap();
+    if let FRMPayload::Data(data_payload) = decrypted.frm_payload() {
+            println!("{}", String::from_utf8_lossy(data_payload));
     }
+} else {
+    panic!("failed to parse data payload");
 }
 ```
 
