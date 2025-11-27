@@ -65,11 +65,10 @@ impl DynamicChannelRegion for IN865Region {
                                 }
                             }
                             DR::_7 => DR::_7,
-                            _ => u8::try_into(core::cmp::min(
+                            _ => u8::into(core::cmp::min(
                                 tx_dr as u8 + rx1_dr_offset - 5,
                                 DR::_7 as u8,
-                            ))
-                            .unwrap(),
+                            )),
                         }
                     }
                 }

@@ -71,8 +71,7 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion
                     if rx1_dr_offset < 6 {
                         tx_dr.offset_sub(rx1_dr_offset)
                     } else {
-                        u8::try_into(core::cmp::min(tx_dr as u8 + rx1_dr_offset - 5, DR::_7 as u8))
-                            .unwrap()
+                        u8::into(core::cmp::min(tx_dr as u8 + rx1_dr_offset - 5, DR::_7 as u8))
                     }
                 }
                 DR::_8 | DR::_9 | DR::_10 | DR::_11 | DR::_12 | DR::_13 | DR::_14 | DR::_15 => {

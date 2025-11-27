@@ -94,11 +94,11 @@ impl FixedChannelRegion for US915Region {
             Window::_1 => match tx_dr {
                 DR::_0 | DR::_1 | DR::_2 | DR::_3 | DR::_4 => {
                     let dr = DR::_10 as u8 + tx_dr as u8 - rx1_dr_offset;
-                    u8::try_into(dr.clamp(DR::_8 as u8, DR::_13 as u8)).unwrap()
+                    u8::into(dr.clamp(DR::_8 as u8, DR::_13 as u8))
                 }
                 DR::_5 | DR::_6 => {
                     let dr = DR::_5 as u8 + tx_dr as u8 - rx1_dr_offset;
-                    u8::try_into(dr.clamp(DR::_8 as u8, DR::_11 as u8)).unwrap()
+                    u8::into(dr.clamp(DR::_8 as u8, DR::_11 as u8))
                 }
                 // Fall back to DR::_8 for unimplemented regions
                 _ => DR::_8,

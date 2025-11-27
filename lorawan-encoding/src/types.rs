@@ -171,15 +171,13 @@ pub enum DR {
 
 impl DR {
     pub fn offset_sub(&self, val: u8) -> DR {
-        u8::try_into((*self as u8).saturating_sub(val)).unwrap()
+        u8::into((*self as u8).saturating_sub(val))
     }
 }
 
-impl TryFrom<u8> for DR {
-    type Error = core::convert::Infallible;
-
-    fn try_from(v: u8) -> Result<Self, Self::Error> {
-        let dr = match v & 0xf {
+impl From<u8> for DR {
+    fn from(v: u8) -> Self {
+        match v & 0xf {
             0 => DR::_0,
             1 => DR::_1,
             2 => DR::_2,
@@ -197,8 +195,7 @@ impl TryFrom<u8> for DR {
             14 => DR::_14,
             15 => DR::_15,
             _ => unreachable!(),
-        };
-        Ok(dr)
+        }
     }
 }
 
@@ -276,7 +273,7 @@ impl DLSettings {
 
     /// The downlink DR for second receive window (RX2)
     pub fn rx2_data_rate(&self) -> DR {
-        DR::try_from(self.0 & 0xf).unwrap()
+        DR::from(self.0 & 0xf)
     }
 
     /// The integer value of the DL Settings.
