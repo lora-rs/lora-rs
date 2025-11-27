@@ -2,7 +2,7 @@ use embassy_time::{Duration, Instant};
 
 use super::radio::Timer;
 
-/// A [`Timer`] implementation based on [`embassy-time`].
+/// A [`Timer`] implementation based on [`embassy_time`].
 pub struct EmbassyTimer {
     start: Instant,
 }
