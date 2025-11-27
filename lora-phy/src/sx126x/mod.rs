@@ -46,7 +46,7 @@ pub struct Config<C: Sx126xVariant + Sized> {
     /// LoRa chip variant on this board
     pub chip: C,
     /// Board is using TCXO (once enabled DIO3 cannot be used as IRQ).
-    /// 
+    ///
     /// The TCXO configuration must match your board's hardware.
     /// If your board does not have a TCXO (Temperature-Compensated Crystal Oscillator),
     /// set `tcxo_ctrl` to `None`. An incorrect setting will cause transmission & receiving
