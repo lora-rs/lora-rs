@@ -83,22 +83,32 @@ pub enum RxMode {
 }
 
 /// Modulation parameters for a send and/or receive communication channel
-#[allow(missing_docs)]
 pub struct ModulationParams {
+    /// Spreading Factor: higher value improves sensitivity at the cost of time-on-air
     pub spreading_factor: SpreadingFactor,
+    /// Signal Bandwidth: lower value improves sensitivity at the cost of time-on-air
     pub bandwidth: Bandwidth,
+    /// Coding Rate: controls number of redundancy bits
     pub coding_rate: CodingRate,
+    /// Set to 1 to improve reliability at the cost of time-on-air.
+    /// LoRaWAN enable this mode for SF11/12 at bandwidth 125kHz and SF12 at bandwidth 250kHz
     pub low_data_rate_optimize: u8,
+    /// Channel frequency in Hertz
     pub frequency_in_hz: u32,
 }
 
 /// Packet parameters for a send or receive communication channel
-#[allow(missing_docs)]
 pub struct PacketParams {
-    pub preamble_length: u16,  // number of LoRa symbols in the preamble
-    pub implicit_header: bool, // if the header is explicit, it will be transmitted in the LoRa packet, but is not transmitted if the header is implicit (known fixed length)
+    /// Number of LoRa symbols in the preamble (typical value are 12 for SF5/6 and 8 for SF7 to 12)
+    pub preamble_length: u16,
+    /// When true length, CodingRate and CRC must be known by the RX.
+    /// When false, a header is automatically added to the packet allowing the RX to automatically discover the settings
+    pub implicit_header: bool,
+    /// Legth of the payload in number of bytes
     pub payload_length: u8,
+    /// Enable CRC
     pub crc_on: bool,
+    /// Use inverted chirp direction (generally used to distinguished uplink/downlink)
     pub iq_inverted: bool,
 }
 
