@@ -406,14 +406,14 @@ impl Session {
                     };
 
                     let cm_ack = region.channel_mask_validate(&channel_mask, dr);
-
-                    if dr.is_some() && pw.is_some() && cm_ack {
-                        // TODO: handle nbtrans
-                        configuration.data_rate = dr.unwrap();
-                        configuration.tx_power = pw.unwrap();
-                        region.channel_mask_set(channel_mask.clone());
+                    if cm_ack {
+                        if let (Some(dr), Some(pw)) = (dr, pw) {
+                            // TODO: handle nbtrans
+                            configuration.data_rate = dr;
+                            configuration.tx_power = pw;
+                            region.channel_mask_set(channel_mask.clone());
+                        }
                     }
-
                     // Add matching number of LinkADRAns responses
                     for _ in 0..num_adrreq {
                         let mut cmd = LinkADRAnsCreator::new();
@@ -463,10 +463,12 @@ impl Session {
                             }
                         }
                     };
-                    if freq_ack && rx2_dr.is_some() && rx1_dr_offset.is_some() {
-                        configuration.rx2_data_rate = rx2_dr.unwrap();
-                        configuration.rx2_frequency = Some(freq);
-                        configuration.rx1_dr_offset = rx1_dr_offset.unwrap();
+                    if freq_ack {
+                        if let (Some(rx2_dr), Some(rx1_dr_offset)) = (rx2_dr, rx1_dr_offset) {
+                            configuration.rx2_data_rate = rx2_dr;
+                            configuration.rx2_frequency = Some(freq);
+                            configuration.rx1_dr_offset = rx1_dr_offset;
+                        }
                     }
 
                     let mut cmd = RXParamSetupAnsCreator::new();

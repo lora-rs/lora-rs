@@ -543,11 +543,12 @@ where
                 if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
                     debug!("CADDone in radio mode {}", radio_mode);
                     // TODO: don't like how we mutate the cad_activity_detected parameter
-                    if cad_activity_detected.is_some() {
+                    if let Some(cad_activity_detected) = cad_activity_detected {
                         // Check if the CAD (Channel Activity Detection) Activity Detected flag is set in irq_flags and then update the reference
-                        *(cad_activity_detected.unwrap()) =
+                        *(cad_activity_detected) =
                             (irq_flags & IrqMask::CADActivityDetected.value()) == IrqMask::CADActivityDetected.value();
                     }
+
                     return Ok(Some(IrqState::Done));
                 }
             }
