@@ -170,3 +170,91 @@ where
         }
     }
 }
+
+/// Base for the InterfaceVariant implementation for LR1110/LR1120/LR1121-based boards
+///
+/// Note: Unlike SX126x, the LR1110 does not expose a BUSY pin for SPI synchronization.
+/// Most commands complete quickly enough that polling is not necessary.
+pub struct GenericLr1110InterfaceVariant<CTRL, WAIT> {
+    reset: CTRL,
+    dio1: WAIT,
+    rf_switch_rx: Option<CTRL>,
+    rf_switch_tx: Option<CTRL>,
+}
+
+impl<CTRL, WAIT> GenericLr1110InterfaceVariant<CTRL, WAIT>
+where
+    CTRL: OutputPin,
+    WAIT: Wait,
+{
+    /// Create an InterfaceVariant instance for LR11xx chips
+    pub fn new(
+        reset: CTRL,
+        dio1: WAIT,
+        rf_switch_rx: Option<CTRL>,
+        rf_switch_tx: Option<CTRL>,
+    ) -> Result<Self, RadioError> {
+        Ok(Self {
+            reset,
+            dio1,
+            rf_switch_rx,
+            rf_switch_tx,
+        })
+    }
+}
+
+impl<CTRL, WAIT> InterfaceVariant for GenericLr1110InterfaceVariant<CTRL, WAIT>
+where
+    CTRL: OutputPin,
+    WAIT: Wait,
+{
+    async fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), RadioError> {
+        delay.delay_ms(10).await;
+        self.reset.set_low().map_err(|_| Reset)?;
+        delay.delay_ms(20).await;
+        self.reset.set_high().map_err(|_| Reset)?;
+        delay.delay_ms(10).await;
+        Ok(())
+    }
+
+    /// LR1110 does not have a BUSY pin exposed, so this is a no-op
+    async fn wait_on_busy(&mut self) -> Result<(), RadioError> {
+        // LR1110 doesn't use BUSY pin - commands are ready quickly
+        Ok(())
+    }
+
+    async fn await_irq(&mut self) -> Result<(), RadioError> {
+        self.dio1.wait_for_high().await.map_err(|_| DIO1)?;
+        Ok(())
+    }
+
+    async fn enable_rf_switch_rx(&mut self) -> Result<(), RadioError> {
+        if let Some(pin) = &mut self.rf_switch_tx {
+            pin.set_low().map_err(|_| RfSwitchTx)?
+        };
+        match &mut self.rf_switch_rx {
+            Some(pin) => pin.set_high().map_err(|_| RfSwitchRx),
+            None => Ok(()),
+        }
+    }
+
+    async fn enable_rf_switch_tx(&mut self) -> Result<(), RadioError> {
+        if let Some(pin) = &mut self.rf_switch_rx {
+            pin.set_low().map_err(|_| RfSwitchRx)?
+        };
+        match &mut self.rf_switch_tx {
+            Some(pin) => pin.set_high().map_err(|_| RfSwitchTx),
+            None => Ok(()),
+        }
+    }
+
+    async fn disable_rf_switch(&mut self) -> Result<(), RadioError> {
+        if let Some(pin) = &mut self.rf_switch_rx {
+            pin.set_low().map_err(|_| RfSwitchRx)?
+        };
+        match &mut self.rf_switch_tx {
+            Some(pin) => pin.set_low().map_err(|_| RfSwitchTx),
+            None => Ok(()),
+        }
+    }
+}

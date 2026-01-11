@@ -27,6 +27,8 @@ pub mod mod_traits;
 pub mod sx126x;
 /// Specific implementation to support Semtech Sx127x chips
 pub mod sx127x;
+/// Specific implementation to support Semtech LR1110/LR1120/LR1121 chips
+pub mod lr1110;
 
 pub use crate::mod_params::RxMode;
 
