@@ -481,11 +481,12 @@ pub fn convert_time_in_ms_to_rtc_step(time_in_ms: u32) -> u32 {
 // =============================================================================
 
 /// LR-FHSS OpCodes (16-bit commands)
+/// Note: LR-FHSS init is done via SetPacketType + SetLrFhssModParams, not a single opcode.
+/// Sync word is set via RadioOpCode::SetLrFhssSyncWord (0x022D).
 #[derive(Clone, Copy, PartialEq)]
 pub enum LrFhssOpCode {
-    Init = 0x022C,
-    BuildFrame = 0x022D,
-    SetSyncWord = 0x022E,
+    /// Build LR-FHSS frame (0x022C) - the main LR-FHSS command
+    BuildFrame = 0x022C,
 }
 
 impl LrFhssOpCode {

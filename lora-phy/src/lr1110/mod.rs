@@ -205,57 +205,82 @@ where
     // =========================================================================
 
     /// Initialize LR-FHSS mode
-    /// This sets the packet type to LR-FHSS
+    ///
+    /// This sets the packet type to LR-FHSS and configures modulation parameters.
+    /// Must be called before lr_fhss_build_frame().
+    ///
+    /// Reference: SWDR001 lr11xx_lr_fhss_init()
     pub async fn lr_fhss_init(&mut self) -> Result<(), RadioError> {
-        let opcode = LrFhssOpCode::Init.bytes();
-        let cmd = [opcode[0], opcode[1]];
-        self.write_command(&cmd).await
+        // Step 1: Set packet type to LR-FHSS (0x04)
+        let pkt_type_opcode = RadioOpCode::SetPktType.bytes();
+        let pkt_type_cmd = [pkt_type_opcode[0], pkt_type_opcode[1], PacketType::LrFhss.value()];
+        self.write_command(&pkt_type_cmd).await?;
+
+        // Step 2: Set LR-FHSS modulation parameters (bitrate 488 bps, BT=1 pulse shape)
+        // Format: opcode[2] + bitrate[4] + pulse_shape[1]
+        let mod_opcode = RadioOpCode::SetModulationParam.bytes();
+        let bitrate: u32 = 488; // LR11XX_RADIO_LR_FHSS_BITRATE_488_BPS
+        let pulse_shape: u8 = 0x01; // LR11XX_RADIO_LR_FHSS_PULSE_SHAPE_BT_1
+        let mod_cmd = [
+            mod_opcode[0],
+            mod_opcode[1],
+            ((bitrate >> 24) & 0xFF) as u8,
+            ((bitrate >> 16) & 0xFF) as u8,
+            ((bitrate >> 8) & 0xFF) as u8,
+            (bitrate & 0xFF) as u8,
+            pulse_shape,
+        ];
+        self.write_command(&mod_cmd).await
     }
 
     /// Build and transmit an LR-FHSS frame
     ///
     /// This command configures the LR-FHSS parameters, writes the payload,
     /// and prepares the radio for transmission.
+    ///
+    /// Reference: SWDR001 lr11xx_lr_fhss_build_frame()
     pub async fn lr_fhss_build_frame(
         &mut self,
         params: &LrFhssParams,
         hop_sequence_id: u16,
         payload: &[u8],
     ) -> Result<(), RadioError> {
-        // Set LR-FHSS sync word from params (matching SWDM001 behavior)
+        // Set LR-FHSS sync word from params (matching SWDR001 behavior)
         self.lr_fhss_set_sync_word(&params.lr_fhss_params.sync_word).await?;
 
         // Build LR-FHSS frame command
-        // Format: opcode[2] + lr_fhss_params[8] + hop_seq_id[2] + payload_len[2] + payload[n]
+        // Format per SWDR001: opcode[2] + header_count + cr + modulation_type + grid +
+        //                     enable_hopping + bw + hop_seq_id[2] + device_offset
+        // Total: 11 bytes command, then payload follows
         let opcode = LrFhssOpCode::BuildFrame.bytes();
 
         // Construct command buffer
         let lr_fhss_params = &params.lr_fhss_params;
         let enable_hopping: u8 = if lr_fhss_params.enable_hopping { 1 } else { 0 };
 
-        let mut cmd = [0u8; 14]; // 2 opcode + 8 params + 2 hop_seq_id + 2 payload_len
-        cmd[0] = opcode[0];
-        cmd[1] = opcode[1];
-        cmd[2] = lr_fhss_params.bandwidth.value();
-        cmd[3] = lr_fhss_params.coding_rate.value();
-        cmd[4] = lr_fhss_params.grid.value();
-        cmd[5] = enable_hopping;
-        cmd[6] = lr_fhss_params.modulation_type.value();
-        cmd[7] = params.device_offset as u8;
-        cmd[8] = lr_fhss_params.header_count;
-        cmd[9] = 0x00; // Reserved
-        cmd[10] = ((hop_sequence_id >> 8) & 0xFF) as u8;
-        cmd[11] = (hop_sequence_id & 0xFF) as u8;
-        cmd[12] = ((payload.len() >> 8) & 0xFF) as u8;
-        cmd[13] = (payload.len() & 0xFF) as u8;
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            lr_fhss_params.header_count,                    // [2] header_count
+            lr_fhss_params.coding_rate.value(),             // [3] cr
+            lr_fhss_params.modulation_type.value(),         // [4] modulation_type
+            lr_fhss_params.grid.value(),                    // [5] grid
+            enable_hopping,                                 // [6] enable_hopping
+            lr_fhss_params.bandwidth.value(),               // [7] bw
+            ((hop_sequence_id >> 8) & 0xFF) as u8,          // [8] hop_seq_id MSB
+            (hop_sequence_id & 0xFF) as u8,                 // [9] hop_seq_id LSB
+            params.device_offset as u8,                     // [10] device_offset
+        ];
 
-        // Write command with payload
+        // Write command with payload (no payload_length field - payload is appended directly)
         self.intf.write_with_payload(&cmd, payload, false).await
     }
 
     /// Set LR-FHSS sync word
+    ///
+    /// Uses RadioOpCode::SetLrFhssSyncWord (0x022D)
     async fn lr_fhss_set_sync_word(&mut self, sync_word: &[u8; 4]) -> Result<(), RadioError> {
-        let opcode = LrFhssOpCode::SetSyncWord.bytes();
+        let opcode = RadioOpCode::SetLrFhssSyncWord.bytes();
         let cmd = [
             opcode[0],
             opcode[1],
