@@ -158,26 +158,43 @@ impl RadioOpCode {
     }
 }
 
-/// Register/Memory OpCodes
+/// Register/Memory OpCodes (from SWDR001 lr11xx_regmem.c)
 #[derive(Clone, Copy, PartialEq)]
 pub enum RegMemOpCode {
-    WriteRegMem = 0x0105,
-    ReadRegMem = 0x0106,
-    WriteBuffer8 = 0x0108,
-    ReadBuffer8 = 0x0109,
-    /// Write with mask (read-modify-write) - used for High ACP workaround
+    /// Write 32-bit words to register/memory (0x0105)
+    WriteRegMem32 = 0x0105,
+    /// Read 32-bit words from register/memory (0x0106)
+    ReadRegMem32 = 0x0106,
+    /// Write bytes to memory (0x0107)
+    WriteMem8 = 0x0107,
+    /// Read bytes from memory (0x0108)
+    ReadMem8 = 0x0108,
+    /// Write bytes to TX buffer (0x0109)
+    WriteBuffer8 = 0x0109,
+    /// Read bytes from RX buffer (0x010A)
+    ReadBuffer8 = 0x010A,
+    /// Clear RX buffer (0x010B)
+    ClearRxBuffer = 0x010B,
+    /// Write with mask (read-modify-write) (0x010C)
     WriteRegMem32Mask = 0x010C,
 }
 
-/// Register address for High ACP workaround (from SWDR001)
-pub const HIGH_ACP_WORKAROUND_REG: u32 = 0x00F30054;
-
 impl RegMemOpCode {
+    /// Convert opcode to bytes for SPI command
     pub fn bytes(self) -> [u8; 2] {
         let val = self as u16;
         [(val >> 8) as u8, (val & 0xFF) as u8]
     }
 }
+
+/// Maximum number of 32-bit words for single read/write operation
+pub const REGMEM_MAX_READ_WRITE_WORDS: usize = 64;
+
+/// Maximum buffer size in bytes
+pub const REGMEM_BUFFER_SIZE_MAX: usize = 256;
+
+/// Register address for High ACP workaround (from SWDR001)
+pub const HIGH_ACP_WORKAROUND_REG: u32 = 0x00F30054;
 
 /// Standby modes
 #[derive(Clone, Copy, PartialEq)]

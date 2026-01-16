@@ -56,6 +56,10 @@ pub use radio_kind_params::{
     BOOTLOADER_CHIP_EUI_LENGTH, BOOTLOADER_JOIN_EUI_LENGTH,
     BOOTLOADER_FLASH_BLOCK_SIZE_WORDS, BOOTLOADER_FLASH_BLOCK_SIZE_BYTES,
 };
+// RegMem (Register/Memory) types
+pub use radio_kind_params::{
+    RegMemOpCode, REGMEM_MAX_READ_WRITE_WORDS, REGMEM_BUFFER_SIZE_MAX,
+};
 use radio_kind_params::*;
 
 use crate::mod_params::*;
@@ -1688,6 +1692,199 @@ where
         let mut rbuffer = [0u8; BOOTLOADER_JOIN_EUI_LENGTH];
         self.read_command(&cmd, &mut rbuffer).await?;
         Ok(rbuffer)
+    }
+
+    // =========================================================================
+    // RegMem (Register/Memory) Functions (from SWDR001 lr11xx_regmem.c)
+    // =========================================================================
+
+    /// Write 32-bit words to register/memory
+    ///
+    /// # Arguments
+    /// * `address` - Starting memory address
+    /// * `data` - Array of 32-bit words to write (max 64 words)
+    pub async fn regmem_write_regmem32(&mut self, address: u32, data: &[u32]) -> Result<(), RadioError> {
+        if data.len() > REGMEM_MAX_READ_WRITE_WORDS {
+            return Err(RadioError::PayloadSizeMismatch(REGMEM_MAX_READ_WRITE_WORDS, data.len()));
+        }
+
+        let opcode = RegMemOpCode::WriteRegMem32.bytes();
+        let mut cmd = [0u8; 6]; // 2 opcode + 4 address
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = (address >> 24) as u8;
+        cmd[3] = (address >> 16) as u8;
+        cmd[4] = (address >> 8) as u8;
+        cmd[5] = address as u8;
+
+        // Convert 32-bit words to bytes (big-endian)
+        let mut cdata = [0u8; REGMEM_MAX_READ_WRITE_WORDS * 4];
+        for (i, word) in data.iter().enumerate() {
+            let idx = i * 4;
+            cdata[idx] = (*word >> 24) as u8;
+            cdata[idx + 1] = (*word >> 16) as u8;
+            cdata[idx + 2] = (*word >> 8) as u8;
+            cdata[idx + 3] = *word as u8;
+        }
+
+        // Write command then data
+        self.intf.iv.wait_on_busy().await?;
+        self.intf.write_with_payload(&cmd, &cdata[..data.len() * 4], false).await
+    }
+
+    /// Read 32-bit words from register/memory
+    ///
+    /// # Arguments
+    /// * `address` - Starting memory address
+    /// * `buffer` - Buffer to store read words (max 64 words)
+    ///
+    /// # Returns
+    /// Number of words read
+    pub async fn regmem_read_regmem32(&mut self, address: u32, buffer: &mut [u32]) -> Result<usize, RadioError> {
+        if buffer.len() > REGMEM_MAX_READ_WRITE_WORDS {
+            return Err(RadioError::PayloadSizeMismatch(REGMEM_MAX_READ_WRITE_WORDS, buffer.len()));
+        }
+
+        let opcode = RegMemOpCode::ReadRegMem32.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (address >> 24) as u8,
+            (address >> 16) as u8,
+            (address >> 8) as u8,
+            address as u8,
+            buffer.len() as u8,
+        ];
+
+        let mut rbuffer = [0u8; REGMEM_MAX_READ_WRITE_WORDS * 4];
+        let read_len = buffer.len() * 4;
+        self.read_command(&cmd, &mut rbuffer[..read_len]).await?;
+
+        // Convert bytes to 32-bit words (big-endian)
+        for (i, word) in buffer.iter_mut().enumerate() {
+            let idx = i * 4;
+            *word = ((rbuffer[idx] as u32) << 24)
+                | ((rbuffer[idx + 1] as u32) << 16)
+                | ((rbuffer[idx + 2] as u32) << 8)
+                | (rbuffer[idx + 3] as u32);
+        }
+
+        Ok(buffer.len())
+    }
+
+    /// Write bytes to memory
+    ///
+    /// # Arguments
+    /// * `address` - Starting memory address
+    /// * `data` - Bytes to write
+    pub async fn regmem_write_mem8(&mut self, address: u32, data: &[u8]) -> Result<(), RadioError> {
+        let opcode = RegMemOpCode::WriteMem8.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (address >> 24) as u8,
+            (address >> 16) as u8,
+            (address >> 8) as u8,
+            address as u8,
+        ];
+
+        self.intf.iv.wait_on_busy().await?;
+        self.intf.write_with_payload(&cmd, data, false).await
+    }
+
+    /// Read bytes from memory
+    ///
+    /// # Arguments
+    /// * `address` - Starting memory address
+    /// * `buffer` - Buffer to store read bytes
+    ///
+    /// # Returns
+    /// Number of bytes read
+    pub async fn regmem_read_mem8(&mut self, address: u32, buffer: &mut [u8]) -> Result<usize, RadioError> {
+        let opcode = RegMemOpCode::ReadMem8.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (address >> 24) as u8,
+            (address >> 16) as u8,
+            (address >> 8) as u8,
+            address as u8,
+            buffer.len() as u8,
+        ];
+
+        self.read_command(&cmd, buffer).await?;
+        Ok(buffer.len())
+    }
+
+    /// Write bytes to TX buffer
+    ///
+    /// # Arguments
+    /// * `data` - Bytes to write to TX buffer
+    pub async fn regmem_write_buffer8(&mut self, data: &[u8]) -> Result<(), RadioError> {
+        let opcode = RegMemOpCode::WriteBuffer8.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        self.intf.iv.wait_on_busy().await?;
+        self.intf.write_with_payload(&cmd, data, false).await
+    }
+
+    /// Read bytes from RX buffer
+    ///
+    /// # Arguments
+    /// * `offset` - Offset within RX buffer
+    /// * `buffer` - Buffer to store read bytes
+    ///
+    /// # Returns
+    /// Number of bytes read
+    pub async fn regmem_read_buffer8(&mut self, offset: u8, buffer: &mut [u8]) -> Result<usize, RadioError> {
+        let opcode = RegMemOpCode::ReadBuffer8.bytes();
+        let cmd = [opcode[0], opcode[1], offset, buffer.len() as u8];
+
+        self.read_command(&cmd, buffer).await?;
+        Ok(buffer.len())
+    }
+
+    /// Clear the RX buffer
+    ///
+    /// Sets all bytes in the RX buffer to 0x00.
+    pub async fn regmem_clear_rxbuffer(&mut self) -> Result<(), RadioError> {
+        let opcode = RegMemOpCode::ClearRxBuffer.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        self.write_command(&cmd).await
+    }
+
+    /// Read-modify-write a 32-bit register with mask
+    ///
+    /// Performs: register = (register & ~mask) | (data & mask)
+    ///
+    /// # Arguments
+    /// * `address` - Register address
+    /// * `mask` - Bits to modify (1 = modify, 0 = preserve)
+    /// * `data` - New data for masked bits
+    pub async fn regmem_write_regmem32_mask(
+        &mut self,
+        address: u32,
+        mask: u32,
+        data: u32,
+    ) -> Result<(), RadioError> {
+        let opcode = RegMemOpCode::WriteRegMem32Mask.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (address >> 24) as u8,
+            (address >> 16) as u8,
+            (address >> 8) as u8,
+            address as u8,
+            (mask >> 24) as u8,
+            (mask >> 16) as u8,
+            (mask >> 8) as u8,
+            mask as u8,
+            (data >> 24) as u8,
+            (data >> 16) as u8,
+            (data >> 8) as u8,
+            data as u8,
+        ];
+        self.write_command(&cmd).await
     }
 }
 
