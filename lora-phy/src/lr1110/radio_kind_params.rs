@@ -2021,3 +2021,164 @@ pub fn rttof_rssi_raw_to_dbm(raw_result: &RttofRawResult) -> i8 {
     // Only the last byte is meaningful
     -((raw_result[3] >> 1) as i8)
 }
+
+// =============================================================================
+// Bootloader Types and Constants (from SWDR001 lr11xx_bootloader.c/h)
+// =============================================================================
+
+/// Bootloader OpCodes (16-bit commands)
+///
+/// These opcodes are used when the chip is in bootloader mode (before flash
+/// code execution or during firmware update).
+#[derive(Clone, Copy, PartialEq)]
+pub enum BootloaderOpCode {
+    /// Get status registers (0x0100) - same as System GetStatus
+    GetStatus = 0x0100,
+    /// Get bootloader version (0x0101) - same as System GetVersion
+    GetVersion = 0x0101,
+    /// Erase entire flash memory (0x8000)
+    EraseFlash = 0x8000,
+    /// Write encrypted data to flash (0x8003)
+    WriteFlashEncrypted = 0x8003,
+    /// Reboot the chip (0x8005)
+    Reboot = 0x8005,
+    /// Read device PIN for cloud claiming (0x800B)
+    GetPin = 0x800B,
+    /// Read chip EUI (0x800C)
+    ReadChipEui = 0x800C,
+    /// Read join EUI (0x800D)
+    ReadJoinEui = 0x800D,
+}
+
+impl BootloaderOpCode {
+    /// Convert opcode to bytes for SPI command
+    pub fn bytes(self) -> [u8; 2] {
+        let val = self as u16;
+        [(val >> 8) as u8, (val & 0xFF) as u8]
+    }
+}
+
+/// Length of bootloader version in bytes
+pub const BOOTLOADER_VERSION_LENGTH: usize = 4;
+
+/// Length of PIN in bytes
+pub const BOOTLOADER_PIN_LENGTH: usize = 4;
+
+/// Length of chip EUI in bytes
+pub const BOOTLOADER_CHIP_EUI_LENGTH: usize = 8;
+
+/// Length of join EUI in bytes
+pub const BOOTLOADER_JOIN_EUI_LENGTH: usize = 8;
+
+/// Maximum flash write block size in 32-bit words
+pub const BOOTLOADER_FLASH_BLOCK_SIZE_WORDS: usize = 64;
+
+/// Maximum flash write block size in bytes
+pub const BOOTLOADER_FLASH_BLOCK_SIZE_BYTES: usize = BOOTLOADER_FLASH_BLOCK_SIZE_WORDS * 4;
+
+/// Type alias for bootloader PIN (4 bytes)
+pub type BootloaderPin = [u8; BOOTLOADER_PIN_LENGTH];
+
+/// Type alias for chip EUI (8 bytes)
+pub type BootloaderChipEui = [u8; BOOTLOADER_CHIP_EUI_LENGTH];
+
+/// Type alias for join EUI (8 bytes)
+pub type BootloaderJoinEui = [u8; BOOTLOADER_JOIN_EUI_LENGTH];
+
+/// Bootloader version information
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct BootloaderVersion {
+    /// Hardware version
+    pub hw: u8,
+    /// Chip type (same encoding as system Version)
+    pub chip_type: u8,
+    /// Firmware version (bootloader version)
+    pub fw: u16,
+}
+
+/// Bootloader command status
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum BootloaderCommandStatus {
+    /// Command failed
+    Fail = 0x00,
+    /// Permission error
+    Perr = 0x01,
+    /// Command OK
+    Ok = 0x02,
+    /// Data available
+    Data = 0x03,
+}
+
+impl From<u8> for BootloaderCommandStatus {
+    fn from(value: u8) -> Self {
+        match value & 0x07 {
+            0x00 => BootloaderCommandStatus::Fail,
+            0x01 => BootloaderCommandStatus::Perr,
+            0x02 => BootloaderCommandStatus::Ok,
+            0x03 => BootloaderCommandStatus::Data,
+            _ => BootloaderCommandStatus::Fail,
+        }
+    }
+}
+
+/// Bootloader status register 1
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct BootloaderStat1 {
+    /// Command status
+    pub command_status: u8,
+    /// Interrupt is active
+    pub is_interrupt_active: bool,
+}
+
+impl BootloaderStat1 {
+    /// Parse from raw byte
+    pub fn from_byte(byte: u8) -> Self {
+        Self {
+            is_interrupt_active: (byte & 0x01) != 0,
+            command_status: byte >> 1,
+        }
+    }
+
+    /// Get command status as enum
+    pub fn status(&self) -> BootloaderCommandStatus {
+        BootloaderCommandStatus::from(self.command_status)
+    }
+}
+
+/// Bootloader status register 2
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct BootloaderStat2 {
+    /// Chip is running from flash (vs bootloader)
+    pub is_running_from_flash: bool,
+    /// Current chip mode
+    pub chip_mode: u8,
+    /// Reset status
+    pub reset_status: u8,
+}
+
+impl BootloaderStat2 {
+    /// Parse from raw byte
+    pub fn from_byte(byte: u8) -> Self {
+        Self {
+            is_running_from_flash: (byte & 0x01) != 0,
+            chip_mode: (byte & 0x0F) >> 1,
+            reset_status: (byte & 0xF0) >> 4,
+        }
+    }
+}
+
+/// Complete bootloader status
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct BootloaderStatus {
+    /// Status register 1
+    pub stat1: BootloaderStat1,
+    /// Status register 2
+    pub stat2: BootloaderStat2,
+    /// IRQ status flags (32-bit mask)
+    pub irq_status: u32,
+}
