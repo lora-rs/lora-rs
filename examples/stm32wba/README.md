@@ -121,6 +121,28 @@ cargo run --release --bin lr1110_gnss_scan
 - [SWDR001 - LR11xx Driver](https://www.semtech.com)
 - [LoRa Cloud Geolocation](https://www.loracloud.com/documentation/geolocation)
 
+### lr1110_wifi_scan
+
+Demonstrates using the built-in WiFi passive scanner of the LR1110 radio to detect nearby access points.
+
+**Features:**
+- Configure scan parameters (signal type, channels, scan mode)
+- Scan for WiFi 802.11 b/g/n access points
+- Read detected AP information (MAC address, RSSI, channel, signal type)
+- Cumulative timing information for power consumption estimation
+- Results can be used for WiFi-based geolocation via LoRa Cloud
+
+**Run:**
+```bash
+cargo run --release --bin lr1110_wifi_scan
+```
+
+**Note:** The WiFi scanner is a passive receiver that detects beacon frames from nearby access points. No WiFi transmission occurs. The MAC addresses and RSSI values can be sent to [LoRa Cloud](https://www.loracloud.com) for WiFi-based position solving.
+
+**Reference:**
+- [SWDR001 - LR11xx Driver](https://www.semtech.com)
+- [LoRa Cloud WiFi Geolocation](https://www.loracloud.com/documentation/geolocation)
+
 ## Building
 
 ### Prerequisites
