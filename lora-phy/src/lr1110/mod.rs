@@ -2805,6 +2805,11 @@ where
                 if IrqMask::Timeout.is_set(irq_flags) {
                     return Err(RadioError::TransmitTimeout);
                 }
+                // LR1110 may auto-clear IRQ flags when DIO1 triggers.
+                // If we waited for DIO1 and flags are 0, TX is complete.
+                if irq_flags == 0 {
+                    return Ok(Some(IrqState::Done));
+                }
             }
             RadioMode::Receive(_) => {
                 if IrqMask::CrcError.is_set(irq_flags) || IrqMask::HeaderError.is_set(irq_flags) {
