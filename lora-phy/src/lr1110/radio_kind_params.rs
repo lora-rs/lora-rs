@@ -610,3 +610,188 @@ pub struct LrFhssParams {
 
 /// LR-FHSS sync word bytes
 pub const LR_FHSS_SYNC_WORD_BYTES: usize = 4;
+
+// =============================================================================
+// System Types (from SWDR001 lr11xx_system_types.h)
+// =============================================================================
+
+/// Length of the LR11XX Unique Identifier in bytes
+pub const LR11XX_SYSTEM_UID_LENGTH: usize = 8;
+
+/// Length of the LR11XX Join EUI in bytes
+pub const LR11XX_SYSTEM_JOIN_EUI_LENGTH: usize = 8;
+
+/// Chip type/version values
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum ChipType {
+    Lr1110 = 0x01,
+    Lr1120 = 0x02,
+    Lr1121 = 0x03,
+    Unknown = 0xFF,
+}
+
+impl From<u8> for ChipType {
+    fn from(value: u8) -> Self {
+        match value {
+            0x01 => ChipType::Lr1110,
+            0x02 => ChipType::Lr1120,
+            0x03 => ChipType::Lr1121,
+            _ => ChipType::Unknown,
+        }
+    }
+}
+
+/// System version information
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct Version {
+    /// Hardware version
+    pub hw: u8,
+    /// Chip type (LR1110, LR1120, LR1121)
+    pub chip_type: ChipType,
+    /// Firmware version (major.minor encoded as u16)
+    pub fw: u16,
+}
+
+impl Version {
+    /// Get firmware major version
+    pub fn fw_major(&self) -> u8 {
+        (self.fw >> 8) as u8
+    }
+
+    /// Get firmware minor version
+    pub fn fw_minor(&self) -> u8 {
+        (self.fw & 0xFF) as u8
+    }
+}
+
+/// Chip operating modes
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum ChipMode {
+    Sleep = 0x00,
+    StandbyRc = 0x01,
+    StandbyXosc = 0x02,
+    Fs = 0x03,
+    Rx = 0x04,
+    Tx = 0x05,
+    Loc = 0x06,  // GNSS/WiFi scanning
+    Unknown = 0xFF,
+}
+
+impl From<u8> for ChipMode {
+    fn from(value: u8) -> Self {
+        match value {
+            0x00 => ChipMode::Sleep,
+            0x01 => ChipMode::StandbyRc,
+            0x02 => ChipMode::StandbyXosc,
+            0x03 => ChipMode::Fs,
+            0x04 => ChipMode::Rx,
+            0x05 => ChipMode::Tx,
+            0x06 => ChipMode::Loc,
+            _ => ChipMode::Unknown,
+        }
+    }
+}
+
+/// Reset status values
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum ResetStatus {
+    Cleared = 0x00,
+    Analog = 0x01,
+    External = 0x02,
+    System = 0x03,
+    Watchdog = 0x04,
+    IocdRestart = 0x05,
+    RtcRestart = 0x06,
+    Unknown = 0xFF,
+}
+
+impl From<u8> for ResetStatus {
+    fn from(value: u8) -> Self {
+        match value {
+            0x00 => ResetStatus::Cleared,
+            0x01 => ResetStatus::Analog,
+            0x02 => ResetStatus::External,
+            0x03 => ResetStatus::System,
+            0x04 => ResetStatus::Watchdog,
+            0x05 => ResetStatus::IocdRestart,
+            0x06 => ResetStatus::RtcRestart,
+            _ => ResetStatus::Unknown,
+        }
+    }
+}
+
+/// Command status values
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum CommandStatus {
+    Fail = 0x00,
+    PeripheralError = 0x01,
+    Ok = 0x02,
+    Data = 0x03,
+}
+
+impl From<u8> for CommandStatus {
+    fn from(value: u8) -> Self {
+        match value {
+            0x00 => CommandStatus::Fail,
+            0x01 => CommandStatus::PeripheralError,
+            0x02 => CommandStatus::Ok,
+            0x03 => CommandStatus::Data,
+            _ => CommandStatus::Fail,
+        }
+    }
+}
+
+/// Status register 1
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct Stat1 {
+    /// Command status
+    pub command_status: CommandStatus,
+    /// Whether an interrupt is currently active
+    pub is_interrupt_active: bool,
+}
+
+impl From<u8> for Stat1 {
+    fn from(value: u8) -> Self {
+        Self {
+            is_interrupt_active: (value & 0x01) != 0,
+            command_status: CommandStatus::from(value >> 1),
+        }
+    }
+}
+
+/// Status register 2
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct Stat2 {
+    /// Reset status
+    pub reset_status: ResetStatus,
+    /// Current chip mode
+    pub chip_mode: ChipMode,
+    /// Whether running from flash
+    pub is_running_from_flash: bool,
+}
+
+impl From<u8> for Stat2 {
+    fn from(value: u8) -> Self {
+        Self {
+            is_running_from_flash: (value & 0x01) != 0,
+            chip_mode: ChipMode::from((value & 0x0E) >> 1),
+            reset_status: ResetStatus::from((value & 0xF0) >> 4),
+        }
+    }
+}
+
+/// Combined system status
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct SystemStatus {
+    pub stat1: Stat1,
+    pub stat2: Stat2,
+    pub irq_status: u32,
+}

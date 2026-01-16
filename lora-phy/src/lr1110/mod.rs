@@ -8,6 +8,11 @@ pub use radio_kind_params::{
     LrFhssBandwidth, LrFhssCodingRate, LrFhssGrid, LrFhssModulationType, LrFhssParams, LrFhssV1Params,
     LR_FHSS_SYNC_WORD_BYTES, LR_FHSS_DEFAULT_SYNC_WORD,
 };
+// System types
+pub use radio_kind_params::{
+    Version, ChipType, ChipMode, ResetStatus, CommandStatus, Stat1, Stat2, SystemStatus,
+    LR11XX_SYSTEM_UID_LENGTH, LR11XX_SYSTEM_JOIN_EUI_LENGTH,
+};
 use radio_kind_params::*;
 
 use crate::mod_params::*;
@@ -249,6 +254,126 @@ where
             ((data >> 8) & 0xFF) as u8,
             (data & 0xFF) as u8,
         ];
+        self.write_command(&cmd).await
+    }
+
+    // =========================================================================
+    // System Functions (from SWDR001 lr11xx_system.c)
+    // =========================================================================
+
+    /// Get the system version (hardware version, chip type, firmware version)
+    ///
+    /// Returns version information useful for identifying the chip and
+    /// checking firmware compatibility.
+    pub async fn get_version(&mut self) -> Result<Version, RadioError> {
+        let opcode = SystemOpCode::GetVersion.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 4];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        Ok(Version {
+            hw: rbuffer[0],
+            chip_type: ChipType::from(rbuffer[1]),
+            fw: ((rbuffer[2] as u16) << 8) | (rbuffer[3] as u16),
+        })
+    }
+
+    /// Get the system status (stat1, stat2, irq_status)
+    ///
+    /// This performs a direct SPI read to get the status bytes that the
+    /// LR1110 automatically returns on any read operation.
+    pub async fn get_status(&mut self) -> Result<SystemStatus, RadioError> {
+        // Direct read - chip returns status bytes automatically
+        let mut rbuffer = [0u8; 6];
+        self.intf.read(&[], &mut rbuffer).await?;
+
+        Ok(SystemStatus {
+            stat1: Stat1::from(rbuffer[0]),
+            stat2: Stat2::from(rbuffer[1]),
+            irq_status: ((rbuffer[2] as u32) << 24)
+                | ((rbuffer[3] as u32) << 16)
+                | ((rbuffer[4] as u32) << 8)
+                | (rbuffer[5] as u32),
+        })
+    }
+
+    /// Get the chip temperature in degrees Celsius
+    ///
+    /// Returns the raw temperature value from the internal sensor.
+    /// Temperature in Celsius = (raw_value - 273.15) approximately.
+    pub async fn get_temp(&mut self) -> Result<u16, RadioError> {
+        let opcode = SystemOpCode::GetTemp.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 2];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        Ok(((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16))
+    }
+
+    /// Get the battery voltage
+    ///
+    /// Returns a raw ADC value representing battery voltage.
+    /// Actual voltage depends on board configuration.
+    pub async fn get_vbat(&mut self) -> Result<u8, RadioError> {
+        let opcode = SystemOpCode::GetVbat.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        Ok(rbuffer[0])
+    }
+
+    /// Get a 32-bit random number from the hardware RNG
+    ///
+    /// The radio must be in receive mode for best entropy.
+    pub async fn get_random_number(&mut self) -> Result<u32, RadioError> {
+        let opcode = SystemOpCode::GetRandom.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 4];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        Ok(((rbuffer[0] as u32) << 24)
+            | ((rbuffer[1] as u32) << 16)
+            | ((rbuffer[2] as u32) << 8)
+            | (rbuffer[3] as u32))
+    }
+
+    /// Read the unique device identifier (8 bytes)
+    pub async fn read_uid(&mut self) -> Result<[u8; LR11XX_SYSTEM_UID_LENGTH], RadioError> {
+        let opcode = SystemOpCode::ReadUid.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; LR11XX_SYSTEM_UID_LENGTH];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        Ok(rbuffer)
+    }
+
+    /// Read the Join EUI (8 bytes) - for LoRaWAN
+    pub async fn read_join_eui(&mut self) -> Result<[u8; LR11XX_SYSTEM_JOIN_EUI_LENGTH], RadioError> {
+        let opcode = SystemOpCode::ReadJoinEui.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; LR11XX_SYSTEM_JOIN_EUI_LENGTH];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        Ok(rbuffer)
+    }
+
+    /// Get system errors
+    ///
+    /// Returns a bitmask of error flags that have occurred.
+    pub async fn get_errors(&mut self) -> Result<u16, RadioError> {
+        let opcode = SystemOpCode::GetErrors.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 2];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        Ok(((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16))
+    }
+
+    /// Clear system errors
+    pub async fn clear_errors(&mut self) -> Result<(), RadioError> {
+        let opcode = SystemOpCode::ClearErrors.bytes();
+        let cmd = [opcode[0], opcode[1]];
         self.write_command(&cmd).await
     }
 }

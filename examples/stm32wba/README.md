@@ -78,6 +78,24 @@ cargo run --release --bin lr_fhss_ping
 - [SWDM001 - LR-FHSS Demo Package](https://www.semtech.com)
 - [SWDR001 - LR11xx Driver](https://www.semtech.com)
 
+### lr1110_system_info
+
+Demonstrates reading system information from the LR1110 radio using the SWDR001-based system functions.
+
+**Features:**
+- Hardware and firmware version identification
+- Chip type detection (LR1110, LR1120, LR1121)
+- Unique device identifier (UID) and Join EUI
+- Temperature sensor reading
+- Battery voltage reading
+- Hardware random number generation
+- Error status checking
+
+**Run:**
+```bash
+cargo run --release --bin lr1110_system_info
+```
+
 ## Building
 
 ### Prerequisites
