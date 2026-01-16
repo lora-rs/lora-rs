@@ -795,3 +795,401 @@ pub struct SystemStatus {
     pub stat2: Stat2,
     pub irq_status: u32,
 }
+
+// =============================================================================
+// GNSS Types and Constants (from SWDR001 lr11xx_gnss.c and lr11xx_gnss_types.h)
+// =============================================================================
+
+/// GNSS OpCodes (16-bit commands)
+#[derive(Clone, Copy, PartialEq)]
+pub enum GnssOpCode {
+    /// Set the constellation to use (0x0400)
+    SetConstellation = 0x0400,
+    /// Read the used constellations (0x0401)
+    ReadConstellation = 0x0401,
+    /// Set almanac update configuration (0x0402)
+    SetAlmanacUpdate = 0x0402,
+    /// Read the almanac update configuration (0x0403)
+    ReadAlmanacUpdate = 0x0403,
+    /// Set the frequency search space (0x0404)
+    SetFreqSearchSpace = 0x0404,
+    /// Read the frequency search space (0x0405)
+    ReadFreqSearchSpace = 0x0405,
+    /// Read the GNSS firmware version (0x0406)
+    ReadFwVersion = 0x0406,
+    /// Read the supported constellations (0x0407)
+    ReadSupportedConstellation = 0x0407,
+    /// Define single or double capture mode (0x0408)
+    SetScanMode = 0x0408,
+    /// Launch the scan (0x040B)
+    Scan = 0x040B,
+    /// Get the size of the output payload (0x040C)
+    GetResultSize = 0x040C,
+    /// Read the result byte stream (0x040D)
+    ReadResults = 0x040D,
+    /// Update the almanac (0x040E)
+    AlmanacUpdate = 0x040E,
+    /// Read all almanacs (0x040F)
+    AlmanacRead = 0x040F,
+    /// Set the assistance position (0x0410)
+    SetAssistancePosition = 0x0410,
+    /// Read the assistance position (0x0411)
+    ReadAssistancePosition = 0x0411,
+    /// Push messages coming from the solver (0x0414)
+    PushSolverMsg = 0x0414,
+    /// Push messages coming from the device management (0x0415)
+    PushDmMsg = 0x0415,
+    /// Read the context (0x0416)
+    GetContextStatus = 0x0416,
+    /// Get the number of satellites detected during a scan (0x0417)
+    GetNbSatellites = 0x0417,
+    /// Get the list of satellites detected during a scan (0x0418)
+    GetSatellites = 0x0418,
+    /// Read the almanac of given satellites (0x041A)
+    ReadAlmanacPerSatellite = 0x041A,
+    /// Get the number of visible SV from a date and position (0x041F)
+    GetSvVisible = 0x041F,
+    /// Get visible SV ID and corresponding doppler value (0x0420)
+    GetSvVisibleDoppler = 0x0420,
+    /// Get the type of scan launched during the last scan (0x0426)
+    ReadLastScanModeLaunched = 0x0426,
+    /// Start the time acquisition/demodulation (0x0432)
+    FetchTime = 0x0432,
+    /// Read time from LR11XX (0x0434)
+    ReadTime = 0x0434,
+    /// Reset the internal time (0x0435)
+    ResetTime = 0x0435,
+    /// Reset the location and the history Doppler buffer (0x0437)
+    ResetPosition = 0x0437,
+    /// Read the week number rollover (0x0438)
+    ReadWeekNumberRollover = 0x0438,
+    /// Read demod status (0x0439)
+    ReadDemodStatus = 0x0439,
+    /// Read cumulative timing (0x044A)
+    ReadCumulativeTiming = 0x044A,
+    /// Set the GPS time (0x044B)
+    SetTime = 0x044B,
+    /// Configures the time delay in sec (0x044D)
+    ConfigDelayResetAp = 0x044D,
+    /// Read the assisted position based on the internal doppler solver (0x044F)
+    ReadDopplerSolverResult = 0x044F,
+    /// Read the time delay in sec (0x0453)
+    ReadDelayResetAp = 0x0453,
+    /// Launches one scan to download from satellite almanac parameters broadcasted (0x0454)
+    AlmanacUpdateFromSat = 0x0454,
+    /// Read the number of visible satellites and time elapsed (0x0456)
+    ReadKeepSyncStatus = 0x0456,
+    /// Returns the actual state of almanac GPS and Beidou (0x0457)
+    ReadAlmanacStatus = 0x0457,
+    /// Configures the almanac update period (0x0463)
+    ConfigAlmanacUpdatePeriod = 0x0463,
+    /// Read the almanac update period (0x0464)
+    ReadAlmanacUpdatePeriod = 0x0464,
+    /// Returns the list of satellite for the next keep sync scan (0x0466)
+    GetSvSync = 0x0466,
+    /// Configures the ability to search almanac for each satellite (0x0472)
+    WriteBitMaskSatActivated = 0x0472,
+}
+
+impl GnssOpCode {
+    pub fn bytes(self) -> [u8; 2] {
+        let val = self as u16;
+        [(val >> 8) as u8, (val & 0xFF) as u8]
+    }
+}
+
+/// GNSS constellation identifiers
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssConstellation {
+    /// GPS constellation
+    Gps = 0x01,
+    /// BeiDou constellation
+    BeiDou = 0x02,
+}
+
+impl GnssConstellation {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// Bit mask of constellation configurations
+pub type GnssConstellationMask = u8;
+
+/// GPS constellation mask
+pub const GNSS_GPS_MASK: GnssConstellationMask = 0x01;
+/// BeiDou constellation mask
+pub const GNSS_BEIDOU_MASK: GnssConstellationMask = 0x02;
+
+/// Search mode for GNSS scan
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssSearchMode {
+    /// Search all requested satellites or fail, scan duration is low
+    LowEffort = 0x00,
+    /// Add additional search if not all satellites are found, scan duration is standard
+    MidEffort = 0x01,
+    /// Add additional search if not all satellites are found, scan duration is very high
+    HighEffort = 0x02,
+}
+
+impl GnssSearchMode {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// GNSS response type indicates the destination
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssDestination {
+    /// Host MCU
+    Host = 0x00,
+    /// GNSS Solver (LoRa Cloud)
+    Solver = 0x01,
+    /// GNSS DMC (Device Management Component)
+    Dmc = 0x02,
+}
+
+impl GnssDestination {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+impl From<u8> for GnssDestination {
+    fn from(value: u8) -> Self {
+        match value {
+            0x00 => GnssDestination::Host,
+            0x01 => GnssDestination::Solver,
+            0x02 => GnssDestination::Dmc,
+            _ => GnssDestination::Host,
+        }
+    }
+}
+
+/// GNSS single or double scan mode
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssScanMode {
+    /// Single scan legacy mode - NAV3 format
+    SingleScanLegacy = 0x00,
+    /// Single scan and 5 fast scans - NAV3 format
+    SingleScanAnd5FastScans = 0x03,
+}
+
+impl GnssScanMode {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// Message to host indicating the status of the message
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssHostStatus {
+    Ok = 0x00,
+    UnexpectedCmd = 0x01,
+    UnimplementedCmd = 0x02,
+    InvalidParameters = 0x03,
+    MessageSanityCheckError = 0x04,
+    IqCaptureFails = 0x05,
+    NoTime = 0x06,
+    NoSatelliteDetected = 0x07,
+    AlmanacInFlashTooOld = 0x08,
+    AlmanacUpdateFailsCrcError = 0x09,
+    AlmanacUpdateFailsFlashIntegrityError = 0x0A,
+    AlmanacUpdateNotAllowed = 0x0C,
+    AlmanacCrcError = 0x0D,
+    AlmanacVersionNotSupported = 0x0E,
+    NotEnoughSvDetectedToBuildNavMessage = 0x10,
+    TimeDemodulationFail = 0x11,
+    AlmanacDemodulationFail = 0x12,
+    AtLeastTheDetectedSvOfOneConstellationAreDeactivated = 0x13,
+    AssistancePositionPossiblyWrongButFailsToUpdate = 0x14,
+    ScanAborted = 0x15,
+    NavMessageCannotBeGeneratedIntervalGreaterThan63Sec = 0x16,
+}
+
+impl From<u8> for GnssHostStatus {
+    fn from(value: u8) -> Self {
+        match value {
+            0x00 => GnssHostStatus::Ok,
+            0x01 => GnssHostStatus::UnexpectedCmd,
+            0x02 => GnssHostStatus::UnimplementedCmd,
+            0x03 => GnssHostStatus::InvalidParameters,
+            0x04 => GnssHostStatus::MessageSanityCheckError,
+            0x05 => GnssHostStatus::IqCaptureFails,
+            0x06 => GnssHostStatus::NoTime,
+            0x07 => GnssHostStatus::NoSatelliteDetected,
+            0x08 => GnssHostStatus::AlmanacInFlashTooOld,
+            0x09 => GnssHostStatus::AlmanacUpdateFailsCrcError,
+            0x0A => GnssHostStatus::AlmanacUpdateFailsFlashIntegrityError,
+            0x0C => GnssHostStatus::AlmanacUpdateNotAllowed,
+            0x0D => GnssHostStatus::AlmanacCrcError,
+            0x0E => GnssHostStatus::AlmanacVersionNotSupported,
+            0x10 => GnssHostStatus::NotEnoughSvDetectedToBuildNavMessage,
+            0x11 => GnssHostStatus::TimeDemodulationFail,
+            0x12 => GnssHostStatus::AlmanacDemodulationFail,
+            0x13 => GnssHostStatus::AtLeastTheDetectedSvOfOneConstellationAreDeactivated,
+            0x14 => GnssHostStatus::AssistancePositionPossiblyWrongButFailsToUpdate,
+            0x15 => GnssHostStatus::ScanAborted,
+            0x16 => GnssHostStatus::NavMessageCannotBeGeneratedIntervalGreaterThan63Sec,
+            _ => GnssHostStatus::UnexpectedCmd,
+        }
+    }
+}
+
+/// GNSS error codes
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssErrorCode {
+    NoError = 0,
+    AlmanacTooOld = 1,
+    UpdateCrcMismatch = 2,
+    UpdateFlashMemoryIntegrity = 3,
+    /// Impossible to update more than one constellation at a time
+    AlmanacUpdateNotAllowed = 4,
+}
+
+impl From<u8> for GnssErrorCode {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => GnssErrorCode::NoError,
+            1 => GnssErrorCode::AlmanacTooOld,
+            2 => GnssErrorCode::UpdateCrcMismatch,
+            3 => GnssErrorCode::UpdateFlashMemoryIntegrity,
+            4 => GnssErrorCode::AlmanacUpdateNotAllowed,
+            _ => GnssErrorCode::NoError,
+        }
+    }
+}
+
+/// GNSS frequency search space
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssFreqSearchSpace {
+    Hz250 = 0,
+    Hz500 = 1,
+    Khz1 = 2,
+    Khz2 = 3,
+}
+
+impl GnssFreqSearchSpace {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+impl From<u8> for GnssFreqSearchSpace {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => GnssFreqSearchSpace::Hz250,
+            1 => GnssFreqSearchSpace::Hz500,
+            2 => GnssFreqSearchSpace::Khz1,
+            3 => GnssFreqSearchSpace::Khz2,
+            _ => GnssFreqSearchSpace::Hz250,
+        }
+    }
+}
+
+/// Result fields bit mask indicating which information is added in the output payload
+#[derive(Clone, Copy)]
+pub enum GnssResultFields {
+    /// Add Doppler information if set
+    DopplerEnable = 0x01,
+    /// Add up to 14 Doppler if set - up to 7 if not (valid if DopplerEnable is set)
+    DopplerMask = 0x02,
+    /// Add bit change if set (SingleScanAnd5FastScans mode only)
+    BitChange = 0x04,
+    /// Add time demodulation if set (SingleScanAnd5FastScans mode only)
+    DemodulateTime = 0x08,
+    /// Remove time from NAV if set
+    RemoveTimeFromNav = 0x10,
+    /// Remove aiding position from NAV if set
+    RemoveApFromNav = 0x20,
+}
+
+impl GnssResultFields {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// Maximal GNSS result buffer size: (128sv * 22bytes + 4bytes for CRC)
+pub const GNSS_MAX_RESULT_SIZE: usize = 2820;
+
+/// Size of the almanac of a single satellite when reading
+pub const GNSS_SINGLE_ALMANAC_READ_SIZE: usize = 22;
+
+/// Size of the almanac of a single satellite when writing
+pub const GNSS_SINGLE_ALMANAC_WRITE_SIZE: usize = 20;
+
+/// Size of the GNSS context status buffer
+pub const GNSS_CONTEXT_STATUS_LENGTH: usize = 9;
+
+/// Number of almanacs in full update payload
+pub const GNSS_FULL_UPDATE_N_ALMANACS: usize = 128;
+
+/// Assistance position for GNSS
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GnssAssistancePosition {
+    /// Latitude in degrees (-90 to +90)
+    pub latitude: f32,
+    /// Longitude in degrees (-180 to +180)
+    pub longitude: f32,
+}
+
+/// GNSS firmware version
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GnssVersion {
+    /// Version of the firmware
+    pub gnss_firmware: u8,
+    /// Version of the almanac format
+    pub gnss_almanac: u8,
+}
+
+/// Detected satellite information
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GnssDetectedSatellite {
+    /// Satellite ID
+    pub satellite_id: u8,
+    /// Carrier-to-noise ratio (C/N) in dB
+    pub cnr: i8,
+    /// SV doppler in Hz
+    pub doppler: i16,
+}
+
+/// GNSS context status structure
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GnssContextStatus {
+    /// Firmware version
+    pub firmware_version: u8,
+    /// Global almanac CRC
+    pub global_almanac_crc: u32,
+    /// Error code
+    pub error_code: GnssErrorCode,
+    /// Whether GPS almanac needs update
+    pub almanac_update_gps: bool,
+    /// Whether BeiDou almanac needs update
+    pub almanac_update_beidou: bool,
+    /// Frequency search space
+    pub freq_search_space: GnssFreqSearchSpace,
+}
+
+/// GNSS scan result destination index in result buffer
+pub const GNSS_SCAN_RESULT_DESTINATION_INDEX: usize = 0;
+
+/// SNR to CNR offset conversion
+pub const GNSS_SNR_TO_CNR_OFFSET: i8 = 31;
+
+/// Scaling factor for latitude conversion (90 degrees)
+pub const GNSS_SCALING_LATITUDE: f32 = 90.0;
+
+/// Scaling factor for longitude conversion (180 degrees)
+pub const GNSS_SCALING_LONGITUDE: f32 = 180.0;

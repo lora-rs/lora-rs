@@ -13,6 +13,15 @@ pub use radio_kind_params::{
     Version, ChipType, ChipMode, ResetStatus, CommandStatus, Stat1, Stat2, SystemStatus,
     LR11XX_SYSTEM_UID_LENGTH, LR11XX_SYSTEM_JOIN_EUI_LENGTH,
 };
+// GNSS types
+pub use radio_kind_params::{
+    GnssOpCode, GnssConstellation, GnssConstellationMask, GnssSearchMode, GnssDestination,
+    GnssScanMode, GnssHostStatus, GnssErrorCode, GnssFreqSearchSpace, GnssResultFields,
+    GnssAssistancePosition, GnssVersion, GnssDetectedSatellite, GnssContextStatus,
+    GNSS_GPS_MASK, GNSS_BEIDOU_MASK, GNSS_MAX_RESULT_SIZE, GNSS_CONTEXT_STATUS_LENGTH,
+    GNSS_SINGLE_ALMANAC_READ_SIZE, GNSS_SINGLE_ALMANAC_WRITE_SIZE, GNSS_SNR_TO_CNR_OFFSET,
+    GNSS_SCALING_LATITUDE, GNSS_SCALING_LONGITUDE,
+};
 use radio_kind_params::*;
 
 use crate::mod_params::*;
@@ -375,6 +384,268 @@ where
         let opcode = SystemOpCode::ClearErrors.bytes();
         let cmd = [opcode[0], opcode[1]];
         self.write_command(&cmd).await
+    }
+
+    // =========================================================================
+    // GNSS Functions (from SWDR001 lr11xx_gnss.c)
+    // =========================================================================
+
+    /// Set the GNSS constellations to use
+    ///
+    /// # Arguments
+    /// * `constellation_mask` - Bitmask of constellations to use (GNSS_GPS_MASK | GNSS_BEIDOU_MASK)
+    pub async fn gnss_set_constellation(&mut self, constellation_mask: GnssConstellationMask) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::SetConstellation.bytes();
+        let cmd = [opcode[0], opcode[1], constellation_mask];
+        self.write_command(&cmd).await
+    }
+
+    /// Read the currently configured GNSS constellations
+    pub async fn gnss_read_constellation(&mut self) -> Result<GnssConstellationMask, RadioError> {
+        let opcode = GnssOpCode::ReadConstellation.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(rbuffer[0])
+    }
+
+    /// Read the supported constellations for this chip
+    pub async fn gnss_read_supported_constellations(&mut self) -> Result<GnssConstellationMask, RadioError> {
+        let opcode = GnssOpCode::ReadSupportedConstellation.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(rbuffer[0])
+    }
+
+    /// Set the GNSS scan mode (single scan or multiple fast scans)
+    pub async fn gnss_set_scan_mode(&mut self, scan_mode: GnssScanMode) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::SetScanMode.bytes();
+        let cmd = [opcode[0], opcode[1], scan_mode.value()];
+        self.write_command(&cmd).await
+    }
+
+    /// Launch a GNSS scan
+    ///
+    /// # Arguments
+    /// * `effort_mode` - Search effort mode (affects scan duration)
+    /// * `result_mask` - Bitmask of result fields to include
+    /// * `nb_sv_max` - Maximum number of satellites to detect (0 = no limit)
+    ///
+    /// After calling this, wait for GnssScanDone IRQ, then call gnss_get_result_size()
+    /// and gnss_read_results().
+    pub async fn gnss_scan(
+        &mut self,
+        effort_mode: GnssSearchMode,
+        result_mask: u8,
+        nb_sv_max: u8,
+    ) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::Scan.bytes();
+        let cmd = [opcode[0], opcode[1], effort_mode.value(), result_mask, nb_sv_max];
+        self.write_command(&cmd).await
+    }
+
+    /// Get the size of the GNSS scan result
+    ///
+    /// Call this after GnssScanDone IRQ to determine buffer size needed.
+    pub async fn gnss_get_result_size(&mut self) -> Result<u16, RadioError> {
+        let opcode = GnssOpCode::GetResultSize.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 2];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16))
+    }
+
+    /// Read the GNSS scan results
+    ///
+    /// # Arguments
+    /// * `result_buffer` - Buffer to store results (must be at least result_size bytes)
+    ///
+    /// The first byte indicates the destination (Host/Solver/DMC).
+    /// Remaining bytes are the NAV message to send to LoRa Cloud or process locally.
+    pub async fn gnss_read_results(&mut self, result_buffer: &mut [u8]) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::ReadResults.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        self.read_command(&cmd, result_buffer).await
+    }
+
+    /// Get the number of satellites detected in the last scan
+    pub async fn gnss_get_nb_satellites(&mut self) -> Result<u8, RadioError> {
+        let opcode = GnssOpCode::GetNbSatellites.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(rbuffer[0])
+    }
+
+    /// Get detected satellite information
+    ///
+    /// # Arguments
+    /// * `satellites` - Buffer to store satellite info (max 32 satellites)
+    /// * `nb_satellites` - Number of satellites to read (from gnss_get_nb_satellites)
+    ///
+    /// Returns the actual number of satellites read.
+    pub async fn gnss_get_satellites(
+        &mut self,
+        satellites: &mut [GnssDetectedSatellite],
+        nb_satellites: u8,
+    ) -> Result<u8, RadioError> {
+        let opcode = GnssOpCode::GetSatellites.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        // Each satellite entry is 4 bytes: id(1) + cnr(1) + doppler(2)
+        let n = (nb_satellites as usize).min(satellites.len()).min(32);
+        let mut rbuffer = [0u8; 128]; // 32 * 4 = 128 max
+        self.read_command(&cmd, &mut rbuffer[..n * 4]).await?;
+
+        for i in 0..n {
+            let offset = i * 4;
+            satellites[i] = GnssDetectedSatellite {
+                satellite_id: rbuffer[offset],
+                cnr: (rbuffer[offset + 1] as i8) - GNSS_SNR_TO_CNR_OFFSET,
+                doppler: ((rbuffer[offset + 2] as i16) << 8) | (rbuffer[offset + 3] as i16),
+            };
+        }
+
+        Ok(n as u8)
+    }
+
+    /// Set the assistance position for assisted GNSS scanning
+    ///
+    /// Setting an approximate position improves scan performance.
+    pub async fn gnss_set_assistance_position(&mut self, position: &GnssAssistancePosition) -> Result<(), RadioError> {
+        let latitude = ((position.latitude * 2048.0) / GNSS_SCALING_LATITUDE) as i16;
+        let longitude = ((position.longitude * 2048.0) / GNSS_SCALING_LONGITUDE) as i16;
+
+        let opcode = GnssOpCode::SetAssistancePosition.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (latitude >> 8) as u8,
+            (latitude & 0xFF) as u8,
+            (longitude >> 8) as u8,
+            (longitude & 0xFF) as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Read the current assistance position
+    pub async fn gnss_read_assistance_position(&mut self) -> Result<GnssAssistancePosition, RadioError> {
+        let opcode = GnssOpCode::ReadAssistancePosition.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 4];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        let latitude_raw = ((rbuffer[0] as i16) << 8) | (rbuffer[1] as i16);
+        let longitude_raw = ((rbuffer[2] as i16) << 8) | (rbuffer[3] as i16);
+
+        Ok(GnssAssistancePosition {
+            latitude: (latitude_raw as f32) * GNSS_SCALING_LATITUDE / 2048.0,
+            longitude: (longitude_raw as f32) * GNSS_SCALING_LONGITUDE / 2048.0,
+        })
+    }
+
+    /// Read the GNSS firmware version
+    pub async fn gnss_read_firmware_version(&mut self) -> Result<GnssVersion, RadioError> {
+        let opcode = GnssOpCode::ReadFwVersion.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 2];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        Ok(GnssVersion {
+            gnss_firmware: rbuffer[0],
+            gnss_almanac: rbuffer[1],
+        })
+    }
+
+    /// Get the GNSS context status
+    ///
+    /// Returns information about almanac status, error codes, and configuration.
+    pub async fn gnss_get_context_status(&mut self) -> Result<GnssContextStatus, RadioError> {
+        let opcode = GnssOpCode::GetContextStatus.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; GNSS_CONTEXT_STATUS_LENGTH];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        // Parse the context status bytes per SWDR001
+        let firmware_version = rbuffer[0];
+        let global_almanac_crc = ((rbuffer[1] as u32) << 24)
+            | ((rbuffer[2] as u32) << 16)
+            | ((rbuffer[3] as u32) << 8)
+            | (rbuffer[4] as u32);
+        let error_code = GnssErrorCode::from(rbuffer[5] & 0x0F);
+        let almanac_update_gps = (rbuffer[6] & 0x02) != 0;
+        let almanac_update_beidou = (rbuffer[6] & 0x04) != 0;
+        let freq_search_space = GnssFreqSearchSpace::from(
+            ((rbuffer[6] & 0x01) << 1) | ((rbuffer[7] & 0x80) >> 7),
+        );
+
+        Ok(GnssContextStatus {
+            firmware_version,
+            global_almanac_crc,
+            error_code,
+            almanac_update_gps,
+            almanac_update_beidou,
+            freq_search_space,
+        })
+    }
+
+    /// Set the frequency search space for GNSS
+    pub async fn gnss_set_freq_search_space(&mut self, freq_search_space: GnssFreqSearchSpace) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::SetFreqSearchSpace.bytes();
+        let cmd = [opcode[0], opcode[1], freq_search_space.value()];
+        self.write_command(&cmd).await
+    }
+
+    /// Read the frequency search space
+    pub async fn gnss_read_freq_search_space(&mut self) -> Result<GnssFreqSearchSpace, RadioError> {
+        let opcode = GnssOpCode::ReadFreqSearchSpace.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(GnssFreqSearchSpace::from(rbuffer[0]))
+    }
+
+    /// Reset the GNSS time
+    pub async fn gnss_reset_time(&mut self) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::ResetTime.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        self.write_command(&cmd).await
+    }
+
+    /// Reset the GNSS position and doppler history buffer
+    pub async fn gnss_reset_position(&mut self) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::ResetPosition.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        self.write_command(&cmd).await
+    }
+
+    /// Update almanac data
+    ///
+    /// # Arguments
+    /// * `blocks` - Almanac blocks to write (20 bytes per satellite)
+    /// * `nb_blocks` - Number of blocks to write
+    pub async fn gnss_almanac_update(&mut self, blocks: &[u8], nb_blocks: u8) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::AlmanacUpdate.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        let block_size = (nb_blocks as usize) * GNSS_SINGLE_ALMANAC_WRITE_SIZE;
+        self.intf.write_with_payload(&cmd, &blocks[..block_size], false).await
+    }
+
+    /// Push a solver message to the GNSS engine
+    ///
+    /// Used to provide assistance data from LoRa Cloud.
+    pub async fn gnss_push_solver_msg(&mut self, payload: &[u8]) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::PushSolverMsg.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        self.intf.write_with_payload(&cmd, payload, false).await
+    }
+
+    /// Push a device management message to the GNSS engine
+    pub async fn gnss_push_dm_msg(&mut self, payload: &[u8]) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::PushDmMsg.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        self.intf.write_with_payload(&cmd, payload, false).await
     }
 }
 

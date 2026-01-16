@@ -15,14 +15,17 @@ The examples use the following default pin configuration (adjust in code as need
 
 | Function | Pin | Description |
 |----------|-----|-------------|
-| SPI1_NSS | PA4 | SPI Chip Select |
-| SPI1_SCK | PB4 | SPI Clock |
-| SPI1_MISO | PA11 | SPI Master In Slave Out |
-| SPI1_MOSI | PA12 | SPI Master Out Slave In |
+| SPI2_NSS | PA4 | SPI Chip Select (manual GPIO) |
+| SPI2_SCK | PB10 | SPI Clock |
+| SPI2_MISO | PA9 | SPI Master In Slave Out |
+| SPI2_MOSI | PC3 | SPI Master Out Slave In |
 | LR1110_RESET | PB2 | Radio Reset (active low) |
-| LR1110_DIO1 | PB1 | Radio IRQ (with EXTI) |
-| RF_SWITCH_RX | PC6 | RX Antenna Switch (optional) |
-| RF_SWITCH_TX | PC7 | TX Antenna Switch (optional) |
+| LR1110_BUSY | PB13 | Radio BUSY signal (active high when processing) |
+| LR1110_DIO1 | PB14 | Radio IRQ (with EXTI) |
+| RF_SWITCH_RX | - | RX Antenna Switch (optional) |
+| RF_SWITCH_TX | - | TX Antenna Switch (optional) |
+
+**Note:** The LR1110 uses DIO0 as a BUSY signal. The BUSY pin goes HIGH when the chip is processing a command and is not ready to accept new commands. Always wait for BUSY to go LOW before sending the next SPI command.
 
 ## Examples
 
@@ -95,6 +98,28 @@ Demonstrates reading system information from the LR1110 radio using the SWDR001-
 ```bash
 cargo run --release --bin lr1110_system_info
 ```
+
+### lr1110_gnss_scan
+
+Demonstrates using the built-in GNSS scanner of the LR1110 radio to detect GPS and BeiDou satellites.
+
+**Features:**
+- Configure GNSS constellations (GPS and/or BeiDou)
+- Set assistance position for improved performance
+- Autonomous GNSS scanning
+- Read detected satellite information (ID, C/N ratio, Doppler)
+- Capture NAV message for LoRa Cloud position solving
+
+**Run:**
+```bash
+cargo run --release --bin lr1110_gnss_scan
+```
+
+**Note:** For best results, ensure the antenna has a clear view of the sky. The NAV message output can be sent to [LoRa Cloud](https://www.loracloud.com) for position solving.
+
+**Reference:**
+- [SWDR001 - LR11xx Driver](https://www.semtech.com)
+- [LoRa Cloud Geolocation](https://www.loracloud.com/documentation/geolocation)
 
 ## Building
 

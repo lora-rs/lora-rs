@@ -14,6 +14,7 @@
 //! - SPI2_MOSI: PC3
 //! - SPI2_NSS:  PA4 (manual control via GPIO)
 //! - LR1110_RESET: PB2
+//! - LR1110_BUSY:  PB13 (BUSY signal, active high)
 //! - LR1110_DIO1:  PB14 (with EXTI interrupt)
 
 #![no_std]
@@ -36,12 +37,14 @@ use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
+use lora_phy::mod_traits::RadioKind;
 use {defmt_rtt as _, panic_probe as _};
 
 use self::iv::Stm32wbaLr1110InterfaceVariant;
 
-// Bind EXTI14 interrupt for PB14
+// Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
 bind_interrupts!(struct Irqs {
+    EXTI13 => embassy_stm32::exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI13>;
     EXTI14 => embassy_stm32::exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI14>;
 });
 
@@ -94,14 +97,20 @@ async fn main(_spawner: Spawner) {
 
     // Configure LR1110 control pins
     let reset = Output::new(p.PB2, Level::High, Speed::Low);
+    let busy = ExtiInput::new(p.PB13, p.EXTI13, Pull::None, Irqs);
     let dio1 = ExtiInput::new(p.PB14, p.EXTI14, Pull::Down, Irqs);
+
+    // Optional RF switch control pins (set to None if not using)
+    let rf_switch_rx: Option<Output<'_>> = None;
+    let rf_switch_tx: Option<Output<'_>> = None;
 
     // Create InterfaceVariant
     let iv = Stm32wbaLr1110InterfaceVariant::new(
         reset,
+        busy,
         dio1,
-        None,
-        None,
+        rf_switch_rx,
+        rf_switch_tx,
     )
     .unwrap();
 
