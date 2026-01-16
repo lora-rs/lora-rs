@@ -60,6 +60,12 @@ pub use radio_kind_params::{
 pub use radio_kind_params::{
     RegMemOpCode, REGMEM_MAX_READ_WRITE_WORDS, REGMEM_BUFFER_SIZE_MAX,
 };
+// Radio Timings helpers
+pub use radio_kind_params::{
+    RX_DONE_IRQ_PROCESSING_TIME_IN_US, TX_DONE_IRQ_PROCESSING_TIME_IN_US,
+    lora_rx_input_delay_in_us, lora_symbol_time_in_us,
+    delay_between_last_bit_sent_and_rx_done_in_us, delay_between_last_bit_sent_and_tx_done_in_us,
+};
 use radio_kind_params::*;
 
 use crate::mod_params::*;

@@ -2199,3 +2199,96 @@ pub struct BootloaderStatus {
     /// IRQ status flags (32-bit mask)
     pub irq_status: u32,
 }
+
+// =============================================================================
+// Radio Timings (from SWDR001 lr11xx_radio_timings.h/.c)
+// =============================================================================
+
+/// Time in microseconds taken by the chip to process the Rx done interrupt
+pub const RX_DONE_IRQ_PROCESSING_TIME_IN_US: u32 = 74;
+
+/// Time in microseconds taken by the chip to process the Tx done interrupt
+pub const TX_DONE_IRQ_PROCESSING_TIME_IN_US: u32 = 111;
+
+impl RampTime {
+    /// Convert PA ramp time to microseconds
+    pub const fn to_us(self) -> u32 {
+        match self {
+            RampTime::Ramp16Us => 16,
+            RampTime::Ramp32Us => 32,
+            RampTime::Ramp48Us => 48,
+            RampTime::Ramp64Us => 64,
+            RampTime::Ramp80Us => 80,
+            RampTime::Ramp96Us => 96,
+            RampTime::Ramp112Us => 112,
+            RampTime::Ramp128Us => 128,
+            RampTime::Ramp144Us => 144,
+            RampTime::Ramp160Us => 160,
+            RampTime::Ramp176Us => 176,
+            RampTime::Ramp192Us => 192,
+            RampTime::Ramp208Us => 208,
+            RampTime::Ramp240Us => 240,
+            RampTime::Ramp272Us => 272,
+            RampTime::Ramp304Us => 304,
+        }
+    }
+}
+
+/// Get the LoRa reception input delay for a given bandwidth
+///
+/// This delay depends on the radio's digital filter settling time.
+/// Values are from SWDR001 for the common LoRaWAN bandwidths.
+pub fn lora_rx_input_delay_in_us(bandwidth: Bandwidth) -> u32 {
+    match bandwidth {
+        Bandwidth::_500KHz => 16,
+        Bandwidth::_250KHz => 31,
+        Bandwidth::_125KHz => 57,
+        // Lower bandwidths have longer settling times (extrapolated)
+        Bandwidth::_62KHz => 114,
+        Bandwidth::_41KHz => 171,
+        Bandwidth::_31KHz => 228,
+        Bandwidth::_20KHz => 342,
+        Bandwidth::_15KHz => 456,
+        Bandwidth::_10KHz => 684,
+        Bandwidth::_7KHz => 912,
+    }
+}
+
+/// Get the LoRa symbol time for a given spreading factor and bandwidth
+///
+/// Symbol time = 2^SF / BW (in seconds)
+/// Returns time in microseconds
+pub fn lora_symbol_time_in_us(spreading_factor: SpreadingFactor, bandwidth: Bandwidth) -> u32 {
+    let sf = spreading_factor.factor();
+    let bw_hz = bandwidth.hz();
+    // (2^SF * 1_000_000) / BW_Hz
+    (1u32 << sf) * 1_000_000 / bw_hz
+}
+
+/// Get the time between the last bit sent (on Tx side) and the Rx done event (on Rx side)
+///
+/// This includes:
+/// - RX input delay (filter settling time)
+/// - 2 symbol times (for synchronization)
+/// - RX done IRQ processing time
+///
+/// This timing is useful for LoRaWAN RX window calculations.
+pub fn delay_between_last_bit_sent_and_rx_done_in_us(
+    spreading_factor: SpreadingFactor,
+    bandwidth: Bandwidth,
+) -> u32 {
+    lora_rx_input_delay_in_us(bandwidth)
+        + 2 * lora_symbol_time_in_us(spreading_factor, bandwidth)
+        + RX_DONE_IRQ_PROCESSING_TIME_IN_US
+}
+
+/// Get the time between the last bit sent and the Tx done event
+///
+/// This includes:
+/// - PA ramp down time (same as ramp up)
+/// - TX done IRQ processing time
+///
+/// This timing is useful for precise transmit timing calculations.
+pub fn delay_between_last_bit_sent_and_tx_done_in_us(ramp_time: RampTime) -> u32 {
+    ramp_time.to_us() + TX_DONE_IRQ_PROCESSING_TIME_IN_US
+}
