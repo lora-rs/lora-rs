@@ -34,6 +34,7 @@ use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::radio_kind_params::{
     LrFhssBandwidth, LrFhssCodingRate, LrFhssGrid, LrFhssModulationType, LrFhssParams, LrFhssV1Params,
+    PaSelection,
 };
 use lora_phy::lr1110::LR_FHSS_DEFAULT_SYNC_WORD;
 use lora_phy::mod_params::RadioMode;
@@ -120,8 +121,9 @@ async fn main(_spawner: Spawner) {
     .unwrap();
 
     // Configure LR1110 chip variant
+    // Use LP (Low Power) PA to match SWDM001 demo configuration
     let lr_config = lr1110_module::Config {
-        chip: Lr1110Chip::new(),
+        chip: Lr1110Chip::with_pa(PaSelection::Lp),
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl3V0),
         use_dcdc: true,
         rx_boost: false,
@@ -246,33 +248,60 @@ async fn main(_spawner: Spawner) {
             }
         }
 
-        // Wait for TX done interrupt
-        match lora_radio.await_irq().await {
-            Ok(_) => {
-                info!("IRQ received");
+        // Check radio status immediately after SetTx
+        match lora_radio.get_status().await {
+            Ok(status) => {
+                info!("Radio status after SetTx: chip_mode={:?}, cmd_status={:?}, irq_active={}, irq=0x{:08x}",
+                    status.stat2.chip_mode,
+                    status.stat1.command_status,
+                    status.stat1.is_interrupt_active,
+                    status.irq_status);
             }
             Err(err) => {
-                error!("IRQ wait failed: {:?}", err);
-                embassy_time::Timer::after_secs(INTER_PKT_DELAY_MS / 1000).await;
-                continue;
+                error!("Failed to get status: {:?}", err);
             }
         }
 
-        // Check IRQ status
-        match lora_radio.process_irq_event(
-            RadioMode::Transmit,
-            None,
-            true,
-        ).await {
-            Ok(Some(IrqState::Done)) => {
-                info!("Packet sent successfully!");
+        // Poll for TX done instead of waiting for DIO1 interrupt
+        // (SWDM001 uses polling, not interrupts)
+        let mut tx_done = false;
+        for poll_count in 0..100 {
+            embassy_time::Timer::after_millis(50).await;
+
+            match lora_radio.process_irq_event(
+                RadioMode::Transmit,
+                None,
+                false,  // Don't clear IRQ yet, just check
+            ).await {
+                Ok(Some(IrqState::Done)) => {
+                    info!("TX done detected after {} polls!", poll_count + 1);
+                    tx_done = true;
+                    break;
+                }
+                Ok(None) => {
+                    // No IRQ yet, keep polling
+                    if poll_count % 10 == 0 {
+                        debug!("Still waiting for TX done (poll #{})", poll_count);
+                    }
+                }
+                Ok(_) => {
+                    warn!("Unexpected IRQ state at poll #{}", poll_count);
+                }
+                Err(err) => {
+                    error!("IRQ check failed: {:?}", err);
+                    break;
+                }
             }
-            Ok(_) => {
-                warn!("Unexpected IRQ state");
+        }
+
+        if tx_done {
+            // Clear the IRQ now
+            match lora_radio.process_irq_event(RadioMode::Transmit, None, true).await {
+                Ok(_) => info!("Packet sent successfully!"),
+                Err(err) => error!("Failed to clear IRQ: {:?}", err),
             }
-            Err(err) => {
-                error!("IRQ processing failed: {:?}", err);
-            }
+        } else {
+            error!("TX timeout - no TxDone after 5 seconds of polling");
         }
 
         // Go to standby

@@ -226,9 +226,10 @@ where
 
         // Step 2: Set LR-FHSS modulation parameters (bitrate 488 bps, BT=1 pulse shape)
         // Format: opcode[2] + bitrate[4] + pulse_shape[1]
+        // Note: These are special encoded values from SWDR001, NOT the raw bps values!
         let mod_opcode = RadioOpCode::SetModulationParam.bytes();
-        let bitrate: u32 = 488; // LR11XX_RADIO_LR_FHSS_BITRATE_488_BPS
-        let pulse_shape: u8 = 0x01; // LR11XX_RADIO_LR_FHSS_PULSE_SHAPE_BT_1
+        let bitrate: u32 = 0x8001E848; // LR11XX_RADIO_LR_FHSS_BITRATE_488_BPS (encoded)
+        let pulse_shape: u8 = 0x0B; // LR11XX_RADIO_LR_FHSS_PULSE_SHAPE_BT_1
         let mod_cmd = [
             mod_opcode[0],
             mod_opcode[1],
@@ -1629,18 +1630,25 @@ where
         self.write_command(&cmd).await
     }
 
-    /// Get IRQ flags via direct status read
+    /// Read 32-bit IRQ flags without clearing them.
     ///
-    /// # Returns
-    /// 32-bit IRQ flags
+    /// Uses ClearIrq command with zero mask - this reads the current IRQ flags
+    /// without actually clearing any of them (per SWDR001 driver behavior).
     pub async fn get_irq_flags(&mut self) -> Result<u32, RadioError> {
         // Wait for chip to be ready
         self.intf.iv.wait_on_busy().await?;
 
-        // LR1110 returns status on any SPI read
-        // We'll use GetStatus to get the IRQ flags
-        let opcode = SystemOpCode::GetStatus.bytes();
-        let cmd = [opcode[0], opcode[1]];
+        // LR1110's ClearIrq command (0x0114) returns the current IRQ flags before clearing.
+        // By passing a zero mask, we read the flags without clearing any.
+        let opcode = SystemOpCode::ClearIrq.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            0x00, // Zero mask - don't clear any interrupts
+            0x00,
+            0x00,
+            0x00,
+        ];
 
         let mut rbuffer = [0u8; 4];
         self.read_command(&cmd, &mut rbuffer).await?;
@@ -1650,6 +1658,9 @@ where
             | ((rbuffer[1] as u32) << 16)
             | ((rbuffer[2] as u32) << 8)
             | (rbuffer[3] as u32);
+
+        debug!("get_irq_flags: raw = [{:02x}, {:02x}, {:02x}, {:02x}], flags = 0x{:08x}",
+            rbuffer[0], rbuffer[1], rbuffer[2], rbuffer[3], irq_flags);
 
         Ok(irq_flags)
     }
@@ -2384,12 +2395,11 @@ where
         &mut self,
         output_power: i32,
         mdltn_params: Option<&ModulationParams>,
-        is_tx_prep: bool,
+        _is_tx_prep: bool,
     ) -> Result<(), RadioError> {
-        let ramp_time = match is_tx_prep {
-            true => RampTime::Ramp16Us,   // Fast ramp for TX prep
-            false => RampTime::Ramp48Us,  // Slower ramp for init
-        };
+        // Use 208µs ramp time to match SWDM001 LR-FHSS demo behavior
+        // Shorter ramp times can cause TX issues with some configurations
+        let ramp_time = RampTime::Ramp208Us;
 
         let pa_selection = self.config.chip.get_pa_selection();
         let pa_supply = self.config.chip.get_pa_supply();
@@ -2410,13 +2420,10 @@ where
                     }
                 }
 
-                // PA configuration based on output power
-                let (duty_cycle, hp_sel, power) = match txp {
-                    14 => (0x04, 0x00, 14),
-                    10..=13 => (0x02, 0x00, txp as u8),
-                    LP_MIN..=9 => (0x01, 0x00, txp as u8),
-                    _ => unreachable!(),
-                };
+                // PA configuration for LP PA
+                // Per LR1110 User Manual Table 9-1 and SWDM001 demo:
+                // LP PA uses paDutyCycle = 0x04, paHPSel = 0x00
+                let (duty_cycle, hp_sel, power) = (0x04, 0x00, txp as u8);
                 (power, duty_cycle, hp_sel)
             }
             PaSelection::Hp => {
@@ -2555,6 +2562,26 @@ where
 
     async fn do_tx(&mut self) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_tx().await?;
+
+        // Clear any pending IRQs (especially error flags) before TX
+        self.clear_all_irq().await?;
+
+        // Reconfigure TCXO with longer timeout before TX (per SWDM001)
+        // This ensures the TCXO is stable during transmission
+        if let Some(voltage) = self.config.tcxo_ctrl {
+            // SWDM001 uses 0x000CD0 = 3280 RTC steps (~100ms) before TX
+            let tx_tcxo_timeout: u32 = 0x000CD0;
+            let tcxo_opcode = SystemOpCode::SetTcxoMode.bytes();
+            let tcxo_cmd = [
+                tcxo_opcode[0],
+                tcxo_opcode[1],
+                voltage.value(),
+                Self::timeout_1(tx_tcxo_timeout),
+                Self::timeout_2(tx_tcxo_timeout),
+                Self::timeout_3(tx_tcxo_timeout),
+            ];
+            self.write_command(&tcxo_cmd).await?;
+        }
 
         // Disable timeout (0 = no timeout)
         let opcode = RadioOpCode::SetTx.bytes();
@@ -2725,18 +2752,22 @@ where
             _ => 0x00000000,
         };
 
+        debug!("set_irq_params: dio1_mask = 0x{:08x}", dio1_mask);
+
         let opcode = SystemOpCode::SetDioIrqParams.bytes();
         let cmd = [
             opcode[0],
             opcode[1],
+            // Global IRQ enable mask (bytes 2-5)
             ((dio1_mask >> 24) & 0xFF) as u8,
             ((dio1_mask >> 16) & 0xFF) as u8,
             ((dio1_mask >> 8) & 0xFF) as u8,
             (dio1_mask & 0xFF) as u8,
-            0x00, // DIO2 mask (4 bytes)
-            0x00,
-            0x00,
-            0x00,
+            // DIO1 mask (bytes 6-9) - route these IRQs to DIO1 pin
+            ((dio1_mask >> 24) & 0xFF) as u8,
+            ((dio1_mask >> 16) & 0xFF) as u8,
+            ((dio1_mask >> 8) & 0xFF) as u8,
+            (dio1_mask & 0xFF) as u8,
         ];
         self.write_command(&cmd).await
     }
@@ -2758,17 +2789,13 @@ where
         radio_mode: RadioMode,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<Option<IrqState>, RadioError> {
-        // Read IRQ status - LR1110 returns 32-bit IRQ flags directly via GetStatus
-        // We'll use a direct read to get the status including IRQ flags
-        // For now, use the system command to get IRQ status
+        // Read IRQ status from the LR1110
+        let irq_flags = self.get_irq_flags().await?;
 
-        // Note: The proper way would be to implement direct_read in the interface,
-        // but for simplicity we'll clear and read IRQs via standard command
-        let irq_flags = 0u32;
-
-        // This is a simplified version - in production you'd want to use GetStatus direct read
-        // For now we just return None to indicate no IRQ processing
-        // A full implementation would read the 32-bit IRQ mask properly
+        debug!(
+            "process_irq: irq_flags = 0x{:08x} in radio mode {}",
+            irq_flags, radio_mode
+        );
 
         match radio_mode {
             RadioMode::Transmit => {

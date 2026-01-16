@@ -70,6 +70,16 @@ impl Lr1110Variant for Lr1110 {
     fn get_pa_selection(&self) -> PaSelection {
         self.pa_selection
     }
+
+    fn get_pa_supply(&self) -> PaRegSupply {
+        // Per LR1110 User Manual Table 9-1 and 9-2:
+        // - LP PA uses Vreg (internal regulator)
+        // - HP PA uses Vbat (battery)
+        match self.pa_selection {
+            PaSelection::Lp => PaRegSupply::Vreg,
+            PaSelection::Hp | PaSelection::Hf => PaRegSupply::Vbat,
+        }
+    }
 }
 
 /// LR1120 chip variant (placeholder for future implementation)
