@@ -45,8 +45,8 @@ bind_interrupts!(struct Irqs {
 });
 
 const RF_FREQUENCY: u32 = 915_000_000;
-const TX_OUTPUT_POWER_DBM: i32 = 14;
-const INTER_PKT_DELAY_MS: u64 = 3000;
+const TX_OUTPUT_POWER_DBM: i32 = -4;
+const INTER_PKT_DELAY_MS: u64 = 20000;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {

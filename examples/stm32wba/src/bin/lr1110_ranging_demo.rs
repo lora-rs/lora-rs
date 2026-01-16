@@ -75,8 +75,8 @@ const IS_MANAGER: bool = false;
 /// RF frequency for initialization phase (Hz)
 const RF_FREQUENCY: u32 = 915_000_000;
 
-/// TX output power (dBm)
-const TX_OUTPUT_POWER_DBM: i32 = 14;
+/// TX output power (dBm) - ~half power (was 14)
+const TX_OUTPUT_POWER_DBM: i32 = 11;
 
 /// LoRa spreading factor
 const LORA_SF: u8 = lora_sf::SF8;

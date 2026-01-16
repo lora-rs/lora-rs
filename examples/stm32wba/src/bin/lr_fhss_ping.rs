@@ -50,10 +50,10 @@ bind_interrupts!(struct Irqs {
 });
 
 const RF_FREQUENCY: u32 = 915_000_000;
-const TX_OUTPUT_POWER_DBM: i32 = -9;
+const TX_OUTPUT_POWER_DBM: i32 = -12;  // ~half power (was -9)
 const MIN_PAYLOAD_LENGTH: usize = 15;
 const MAX_PAYLOAD_LENGTH: usize = 15;
-const INTER_PKT_DELAY_MS: u64 = 3000;
+const INTER_PKT_DELAY_MS: u64 = 20000;
 
 #[embassy_executor::main]
 async fn main(_spawner: Spawner) {
