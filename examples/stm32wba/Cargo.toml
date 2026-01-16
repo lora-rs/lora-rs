@@ -5,6 +5,11 @@ version = "0.1.0"
 license = "MIT OR Apache-2.0"
 publish = false
 
+[features]
+default = []
+# Run ranging demo as Manager (initiator). Without this feature, runs as Subordinate (responder).
+manager = []
+
 [dependencies]
 # STM32WBA65RI with LR1110 external radio
 embassy-stm32 = { version = "0.5.0", features = [

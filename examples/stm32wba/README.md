@@ -143,6 +143,80 @@ cargo run --release --bin lr1110_wifi_scan
 - [SWDR001 - LR11xx Driver](https://www.semtech.com)
 - [LoRa Cloud WiFi Geolocation](https://www.loracloud.com/documentation/geolocation)
 
+### lr1110_ranging_demo
+
+Demonstrates RTToF (Round-Trip Time of Flight) ranging between two LR1110-based devices. This is a Rust implementation of Semtech's lr11xx_ranging_demo.
+
+**Features:**
+- Two-device ranging: Manager (initiator) and Subordinate (responder)
+- LoRa initialization handshake for device synchronization
+- RTToF ranging with 39-channel frequency hopping (US915 band)
+- Distance calculation with median filtering for noise reduction
+- RSSI measurement for path loss analysis
+- Packet Error Rate (PER) calculation
+
+**Hardware Requirements:**
+- Two STM32WBA65RI + LR1110 boards
+- Both configured with the same pin connections
+
+**How It Works:**
+1. **Initialization Phase (LoRa):**
+   - Manager sends an initialization packet with ranging address
+   - Subordinate responds with its RSSI measurement
+   - Both devices synchronize on the first frequency channel
+
+2. **Ranging Phase (RTToF):**
+   - Devices hop through 39 frequency channels
+   - Manager sends RTToF request, Subordinate responds
+   - Manager measures round-trip time and calculates distance
+   - Each channel provides one distance measurement
+
+3. **Result Processing:**
+   - Median filtering removes outliers
+   - Final distance is reported along with RSSI and PER
+
+**Run as Manager (Device 1):**
+```bash
+cargo run --release --bin lr1110_ranging_demo --features manager
+```
+
+**Run as Subordinate (Device 2):**
+```bash
+cargo run --release --bin lr1110_ranging_demo
+```
+
+**Output Example (Manager):**
+```
+=== Ranging Session Complete ===
+Successful measurements: 35/39
+Packet Error Rate: 10%
+Median distance: 15 meters
+Manager RSSI: -45 dBm
+Subordinate RSSI: -47 dBm
+================================
+```
+
+**Configuration:**
+Edit the constants at the top of `lr1110_ranging_demo.rs`:
+- `RF_FREQUENCY` - Base frequency for initialization (default: 915 MHz)
+- `TX_OUTPUT_POWER_DBM` - Transmit power (default: 14 dBm)
+- `LORA_SF` - Spreading factor (default: SF8)
+- `LORA_BW` - Bandwidth (default: 500 kHz)
+- `RANGING_ADDRESS` - Device pairing address
+
+**Frequency Bands:**
+The demo includes frequency hopping tables for multiple regions:
+- US915 (902-928 MHz) - Default
+- EU868 (863-870 MHz)
+- CN490 (490-510 MHz)
+- ISM 2.4 GHz
+
+To change the frequency band, modify the `ranging_channels::US915` reference in the code.
+
+**Reference:**
+- [lr11xx_ranging_demo](https://github.com/Lora-net/SWDM001) - Original C implementation
+- [LR1110 Ranging Application Note](https://www.semtech.com)
+
 ## Building
 
 ### Prerequisites

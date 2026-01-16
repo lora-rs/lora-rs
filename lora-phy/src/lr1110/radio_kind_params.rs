@@ -63,12 +63,14 @@ pub enum IrqMask {
 }
 
 impl IrqMask {
-    pub fn value(self) -> u32 {
+    /// Get the raw u32 value of this IRQ mask
+    pub const fn value(self) -> u32 {
         self as u32
     }
 
+    /// Check if this IRQ flag is set in the given mask
     pub fn is_set(self, mask: u32) -> bool {
-        self.value() & mask == self.value()
+        (self as u32) & mask == (self as u32)
     }
 }
 
@@ -2038,6 +2040,222 @@ pub fn rttof_distance_raw_to_meters(bandwidth: Bandwidth, raw_result: &RttofRawR
 pub fn rttof_rssi_raw_to_dbm(raw_result: &RttofRawResult) -> i8 {
     // Only the last byte is meaningful
     -((raw_result[3] >> 1) as i8)
+}
+
+// =============================================================================
+// RTToF Ranging Constants for Demo Application
+// =============================================================================
+
+/// Packet type values for use with set_packet_type()
+pub mod packet_type {
+    /// LoRa packet type
+    pub const LORA: u8 = 0x02;
+    /// RTToF (Round-Trip Time of Flight) packet type for ranging
+    pub const RTTOF: u8 = 0x05;
+}
+
+/// IRQ masks for RTToF ranging
+pub mod ranging_irq {
+    use super::IrqMask;
+
+    /// LoRa IRQ mask for initialization phase (RxDone, TxDone, Timeout, CrcError)
+    pub const LORA_IRQ_MASK: u32 =
+        IrqMask::TxDone.value() | IrqMask::RxDone.value() |
+        IrqMask::Timeout.value() | IrqMask::CrcError.value() |
+        IrqMask::HeaderError.value();
+
+    /// Manager device IRQ mask for RTToF ranging
+    /// RttofExchValid = ranging exchange completed successfully
+    /// RttofTimeout = ranging timeout
+    pub const MANAGER_IRQ_MASK: u32 =
+        IrqMask::RttofExchValid.value() | IrqMask::RttofTimeout.value();
+
+    /// Subordinate device IRQ mask for RTToF ranging
+    /// RttofReqValid = received valid ranging request
+    /// RttofRespDone = sent ranging response
+    /// RttofReqDiscarded = discarded ranging request (address mismatch)
+    pub const SUBORDINATE_IRQ_MASK: u32 =
+        IrqMask::RttofReqValid.value() | IrqMask::RttofRespDone.value() |
+        IrqMask::RttofReqDiscarded.value();
+}
+
+/// Ranging configuration constants (matching lr11xx_ranging_demo)
+pub mod ranging_config {
+    /// Default ranging address
+    pub const DEFAULT_ADDRESS: u32 = 0x32101222;
+
+    /// Number of address bytes the subordinate checks (1-4)
+    pub const SUBORDINATE_CHECK_LENGTH_BYTES: u8 = 4;
+
+    /// Number of symbols in ranging response
+    pub const RESPONSE_SYMBOLS_COUNT: u8 = 15;
+
+    /// Payload length for LoRa initialization packets
+    pub const INIT_PAYLOAD_LENGTH: usize = 6;
+
+    /// Processing time between ranging channels (ms)
+    pub const DONE_PROCESSING_TIME_MS: u32 = 5;
+
+    /// Maximum number of frequency hopping channels
+    pub const MAX_HOPPING_CHANNELS: usize = 39;
+
+    /// Minimum successful measurements for valid result
+    pub const MIN_HOPPING_CHANNELS: usize = 10;
+
+    /// LoRa sync word for private network
+    pub const LORA_SYNC_WORD: u8 = 0x34;
+
+    /// Continuous RX timeout value
+    pub const RX_CONTINUOUS: u32 = 0xFFFFFF;
+}
+
+/// Frequency hopping channel tables for different regions
+pub mod ranging_channels {
+    /// ISM 902-928 MHz (US915) - 39 channels
+    pub const US915: [u32; 39] = [
+        907850000, 902650000, 914350000, 906550000, 905900000, 924750000, 926700000, 918250000, 921500000, 909150000,
+        907200000, 924100000, 903950000, 910450000, 917600000, 919550000, 923450000, 925400000, 909800000, 915000000,
+        912400000, 904600000, 908500000, 911100000, 911750000, 916300000, 918900000, 905250000, 913700000, 927350000,
+        926050000, 916950000, 913050000, 903300000, 920200000, 922800000, 915650000, 922150000, 920850000,
+    ];
+
+    /// ISM 863-870 MHz (EU868) - 39 channels
+    pub const EU868: [u32; 39] = [
+        863750000, 865100000, 864800000, 868400000, 865250000, 867500000, 865550000, 867650000, 866150000, 864050000,
+        867800000, 863300000, 863450000, 867950000, 868550000, 868850000, 867200000, 867050000, 864650000, 863900000,
+        864500000, 866450000, 865400000, 868700000, 863150000, 866750000, 866300000, 864950000, 864350000, 866000000,
+        866900000, 868250000, 865850000, 865700000, 867350000, 868100000, 863600000, 866600000, 864200000,
+    ];
+
+    /// ISM 490-510 MHz (CN490) - 39 channels
+    pub const CN490: [u32; 39] = [
+        490810000, 508940000, 496690000, 507470000, 504040000, 508450000, 505020000, 497670000, 497180000, 500610000,
+        494240000, 493260000, 495710000, 491300000, 504530000, 501100000, 502080000, 501590000, 499140000, 494730000,
+        506980000, 492280000, 509430000, 495220000, 492770000, 507960000, 493750000, 499630000, 496200000, 498160000,
+        505510000, 500120000, 503060000, 506000000, 506490000, 498650000, 491790000, 503550000, 502570000,
+    ];
+
+    /// ISM 2.4 GHz - 39 channels
+    pub const ISM2G4: [u32; 39] = [
+        2450000000, 2402000000, 2476000000, 2436000000, 2430000000, 2468000000, 2458000000, 2416000000,
+        2424000000, 2478000000, 2456000000, 2448000000, 2462000000, 2472000000, 2432000000, 2446000000,
+        2422000000, 2442000000, 2460000000, 2474000000, 2414000000, 2464000000, 2454000000, 2444000000,
+        2404000000, 2434000000, 2410000000, 2408000000, 2440000000, 2452000000, 2480000000, 2426000000,
+        2428000000, 2466000000, 2418000000, 2412000000, 2406000000, 2470000000, 2438000000,
+    ];
+}
+
+/// LoRa spreading factor values
+pub mod lora_sf {
+    /// SF5
+    pub const SF5: u8 = 0x05;
+    /// SF6
+    pub const SF6: u8 = 0x06;
+    /// SF7
+    pub const SF7: u8 = 0x07;
+    /// SF8
+    pub const SF8: u8 = 0x08;
+    /// SF9
+    pub const SF9: u8 = 0x09;
+    /// SF10
+    pub const SF10: u8 = 0x0A;
+    /// SF11
+    pub const SF11: u8 = 0x0B;
+    /// SF12
+    pub const SF12: u8 = 0x0C;
+}
+
+/// LoRa bandwidth values
+pub mod lora_bw {
+    /// 125 kHz
+    pub const BW_125: u8 = 0x04;
+    /// 250 kHz
+    pub const BW_250: u8 = 0x05;
+    /// 500 kHz
+    pub const BW_500: u8 = 0x06;
+}
+
+/// LoRa coding rate values
+pub mod lora_cr {
+    /// CR 4/5
+    pub const CR_4_5: u8 = 0x01;
+    /// CR 4/6
+    pub const CR_4_6: u8 = 0x02;
+    /// CR 4/7
+    pub const CR_4_7: u8 = 0x03;
+    /// CR 4/8
+    pub const CR_4_8: u8 = 0x04;
+}
+
+/// Calculate single symbol time in milliseconds
+///
+/// # Arguments
+/// * `bw` - Bandwidth value (from lora_bw module)
+/// * `sf` - Spreading factor value (from lora_sf module)
+///
+/// # Returns
+/// Symbol time in milliseconds as f32
+pub fn calculate_symbol_time_ms(bw: u8, sf: u8) -> f32 {
+    let bw_khz: f32 = match bw {
+        0x04 => 125.0,  // BW_125
+        0x05 => 250.0,  // BW_250
+        0x06 => 500.0,  // BW_500
+        _ => 500.0,
+    };
+
+    let sf_val = sf as u32;
+    let symbol_time_ms = (1u32 << sf_val) as f32 / bw_khz;
+    symbol_time_ms
+}
+
+/// Calculate ranging request delay in milliseconds
+///
+/// This calculates the time for a complete ranging exchange including:
+/// - Preamble
+/// - Frequency sync (4.25 symbols, 6.25 for SF5/SF6)
+/// - Double header (16 symbols)
+/// - Ranging request (15 symbols)
+/// - Ranging silence (2 symbols)
+/// - Response symbols
+///
+/// # Arguments
+/// * `bw` - Bandwidth value
+/// * `sf` - Spreading factor value
+/// * `preamble_len` - Preamble length in symbols
+/// * `response_symbols` - Number of response symbols
+///
+/// # Returns
+/// Delay in milliseconds
+pub fn calculate_ranging_request_delay_ms(bw: u8, sf: u8, preamble_len: u16, response_symbols: u8) -> u32 {
+    let symbol_time_ms = calculate_symbol_time_ms(bw, sf);
+
+    // Extra symbols for SF5/SF6
+    let extra_symbols: f32 = if sf == lora_sf::SF5 || sf == lora_sf::SF6 {
+        2.0
+    } else {
+        0.0
+    };
+
+    // Total symbols for ranging exchange
+    // Preamble + FreqSync(4.25) + DoubleHeader(16) + Request(15) + Silence(2) + Response
+    let freq_sync_symbols = 4.25;
+    let double_header_symbols = 16.0;
+    let request_symbols = 15.0;
+    let silence_symbols = 2.0;
+
+    let total_symbols = preamble_len as f32
+        + freq_sync_symbols
+        + double_header_symbols
+        + request_symbols
+        + silence_symbols
+        + response_symbols as f32
+        + extra_symbols;
+
+    // Add PA ramp time (approximately 0.3ms for typical values) and processing time
+    let pa_ramp_ms = 0.3;
+    let delay_ms = (symbol_time_ms * total_symbols) + pa_ramp_ms + ranging_config::DONE_PROCESSING_TIME_MS as f32 + 1.0;
+
+    delay_ms as u32
 }
 
 // =============================================================================

@@ -47,6 +47,14 @@ pub use radio_kind_params::{
     rttof_distance_raw_to_meters, rttof_rssi_raw_to_dbm,
     RTTOF_RESULT_LENGTH, RTTOF_DEFAULT_ADDRESS, RTTOF_DEFAULT_NB_SYMBOLS,
 };
+// RTToF Ranging demo constants and helpers
+pub use radio_kind_params::{
+    packet_type, ranging_irq, ranging_config, ranging_channels,
+    lora_sf, lora_bw, lora_cr,
+    calculate_symbol_time_ms, calculate_ranging_request_delay_ms,
+};
+// IrqMask for direct use
+pub use radio_kind_params::IrqMask;
 // Bootloader types
 pub use radio_kind_params::{
     BootloaderOpCode, BootloaderVersion, BootloaderCommandStatus,
@@ -1550,6 +1558,259 @@ where
         let rssi_dbm = rttof_rssi_raw_to_dbm(&raw_rssi);
 
         Ok(RttofDistanceResult { distance_m, rssi_dbm })
+    }
+
+    // =========================================================================
+    // RTToF Ranging Public Methods (for ranging demo)
+    // =========================================================================
+
+    /// Set the packet type (LoRa, RTToF, etc.)
+    ///
+    /// Used to switch between standard LoRa mode and RTToF mode for ranging.
+    ///
+    /// # Arguments
+    /// * `packet_type` - The packet type to set (LoRa = 0x02, RTToF = 0x05)
+    pub async fn set_packet_type(&mut self, packet_type: u8) -> Result<(), RadioError> {
+        let opcode = RadioOpCode::SetPktType.bytes();
+        let cmd = [opcode[0], opcode[1], packet_type];
+        self.write_command(&cmd).await
+    }
+
+    /// Set the RF frequency
+    ///
+    /// # Arguments
+    /// * `frequency_hz` - Frequency in Hz
+    pub async fn set_rf_frequency(&mut self, frequency_hz: u32) -> Result<(), RadioError> {
+        // LR1110 uses frequency directly in Hz (as 32-bit value)
+        let opcode = RadioOpCode::SetRfFrequency.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            ((frequency_hz >> 24) & 0xFF) as u8,
+            ((frequency_hz >> 16) & 0xFF) as u8,
+            ((frequency_hz >> 8) & 0xFF) as u8,
+            (frequency_hz & 0xFF) as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Set DIO IRQ parameters with custom mask
+    ///
+    /// # Arguments
+    /// * `irq_mask` - 32-bit IRQ mask for DIO1
+    pub async fn set_dio_irq_params_custom(&mut self, irq_mask: u32) -> Result<(), RadioError> {
+        let opcode = SystemOpCode::SetDioIrqParams.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            ((irq_mask >> 24) & 0xFF) as u8,
+            ((irq_mask >> 16) & 0xFF) as u8,
+            ((irq_mask >> 8) & 0xFF) as u8,
+            (irq_mask & 0xFF) as u8,
+            0x00, // DIO2 mask (4 bytes)
+            0x00,
+            0x00,
+            0x00,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Clear all IRQ flags
+    pub async fn clear_all_irq(&mut self) -> Result<(), RadioError> {
+        let opcode = SystemOpCode::ClearIrq.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            0xFF, // Clear all interrupts (32-bit mask)
+            0xFF,
+            0xFF,
+            0xFF,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Get IRQ flags via direct status read
+    ///
+    /// # Returns
+    /// 32-bit IRQ flags
+    pub async fn get_irq_flags(&mut self) -> Result<u32, RadioError> {
+        // Wait for chip to be ready
+        self.intf.iv.wait_on_busy().await?;
+
+        // LR1110 returns status on any SPI read
+        // We'll use GetStatus to get the IRQ flags
+        let opcode = SystemOpCode::GetStatus.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 4];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        // Parse IRQ flags (32-bit, big-endian)
+        let irq_flags = ((rbuffer[0] as u32) << 24)
+            | ((rbuffer[1] as u32) << 16)
+            | ((rbuffer[2] as u32) << 8)
+            | (rbuffer[3] as u32);
+
+        Ok(irq_flags)
+    }
+
+    /// Start transmission (for RTToF ranging)
+    ///
+    /// # Arguments
+    /// * `timeout_rtc_steps` - Timeout in RTC steps (0 for no timeout)
+    pub async fn set_tx_mode(&mut self, timeout_rtc_steps: u32) -> Result<(), RadioError> {
+        self.intf.iv.enable_rf_switch_tx().await?;
+
+        let opcode = RadioOpCode::SetTx.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            ((timeout_rtc_steps >> 16) & 0xFF) as u8,
+            ((timeout_rtc_steps >> 8) & 0xFF) as u8,
+            (timeout_rtc_steps & 0xFF) as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Start reception (for RTToF ranging)
+    ///
+    /// # Arguments
+    /// * `timeout_rtc_steps` - Timeout in RTC steps (0xFFFFFF for continuous)
+    pub async fn set_rx_mode(&mut self, timeout_rtc_steps: u32) -> Result<(), RadioError> {
+        self.intf.iv.enable_rf_switch_rx().await?;
+
+        let opcode = RadioOpCode::SetRx.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            ((timeout_rtc_steps >> 16) & 0xFF) as u8,
+            ((timeout_rtc_steps >> 8) & 0xFF) as u8,
+            (timeout_rtc_steps & 0xFF) as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Set standby mode
+    ///
+    /// # Arguments
+    /// * `use_xosc` - Use XOSC instead of RC oscillator
+    pub async fn set_standby_mode(&mut self, use_xosc: bool) -> Result<(), RadioError> {
+        self.intf.iv.disable_rf_switch().await?;
+
+        let opcode = SystemOpCode::SetStandby.bytes();
+        let standby_cfg = if use_xosc {
+            StandbyMode::Xosc.value()
+        } else {
+            StandbyMode::Rc.value()
+        };
+        let cmd = [opcode[0], opcode[1], standby_cfg];
+        self.write_command(&cmd).await
+    }
+
+    /// Write data to TX buffer
+    ///
+    /// # Arguments
+    /// * `offset` - Buffer offset
+    /// * `data` - Data to write
+    pub async fn write_tx_buffer(&mut self, offset: u8, data: &[u8]) -> Result<(), RadioError> {
+        self.write_buffer(offset, data).await
+    }
+
+    /// Read data from RX buffer
+    ///
+    /// # Arguments
+    /// * `offset` - Buffer offset
+    /// * `length` - Number of bytes to read
+    /// * `buffer` - Buffer to read into
+    pub async fn read_rx_buffer(&mut self, offset: u8, length: u8, buffer: &mut [u8]) -> Result<(), RadioError> {
+        self.read_buffer(offset, length, buffer).await
+    }
+
+    /// Get RX buffer status
+    ///
+    /// # Returns
+    /// (payload_length, buffer_start_pointer)
+    pub async fn get_rx_buffer_status(&mut self) -> Result<(u8, u8), RadioError> {
+        let opcode = RadioOpCode::GetRxBufferStatus.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 2];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        Ok((rbuffer[0], rbuffer[1]))
+    }
+
+    /// Get LoRa packet status
+    ///
+    /// # Returns
+    /// (rssi_pkt_dbm, snr_pkt_db)
+    pub async fn get_lora_packet_status(&mut self) -> Result<(i16, i8), RadioError> {
+        let opcode = RadioOpCode::GetPktStatus.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 3];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        // Parse RSSI and SNR
+        // RSSI is returned as unsigned value, needs to be converted: rssi_dbm = -rssi_raw / 2
+        let rssi_pkt_dbm = -((rbuffer[0] as i16) / 2);
+        // SNR is signed
+        let snr_pkt_db = rbuffer[1] as i8;
+
+        Ok((rssi_pkt_dbm, snr_pkt_db))
+    }
+
+    /// Set LoRa modulation parameters
+    ///
+    /// # Arguments
+    /// * `sf` - Spreading factor (5-12)
+    /// * `bw` - Bandwidth
+    /// * `cr` - Coding rate
+    /// * `ldro` - Low data rate optimization (0 or 1)
+    pub async fn set_lora_mod_params(&mut self, sf: u8, bw: u8, cr: u8, ldro: u8) -> Result<(), RadioError> {
+        let opcode = RadioOpCode::SetModulationParam.bytes();
+        let cmd = [opcode[0], opcode[1], sf, bw, cr, ldro];
+        self.write_command(&cmd).await
+    }
+
+    /// Set LoRa packet parameters
+    ///
+    /// # Arguments
+    /// * `preamble_len` - Preamble length in symbols
+    /// * `header_type` - Header type (0 = explicit, 1 = implicit)
+    /// * `payload_len` - Payload length
+    /// * `crc_on` - Enable CRC (0 = off, 1 = on)
+    /// * `iq_inverted` - Invert IQ (0 = standard, 1 = inverted)
+    pub async fn set_lora_pkt_params(
+        &mut self,
+        preamble_len: u16,
+        header_type: u8,
+        payload_len: u8,
+        crc_on: u8,
+        iq_inverted: u8,
+    ) -> Result<(), RadioError> {
+        let opcode = RadioOpCode::SetPktParam.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            ((preamble_len >> 8) & 0xFF) as u8,
+            (preamble_len & 0xFF) as u8,
+            header_type,
+            payload_len,
+            crc_on,
+            iq_inverted,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Set LoRa sync word
+    ///
+    /// # Arguments
+    /// * `sync_word` - Sync word value (e.g., 0x34 for private network)
+    pub async fn set_lora_sync_word(&mut self, sync_word: u8) -> Result<(), RadioError> {
+        let opcode = RadioOpCode::SetLoRaSyncWord.bytes();
+        let cmd = [opcode[0], opcode[1], sync_word];
+        self.write_command(&cmd).await
     }
 
     // =========================================================================
