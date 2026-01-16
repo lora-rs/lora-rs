@@ -48,14 +48,29 @@ where
     }
 
     // Request a read, filling the provided buffer.
+    // For LR11xx: This is a two-step operation per the HAL specification:
+    // 1. Write command (NSS low -> write -> NSS high)
+    // 2. Wait for BUSY to go low
+    // 3. Read response (NSS low -> read with NOPs -> NSS high)
+    // The first byte of the response is Stat1, followed by the actual data.
     pub async fn read(&mut self, write_buffer: &[u8], read_buffer: &mut [u8]) -> Result<(), RadioError> {
-        {
-            let mut ops = [Operation::Write(write_buffer), Operation::Read(read_buffer)];
-
-            self.spi.transaction(&mut ops).await.map_err(|_| SPI)?;
+        // Step 1: Write command in separate transaction
+        if !write_buffer.is_empty() {
+            self.spi.write(write_buffer).await.map_err(|_| SPI)?;
         }
 
+        // Step 2: Wait for BUSY to go low
         self.iv.wait_on_busy().await?;
+
+        // Step 3: Read response in separate transaction
+        // First byte is Stat1 (discarded), followed by actual data
+        // We need to read stat1 + data_length bytes
+        let total_len = 1 + read_buffer.len();
+        let mut full_buffer = [0u8; 32]; // Max reasonable size
+        self.spi.read(&mut full_buffer[..total_len]).await.map_err(|_| SPI)?;
+
+        // Copy data (skip stat1 at position 0)
+        read_buffer.copy_from_slice(&full_buffer[1..total_len]);
 
         trace!(
             "read: addr={=[u8]:02x}, len={}, data={=[u8]:02x}",
@@ -68,28 +83,33 @@ where
     }
 
     // Request a read with status, filling the provided buffer and returning the status.
+    // For LR11xx: Same two-step protocol as read(), but returns the Stat1 byte.
     pub async fn read_with_status(&mut self, write_buffer: &[u8], read_buffer: &mut [u8]) -> Result<u8, RadioError> {
-        let mut status = [0u8];
-        {
-            let mut ops = [
-                Operation::Write(write_buffer),
-                Operation::Read(&mut status),
-                Operation::Read(read_buffer),
-            ];
-
-            self.spi.transaction(&mut ops).await.map_err(|_| SPI)?;
+        // Step 1: Write command in separate transaction
+        if !write_buffer.is_empty() {
+            self.spi.write(write_buffer).await.map_err(|_| SPI)?;
         }
 
+        // Step 2: Wait for BUSY to go low
         self.iv.wait_on_busy().await?;
+
+        // Step 3: Read response in separate transaction
+        // First byte is Stat1, followed by actual data
+        let total_len = 1 + read_buffer.len();
+        let mut full_buffer = [0u8; 32]; // Max reasonable size
+        self.spi.read(&mut full_buffer[..total_len]).await.map_err(|_| SPI)?;
+
+        let status = full_buffer[0];
+        read_buffer.copy_from_slice(&full_buffer[1..total_len]);
 
         trace!(
             "read: addr={=[u8]:02x}, len={}, status={:02x}, buf={=[u8]:02x}",
             write_buffer,
             read_buffer.len(),
-            status[0],
+            status,
             read_buffer
         );
 
-        Ok(status[0])
+        Ok(status)
     }
 }
