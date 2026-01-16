@@ -217,6 +217,106 @@ To change the frequency band, modify the `ranging_channels::US915` reference in 
 - [lr11xx_ranging_demo](https://github.com/Lora-net/SWDM001) - Original C implementation
 - [LR1110 Ranging Application Note](https://www.semtech.com)
 
+### lr1110_firmware_update
+
+Demonstrates how to update the LR1110 firmware using the bootloader interface. This is a Rust implementation based on Semtech's SWTL001 firmware updater tool.
+
+**Features:**
+- Reset chip and enter bootloader mode
+- Validate bootloader version and chip type
+- Read device identifiers (PIN, Chip EUI, Join EUI)
+- Erase flash memory
+- Write encrypted firmware in 256-byte chunks
+- Reboot and verify new firmware version
+
+**Firmware Update Process:**
+1. Chip is reset and enters bootloader mode
+2. Bootloader version is validated against firmware type
+3. Device identifiers are logged for reference
+4. Entire flash is erased (required before write)
+5. Firmware image is written in 64-word (256-byte) chunks
+6. Chip reboots and new firmware version is verified
+
+**Obtaining Firmware Images:**
+
+Firmware images are pre-encrypted by Semtech. To obtain them:
+
+1. Download the SWTL001 package from [Semtech](https://www.semtech.com)
+2. Find the firmware header file in `application/inc/` (e.g., `lr1110_transceiver_0401.h`)
+3. Convert the C array to Rust format:
+
+```c
+// C format (from SWTL001):
+const uint32_t lr11xx_firmware_image[] = {
+    0x3dd0a84a, 0xd225a051, 0x3b4ab123, ...
+};
+```
+
+```rust
+// Rust format (for this example):
+const FIRMWARE_IMAGE: &[u32] = &[
+    0x3dd0a84a, 0xd225a051, 0x3b4ab123, ...
+];
+```
+
+4. Update `FIRMWARE_TYPE` and `EXPECTED_FIRMWARE_VERSION` constants
+
+**Supported Firmware Types:**
+- LR1110 Transceiver (bootloader 0x6500)
+- LR1110 Modem V1 (bootloader 0x6500)
+- LR1120 Transceiver (bootloader 0x2000)
+- LR1121 Transceiver (bootloader 0x2100)
+- LR1121 Modem V2 (bootloader 0x2100)
+
+**Run:**
+```bash
+cargo run --release --bin lr1110_firmware_update
+```
+
+**Output Example:**
+```
+==============================================
+LR1110 Firmware Update Example
+==============================================
+Starting firmware update...
+Firmware type: Lr1110Transceiver
+Expected version: 0x0401
+Firmware size: 51234 words (204936 bytes)
+Step 1: Resetting chip to enter bootloader mode...
+Step 2: Reading bootloader version...
+  Hardware version: 0x22
+  Chip type: 0xDF
+  Bootloader version: 0x6500
+  Bootloader version validated OK
+Step 3: Reading device identifiers...
+  PIN: 12345678
+  Chip EUI: 0011223344556677
+  Join EUI: AABBCCDDEEFF0011
+Step 4: Erasing flash memory...
+  Flash erased successfully
+Step 5: Writing firmware image...
+  Progress: 10% (5123/51234 words)
+  ...
+  Progress: 100% (51234/51234 words)
+  Firmware written successfully
+Step 6: Rebooting to execute new firmware...
+Step 7: Verifying firmware version...
+  Firmware version: 0x0401
+  Firmware version verified OK
+==============================================
+FIRMWARE UPDATE SUCCESSFUL!
+==============================================
+```
+
+**Warning:**
+- The firmware erase operation is DESTRUCTIVE and cannot be undone
+- Make sure you have the correct firmware for your chip type
+- Do not power off during the update process
+
+**Reference:**
+- [SWTL001 - LR11xx Firmware Update Tool](https://www.semtech.com)
+- [AN1200.57 - LR1110 Upgrade of the Program Memory](https://www.semtech.com)
+
 ## Building
 
 ### Prerequisites
