@@ -15,7 +15,7 @@ The examples use the following default pin configuration (adjust in code as need
 
 | Function | Pin | Description |
 |----------|-----|-------------|
-| SPI2_NSS | PA4 | SPI Chip Select (manual GPIO) |
+| SPI2_NSS | PD14 | SPI Chip Select (manual GPIO) |
 | SPI2_SCK | PB10 | SPI Clock |
 | SPI2_MISO | PA9 | SPI Master In Slave Out |
 | SPI2_MOSI | PC3 | SPI Master Out Slave In |

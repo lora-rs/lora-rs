@@ -34,6 +34,13 @@ pub use radio_kind_params::{
     WIFI_CHANNEL_8_MASK, WIFI_CHANNEL_9_MASK, WIFI_CHANNEL_10_MASK, WIFI_CHANNEL_11_MASK,
     WIFI_CHANNEL_12_MASK, WIFI_CHANNEL_13_MASK, WIFI_CHANNEL_14_MASK,
 };
+// Crypto Engine types
+pub use radio_kind_params::{
+    CryptoOpCode, CryptoElement, CryptoStatus, CryptoLorawanVersion, CryptoKeyId,
+    CryptoKey, CryptoNonce, CryptoMic, CryptoParam,
+    CRYPTO_MIC_LENGTH, CRYPTO_AES_CMAC_LENGTH, CRYPTO_DATA_MAX_LENGTH,
+    CRYPTO_KEY_LENGTH, CRYPTO_NONCE_LENGTH, CRYPTO_PARAMETER_LENGTH,
+};
 use radio_kind_params::*;
 
 use crate::mod_params::*;
@@ -927,6 +934,445 @@ where
             timestamp_s as u8,
         ];
         self.write_command(&cmd).await
+    }
+
+    // =========================================================================
+    // Crypto Engine Functions (from SWDR001 lr11xx_crypto_engine.c)
+    // =========================================================================
+
+    /// Select the crypto element to use for subsequent operations
+    ///
+    /// # Arguments
+    /// * `element` - Crypto element to use (CryptoEngine or SecureElement)
+    pub async fn crypto_select(&mut self, element: CryptoElement) -> Result<(), RadioError> {
+        let opcode = CryptoOpCode::Select.bytes();
+        let cmd = [opcode[0], opcode[1], element.value()];
+        self.write_command(&cmd).await
+    }
+
+    /// Set a key in the specified key slot
+    ///
+    /// # Arguments
+    /// * `key_id` - Key slot to write to
+    /// * `key` - 16-byte AES key
+    ///
+    /// # Returns
+    /// * `Ok(CryptoStatus)` - Status of the operation
+    pub async fn crypto_set_key(&mut self, key_id: CryptoKeyId, key: &CryptoKey) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::SetKey.bytes();
+        let mut cmd = [0u8; 19]; // 2 opcode + 1 key_id + 16 key
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = key_id.value();
+        cmd[3..19].copy_from_slice(key);
+
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(CryptoStatus::from(rbuffer[0]))
+    }
+
+    /// Derive a new key from an existing key using a nonce
+    ///
+    /// # Arguments
+    /// * `src_key_id` - Source key slot
+    /// * `dest_key_id` - Destination key slot for derived key
+    /// * `nonce` - 16-byte nonce for key derivation
+    ///
+    /// # Returns
+    /// * `Ok(CryptoStatus)` - Status of the operation
+    pub async fn crypto_derive_key(
+        &mut self,
+        src_key_id: CryptoKeyId,
+        dest_key_id: CryptoKeyId,
+        nonce: &CryptoNonce,
+    ) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::DeriveKey.bytes();
+        let mut cmd = [0u8; 20]; // 2 opcode + 1 src_key_id + 1 dest_key_id + 16 nonce
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = src_key_id.value();
+        cmd[3] = dest_key_id.value();
+        cmd[4..20].copy_from_slice(nonce);
+
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(CryptoStatus::from(rbuffer[0]))
+    }
+
+    /// Process a LoRaWAN Join Accept message
+    ///
+    /// Decrypts the Join Accept and verifies its MIC.
+    ///
+    /// # Arguments
+    /// * `dec_key_id` - Key slot for decryption (NwkKey for LoRaWAN 1.0.x)
+    /// * `ver_key_id` - Key slot for MIC verification (JSIntKey for LoRaWAN 1.1.x)
+    /// * `lorawan_version` - LoRaWAN version (affects header length)
+    /// * `header` - Join Accept header (1 byte for 1.0.x, 12 bytes for 1.1.x)
+    /// * `data_in` - Encrypted Join Accept data
+    /// * `data_out` - Buffer for decrypted data (must be same size as data_in)
+    ///
+    /// # Returns
+    /// * `Ok(CryptoStatus)` - Status of the operation
+    pub async fn crypto_process_join_accept(
+        &mut self,
+        dec_key_id: CryptoKeyId,
+        ver_key_id: CryptoKeyId,
+        lorawan_version: CryptoLorawanVersion,
+        header: &[u8],
+        data_in: &[u8],
+        data_out: &mut [u8],
+    ) -> Result<CryptoStatus, RadioError> {
+        let header_length = lorawan_version.header_length();
+        if header.len() < header_length {
+            return Err(RadioError::PayloadSizeMismatch(header_length, header.len()));
+        }
+        if data_in.len() > 32 || data_in.is_empty() {
+            return Err(RadioError::PayloadSizeMismatch(32, data_in.len()));
+        }
+        if data_out.len() < data_in.len() {
+            return Err(RadioError::PayloadSizeMismatch(data_in.len(), data_out.len()));
+        }
+
+        let opcode = CryptoOpCode::ProcessJoinAccept.bytes();
+        let cmd_len = 2 + 3 + header_length + data_in.len();
+        let mut cmd = [0u8; 49]; // Max: 2 + 3 + 12 + 32
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = dec_key_id.value();
+        cmd[3] = ver_key_id.value();
+        cmd[4] = lorawan_version.value();
+        cmd[5..5 + header_length].copy_from_slice(&header[..header_length]);
+        cmd[5 + header_length..cmd_len].copy_from_slice(data_in);
+
+        let mut rbuffer = [0u8; 33]; // 1 status + 32 max data
+        self.read_command(&cmd[..cmd_len], &mut rbuffer[..1 + data_in.len()]).await?;
+
+        let status = CryptoStatus::from(rbuffer[0]);
+        if status == CryptoStatus::Success {
+            data_out[..data_in.len()].copy_from_slice(&rbuffer[1..1 + data_in.len()]);
+        }
+        Ok(status)
+    }
+
+    /// Compute AES-CMAC (Message Integrity Code) over data
+    ///
+    /// # Arguments
+    /// * `key_id` - Key slot to use for CMAC calculation
+    /// * `data` - Data to compute CMAC over (max 256 bytes)
+    ///
+    /// # Returns
+    /// * `Ok((CryptoStatus, CryptoMic))` - Status and 4-byte MIC
+    pub async fn crypto_compute_aes_cmac(
+        &mut self,
+        key_id: CryptoKeyId,
+        data: &[u8],
+    ) -> Result<(CryptoStatus, CryptoMic), RadioError> {
+        if data.len() > CRYPTO_DATA_MAX_LENGTH {
+            return Err(RadioError::PayloadSizeMismatch(CRYPTO_DATA_MAX_LENGTH, data.len()));
+        }
+
+        let opcode = CryptoOpCode::ComputeAesCmac.bytes();
+        let cmd_len = 3 + data.len();
+        let mut cmd = [0u8; 259]; // 2 opcode + 1 key_id + 256 data
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = key_id.value();
+        cmd[3..cmd_len].copy_from_slice(data);
+
+        let mut rbuffer = [0u8; 5]; // 1 status + 4 MIC
+        self.read_command(&cmd[..cmd_len], &mut rbuffer).await?;
+
+        let status = CryptoStatus::from(rbuffer[0]);
+        let mut mic = [0u8; CRYPTO_MIC_LENGTH];
+        if status == CryptoStatus::Success {
+            mic.copy_from_slice(&rbuffer[1..5]);
+        }
+        Ok((status, mic))
+    }
+
+    /// Verify AES-CMAC (Message Integrity Code) over data
+    ///
+    /// # Arguments
+    /// * `key_id` - Key slot to use for CMAC verification
+    /// * `data` - Data to verify CMAC over (max 256 bytes)
+    /// * `mic` - Expected 4-byte MIC
+    ///
+    /// # Returns
+    /// * `Ok(CryptoStatus)` - Success if MIC matches, ErrorFailCmac otherwise
+    pub async fn crypto_verify_aes_cmac(
+        &mut self,
+        key_id: CryptoKeyId,
+        data: &[u8],
+        mic: &CryptoMic,
+    ) -> Result<CryptoStatus, RadioError> {
+        if data.len() > CRYPTO_DATA_MAX_LENGTH {
+            return Err(RadioError::PayloadSizeMismatch(CRYPTO_DATA_MAX_LENGTH, data.len()));
+        }
+
+        let opcode = CryptoOpCode::VerifyAesCmac.bytes();
+        let cmd_len = 3 + CRYPTO_MIC_LENGTH + data.len();
+        let mut cmd = [0u8; 263]; // 2 opcode + 1 key_id + 4 MIC + 256 data
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = key_id.value();
+        cmd[3..7].copy_from_slice(mic);
+        cmd[7..cmd_len].copy_from_slice(data);
+
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd[..cmd_len], &mut rbuffer).await?;
+        Ok(CryptoStatus::from(rbuffer[0]))
+    }
+
+    /// AES encrypt data (legacy variant 01)
+    ///
+    /// # Arguments
+    /// * `key_id` - Key slot to use for encryption
+    /// * `data` - Data to encrypt (must be multiple of 16 bytes, max 256)
+    /// * `result` - Buffer for encrypted data (same size as input)
+    ///
+    /// # Returns
+    /// * `Ok(CryptoStatus)` - Status of the operation
+    pub async fn crypto_aes_encrypt_01(
+        &mut self,
+        key_id: CryptoKeyId,
+        data: &[u8],
+        result: &mut [u8],
+    ) -> Result<CryptoStatus, RadioError> {
+        if data.len() > CRYPTO_DATA_MAX_LENGTH || data.is_empty() {
+            return Err(RadioError::PayloadSizeMismatch(CRYPTO_DATA_MAX_LENGTH, data.len()));
+        }
+        if result.len() < data.len() {
+            return Err(RadioError::PayloadSizeMismatch(data.len(), result.len()));
+        }
+
+        let opcode = CryptoOpCode::AesEncrypt01.bytes();
+        let cmd_len = 3 + data.len();
+        let mut cmd = [0u8; 259]; // 2 opcode + 1 key_id + 256 data
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = key_id.value();
+        cmd[3..cmd_len].copy_from_slice(data);
+
+        let mut rbuffer = [0u8; 257]; // 1 status + 256 data
+        self.read_command(&cmd[..cmd_len], &mut rbuffer[..1 + data.len()]).await?;
+
+        let status = CryptoStatus::from(rbuffer[0]);
+        if status == CryptoStatus::Success {
+            result[..data.len()].copy_from_slice(&rbuffer[1..1 + data.len()]);
+        }
+        Ok(status)
+    }
+
+    /// AES encrypt data
+    ///
+    /// # Arguments
+    /// * `key_id` - Key slot to use for encryption
+    /// * `data` - Data to encrypt (must be multiple of 16 bytes, max 256)
+    /// * `result` - Buffer for encrypted data (same size as input)
+    ///
+    /// # Returns
+    /// * `Ok(CryptoStatus)` - Status of the operation
+    pub async fn crypto_aes_encrypt(
+        &mut self,
+        key_id: CryptoKeyId,
+        data: &[u8],
+        result: &mut [u8],
+    ) -> Result<CryptoStatus, RadioError> {
+        if data.len() > CRYPTO_DATA_MAX_LENGTH || data.is_empty() {
+            return Err(RadioError::PayloadSizeMismatch(CRYPTO_DATA_MAX_LENGTH, data.len()));
+        }
+        if result.len() < data.len() {
+            return Err(RadioError::PayloadSizeMismatch(data.len(), result.len()));
+        }
+
+        let opcode = CryptoOpCode::AesEncrypt.bytes();
+        let cmd_len = 3 + data.len();
+        let mut cmd = [0u8; 259]; // 2 opcode + 1 key_id + 256 data
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = key_id.value();
+        cmd[3..cmd_len].copy_from_slice(data);
+
+        let mut rbuffer = [0u8; 257]; // 1 status + 256 data
+        self.read_command(&cmd[..cmd_len], &mut rbuffer[..1 + data.len()]).await?;
+
+        let status = CryptoStatus::from(rbuffer[0]);
+        if status == CryptoStatus::Success {
+            result[..data.len()].copy_from_slice(&rbuffer[1..1 + data.len()]);
+        }
+        Ok(status)
+    }
+
+    /// AES decrypt data
+    ///
+    /// # Arguments
+    /// * `key_id` - Key slot to use for decryption
+    /// * `data` - Data to decrypt (must be multiple of 16 bytes, max 256)
+    /// * `result` - Buffer for decrypted data (same size as input)
+    ///
+    /// # Returns
+    /// * `Ok(CryptoStatus)` - Status of the operation
+    pub async fn crypto_aes_decrypt(
+        &mut self,
+        key_id: CryptoKeyId,
+        data: &[u8],
+        result: &mut [u8],
+    ) -> Result<CryptoStatus, RadioError> {
+        if data.len() > CRYPTO_DATA_MAX_LENGTH || data.is_empty() {
+            return Err(RadioError::PayloadSizeMismatch(CRYPTO_DATA_MAX_LENGTH, data.len()));
+        }
+        if result.len() < data.len() {
+            return Err(RadioError::PayloadSizeMismatch(data.len(), result.len()));
+        }
+
+        let opcode = CryptoOpCode::AesDecrypt.bytes();
+        let cmd_len = 3 + data.len();
+        let mut cmd = [0u8; 259]; // 2 opcode + 1 key_id + 256 data
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = key_id.value();
+        cmd[3..cmd_len].copy_from_slice(data);
+
+        let mut rbuffer = [0u8; 257]; // 1 status + 256 data
+        self.read_command(&cmd[..cmd_len], &mut rbuffer[..1 + data.len()]).await?;
+
+        let status = CryptoStatus::from(rbuffer[0]);
+        if status == CryptoStatus::Success {
+            result[..data.len()].copy_from_slice(&rbuffer[1..1 + data.len()]);
+        }
+        Ok(status)
+    }
+
+    /// Store crypto keys and data to flash
+    ///
+    /// Persists the current crypto engine state to internal flash memory.
+    ///
+    /// # Returns
+    /// * `Ok(CryptoStatus)` - Status of the operation
+    pub async fn crypto_store_to_flash(&mut self) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::StoreToFlash.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(CryptoStatus::from(rbuffer[0]))
+    }
+
+    /// Restore crypto keys and data from flash
+    ///
+    /// Restores the crypto engine state from internal flash memory.
+    ///
+    /// # Returns
+    /// * `Ok(CryptoStatus)` - Status of the operation
+    pub async fn crypto_restore_from_flash(&mut self) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::RestoreFromFlash.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(CryptoStatus::from(rbuffer[0]))
+    }
+
+    /// Set a crypto parameter
+    ///
+    /// # Arguments
+    /// * `param_id` - Parameter identifier
+    /// * `parameter` - 4-byte parameter value
+    ///
+    /// # Returns
+    /// * `Ok(CryptoStatus)` - Status of the operation
+    pub async fn crypto_set_parameter(
+        &mut self,
+        param_id: u8,
+        parameter: &CryptoParam,
+    ) -> Result<CryptoStatus, RadioError> {
+        let opcode = CryptoOpCode::SetParameter.bytes();
+        let mut cmd = [0u8; 7]; // 2 opcode + 1 param_id + 4 parameter
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = param_id;
+        cmd[3..7].copy_from_slice(parameter);
+
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(CryptoStatus::from(rbuffer[0]))
+    }
+
+    /// Get a crypto parameter
+    ///
+    /// # Arguments
+    /// * `param_id` - Parameter identifier
+    ///
+    /// # Returns
+    /// * `Ok((CryptoStatus, CryptoParam))` - Status and 4-byte parameter value
+    pub async fn crypto_get_parameter(
+        &mut self,
+        param_id: u8,
+    ) -> Result<(CryptoStatus, CryptoParam), RadioError> {
+        let opcode = CryptoOpCode::GetParameter.bytes();
+        let cmd = [opcode[0], opcode[1], param_id];
+
+        let mut rbuffer = [0u8; 5]; // 1 status + 4 parameter
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        let status = CryptoStatus::from(rbuffer[0]);
+        let mut parameter = [0u8; CRYPTO_PARAMETER_LENGTH];
+        if status == CryptoStatus::Success {
+            parameter.copy_from_slice(&rbuffer[1..5]);
+        }
+        Ok((status, parameter))
+    }
+
+    /// Check a portion of an encrypted firmware image
+    ///
+    /// This function checks one block of encrypted firmware data.
+    /// Use `crypto_check_encrypted_fw_image_full` for checking complete images.
+    ///
+    /// # Arguments
+    /// * `offset` - Byte offset within the firmware image
+    /// * `data` - 32-bit words of encrypted firmware data (max 64 words)
+    pub async fn crypto_check_encrypted_fw_image(
+        &mut self,
+        offset: u32,
+        data: &[u32],
+    ) -> Result<(), RadioError> {
+        const MAX_WORDS: usize = 64;
+        if data.len() > MAX_WORDS {
+            return Err(RadioError::PayloadSizeMismatch(MAX_WORDS, data.len()));
+        }
+
+        let opcode = CryptoOpCode::CheckEncryptedFwImage.bytes();
+        let mut cmd = [0u8; 262]; // 2 opcode + 4 offset + 256 data (64 * 4)
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = (offset >> 24) as u8;
+        cmd[3] = (offset >> 16) as u8;
+        cmd[4] = (offset >> 8) as u8;
+        cmd[5] = offset as u8;
+
+        for (i, word) in data.iter().enumerate() {
+            let idx = 6 + i * 4;
+            cmd[idx] = (*word >> 24) as u8;
+            cmd[idx + 1] = (*word >> 16) as u8;
+            cmd[idx + 2] = (*word >> 8) as u8;
+            cmd[idx + 3] = *word as u8;
+        }
+
+        let cmd_len = 6 + data.len() * 4;
+        self.write_command(&cmd[..cmd_len]).await
+    }
+
+    /// Get the result of encrypted firmware image check
+    ///
+    /// # Returns
+    /// * `Ok(bool)` - true if the firmware image is valid
+    pub async fn crypto_get_check_encrypted_fw_image_result(&mut self) -> Result<bool, RadioError> {
+        let opcode = CryptoOpCode::GetCheckEncryptedFwImageResult.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(rbuffer[0] != 0)
     }
 }
 
