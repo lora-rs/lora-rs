@@ -31,14 +31,13 @@ use embassy_stm32::rcc::{
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{bind_interrupts, Config};
+use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
-use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
+use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::lr1110::{
-    WifiSignalTypeScan, WifiScanMode, WifiBasicMacTypeChannelResult,
-    WIFI_ALL_CHANNELS_MASK, WIFI_MAX_RESULTS,
+    WIFI_ALL_CHANNELS_MASK, WIFI_MAX_RESULTS, WifiBasicMacTypeChannelResult, WifiScanMode, WifiSignalTypeScan,
 };
 use lora_phy::mod_traits::RadioKind;
 use {defmt_rtt as _, panic_probe as _};
@@ -87,9 +86,9 @@ async fn main(_spawner: Spawner) {
 
     let spi = Spi::new(
         p.SPI2,
-        p.PB10,  // SCK
-        p.PC3,   // MOSI
-        p.PA9,   // MISO
+        p.PB10, // SCK
+        p.PC3,  // MOSI
+        p.PA9,  // MISO
         p.GPDMA1_CH0,
         p.GPDMA1_CH1,
         spi_config,
@@ -108,14 +107,7 @@ async fn main(_spawner: Spawner) {
     let rf_switch_tx: Option<Output<'_>> = None;
 
     // Create InterfaceVariant
-    let iv = Stm32wbaLr1110InterfaceVariant::new(
-        reset,
-        busy,
-        dio1,
-        rf_switch_rx,
-        rf_switch_tx,
-    )
-    .unwrap();
+    let iv = Stm32wbaLr1110InterfaceVariant::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
 
     // Configure LR1110 chip variant
     let lr_config = lr1110_module::Config {
@@ -171,15 +163,18 @@ async fn main(_spawner: Spawner) {
         // - nb_scan_per_channel: 10 scans per channel
         // - timeout_per_scan_ms: 90ms per scan
         // - abort_on_timeout: false (continue scanning on timeout)
-        if let Err(e) = radio.wifi_scan(
-            WifiSignalTypeScan::TypeBGN,
-            WIFI_ALL_CHANNELS_MASK,
-            WifiScanMode::Beacon,
-            0,   // max_results (0 = no limit)
-            10,  // nb_scan_per_channel
-            90,  // timeout_per_scan_ms
-            false, // abort_on_timeout
-        ).await {
+        if let Err(e) = radio
+            .wifi_scan(
+                WifiSignalTypeScan::TypeBGN,
+                WIFI_ALL_CHANNELS_MASK,
+                WifiScanMode::Beacon,
+                0,     // max_results (0 = no limit)
+                10,    // nb_scan_per_channel
+                90,    // timeout_per_scan_ms
+                false, // abort_on_timeout
+            )
+            .await
+        {
             error!("  Failed to start WiFi scan: {:?}", e);
             embassy_time::Timer::after_secs(5).await;
             continue;
@@ -214,11 +209,10 @@ async fn main(_spawner: Spawner) {
 
         // Read results
         let mut results = [WifiBasicMacTypeChannelResult::default(); WIFI_MAX_RESULTS];
-        let read_count = match radio.wifi_read_basic_mac_type_channel_results(
-            &mut results,
-            0,
-            nb_results.min(WIFI_MAX_RESULTS as u8),
-        ).await {
+        let read_count = match radio
+            .wifi_read_basic_mac_type_channel_results(&mut results, 0, nb_results.min(WIFI_MAX_RESULTS as u8))
+            .await
+        {
             Ok(count) => count,
             Err(e) => {
                 error!("  Failed to read results: {:?}", e);
@@ -237,13 +231,20 @@ async fn main(_spawner: Spawner) {
             let signal_type = result.signal_type();
             let rssi_valid = if result.rssi_valid() { "" } else { " (invalid)" };
 
-            info!("    AP {}: MAC={:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} Ch={:?} RSSI={}dBm{} Type={:?}",
+            info!(
+                "    AP {}: MAC={:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X} Ch={:?} RSSI={}dBm{} Type={:?}",
                 i + 1,
-                mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
+                mac[0],
+                mac[1],
+                mac[2],
+                mac[3],
+                mac[4],
+                mac[5],
                 channel,
                 rssi,
                 rssi_valid,
-                signal_type);
+                signal_type
+            );
         }
 
         // Read cumulative timing

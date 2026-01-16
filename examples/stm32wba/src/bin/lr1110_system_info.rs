@@ -32,11 +32,11 @@ use embassy_stm32::rcc::{
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{bind_interrupts, Config};
+use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
-use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
+use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::mod_traits::RadioKind;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -84,9 +84,9 @@ async fn main(_spawner: Spawner) {
 
     let spi = Spi::new(
         p.SPI2,
-        p.PB10,  // SCK
-        p.PC3,   // MOSI
-        p.PA9,   // MISO
+        p.PB10, // SCK
+        p.PC3,  // MOSI
+        p.PA9,  // MISO
         p.GPDMA1_CH0,
         p.GPDMA1_CH1,
         spi_config,
@@ -105,14 +105,7 @@ async fn main(_spawner: Spawner) {
     let rf_switch_tx: Option<Output<'_>> = None;
 
     // Create InterfaceVariant
-    let iv = Stm32wbaLr1110InterfaceVariant::new(
-        reset,
-        busy,
-        dio1,
-        rf_switch_rx,
-        rf_switch_tx,
-    )
-    .unwrap();
+    let iv = Stm32wbaLr1110InterfaceVariant::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
 
     // Configure LR1110 chip variant
     let lr_config = lr1110_module::Config {
@@ -138,8 +131,12 @@ async fn main(_spawner: Spawner) {
         Ok(version) => {
             info!("  Hardware version: 0x{:02X}", version.hw);
             info!("  Chip type: {:?}", version.chip_type);
-            info!("  Firmware version: 0x{:04X} (v{}.{})",
-                version.fw, version.fw_major(), version.fw_minor());
+            info!(
+                "  Firmware version: 0x{:04X} (v{}.{})",
+                version.fw,
+                version.fw_major(),
+                version.fw_minor()
+            );
         }
         Err(e) => {
             error!("  Failed to read version: {:?}", e);
@@ -151,8 +148,10 @@ async fn main(_spawner: Spawner) {
     info!("Device Identifier:");
     match radio.read_uid().await {
         Ok(uid) => {
-            info!("  UID: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-                uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6], uid[7]);
+            info!(
+                "  UID: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                uid[0], uid[1], uid[2], uid[3], uid[4], uid[5], uid[6], uid[7]
+            );
         }
         Err(e) => {
             error!("  Failed to read UID: {:?}", e);
@@ -162,9 +161,10 @@ async fn main(_spawner: Spawner) {
     // Read Join EUI
     match radio.read_join_eui().await {
         Ok(join_eui) => {
-            info!("  Join EUI: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
-                join_eui[0], join_eui[1], join_eui[2], join_eui[3],
-                join_eui[4], join_eui[5], join_eui[6], join_eui[7]);
+            info!(
+                "  Join EUI: {:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+                join_eui[0], join_eui[1], join_eui[2], join_eui[3], join_eui[4], join_eui[5], join_eui[6], join_eui[7]
+            );
         }
         Err(e) => {
             error!("  Failed to read Join EUI: {:?}", e);
@@ -236,14 +236,30 @@ async fn main(_spawner: Spawner) {
                 info!("  No errors");
             } else {
                 warn!("  Error flags: 0x{:04X}", errors);
-                if errors & 0x01 != 0 { warn!("    - LF RC calibration error"); }
-                if errors & 0x02 != 0 { warn!("    - HF RC calibration error"); }
-                if errors & 0x04 != 0 { warn!("    - ADC calibration error"); }
-                if errors & 0x08 != 0 { warn!("    - PLL calibration error"); }
-                if errors & 0x10 != 0 { warn!("    - Image calibration error"); }
-                if errors & 0x20 != 0 { warn!("    - HF XOSC start error"); }
-                if errors & 0x40 != 0 { warn!("    - LF XOSC start error"); }
-                if errors & 0x80 != 0 { warn!("    - PLL lock error"); }
+                if errors & 0x01 != 0 {
+                    warn!("    - LF RC calibration error");
+                }
+                if errors & 0x02 != 0 {
+                    warn!("    - HF RC calibration error");
+                }
+                if errors & 0x04 != 0 {
+                    warn!("    - ADC calibration error");
+                }
+                if errors & 0x08 != 0 {
+                    warn!("    - PLL calibration error");
+                }
+                if errors & 0x10 != 0 {
+                    warn!("    - Image calibration error");
+                }
+                if errors & 0x20 != 0 {
+                    warn!("    - HF XOSC start error");
+                }
+                if errors & 0x40 != 0 {
+                    warn!("    - LF XOSC start error");
+                }
+                if errors & 0x80 != 0 {
+                    warn!("    - PLL lock error");
+                }
             }
         }
         Err(e) => {

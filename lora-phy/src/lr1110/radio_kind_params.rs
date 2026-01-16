@@ -2,7 +2,6 @@
 ///
 /// This module defines all the enums, structs, and constants used by the LR1110 radio driver.
 /// Implementation is based on the official SWDR001 C driver.
-
 use crate::mod_params::*;
 
 /// LR1110 crystal frequency (32 MHz)
@@ -37,29 +36,29 @@ impl PacketType {
 #[derive(Clone, Copy)]
 pub enum IrqMask {
     None = 0x00000000,
-    TxDone = 0x00000004,                   // bit 2
-    RxDone = 0x00000008,                   // bit 3
-    PreambleDetected = 0x00000010,         // bit 4
-    SyncWordHeaderValid = 0x00000020,      // bit 5
-    HeaderError = 0x00000040,              // bit 6
-    CrcError = 0x00000080,                 // bit 7
-    CadDone = 0x00000100,                  // bit 8
-    CadDetected = 0x00000200,              // bit 9
-    Timeout = 0x00000400,                  // bit 10
-    LrFhssIntraPktHop = 0x00000800,        // bit 11
-    RttofReqValid = 0x00004000,            // bit 14
-    RttofReqDiscarded = 0x00008000,        // bit 15
-    RttofRespDone = 0x00010000,            // bit 16
-    RttofExchValid = 0x00020000,           // bit 17
-    RttofTimeout = 0x00040000,             // bit 18
-    GnssScanDone = 0x00080000,             // bit 19
-    WifiScanDone = 0x00100000,             // bit 20
-    Eol = 0x00200000,                      // bit 21
-    CmdError = 0x00400000,                 // bit 22
-    Error = 0x00800000,                    // bit 23
-    FskLenError = 0x01000000,              // bit 24
-    FskAddrError = 0x02000000,             // bit 25
-    LoRaRxTimestamp = 0x08000000,          // bit 27
+    TxDone = 0x00000004,              // bit 2
+    RxDone = 0x00000008,              // bit 3
+    PreambleDetected = 0x00000010,    // bit 4
+    SyncWordHeaderValid = 0x00000020, // bit 5
+    HeaderError = 0x00000040,         // bit 6
+    CrcError = 0x00000080,            // bit 7
+    CadDone = 0x00000100,             // bit 8
+    CadDetected = 0x00000200,         // bit 9
+    Timeout = 0x00000400,             // bit 10
+    LrFhssIntraPktHop = 0x00000800,   // bit 11
+    RttofReqValid = 0x00004000,       // bit 14
+    RttofReqDiscarded = 0x00008000,   // bit 15
+    RttofRespDone = 0x00010000,       // bit 16
+    RttofExchValid = 0x00020000,      // bit 17
+    RttofTimeout = 0x00040000,        // bit 18
+    GnssScanDone = 0x00080000,        // bit 19
+    WifiScanDone = 0x00100000,        // bit 20
+    Eol = 0x00200000,                 // bit 21
+    CmdError = 0x00400000,            // bit 22
+    Error = 0x00800000,               // bit 23
+    FskLenError = 0x01000000,         // bit 24
+    FskAddrError = 0x02000000,        // bit 25
+    LoRaRxTimestamp = 0x08000000,     // bit 27
 }
 
 impl IrqMask {
@@ -246,9 +245,9 @@ impl TcxoCtrlVoltage {
 /// Power Amplifier selection
 #[derive(Clone, Copy, PartialEq)]
 pub enum PaSelection {
-    Lp = 0x00,  // Low-power PA (up to +14dBm)
-    Hp = 0x01,  // High-power PA (up to +22dBm)
-    Hf = 0x02,  // High-frequency PA (2.4GHz)
+    Lp = 0x00, // Low-power PA (up to +14dBm)
+    Hp = 0x01, // High-power PA (up to +22dBm)
+    Hf = 0x02, // High-frequency PA (2.4GHz)
 }
 
 impl PaSelection {
@@ -260,8 +259,8 @@ impl PaSelection {
 /// Power Amplifier regulator supply
 #[derive(Clone, Copy)]
 pub enum PaRegSupply {
-    Vreg = 0x00,  // From internal regulator
-    Vbat = 0x01,  // From battery
+    Vreg = 0x00, // From internal regulator
+    Vbat = 0x01, // From battery
 }
 
 impl PaRegSupply {
@@ -314,7 +313,7 @@ pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, R
 /// LoRa bandwidth values for LR1110
 pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError> {
     match bandwidth {
-        Bandwidth::_7KHz => Err(RadioError::InvalidBandwidthForFrequency),  // Not supported on LR1110
+        Bandwidth::_7KHz => Err(RadioError::InvalidBandwidthForFrequency), // Not supported on LR1110
         Bandwidth::_10KHz => Ok(0x08),
         Bandwidth::_15KHz => Ok(0x01),
         Bandwidth::_20KHz => Ok(0x09),
@@ -696,7 +695,7 @@ pub enum ChipMode {
     Fs = 0x03,
     Rx = 0x04,
     Tx = 0x05,
-    Loc = 0x06,  // GNSS/WiFi scanning
+    Loc = 0x06, // GNSS/WiFi scanning
     Unknown = 0xFF,
 }
 
@@ -1326,20 +1325,20 @@ pub const WIFI_ALL_CHANNELS_MASK: WifiChannelMask = 0x3FFF;
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum WifiChannel {
     NoChannel = 0x00,
-    Channel1 = 0x01,   // 2.412 GHz
-    Channel2 = 0x02,   // 2.417 GHz
-    Channel3 = 0x03,   // 2.422 GHz
-    Channel4 = 0x04,   // 2.427 GHz
-    Channel5 = 0x05,   // 2.432 GHz
-    Channel6 = 0x06,   // 2.437 GHz
-    Channel7 = 0x07,   // 2.442 GHz
-    Channel8 = 0x08,   // 2.447 GHz
-    Channel9 = 0x09,   // 2.452 GHz
-    Channel10 = 0x0A,  // 2.457 GHz
-    Channel11 = 0x0B,  // 2.462 GHz
-    Channel12 = 0x0C,  // 2.467 GHz
-    Channel13 = 0x0D,  // 2.472 GHz
-    Channel14 = 0x0E,  // 2.484 GHz
+    Channel1 = 0x01,  // 2.412 GHz
+    Channel2 = 0x02,  // 2.417 GHz
+    Channel3 = 0x03,  // 2.422 GHz
+    Channel4 = 0x04,  // 2.427 GHz
+    Channel5 = 0x05,  // 2.432 GHz
+    Channel6 = 0x06,  // 2.437 GHz
+    Channel7 = 0x07,  // 2.442 GHz
+    Channel8 = 0x08,  // 2.447 GHz
+    Channel9 = 0x09,  // 2.452 GHz
+    Channel10 = 0x0A, // 2.457 GHz
+    Channel11 = 0x0B, // 2.462 GHz
+    Channel12 = 0x0C, // 2.467 GHz
+    Channel13 = 0x0D, // 2.472 GHz
+    Channel14 = 0x0E, // 2.484 GHz
     AllChannels = 0x0F,
 }
 
@@ -1705,7 +1704,11 @@ impl WifiExtendedFullResult {
     /// Get SSID as string (if valid UTF-8)
     pub fn ssid_str(&self) -> Option<&str> {
         // Find null terminator
-        let len = self.ssid_bytes.iter().position(|&c| c == 0).unwrap_or(WIFI_RESULT_SSID_LENGTH);
+        let len = self
+            .ssid_bytes
+            .iter()
+            .position(|&c| c == 0)
+            .unwrap_or(WIFI_RESULT_SSID_LENGTH);
         core::str::from_utf8(&self.ssid_bytes[..len]).ok()
     }
 }
@@ -2059,24 +2062,23 @@ pub mod ranging_irq {
     use super::IrqMask;
 
     /// LoRa IRQ mask for initialization phase (RxDone, TxDone, Timeout, CrcError)
-    pub const LORA_IRQ_MASK: u32 =
-        IrqMask::TxDone.value() | IrqMask::RxDone.value() |
-        IrqMask::Timeout.value() | IrqMask::CrcError.value() |
-        IrqMask::HeaderError.value();
+    pub const LORA_IRQ_MASK: u32 = IrqMask::TxDone.value()
+        | IrqMask::RxDone.value()
+        | IrqMask::Timeout.value()
+        | IrqMask::CrcError.value()
+        | IrqMask::HeaderError.value();
 
     /// Manager device IRQ mask for RTToF ranging
     /// RttofExchValid = ranging exchange completed successfully
     /// RttofTimeout = ranging timeout
-    pub const MANAGER_IRQ_MASK: u32 =
-        IrqMask::RttofExchValid.value() | IrqMask::RttofTimeout.value();
+    pub const MANAGER_IRQ_MASK: u32 = IrqMask::RttofExchValid.value() | IrqMask::RttofTimeout.value();
 
     /// Subordinate device IRQ mask for RTToF ranging
     /// RttofReqValid = received valid ranging request
     /// RttofRespDone = sent ranging response
     /// RttofReqDiscarded = discarded ranging request (address mismatch)
     pub const SUBORDINATE_IRQ_MASK: u32 =
-        IrqMask::RttofReqValid.value() | IrqMask::RttofRespDone.value() |
-        IrqMask::RttofReqDiscarded.value();
+        IrqMask::RttofReqValid.value() | IrqMask::RttofRespDone.value() | IrqMask::RttofReqDiscarded.value();
 }
 
 /// Ranging configuration constants (matching lr11xx_ranging_demo)
@@ -2137,11 +2139,11 @@ pub mod ranging_channels {
 
     /// ISM 2.4 GHz - 39 channels
     pub const ISM2G4: [u32; 39] = [
-        2450000000, 2402000000, 2476000000, 2436000000, 2430000000, 2468000000, 2458000000, 2416000000,
-        2424000000, 2478000000, 2456000000, 2448000000, 2462000000, 2472000000, 2432000000, 2446000000,
-        2422000000, 2442000000, 2460000000, 2474000000, 2414000000, 2464000000, 2454000000, 2444000000,
-        2404000000, 2434000000, 2410000000, 2408000000, 2440000000, 2452000000, 2480000000, 2426000000,
-        2428000000, 2466000000, 2418000000, 2412000000, 2406000000, 2470000000, 2438000000,
+        2450000000, 2402000000, 2476000000, 2436000000, 2430000000, 2468000000, 2458000000, 2416000000, 2424000000,
+        2478000000, 2456000000, 2448000000, 2462000000, 2472000000, 2432000000, 2446000000, 2422000000, 2442000000,
+        2460000000, 2474000000, 2414000000, 2464000000, 2454000000, 2444000000, 2404000000, 2434000000, 2410000000,
+        2408000000, 2440000000, 2452000000, 2480000000, 2426000000, 2428000000, 2466000000, 2418000000, 2412000000,
+        2406000000, 2470000000, 2438000000,
     ];
 }
 
@@ -2197,9 +2199,9 @@ pub mod lora_cr {
 /// Symbol time in milliseconds as f32
 pub fn calculate_symbol_time_ms(bw: u8, sf: u8) -> f32 {
     let bw_khz: f32 = match bw {
-        0x04 => 125.0,  // BW_125
-        0x05 => 250.0,  // BW_250
-        0x06 => 500.0,  // BW_500
+        0x04 => 125.0, // BW_125
+        0x05 => 250.0, // BW_250
+        0x06 => 500.0, // BW_500
         _ => 500.0,
     };
 
@@ -2492,10 +2494,7 @@ pub fn lora_symbol_time_in_us(spreading_factor: SpreadingFactor, bandwidth: Band
 /// - RX done IRQ processing time
 ///
 /// This timing is useful for LoRaWAN RX window calculations.
-pub fn delay_between_last_bit_sent_and_rx_done_in_us(
-    spreading_factor: SpreadingFactor,
-    bandwidth: Bandwidth,
-) -> u32 {
+pub fn delay_between_last_bit_sent_and_rx_done_in_us(spreading_factor: SpreadingFactor, bandwidth: Bandwidth) -> u32 {
     lora_rx_input_delay_in_us(bandwidth)
         + 2 * lora_symbol_time_in_us(spreading_factor, bandwidth)
         + RX_DONE_IRQ_PROCESSING_TIME_IN_US

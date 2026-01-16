@@ -2,13 +2,12 @@
 ///
 /// This module provides the hardware abstraction layer between the STM32WBA MCU
 /// and the LR1110 LoRa radio chip over SPI.
-
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_async::digital::Wait;
+use lora_phy::DelayNs;
 use lora_phy::mod_params::RadioError;
 use lora_phy::mod_params::RadioError::*;
 use lora_phy::mod_traits::InterfaceVariant;
-use lora_phy::DelayNs;
 
 /// InterfaceVariant for LR1110 on STM32WBA
 ///

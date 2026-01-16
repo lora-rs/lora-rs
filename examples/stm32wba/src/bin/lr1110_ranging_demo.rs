@@ -41,15 +41,14 @@ use embassy_stm32::rcc::{
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{bind_interrupts, Config};
+use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::{Delay, Duration, Instant, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
-use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
+use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::lr1110::{
-    packet_type, ranging_irq, ranging_config, ranging_channels,
-    lora_sf, lora_bw, lora_cr, IrqMask,
-    calculate_ranging_request_delay_ms, RttofDistanceResult,
+    IrqMask, RttofDistanceResult, calculate_ranging_request_delay_ms, lora_bw, lora_cr, lora_sf, packet_type,
+    ranging_channels, ranging_config, ranging_irq,
 };
 use {defmt_rtt as _, panic_probe as _};
 
@@ -238,9 +237,9 @@ async fn main(_spawner: Spawner) {
 
     let spi = Spi::new(
         p.SPI2,
-        p.PB10,  // SCK
-        p.PC3,   // MOSI
-        p.PA9,   // MISO
+        p.PB10, // SCK
+        p.PC3,  // MOSI
+        p.PA9,  // MISO
         p.GPDMA1_CH0,
         p.GPDMA1_CH1,
         spi_config,
@@ -259,14 +258,7 @@ async fn main(_spawner: Spawner) {
     let rf_switch_tx: Option<Output<'_>> = None;
 
     // Create InterfaceVariant
-    let iv = Stm32wbaLr1110InterfaceVariant::new(
-        reset,
-        busy,
-        dio1,
-        rf_switch_rx,
-        rf_switch_tx,
-    )
-    .unwrap();
+    let iv = Stm32wbaLr1110InterfaceVariant::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
 
     // Configure LR1110 chip variant
     let lr_config = lr1110_module::Config {
@@ -293,14 +285,21 @@ async fn main(_spawner: Spawner) {
         match result {
             Ok(results) => {
                 info!("=== Ranging Session Complete ===");
-                info!("Successful measurements: {}/{}", results.count, ranging_config::MAX_HOPPING_CHANNELS);
+                info!(
+                    "Successful measurements: {}/{}",
+                    results.count,
+                    ranging_config::MAX_HOPPING_CHANNELS
+                );
                 info!("Packet Error Rate: {}%", results.per());
                 if results.count >= ranging_config::MIN_HOPPING_CHANNELS {
                     info!("Median distance: {} meters", results.median_distance);
                     info!("Manager RSSI: {} dBm", results.manager_rssi);
                     info!("Subordinate RSSI: {} dBm", results.subordinate_rssi);
                 } else {
-                    warn!("Not enough measurements for valid result (min: {})", ranging_config::MIN_HOPPING_CHANNELS);
+                    warn!(
+                        "Not enough measurements for valid result (min: {})",
+                        ranging_config::MIN_HOPPING_CHANNELS
+                    );
                 }
                 info!("================================");
             }
@@ -332,14 +331,10 @@ where
     let mut tx_buffer = [0u8; ranging_config::INIT_PAYLOAD_LENGTH];
 
     // Calculate timing parameters
-    let ranging_delay_ms = calculate_ranging_request_delay_ms(
-        LORA_BW,
-        LORA_SF,
-        LORA_PREAMBLE_LENGTH,
-        RESPONSE_SYMBOLS,
-    );
+    let ranging_delay_ms = calculate_ranging_request_delay_ms(LORA_BW, LORA_SF, LORA_PREAMBLE_LENGTH, RESPONSE_SYMBOLS);
     let global_timeout_ms = ranging_delay_ms * (ranging_config::MAX_HOPPING_CHANNELS as u32 + 1)
-        + (ranging_config::MAX_HOPPING_CHANNELS as u32) + 5;
+        + (ranging_config::MAX_HOPPING_CHANNELS as u32)
+        + 5;
 
     info!("Ranging delay per channel: {} ms", ranging_delay_ms);
     info!("Global timeout: {} ms", global_timeout_ms);
@@ -359,28 +354,46 @@ where
                 info!("Configuring radio for LoRa initialization...");
 
                 // Set packet type to LoRa
-                radio.set_packet_type(packet_type::LORA).await.map_err(|_| "set_packet_type")?;
+                radio
+                    .set_packet_type(packet_type::LORA)
+                    .await
+                    .map_err(|_| "set_packet_type")?;
 
                 // Set frequency
-                radio.set_rf_frequency(RF_FREQUENCY).await.map_err(|_| "set_rf_frequency")?;
+                radio
+                    .set_rf_frequency(RF_FREQUENCY)
+                    .await
+                    .map_err(|_| "set_rf_frequency")?;
 
                 // Set modulation parameters
-                radio.set_lora_mod_params(LORA_SF, LORA_BW, LORA_CR, LORA_LDRO).await.map_err(|_| "set_lora_mod_params")?;
+                radio
+                    .set_lora_mod_params(LORA_SF, LORA_BW, LORA_CR, LORA_LDRO)
+                    .await
+                    .map_err(|_| "set_lora_mod_params")?;
 
                 // Set packet parameters
-                radio.set_lora_pkt_params(
-                    LORA_PREAMBLE_LENGTH,
-                    0, // explicit header
-                    ranging_config::INIT_PAYLOAD_LENGTH as u8,
-                    1, // CRC on
-                    0, // IQ not inverted
-                ).await.map_err(|_| "set_lora_pkt_params")?;
+                radio
+                    .set_lora_pkt_params(
+                        LORA_PREAMBLE_LENGTH,
+                        0, // explicit header
+                        ranging_config::INIT_PAYLOAD_LENGTH as u8,
+                        1, // CRC on
+                        0, // IQ not inverted
+                    )
+                    .await
+                    .map_err(|_| "set_lora_pkt_params")?;
 
                 // Set sync word
-                radio.set_lora_sync_word(ranging_config::LORA_SYNC_WORD).await.map_err(|_| "set_lora_sync_word")?;
+                radio
+                    .set_lora_sync_word(ranging_config::LORA_SYNC_WORD)
+                    .await
+                    .map_err(|_| "set_lora_sync_word")?;
 
                 // Set IRQ params for LoRa
-                radio.set_dio_irq_params_custom(ranging_irq::LORA_IRQ_MASK).await.map_err(|_| "set_dio_irq_params")?;
+                radio
+                    .set_dio_irq_params_custom(ranging_irq::LORA_IRQ_MASK)
+                    .await
+                    .map_err(|_| "set_dio_irq_params")?;
                 radio.clear_all_irq().await.map_err(|_| "clear_all_irq")?;
 
                 if IS_MANAGER {
@@ -393,12 +406,18 @@ where
                     tx_buffer[5] = 0;
 
                     info!("Sending initialization packet...");
-                    radio.write_tx_buffer(0, &tx_buffer).await.map_err(|_| "write_tx_buffer")?;
+                    radio
+                        .write_tx_buffer(0, &tx_buffer)
+                        .await
+                        .map_err(|_| "write_tx_buffer")?;
                     radio.set_tx_mode(0).await.map_err(|_| "set_tx_mode")?;
                 } else {
                     // Subordinate: Wait for initialization packet
                     info!("Waiting for initialization packet...");
-                    radio.set_rx_mode(ranging_config::RX_CONTINUOUS).await.map_err(|_| "set_rx_mode")?;
+                    radio
+                        .set_rx_mode(ranging_config::RX_CONTINUOUS)
+                        .await
+                        .map_err(|_| "set_rx_mode")?;
                 }
 
                 state = RangingState::LoraIdle;
@@ -449,7 +468,14 @@ where
                 // Read received packet
                 let (pld_len, start_ptr) = radio.get_rx_buffer_status().await.map_err(|_| "get_rx_buffer_status")?;
                 let mut rx_buffer = [0u8; ranging_config::INIT_PAYLOAD_LENGTH];
-                radio.read_rx_buffer(start_ptr, pld_len.min(ranging_config::INIT_PAYLOAD_LENGTH as u8), &mut rx_buffer).await.map_err(|_| "read_rx_buffer")?;
+                radio
+                    .read_rx_buffer(
+                        start_ptr,
+                        pld_len.min(ranging_config::INIT_PAYLOAD_LENGTH as u8),
+                        &mut rx_buffer,
+                    )
+                    .await
+                    .map_err(|_| "read_rx_buffer")?;
 
                 // Verify address
                 let rx_address = ((rx_buffer[0] as u32) << 24)
@@ -458,20 +484,29 @@ where
                     | (rx_buffer[3] as u32);
 
                 if rx_address != RANGING_ADDRESS {
-                    warn!("Address mismatch: expected {:08X}, got {:08X}", RANGING_ADDRESS, rx_address);
+                    warn!(
+                        "Address mismatch: expected {:08X}, got {:08X}",
+                        RANGING_ADDRESS, rx_address
+                    );
                     state = RangingState::LoraConfig;
                     continue;
                 }
 
                 // Get packet status
-                let (rssi, _snr) = radio.get_lora_packet_status().await.map_err(|_| "get_lora_packet_status")?;
+                let (rssi, _snr) = radio
+                    .get_lora_packet_status()
+                    .await
+                    .map_err(|_| "get_lora_packet_status")?;
 
                 if IS_MANAGER {
                     // Manager: Got subordinate's response
                     results.subordinate_rssi = rx_buffer[5] as i8;
                     results.manager_rssi = rssi;
                     current_channel = rx_buffer[4] as usize;
-                    info!("Received subordinate response, subordinate RSSI: {} dBm", results.subordinate_rssi);
+                    info!(
+                        "Received subordinate response, subordinate RSSI: {} dBm",
+                        results.subordinate_rssi
+                    );
                     state = RangingState::RangingConfig;
                 } else {
                     // Subordinate: Got manager's initialization
@@ -483,7 +518,10 @@ where
                     tx_buffer[5] = (rssi as i8) as u8;
 
                     info!("Sending response with RSSI: {} dBm", rssi);
-                    radio.write_tx_buffer(0, &tx_buffer).await.map_err(|_| "write_tx_buffer")?;
+                    radio
+                        .write_tx_buffer(0, &tx_buffer)
+                        .await
+                        .map_err(|_| "write_tx_buffer")?;
                     radio.set_tx_mode(0).await.map_err(|_| "set_tx_mode")?;
                     state = RangingState::LoraIdle;
                 }
@@ -493,35 +531,62 @@ where
                 info!("Configuring radio for RTToF ranging...");
 
                 // Set packet type to RTToF
-                radio.set_packet_type(packet_type::RTTOF).await.map_err(|_| "set_packet_type")?;
+                radio
+                    .set_packet_type(packet_type::RTTOF)
+                    .await
+                    .map_err(|_| "set_packet_type")?;
 
                 // Set modulation parameters (same as LoRa)
-                radio.set_lora_mod_params(LORA_SF, LORA_BW, LORA_CR, LORA_LDRO).await.map_err(|_| "set_lora_mod_params")?;
+                radio
+                    .set_lora_mod_params(LORA_SF, LORA_BW, LORA_CR, LORA_LDRO)
+                    .await
+                    .map_err(|_| "set_lora_mod_params")?;
 
                 // Set packet parameters with larger payload for RTToF
-                radio.set_lora_pkt_params(
-                    LORA_PREAMBLE_LENGTH,
-                    0, // explicit header
-                    10, // RTToF payload length
-                    1, // CRC on
-                    0, // IQ not inverted
-                ).await.map_err(|_| "set_lora_pkt_params")?;
+                radio
+                    .set_lora_pkt_params(
+                        LORA_PREAMBLE_LENGTH,
+                        0,  // explicit header
+                        10, // RTToF payload length
+                        1,  // CRC on
+                        0,  // IQ not inverted
+                    )
+                    .await
+                    .map_err(|_| "set_lora_pkt_params")?;
 
                 // Configure RTToF parameters
-                radio.rttof_set_parameters(RESPONSE_SYMBOLS).await.map_err(|_| "rttof_set_parameters")?;
+                radio
+                    .rttof_set_parameters(RESPONSE_SYMBOLS)
+                    .await
+                    .map_err(|_| "rttof_set_parameters")?;
 
                 // Set RX/TX delay indicator (calibration value - simplified)
                 // A proper implementation would use a lookup table based on SF/BW
-                radio.rttof_set_rx_tx_delay_indicator(0).await.map_err(|_| "rttof_set_rx_tx_delay_indicator")?;
+                radio
+                    .rttof_set_rx_tx_delay_indicator(0)
+                    .await
+                    .map_err(|_| "rttof_set_rx_tx_delay_indicator")?;
 
                 if IS_MANAGER {
                     // Manager: Set request address
-                    radio.rttof_set_request_address(RANGING_ADDRESS).await.map_err(|_| "rttof_set_request_address")?;
-                    radio.set_dio_irq_params_custom(ranging_irq::MANAGER_IRQ_MASK).await.map_err(|_| "set_dio_irq_params")?;
+                    radio
+                        .rttof_set_request_address(RANGING_ADDRESS)
+                        .await
+                        .map_err(|_| "rttof_set_request_address")?;
+                    radio
+                        .set_dio_irq_params_custom(ranging_irq::MANAGER_IRQ_MASK)
+                        .await
+                        .map_err(|_| "set_dio_irq_params")?;
                 } else {
                     // Subordinate: Set address
-                    radio.rttof_set_address(RANGING_ADDRESS, ranging_config::SUBORDINATE_CHECK_LENGTH_BYTES).await.map_err(|_| "rttof_set_address")?;
-                    radio.set_dio_irq_params_custom(ranging_irq::SUBORDINATE_IRQ_MASK).await.map_err(|_| "set_dio_irq_params")?;
+                    radio
+                        .rttof_set_address(RANGING_ADDRESS, ranging_config::SUBORDINATE_CHECK_LENGTH_BYTES)
+                        .await
+                        .map_err(|_| "rttof_set_address")?;
+                    radio
+                        .set_dio_irq_params_custom(ranging_irq::SUBORDINATE_IRQ_MASK)
+                        .await
+                        .map_err(|_| "set_dio_irq_params")?;
                 }
 
                 radio.clear_all_irq().await.map_err(|_| "clear_all_irq")?;
@@ -605,15 +670,19 @@ where
 
                 if IS_MANAGER {
                     // Manager: Get ranging result
-                    let result: RttofDistanceResult = radio.rttof_get_distance_result(
-                        lora_phy::mod_params::Bandwidth::_500KHz
-                    ).await.map_err(|_| "rttof_get_distance_result")?;
+                    let result: RttofDistanceResult = radio
+                        .rttof_get_distance_result(lora_phy::mod_params::Bandwidth::_500KHz)
+                        .await
+                        .map_err(|_| "rttof_get_distance_result")?;
 
                     results.distances[results.count] = result.distance_m;
                     results.rssi[results.count] = result.rssi_dbm;
                     results.count += 1;
 
-                    debug!("Ch {}: {} m, {} dBm", current_channel, result.distance_m, result.rssi_dbm);
+                    debug!(
+                        "Ch {}: {} m, {} dBm",
+                        current_channel, result.distance_m, result.rssi_dbm
+                    );
                 }
 
                 current_channel += 1;

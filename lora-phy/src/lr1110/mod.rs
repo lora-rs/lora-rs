@@ -6,75 +6,65 @@ use embedded_hal_async::spi::*;
 pub use radio_kind_params::TcxoCtrlVoltage;
 pub use radio_kind_params::{
     LrFhssBandwidth, LrFhssCodingRate, LrFhssGrid, LrFhssModulationType, LrFhssParams, LrFhssV1Params,
-    LR_FHSS_SYNC_WORD_BYTES, LR_FHSS_DEFAULT_SYNC_WORD,
+    LR_FHSS_DEFAULT_SYNC_WORD, LR_FHSS_SYNC_WORD_BYTES,
 };
 // System types
 pub use radio_kind_params::{
-    Version, ChipType, ChipMode, ResetStatus, CommandStatus, Stat1, Stat2, SystemStatus,
-    LR11XX_SYSTEM_UID_LENGTH, LR11XX_SYSTEM_JOIN_EUI_LENGTH,
+    ChipMode, ChipType, CommandStatus, ResetStatus, Stat1, Stat2, SystemStatus, Version, LR11XX_SYSTEM_JOIN_EUI_LENGTH,
+    LR11XX_SYSTEM_UID_LENGTH,
 };
 // GNSS types
 pub use radio_kind_params::{
-    GnssOpCode, GnssConstellation, GnssConstellationMask, GnssSearchMode, GnssDestination,
-    GnssScanMode, GnssHostStatus, GnssErrorCode, GnssFreqSearchSpace, GnssResultFields,
-    GnssAssistancePosition, GnssVersion, GnssDetectedSatellite, GnssContextStatus,
-    GNSS_GPS_MASK, GNSS_BEIDOU_MASK, GNSS_MAX_RESULT_SIZE, GNSS_CONTEXT_STATUS_LENGTH,
-    GNSS_SINGLE_ALMANAC_READ_SIZE, GNSS_SINGLE_ALMANAC_WRITE_SIZE, GNSS_SNR_TO_CNR_OFFSET,
-    GNSS_SCALING_LATITUDE, GNSS_SCALING_LONGITUDE,
+    GnssAssistancePosition, GnssConstellation, GnssConstellationMask, GnssContextStatus, GnssDestination,
+    GnssDetectedSatellite, GnssErrorCode, GnssFreqSearchSpace, GnssHostStatus, GnssOpCode, GnssResultFields,
+    GnssScanMode, GnssSearchMode, GnssVersion, GNSS_BEIDOU_MASK, GNSS_CONTEXT_STATUS_LENGTH, GNSS_GPS_MASK,
+    GNSS_MAX_RESULT_SIZE, GNSS_SCALING_LATITUDE, GNSS_SCALING_LONGITUDE, GNSS_SINGLE_ALMANAC_READ_SIZE,
+    GNSS_SINGLE_ALMANAC_WRITE_SIZE, GNSS_SNR_TO_CNR_OFFSET,
 };
 // WiFi types
 pub use radio_kind_params::{
-    WifiOpCode, WifiChannel, WifiChannelMask, WifiSignalTypeScan, WifiSignalTypeResult,
-    WifiScanMode, WifiResultFormat, WifiFrameType, WifiMacOrigin, WifiMacAddress,
-    WifiVersion, WifiCumulativeTimings, WifiBasicMacTypeChannelResult, WifiBasicCompleteResult,
-    WifiExtendedFullResult, WifiFcsInfo,
-    WIFI_MAC_ADDRESS_LENGTH, WIFI_MAX_RESULTS, WIFI_RESULT_SSID_LENGTH,
-    WIFI_ALL_CHANNELS_MASK, WIFI_CHANNEL_1_MASK, WIFI_CHANNEL_2_MASK, WIFI_CHANNEL_3_MASK,
-    WIFI_CHANNEL_4_MASK, WIFI_CHANNEL_5_MASK, WIFI_CHANNEL_6_MASK, WIFI_CHANNEL_7_MASK,
-    WIFI_CHANNEL_8_MASK, WIFI_CHANNEL_9_MASK, WIFI_CHANNEL_10_MASK, WIFI_CHANNEL_11_MASK,
-    WIFI_CHANNEL_12_MASK, WIFI_CHANNEL_13_MASK, WIFI_CHANNEL_14_MASK,
+    WifiBasicCompleteResult, WifiBasicMacTypeChannelResult, WifiChannel, WifiChannelMask, WifiCumulativeTimings,
+    WifiExtendedFullResult, WifiFcsInfo, WifiFrameType, WifiMacAddress, WifiMacOrigin, WifiOpCode, WifiResultFormat,
+    WifiScanMode, WifiSignalTypeResult, WifiSignalTypeScan, WifiVersion, WIFI_ALL_CHANNELS_MASK, WIFI_CHANNEL_10_MASK,
+    WIFI_CHANNEL_11_MASK, WIFI_CHANNEL_12_MASK, WIFI_CHANNEL_13_MASK, WIFI_CHANNEL_14_MASK, WIFI_CHANNEL_1_MASK,
+    WIFI_CHANNEL_2_MASK, WIFI_CHANNEL_3_MASK, WIFI_CHANNEL_4_MASK, WIFI_CHANNEL_5_MASK, WIFI_CHANNEL_6_MASK,
+    WIFI_CHANNEL_7_MASK, WIFI_CHANNEL_8_MASK, WIFI_CHANNEL_9_MASK, WIFI_MAC_ADDRESS_LENGTH, WIFI_MAX_RESULTS,
+    WIFI_RESULT_SSID_LENGTH,
 };
 // Crypto Engine types
 pub use radio_kind_params::{
-    CryptoOpCode, CryptoElement, CryptoStatus, CryptoLorawanVersion, CryptoKeyId,
-    CryptoKey, CryptoNonce, CryptoMic, CryptoParam,
-    CRYPTO_MIC_LENGTH, CRYPTO_AES_CMAC_LENGTH, CRYPTO_DATA_MAX_LENGTH,
-    CRYPTO_KEY_LENGTH, CRYPTO_NONCE_LENGTH, CRYPTO_PARAMETER_LENGTH,
+    CryptoElement, CryptoKey, CryptoKeyId, CryptoLorawanVersion, CryptoMic, CryptoNonce, CryptoOpCode, CryptoParam,
+    CryptoStatus, CRYPTO_AES_CMAC_LENGTH, CRYPTO_DATA_MAX_LENGTH, CRYPTO_KEY_LENGTH, CRYPTO_MIC_LENGTH,
+    CRYPTO_NONCE_LENGTH, CRYPTO_PARAMETER_LENGTH,
 };
 // RTToF (Round-Trip Time of Flight) types
 pub use radio_kind_params::{
-    RttofOpCode, RttofResultType, RttofRawResult, RttofDistanceResult,
-    rttof_distance_raw_to_meters, rttof_rssi_raw_to_dbm,
-    RTTOF_RESULT_LENGTH, RTTOF_DEFAULT_ADDRESS, RTTOF_DEFAULT_NB_SYMBOLS,
+    rttof_distance_raw_to_meters, rttof_rssi_raw_to_dbm, RttofDistanceResult, RttofOpCode, RttofRawResult,
+    RttofResultType, RTTOF_DEFAULT_ADDRESS, RTTOF_DEFAULT_NB_SYMBOLS, RTTOF_RESULT_LENGTH,
 };
 // RTToF Ranging demo constants and helpers
 pub use radio_kind_params::{
-    packet_type, ranging_irq, ranging_config, ranging_channels,
-    lora_sf, lora_bw, lora_cr,
-    calculate_symbol_time_ms, calculate_ranging_request_delay_ms,
+    calculate_ranging_request_delay_ms, calculate_symbol_time_ms, lora_bw, lora_cr, lora_sf, packet_type,
+    ranging_channels, ranging_config, ranging_irq,
 };
 // IrqMask for direct use
 pub use radio_kind_params::IrqMask;
 // Bootloader types
 pub use radio_kind_params::{
-    BootloaderOpCode, BootloaderVersion, BootloaderCommandStatus,
-    BootloaderStat1, BootloaderStat2, BootloaderStatus,
-    BootloaderPin, BootloaderChipEui, BootloaderJoinEui,
-    BOOTLOADER_VERSION_LENGTH, BOOTLOADER_PIN_LENGTH,
-    BOOTLOADER_CHIP_EUI_LENGTH, BOOTLOADER_JOIN_EUI_LENGTH,
-    BOOTLOADER_FLASH_BLOCK_SIZE_WORDS, BOOTLOADER_FLASH_BLOCK_SIZE_BYTES,
+    BootloaderChipEui, BootloaderCommandStatus, BootloaderJoinEui, BootloaderOpCode, BootloaderPin, BootloaderStat1,
+    BootloaderStat2, BootloaderStatus, BootloaderVersion, BOOTLOADER_CHIP_EUI_LENGTH,
+    BOOTLOADER_FLASH_BLOCK_SIZE_BYTES, BOOTLOADER_FLASH_BLOCK_SIZE_WORDS, BOOTLOADER_JOIN_EUI_LENGTH,
+    BOOTLOADER_PIN_LENGTH, BOOTLOADER_VERSION_LENGTH,
 };
 // RegMem (Register/Memory) types
-pub use radio_kind_params::{
-    RegMemOpCode, REGMEM_MAX_READ_WRITE_WORDS, REGMEM_BUFFER_SIZE_MAX,
-};
+pub use radio_kind_params::{RegMemOpCode, REGMEM_BUFFER_SIZE_MAX, REGMEM_MAX_READ_WRITE_WORDS};
 // Radio Timings helpers
-pub use radio_kind_params::{
-    RX_DONE_IRQ_PROCESSING_TIME_IN_US, TX_DONE_IRQ_PROCESSING_TIME_IN_US,
-    lora_rx_input_delay_in_us, lora_symbol_time_in_us,
-    delay_between_last_bit_sent_and_rx_done_in_us, delay_between_last_bit_sent_and_tx_done_in_us,
-};
 use radio_kind_params::*;
+pub use radio_kind_params::{
+    delay_between_last_bit_sent_and_rx_done_in_us, delay_between_last_bit_sent_and_tx_done_in_us,
+    lora_rx_input_delay_in_us, lora_symbol_time_in_us, RX_DONE_IRQ_PROCESSING_TIME_IN_US,
+    TX_DONE_IRQ_PROCESSING_TIME_IN_US,
+};
 
 use crate::mod_params::*;
 use crate::mod_traits::IrqState;
@@ -270,15 +260,15 @@ where
         let cmd = [
             opcode[0],
             opcode[1],
-            lr_fhss_params.header_count,                    // [2] header_count
-            lr_fhss_params.coding_rate.value(),             // [3] cr
-            lr_fhss_params.modulation_type.value(),         // [4] modulation_type
-            lr_fhss_params.grid.value(),                    // [5] grid
-            enable_hopping,                                 // [6] enable_hopping
-            lr_fhss_params.bandwidth.value(),               // [7] bw
-            ((hop_sequence_id >> 8) & 0xFF) as u8,          // [8] hop_seq_id MSB
-            (hop_sequence_id & 0xFF) as u8,                 // [9] hop_seq_id LSB
-            params.device_offset as u8,                     // [10] device_offset
+            lr_fhss_params.header_count,            // [2] header_count
+            lr_fhss_params.coding_rate.value(),     // [3] cr
+            lr_fhss_params.modulation_type.value(), // [4] modulation_type
+            lr_fhss_params.grid.value(),            // [5] grid
+            enable_hopping,                         // [6] enable_hopping
+            lr_fhss_params.bandwidth.value(),       // [7] bw
+            ((hop_sequence_id >> 8) & 0xFF) as u8,  // [8] hop_seq_id MSB
+            (hop_sequence_id & 0xFF) as u8,         // [9] hop_seq_id LSB
+            params.device_offset as u8,             // [10] device_offset
         ];
 
         // Write command with payload (no payload_length field - payload is appended directly)
@@ -322,8 +312,8 @@ where
         // Command format: opcode[2] + address[4] + mask[4] + data[4]
         let opcode = RegMemOpCode::WriteRegMem32Mask.bytes();
         let address: u32 = HIGH_ACP_WORKAROUND_REG;
-        let mask: u32 = 1 << 30;  // Bit 30
-        let data: u32 = 0;        // Clear bit 30
+        let mask: u32 = 1 << 30; // Bit 30
+        let data: u32 = 0; // Clear bit 30
 
         let cmd = [
             opcode[0],
@@ -419,10 +409,12 @@ where
         let mut rbuffer = [0u8; 4];
         self.read_command(&cmd, &mut rbuffer).await?;
 
-        Ok(((rbuffer[0] as u32) << 24)
-            | ((rbuffer[1] as u32) << 16)
-            | ((rbuffer[2] as u32) << 8)
-            | (rbuffer[3] as u32))
+        Ok(
+            ((rbuffer[0] as u32) << 24)
+                | ((rbuffer[1] as u32) << 16)
+                | ((rbuffer[2] as u32) << 8)
+                | (rbuffer[3] as u32),
+        )
     }
 
     /// Read the unique device identifier (8 bytes)
@@ -472,7 +464,10 @@ where
     ///
     /// # Arguments
     /// * `constellation_mask` - Bitmask of constellations to use (GNSS_GPS_MASK | GNSS_BEIDOU_MASK)
-    pub async fn gnss_set_constellation(&mut self, constellation_mask: GnssConstellationMask) -> Result<(), RadioError> {
+    pub async fn gnss_set_constellation(
+        &mut self,
+        constellation_mask: GnssConstellationMask,
+    ) -> Result<(), RadioError> {
         let opcode = GnssOpCode::SetConstellation.bytes();
         let cmd = [opcode[0], opcode[1], constellation_mask];
         self.write_command(&cmd).await
@@ -654,9 +649,7 @@ where
         let error_code = GnssErrorCode::from(rbuffer[5] & 0x0F);
         let almanac_update_gps = (rbuffer[6] & 0x02) != 0;
         let almanac_update_beidou = (rbuffer[6] & 0x04) != 0;
-        let freq_search_space = GnssFreqSearchSpace::from(
-            ((rbuffer[6] & 0x01) << 1) | ((rbuffer[7] & 0x80) >> 7),
-        );
+        let freq_search_space = GnssFreqSearchSpace::from(((rbuffer[6] & 0x01) << 1) | ((rbuffer[7] & 0x80) >> 7));
 
         Ok(GnssContextStatus {
             firmware_version,
@@ -669,7 +662,10 @@ where
     }
 
     /// Set the frequency search space for GNSS
-    pub async fn gnss_set_freq_search_space(&mut self, freq_search_space: GnssFreqSearchSpace) -> Result<(), RadioError> {
+    pub async fn gnss_set_freq_search_space(
+        &mut self,
+        freq_search_space: GnssFreqSearchSpace,
+    ) -> Result<(), RadioError> {
         let opcode = GnssOpCode::SetFreqSearchSpace.bytes();
         let cmd = [opcode[0], opcode[1], freq_search_space.value()];
         self.write_command(&cmd).await
@@ -1104,7 +1100,8 @@ where
         cmd[5 + header_length..cmd_len].copy_from_slice(data_in);
 
         let mut rbuffer = [0u8; 33]; // 1 status + 32 max data
-        self.read_command(&cmd[..cmd_len], &mut rbuffer[..1 + data_in.len()]).await?;
+        self.read_command(&cmd[..cmd_len], &mut rbuffer[..1 + data_in.len()])
+            .await?;
 
         let status = CryptoStatus::from(rbuffer[0]);
         if status == CryptoStatus::Success {
@@ -1213,7 +1210,8 @@ where
         cmd[3..cmd_len].copy_from_slice(data);
 
         let mut rbuffer = [0u8; 257]; // 1 status + 256 data
-        self.read_command(&cmd[..cmd_len], &mut rbuffer[..1 + data.len()]).await?;
+        self.read_command(&cmd[..cmd_len], &mut rbuffer[..1 + data.len()])
+            .await?;
 
         let status = CryptoStatus::from(rbuffer[0]);
         if status == CryptoStatus::Success {
@@ -1253,7 +1251,8 @@ where
         cmd[3..cmd_len].copy_from_slice(data);
 
         let mut rbuffer = [0u8; 257]; // 1 status + 256 data
-        self.read_command(&cmd[..cmd_len], &mut rbuffer[..1 + data.len()]).await?;
+        self.read_command(&cmd[..cmd_len], &mut rbuffer[..1 + data.len()])
+            .await?;
 
         let status = CryptoStatus::from(rbuffer[0]);
         if status == CryptoStatus::Success {
@@ -1293,7 +1292,8 @@ where
         cmd[3..cmd_len].copy_from_slice(data);
 
         let mut rbuffer = [0u8; 257]; // 1 status + 256 data
-        self.read_command(&cmd[..cmd_len], &mut rbuffer[..1 + data.len()]).await?;
+        self.read_command(&cmd[..cmd_len], &mut rbuffer[..1 + data.len()])
+            .await?;
 
         let status = CryptoStatus::from(rbuffer[0]);
         if status == CryptoStatus::Success {
@@ -1364,10 +1364,7 @@ where
     ///
     /// # Returns
     /// * `Ok((CryptoStatus, CryptoParam))` - Status and 4-byte parameter value
-    pub async fn crypto_get_parameter(
-        &mut self,
-        param_id: u8,
-    ) -> Result<(CryptoStatus, CryptoParam), RadioError> {
+    pub async fn crypto_get_parameter(&mut self, param_id: u8) -> Result<(CryptoStatus, CryptoParam), RadioError> {
         let opcode = CryptoOpCode::GetParameter.bytes();
         let cmd = [opcode[0], opcode[1], param_id];
 
@@ -1390,11 +1387,7 @@ where
     /// # Arguments
     /// * `offset` - Byte offset within the firmware image
     /// * `data` - 32-bit words of encrypted firmware data (max 64 words)
-    pub async fn crypto_check_encrypted_fw_image(
-        &mut self,
-        offset: u32,
-        data: &[u32],
-    ) -> Result<(), RadioError> {
+    pub async fn crypto_check_encrypted_fw_image(&mut self, offset: u32, data: &[u32]) -> Result<(), RadioError> {
         const MAX_WORDS: usize = 64;
         if data.len() > MAX_WORDS {
             return Err(RadioError::PayloadSizeMismatch(MAX_WORDS, data.len()));
@@ -1620,12 +1613,8 @@ where
     pub async fn clear_all_irq(&mut self) -> Result<(), RadioError> {
         let opcode = SystemOpCode::ClearIrq.bytes();
         let cmd = [
-            opcode[0],
-            opcode[1],
-            0xFF, // Clear all interrupts (32-bit mask)
-            0xFF,
-            0xFF,
-            0xFF,
+            opcode[0], opcode[1], 0xFF, // Clear all interrupts (32-bit mask)
+            0xFF, 0xFF, 0xFF,
         ];
         self.write_command(&cmd).await
     }
@@ -1642,12 +1631,8 @@ where
         // By passing a zero mask, we read the flags without clearing any.
         let opcode = SystemOpCode::ClearIrq.bytes();
         let cmd = [
-            opcode[0],
-            opcode[1],
-            0x00, // Zero mask - don't clear any interrupts
-            0x00,
-            0x00,
-            0x00,
+            opcode[0], opcode[1], 0x00, // Zero mask - don't clear any interrupts
+            0x00, 0x00, 0x00,
         ];
 
         let mut rbuffer = [0u8; 4];
@@ -1659,8 +1644,10 @@ where
             | ((rbuffer[2] as u32) << 8)
             | (rbuffer[3] as u32);
 
-        debug!("get_irq_flags: raw = [{:02x}, {:02x}, {:02x}, {:02x}], flags = 0x{:08x}",
-            rbuffer[0], rbuffer[1], rbuffer[2], rbuffer[3], irq_flags);
+        debug!(
+            "get_irq_flags: raw = [{:02x}, {:02x}, {:02x}, {:02x}], flags = 0x{:08x}",
+            rbuffer[0], rbuffer[1], rbuffer[2], rbuffer[3], irq_flags
+        );
 
         Ok(irq_flags)
     }
@@ -1909,11 +1896,7 @@ where
     /// - Complete firmware image must be split into chunks of 64 words
     /// - Chunks must be sent in order, starting with offset = 0
     /// - Last chunk may be shorter than 64 words
-    pub async fn bootloader_write_flash_encrypted(
-        &mut self,
-        offset: u32,
-        data: &[u32],
-    ) -> Result<(), RadioError> {
+    pub async fn bootloader_write_flash_encrypted(&mut self, offset: u32, data: &[u32]) -> Result<(), RadioError> {
         if data.len() > BOOTLOADER_FLASH_BLOCK_SIZE_WORDS {
             return Err(RadioError::PayloadSizeMismatch(
                 BOOTLOADER_FLASH_BLOCK_SIZE_WORDS,
@@ -1950,11 +1933,7 @@ where
     ///   If false, execute flash code (requires valid flash content).
     pub async fn bootloader_reboot(&mut self, stay_in_bootloader: bool) -> Result<(), RadioError> {
         let opcode = BootloaderOpCode::Reboot.bytes();
-        let cmd = [
-            opcode[0],
-            opcode[1],
-            if stay_in_bootloader { 0x03 } else { 0x00 },
-        ];
+        let cmd = [opcode[0], opcode[1], if stay_in_bootloader { 0x03 } else { 0x00 }];
         self.write_command(&cmd).await
     }
 
@@ -2032,7 +2011,9 @@ where
 
         // Write command then data
         self.intf.iv.wait_on_busy().await?;
-        self.intf.write_with_payload(&cmd, &cdata[..data.len() * 4], false).await
+        self.intf
+            .write_with_payload(&cmd, &cdata[..data.len() * 4], false)
+            .await
     }
 
     /// Read 32-bit words from register/memory
@@ -2045,7 +2026,10 @@ where
     /// Number of words read
     pub async fn regmem_read_regmem32(&mut self, address: u32, buffer: &mut [u32]) -> Result<usize, RadioError> {
         if buffer.len() > REGMEM_MAX_READ_WRITE_WORDS {
-            return Err(RadioError::PayloadSizeMismatch(REGMEM_MAX_READ_WRITE_WORDS, buffer.len()));
+            return Err(RadioError::PayloadSizeMismatch(
+                REGMEM_MAX_READ_WRITE_WORDS,
+                buffer.len(),
+            ));
         }
 
         let opcode = RegMemOpCode::ReadRegMem32.bytes();
@@ -2164,12 +2148,7 @@ where
     /// * `address` - Register address
     /// * `mask` - Bits to modify (1 = modify, 0 = preserve)
     /// * `data` - New data for masked bits
-    pub async fn regmem_write_regmem32_mask(
-        &mut self,
-        address: u32,
-        mask: u32,
-        data: u32,
-    ) -> Result<(), RadioError> {
+    pub async fn regmem_write_regmem32_mask(&mut self, address: u32, mask: u32, data: u32) -> Result<(), RadioError> {
         let opcode = RegMemOpCode::WriteRegMem32Mask.bytes();
         let cmd = [
             opcode[0],
@@ -2225,15 +2204,14 @@ where
             // For now, use simple configuration
             let opcode = SystemOpCode::SetDioAsRfSwitch.bytes();
             let cmd = [
-                opcode[0], opcode[1],
-                0x01,  // enable
-                0x00,  // standby
-                0x01,  // rx
-                0x02,  // tx
-                0x02,  // tx_hp
-                0x00,  // tx_hf
-                0x00,  // gnss
-                0x00,  // wifi
+                opcode[0], opcode[1], 0x01, // enable
+                0x00, // standby
+                0x01, // rx
+                0x02, // tx
+                0x02, // tx_hp
+                0x00, // tx_hf
+                0x00, // gnss
+                0x00, // wifi
             ];
             self.write_command(&cmd).await?;
         }
@@ -2294,8 +2272,7 @@ where
         bandwidth_value(bandwidth)?;
         coding_rate_value(coding_rate)?;
 
-        if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000)
-        {
+        if ((bandwidth == Bandwidth::_250KHz) || (bandwidth == Bandwidth::_500KHz)) && (frequency_in_hz < 400_000_000) {
             return Err(RadioError::InvalidBandwidthForFrequency);
         }
 
@@ -2496,11 +2473,7 @@ where
             LoRaHeaderType::Explicit
         };
 
-        let crc = if pkt_params.crc_on {
-            LoRaCrc::On
-        } else {
-            LoRaCrc::Off
-        };
+        let crc = if pkt_params.crc_on { LoRaCrc::On } else { LoRaCrc::Off };
 
         let iq = if pkt_params.iq_inverted {
             LoRaIq::Inverted
@@ -2679,8 +2652,7 @@ where
         }
 
         // Read payload from buffer
-        self.read_buffer(offset, payload_length, receiving_buffer)
-            .await?;
+        self.read_buffer(offset, payload_length, receiving_buffer).await?;
 
         Ok(payload_length)
     }
@@ -2725,11 +2697,11 @@ where
         let cad_cmd = [
             cad_opcode[0],
             cad_opcode[1],
-            CadSymbols::_8.value(),      // CAD symbol number
-            spreading_factor_val + 13,   // CAD detection peak
-            10,                          // CAD detection min
+            CadSymbols::_8.value(),         // CAD symbol number
+            spreading_factor_val + 13,      // CAD detection peak
+            10,                             // CAD detection min
             CadExitMode::StandbyRc.value(), // CAD exit mode
-            0x00,                        // timeout (24-bit)
+            0x00,                           // timeout (24-bit)
             0x00,
             0x00,
         ];
@@ -2746,9 +2718,7 @@ where
             Some(RadioMode::Standby) => 0xFFFFFFFF,
             Some(RadioMode::Transmit) => IrqMask::TxDone.value() | IrqMask::Timeout.value(),
             Some(RadioMode::Receive(_)) => 0xFFFFFFFF,
-            Some(RadioMode::ChannelActivityDetection) => {
-                IrqMask::CadDone.value() | IrqMask::CadDetected.value()
-            }
+            Some(RadioMode::ChannelActivityDetection) => IrqMask::CadDone.value() | IrqMask::CadDetected.value(),
             _ => 0x00000000,
         };
 
@@ -2821,8 +2791,7 @@ where
                 if IrqMask::Timeout.is_set(irq_flags) {
                     return Err(RadioError::ReceiveTimeout);
                 }
-                if IrqMask::PreambleDetected.is_set(irq_flags) || IrqMask::SyncWordHeaderValid.is_set(irq_flags)
-                {
+                if IrqMask::PreambleDetected.is_set(irq_flags) || IrqMask::SyncWordHeaderValid.is_set(irq_flags) {
                     return Ok(Some(IrqState::PreambleReceived));
                 }
             }
@@ -2846,12 +2815,8 @@ where
     async fn clear_irq_status(&mut self) -> Result<(), RadioError> {
         let opcode = SystemOpCode::ClearIrq.bytes();
         let cmd = [
-            opcode[0],
-            opcode[1],
-            0xFF, // Clear all interrupts (32-bit mask)
-            0xFF,
-            0xFF,
-            0xFF,
+            opcode[0], opcode[1], 0xFF, // Clear all interrupts (32-bit mask)
+            0xFF, 0xFF, 0xFF,
         ];
         self.write_command(&cmd).await
     }

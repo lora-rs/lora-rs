@@ -32,15 +32,12 @@ use embassy_stm32::rcc::{
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{bind_interrupts, Config};
+use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
-use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
-use lora_phy::lr1110::{
-    GnssAssistancePosition, GnssSearchMode, GnssDestination,
-    GNSS_GPS_MASK, GNSS_BEIDOU_MASK,
-};
+use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
+use lora_phy::lr1110::{GNSS_BEIDOU_MASK, GNSS_GPS_MASK, GnssAssistancePosition, GnssDestination, GnssSearchMode};
 use lora_phy::mod_traits::RadioKind;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -88,9 +85,9 @@ async fn main(_spawner: Spawner) {
 
     let spi = Spi::new(
         p.SPI2,
-        p.PB10,  // SCK
-        p.PC3,   // MOSI
-        p.PA9,   // MISO
+        p.PB10, // SCK
+        p.PC3,  // MOSI
+        p.PA9,  // MISO
         p.GPDMA1_CH0,
         p.GPDMA1_CH1,
         spi_config,
@@ -109,14 +106,7 @@ async fn main(_spawner: Spawner) {
     let rf_switch_tx: Option<Output<'_>> = None;
 
     // Create InterfaceVariant
-    let iv = Stm32wbaLr1110InterfaceVariant::new(
-        reset,
-        busy,
-        dio1,
-        rf_switch_rx,
-        rf_switch_tx,
-    )
-    .unwrap();
+    let iv = Stm32wbaLr1110InterfaceVariant::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
 
     // Configure LR1110 chip variant
     let lr_config = lr1110_module::Config {
@@ -178,15 +168,17 @@ async fn main(_spawner: Spawner) {
     // Optionally set an assistance position (improves scan performance)
     // This should be set to an approximate known location
     let assistance_position = GnssAssistancePosition {
-        latitude: 37.7749,   // San Francisco latitude (example)
+        latitude: 37.7749,    // San Francisco latitude (example)
         longitude: -122.4194, // San Francisco longitude (example)
     };
 
     if let Err(e) = radio.gnss_set_assistance_position(&assistance_position).await {
         error!("  Failed to set assistance position: {:?}", e);
     } else {
-        info!("  Set assistance position: lat={}, lon={}",
-            assistance_position.latitude, assistance_position.longitude);
+        info!(
+            "  Set assistance position: lat={}, lon={}",
+            assistance_position.latitude, assistance_position.longitude
+        );
     }
 
     // Read back the assistance position to verify
@@ -289,8 +281,13 @@ async fn main(_spawner: Spawner) {
                         Ok(count) => {
                             for i in 0..count as usize {
                                 let sv = &satellites[i];
-                                info!("    SV {}: ID={}, C/N={}dB, Doppler={}Hz",
-                                    i + 1, sv.satellite_id, sv.cnr, sv.doppler);
+                                info!(
+                                    "    SV {}: ID={}, C/N={}dB, Doppler={}Hz",
+                                    i + 1,
+                                    sv.satellite_id,
+                                    sv.cnr,
+                                    sv.doppler
+                                );
                             }
                         }
                         Err(e) => {

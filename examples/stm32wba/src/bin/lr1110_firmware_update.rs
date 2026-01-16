@@ -61,15 +61,12 @@ use embassy_stm32::rcc::{
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{bind_interrupts, Config};
+use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::{Delay, Duration, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
-use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
-use lora_phy::lr1110::{
-    BootloaderVersion, Version,
-    BOOTLOADER_FLASH_BLOCK_SIZE_WORDS,
-};
+use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
+use lora_phy::lr1110::{BOOTLOADER_FLASH_BLOCK_SIZE_WORDS, BootloaderVersion, Version};
 use {defmt_rtt as _, panic_probe as _};
 
 use self::iv::Stm32wbaLr1110InterfaceVariant;
@@ -200,9 +197,9 @@ async fn main(_spawner: Spawner) {
 
     let spi = Spi::new(
         p.SPI2,
-        p.PB10,  // SCK
-        p.PC3,   // MOSI
-        p.PA9,   // MISO
+        p.PB10, // SCK
+        p.PC3,  // MOSI
+        p.PA9,  // MISO
         p.GPDMA1_CH0,
         p.GPDMA1_CH1,
         spi_config,
@@ -221,14 +218,7 @@ async fn main(_spawner: Spawner) {
     let rf_switch_tx: Option<Output<'_>> = None;
 
     // Create InterfaceVariant
-    let iv = Stm32wbaLr1110InterfaceVariant::new(
-        reset,
-        busy,
-        dio1,
-        rf_switch_rx,
-        rf_switch_tx,
-    )
-    .unwrap();
+    let iv = Stm32wbaLr1110InterfaceVariant::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
 
     // Configure LR1110 chip variant
     let lr_config = lr1110_module::Config {
@@ -244,9 +234,11 @@ async fn main(_spawner: Spawner) {
     info!("Starting firmware update...");
     info!("Firmware type: {:?}", FIRMWARE_TYPE);
     info!("Expected version: 0x{:04X}", EXPECTED_FIRMWARE_VERSION);
-    info!("Firmware size: {} words ({} bytes)",
-          FIRMWARE_IMAGE.len(),
-          FIRMWARE_IMAGE.len() * 4);
+    info!(
+        "Firmware size: {} words ({} bytes)",
+        FIRMWARE_IMAGE.len(),
+        FIRMWARE_IMAGE.len() * 4
+    );
 
     // Perform the firmware update
     let result = perform_firmware_update(&mut radio, FIRMWARE_TYPE, EXPECTED_FIRMWARE_VERSION, FIRMWARE_IMAGE).await;
@@ -320,7 +312,9 @@ where
     // ========================================================================
     info!("Step 2: Reading bootloader version...");
 
-    let bootloader_version: BootloaderVersion = radio.bootloader_get_version().await
+    let bootloader_version: BootloaderVersion = radio
+        .bootloader_get_version()
+        .await
         .map_err(|_| "failed to get bootloader version")?;
 
     info!("  Hardware version: 0x{:02X}", bootloader_version.hw);
@@ -329,16 +323,20 @@ where
 
     // Validate chip type (0xDF = production mode)
     if bootloader_version.chip_type != 0xDF {
-        error!("Invalid chip type: expected 0xDF (production), got 0x{:02X}",
-               bootloader_version.chip_type);
+        error!(
+            "Invalid chip type: expected 0xDF (production), got 0x{:02X}",
+            bootloader_version.chip_type
+        );
         return Ok(FirmwareUpdateStatus::WrongChipType);
     }
 
     // Validate bootloader version matches firmware type
     let expected_bootloader = firmware_type.expected_bootloader_version();
     if bootloader_version.fw != expected_bootloader {
-        error!("Bootloader version mismatch: expected 0x{:04X}, got 0x{:04X}",
-               expected_bootloader, bootloader_version.fw);
+        error!(
+            "Bootloader version mismatch: expected 0x{:04X}, got 0x{:04X}",
+            expected_bootloader, bootloader_version.fw
+        );
         return Ok(FirmwareUpdateStatus::WrongChipType);
     }
 
@@ -355,14 +353,18 @@ where
     }
 
     match radio.bootloader_read_chip_eui().await {
-        Ok(eui) => info!("  Chip EUI: {:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
-                        eui[0], eui[1], eui[2], eui[3], eui[4], eui[5], eui[6], eui[7]),
+        Ok(eui) => info!(
+            "  Chip EUI: {:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
+            eui[0], eui[1], eui[2], eui[3], eui[4], eui[5], eui[6], eui[7]
+        ),
         Err(_) => warn!("  Failed to read Chip EUI"),
     }
 
     match radio.bootloader_read_join_eui().await {
-        Ok(eui) => info!("  Join EUI: {:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
-                        eui[0], eui[1], eui[2], eui[3], eui[4], eui[5], eui[6], eui[7]),
+        Ok(eui) => info!(
+            "  Join EUI: {:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
+            eui[0], eui[1], eui[2], eui[3], eui[4], eui[5], eui[6], eui[7]
+        ),
         Err(_) => warn!("  Failed to read Join EUI"),
     }
 
@@ -372,8 +374,7 @@ where
     info!("Step 4: Erasing flash memory...");
     info!("  This may take a few seconds...");
 
-    radio.bootloader_erase_flash().await
-        .map_err(|_| "flash erase failed")?;
+    radio.bootloader_erase_flash().await.map_err(|_| "flash erase failed")?;
 
     // Wait for erase to complete
     Timer::after(Duration::from_millis(2000)).await;
@@ -403,7 +404,9 @@ where
         let chunk = &firmware_image[words_written..words_written + chunk_size];
 
         // Write the chunk
-        radio.bootloader_write_flash_encrypted(offset, chunk).await
+        radio
+            .bootloader_write_flash_encrypted(offset, chunk)
+            .await
             .map_err(|_| "flash write failed")?;
 
         // Update progress
@@ -425,8 +428,7 @@ where
     info!("Step 6: Rebooting to execute new firmware...");
 
     // Reboot and exit bootloader (run from flash)
-    radio.bootloader_reboot(false).await
-        .map_err(|_| "reboot failed")?;
+    radio.bootloader_reboot(false).await.map_err(|_| "reboot failed")?;
 
     // Wait for chip to boot and initialize
     Timer::after(Duration::from_millis(2000)).await;
@@ -434,7 +436,9 @@ where
     info!("Step 7: Verifying firmware version...");
 
     // Read the new firmware version
-    let version: Version = radio.get_version().await
+    let version: Version = radio
+        .get_version()
+        .await
         .map_err(|_| "failed to get version after reboot")?;
 
     info!("  Hardware version: 0x{:02X}", version.hw);
@@ -443,8 +447,10 @@ where
 
     // Verify the firmware version matches expected
     if version.fw != expected_version {
-        error!("Firmware version mismatch: expected 0x{:04X}, got 0x{:04X}",
-               expected_version, version.fw);
+        error!(
+            "Firmware version mismatch: expected 0x{:04X}, got 0x{:04X}",
+            expected_version, version.fw
+        );
         return Ok(FirmwareUpdateStatus::VerificationFailed);
     }
 

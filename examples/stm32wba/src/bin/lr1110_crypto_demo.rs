@@ -33,16 +33,15 @@ use embassy_stm32::rcc::{
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{bind_interrupts, Config};
+use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
-use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
-use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
-use lora_phy::mod_traits::RadioKind;
 use lora_phy::lr1110::radio_kind_params::{
-    CryptoElement, CryptoKeyId, CryptoStatus,
-    CRYPTO_KEY_LENGTH, CRYPTO_MIC_LENGTH, CRYPTO_NONCE_LENGTH,
+    CRYPTO_KEY_LENGTH, CRYPTO_MIC_LENGTH, CRYPTO_NONCE_LENGTH, CryptoElement, CryptoKeyId, CryptoStatus,
 };
+use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
+use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
+use lora_phy::mod_traits::RadioKind;
 use {defmt_rtt as _, panic_probe as _};
 
 use self::iv::Stm32wbaLr1110InterfaceVariant;
@@ -87,15 +86,7 @@ async fn main(_spawner: Spawner) {
     let mut spi_config = SpiConfig::default();
     spi_config.frequency = Hertz(8_000_000);
 
-    let spi = Spi::new(
-        p.SPI2,
-        p.PB10,
-        p.PC3,
-        p.PA9,
-        p.GPDMA1_CH0,
-        p.GPDMA1_CH1,
-        spi_config,
-    );
+    let spi = Spi::new(p.SPI2, p.PB10, p.PC3, p.PA9, p.GPDMA1_CH0, p.GPDMA1_CH1, spi_config);
 
     let nss = Output::new(p.PD14, Level::High, Speed::VeryHigh);
     let spi_device = ExclusiveDevice::new(spi, nss, Delay).unwrap();
@@ -108,14 +99,7 @@ async fn main(_spawner: Spawner) {
     let rf_switch_rx: Option<Output<'_>> = None;
     let rf_switch_tx: Option<Output<'_>> = None;
 
-    let iv = Stm32wbaLr1110InterfaceVariant::new(
-        reset,
-        busy,
-        dio1,
-        rf_switch_rx,
-        rf_switch_tx,
-    )
-    .unwrap();
+    let iv = Stm32wbaLr1110InterfaceVariant::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
 
     let lr_config = lr1110_module::Config {
         chip: Lr1110Chip::new(),
@@ -173,14 +157,27 @@ async fn main(_spawner: Spawner) {
     // Example AES-128 key (16 bytes)
     // In production, use a securely generated key!
     let test_key: [u8; CRYPTO_KEY_LENGTH] = [
-        0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6,
-        0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C,
+        0x2B, 0x7E, 0x15, 0x16, 0x28, 0xAE, 0xD2, 0xA6, 0xAB, 0xF7, 0x15, 0x88, 0x09, 0xCF, 0x4F, 0x3C,
     ];
 
-    info!("Setting AES key in GP0 slot...");
+    // Set key in Gp0 slot for AES encryption/decryption
+    info!("Setting AES key in Gp0 slot (for encryption)...");
     info!("  Key: {:02X}", test_key);
 
     match radio.crypto_set_key(CryptoKeyId::Gp0, &test_key).await {
+        Ok(status) => {
+            info!("  Set key status: {:?}", status);
+        }
+        Err(e) => {
+            error!("  Failed to set key: {:?}", e);
+        }
+    }
+
+    // Also set key in FNwkSIntKey slot for CMAC operations
+    // (CMAC/MIC computation typically uses session integrity keys)
+    info!("Setting AES key in FNwkSIntKey slot (for CMAC)...");
+
+    match radio.crypto_set_key(CryptoKeyId::FNwkSIntKey, &test_key).await {
         Ok(status) => {
             info!("  Set key status: {:?}", status);
         }
@@ -198,15 +195,17 @@ async fn main(_spawner: Spawner) {
 
     // Plaintext must be multiple of 16 bytes for AES
     let plaintext: [u8; 16] = [
-        0x32, 0x43, 0xF6, 0xA8, 0x88, 0x5A, 0x30, 0x8D,
-        0x31, 0x31, 0x98, 0xA2, 0xE0, 0x37, 0x07, 0x34,
+        0x32, 0x43, 0xF6, 0xA8, 0x88, 0x5A, 0x30, 0x8D, 0x31, 0x31, 0x98, 0xA2, 0xE0, 0x37, 0x07, 0x34,
     ];
     let mut ciphertext = [0u8; 16];
 
-    info!("Encrypting data with AES-128...");
+    info!("Encrypting data with AES-128 using Gp0 key...");
     info!("  Plaintext:  {:02X}", plaintext);
 
-    match radio.crypto_aes_encrypt(CryptoKeyId::Gp0, &plaintext, &mut ciphertext).await {
+    match radio
+        .crypto_aes_encrypt(CryptoKeyId::Gp0, &plaintext, &mut ciphertext)
+        .await
+    {
         Ok(status) => {
             info!("  Encryption status: {:?}", status);
             if status == CryptoStatus::Success {
@@ -227,10 +226,13 @@ async fn main(_spawner: Spawner) {
 
     let mut decrypted = [0u8; 16];
 
-    info!("Decrypting ciphertext...");
+    info!("Decrypting ciphertext using Gp0 key...");
     info!("  Ciphertext: {:02X}", ciphertext);
 
-    match radio.crypto_aes_decrypt(CryptoKeyId::Gp0, &ciphertext, &mut decrypted).await {
+    match radio
+        .crypto_aes_decrypt(CryptoKeyId::Gp0, &ciphertext, &mut decrypted)
+        .await
+    {
         Ok(status) => {
             info!("  Decryption status: {:?}", status);
             if status == CryptoStatus::Success {
@@ -257,17 +259,17 @@ async fn main(_spawner: Spawner) {
     info!("-------------------------------------------");
 
     let message: [u8; 20] = [
-        0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x20, 0x4C, 0x6F,  // "Hello Lo"
-        0x52, 0x61, 0x57, 0x41, 0x4E, 0x21, 0x00, 0x00,  // "RaWAN!.."
-        0x01, 0x02, 0x03, 0x04,                          // Additional data
+        0x48, 0x65, 0x6C, 0x6C, 0x6F, 0x20, 0x4C, 0x6F, // "Hello Lo"
+        0x52, 0x61, 0x57, 0x41, 0x4E, 0x21, 0x00, 0x00, // "RaWAN!.."
+        0x01, 0x02, 0x03, 0x04, // Additional data
     ];
 
-    info!("Computing AES-CMAC (MIC) over message...");
+    info!("Computing AES-CMAC (MIC) using FNwkSIntKey...");
     info!("  Message: {:02X}", message);
 
     let mut mic: [u8; CRYPTO_MIC_LENGTH] = [0u8; CRYPTO_MIC_LENGTH];
 
-    match radio.crypto_compute_aes_cmac(CryptoKeyId::Gp0, &message).await {
+    match radio.crypto_compute_aes_cmac(CryptoKeyId::FNwkSIntKey, &message).await {
         Ok((status, computed_mic)) => {
             info!("  CMAC status: {:?}", status);
             if status == CryptoStatus::Success {
@@ -289,20 +291,21 @@ async fn main(_spawner: Spawner) {
 
     info!("Verifying MIC over original message...");
 
-    match radio.crypto_verify_aes_cmac(CryptoKeyId::Gp0, &message, &mic).await {
-        Ok(status) => {
-            match status {
-                CryptoStatus::Success => {
-                    info!("  MIC verification: PASSED");
-                }
-                CryptoStatus::ErrorFailCmac => {
-                    warn!("  MIC verification: FAILED (CMAC mismatch)");
-                }
-                _ => {
-                    warn!("  MIC verification status: {:?}", status);
-                }
+    match radio
+        .crypto_verify_aes_cmac(CryptoKeyId::FNwkSIntKey, &message, &mic)
+        .await
+    {
+        Ok(status) => match status {
+            CryptoStatus::Success => {
+                info!("  MIC verification: PASSED");
             }
-        }
+            CryptoStatus::ErrorFailCmac => {
+                warn!("  MIC verification: FAILED (CMAC mismatch)");
+            }
+            _ => {
+                warn!("  MIC verification status: {:?}", status);
+            }
+        },
         Err(e) => {
             error!("  MIC verification failed: {:?}", e);
         }
@@ -310,24 +313,25 @@ async fn main(_spawner: Spawner) {
 
     // Try with a tampered message
     let mut tampered_message = message;
-    tampered_message[0] ^= 0xFF;  // Flip bits in first byte
+    tampered_message[0] ^= 0xFF; // Flip bits in first byte
 
     info!("Verifying MIC over TAMPERED message...");
 
-    match radio.crypto_verify_aes_cmac(CryptoKeyId::Gp0, &tampered_message, &mic).await {
-        Ok(status) => {
-            match status {
-                CryptoStatus::Success => {
-                    error!("  MIC verification: PASSED (unexpected!)");
-                }
-                CryptoStatus::ErrorFailCmac => {
-                    info!("  MIC verification: FAILED as expected (tamper detected!)");
-                }
-                _ => {
-                    warn!("  MIC verification status: {:?}", status);
-                }
+    match radio
+        .crypto_verify_aes_cmac(CryptoKeyId::FNwkSIntKey, &tampered_message, &mic)
+        .await
+    {
+        Ok(status) => match status {
+            CryptoStatus::Success => {
+                error!("  MIC verification: PASSED (unexpected!)");
             }
-        }
+            CryptoStatus::ErrorFailCmac => {
+                info!("  MIC verification: FAILED as expected (tamper detected!)");
+            }
+            _ => {
+                warn!("  MIC verification status: {:?}", status);
+            }
+        },
         Err(e) => {
             error!("  MIC verification failed: {:?}", e);
         }
@@ -340,36 +344,32 @@ async fn main(_spawner: Spawner) {
     info!("Demo 8: Key Derivation");
     info!("-------------------------------------------");
 
+    // First, set a key in GpKeKey0 slot (Key Encryption Key slots support derivation)
+    info!("Setting source key in GpKeKey0 slot...");
+    match radio.crypto_set_key(CryptoKeyId::GpKeKey0, &test_key).await {
+        Ok(status) => info!("  Set key status: {:?}", status),
+        Err(e) => error!("  Failed to set key: {:?}", e),
+    }
+
     // Nonce for key derivation (16 bytes)
     let nonce: [u8; CRYPTO_NONCE_LENGTH] = [
-        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-        0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F,
     ];
 
-    info!("Deriving new key from GP0 -> GP1 with nonce...");
+    info!("Deriving new key from GpKeKey0 -> GpKeKey1 with nonce...");
     info!("  Nonce: {:02X}", nonce);
 
-    match radio.crypto_derive_key(CryptoKeyId::Gp0, CryptoKeyId::Gp1, &nonce).await {
+    // Note: Key derivation works with Key Encryption Key slots (GpKeKey0-5)
+    // The Gp0/Gp1 slots are for direct AES operations, not derivation
+    match radio
+        .crypto_derive_key(CryptoKeyId::GpKeKey0, CryptoKeyId::GpKeKey1, &nonce)
+        .await
+    {
         Ok(status) => {
             info!("  Key derivation status: {:?}", status);
             if status == CryptoStatus::Success {
-                info!("  New derived key stored in GP1 slot");
-
-                // Encrypt with derived key to prove it works
-                let test_data: [u8; 16] = [0x00; 16];
-                let mut encrypted = [0u8; 16];
-
-                match radio.crypto_aes_encrypt(CryptoKeyId::Gp1, &test_data, &mut encrypted).await {
-                    Ok(enc_status) => {
-                        if enc_status == CryptoStatus::Success {
-                            info!("  Derived key verified - encryption successful");
-                            info!("  Test encryption: {:02X}", encrypted);
-                        }
-                    }
-                    Err(e) => {
-                        error!("  Derived key test failed: {:?}", e);
-                    }
-                }
+                info!("  New derived key stored in GpKeKey1 slot");
+                info!("  (Note: Derived keys in KEK slots are for key wrapping operations)");
             }
         }
         Err(e) => {

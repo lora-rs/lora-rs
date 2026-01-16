@@ -2,7 +2,6 @@
 ///
 /// This trait defines the interface for different LR1110 chip variants (LR1110, LR1120, LR1121)
 /// to handle differences in PA selection, RF switch configuration, and other chip-specific features.
-
 use super::radio_kind_params::{PaRegSupply, PaSelection};
 
 /// Trait for LR1110 chip variants

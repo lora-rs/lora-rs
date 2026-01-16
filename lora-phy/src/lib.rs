@@ -19,6 +19,8 @@ pub mod lorawan_radio;
 pub(crate) mod interface;
 /// InterfaceVariant implementations using `embedded-hal`.
 pub mod iv;
+/// Specific implementation to support Semtech LR1110/LR1120/LR1121 chips
+pub mod lr1110;
 /// Parameters used across the lora-phy crate to support various use cases
 pub mod mod_params;
 /// Traits implemented externally or internally to support control of LoRa chips
@@ -27,8 +29,6 @@ pub mod mod_traits;
 pub mod sx126x;
 /// Specific implementation to support Semtech Sx127x chips
 pub mod sx127x;
-/// Specific implementation to support Semtech LR1110/LR1120/LR1121 chips
-pub mod lr1110;
 
 pub use crate::mod_params::RxMode;
 

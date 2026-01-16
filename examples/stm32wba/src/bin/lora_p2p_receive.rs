@@ -27,13 +27,13 @@ use embassy_stm32::rcc::{
 };
 use embassy_stm32::spi::{Config as SpiConfig, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{bind_interrupts, Config};
+use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
-use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
-use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
-use lora_phy::mod_params::{Bandwidth, CodingRate, RxMode, SpreadingFactor};
 use lora_phy::LoRa;
+use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
+use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
+use lora_phy::mod_params::{Bandwidth, CodingRate, RxMode, SpreadingFactor};
 use {defmt_rtt as _, panic_probe as _};
 
 use self::iv::Stm32wbaLr1110InterfaceVariant;
@@ -54,9 +54,9 @@ async fn main(_spawner: Spawner) {
     // Configure PLL1 for 96 MHz system clock
     config.rcc.pll1 = Some(embassy_stm32::rcc::Pll {
         source: PllSource::HSI,
-        prediv: PllPreDiv::DIV1,   // PLLM = 1 → HSI / 1 = 16 MHz
-        mul: PllMul::MUL30,        // PLLN = 30 → 16 MHz * 30 = 480 MHz VCO
-        divr: Some(PllDiv::DIV5),  // PLLR = 5 → 96 MHz (Sysclk)
+        prediv: PllPreDiv::DIV1,  // PLLM = 1 → HSI / 1 = 16 MHz
+        mul: PllMul::MUL30,       // PLLN = 30 → 16 MHz * 30 = 480 MHz VCO
+        divr: Some(PllDiv::DIV5), // PLLR = 5 → 96 MHz (Sysclk)
         divq: None,
         divp: Some(PllDiv::DIV30), // PLLP = 30 → 16 MHz (USB)
         frac: Some(0),
@@ -80,9 +80,9 @@ async fn main(_spawner: Spawner) {
 
     let spi = Spi::new(
         p.SPI2,
-        p.PB10,  // SCK
-        p.PC3,   // MOSI
-        p.PA9,   // MISO
+        p.PB10, // SCK
+        p.PC3,  // MOSI
+        p.PA9,  // MISO
         p.GPDMA1_CH0,
         p.GPDMA1_CH1,
         spi_config,
@@ -101,14 +101,7 @@ async fn main(_spawner: Spawner) {
     let rf_switch_tx: Option<Output<'_>> = None;
 
     // Create InterfaceVariant
-    let iv = Stm32wbaLr1110InterfaceVariant::new(
-        reset,
-        busy,
-        dio1,
-        rf_switch_rx,
-        rf_switch_tx,
-    )
-    .unwrap();
+    let iv = Stm32wbaLr1110InterfaceVariant::new(reset, busy, dio1, rf_switch_rx, rf_switch_tx).unwrap();
 
     // Configure LR1110 chip variant
     let lr_config = lr1110_module::Config {
@@ -128,12 +121,7 @@ async fn main(_spawner: Spawner) {
 
     // Create modulation parameters (must match transmitter)
     let mdltn_params = lora
-        .create_modulation_params(
-            SpreadingFactor::_10,
-            Bandwidth::_250KHz,
-            CodingRate::_4_8,
-            RF_FREQUENCY,
-        )
+        .create_modulation_params(SpreadingFactor::_10, Bandwidth::_250KHz, CodingRate::_4_8, RF_FREQUENCY)
         .unwrap();
 
     // Create RX packet parameters
@@ -156,7 +144,10 @@ async fn main(_spawner: Spawner) {
     // Start continuous reception
     loop {
         // Prepare for reception
-        match lora.prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params).await {
+        match lora
+            .prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params)
+            .await
+        {
             Ok(_) => {}
             Err(err) => {
                 error!("Failed to prepare RX: {:?}", err);
