@@ -1906,3 +1906,118 @@ pub type CryptoMic = [u8; CRYPTO_MIC_LENGTH];
 
 /// Type alias for crypto parameter (4 bytes)
 pub type CryptoParam = [u8; CRYPTO_PARAMETER_LENGTH];
+
+// =============================================================================
+// RTToF (Round-Trip Time of Flight) Types and Constants (from SWDR001 lr11xx_rttof.c/h)
+// =============================================================================
+
+/// RTToF OpCodes (16-bit commands)
+///
+/// Note: RTToF opcodes are in the 0x02XX range (shared with Radio opcodes)
+#[derive(Clone, Copy, PartialEq)]
+pub enum RttofOpCode {
+    /// Set the subordinate device address (0x021C)
+    SetAddress = 0x021C,
+    /// Set the request address for manager mode (0x021D)
+    SetRequestAddress = 0x021D,
+    /// Get RTToF result (0x021E)
+    GetResult = 0x021E,
+    /// Set RX/TX delay indicator for calibration (0x021F)
+    SetRxTxDelay = 0x021F,
+    /// Set RTToF parameters (0x0228)
+    SetParameters = 0x0228,
+}
+
+impl RttofOpCode {
+    /// Convert opcode to bytes for SPI command
+    pub fn bytes(self) -> [u8; 2] {
+        let val = self as u16;
+        [(val >> 8) as u8, (val & 0xFF) as u8]
+    }
+}
+
+/// Length of RTToF result in bytes
+pub const RTTOF_RESULT_LENGTH: usize = 4;
+
+/// Default RTToF address
+pub const RTTOF_DEFAULT_ADDRESS: u32 = 0x00000019;
+
+/// Default number of symbols for RTToF (recommended value)
+pub const RTTOF_DEFAULT_NB_SYMBOLS: u8 = 15;
+
+/// RTToF result type
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum RttofResultType {
+    /// Raw distance result (needs conversion to meters)
+    Raw = 0x00,
+    /// RSSI result
+    Rssi = 0x01,
+}
+
+impl RttofResultType {
+    /// Get the value for SPI command
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// Type alias for RTToF raw result (4 bytes)
+pub type RttofRawResult = [u8; RTTOF_RESULT_LENGTH];
+
+/// RTToF distance result with metadata
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct RttofDistanceResult {
+    /// Distance in meters (can be negative for calibration offsets)
+    pub distance_m: i32,
+    /// RSSI in dBm
+    pub rssi_dbm: i8,
+}
+
+/// Convert raw RTToF distance result to meters
+///
+/// # Arguments
+/// * `bandwidth` - LoRa bandwidth used during RTToF measurement
+/// * `raw_result` - 4-byte raw distance result from device
+///
+/// # Returns
+/// Distance in meters (can be negative)
+pub fn rttof_distance_raw_to_meters(bandwidth: Bandwidth, raw_result: &RttofRawResult) -> i32 {
+    let bitcnt: u8 = 24;
+
+    // Bandwidth scaling factor
+    let bw_scaling: i32 = match bandwidth {
+        Bandwidth::_500KHz => 1,
+        Bandwidth::_250KHz => 2,
+        Bandwidth::_125KHz => 4,
+        _ => 1, // Default to 500 kHz scaling for unsupported bandwidths
+    };
+
+    // Parse raw distance (big-endian)
+    let raw_distance: u32 = ((raw_result[0] as u32) << 24)
+        | ((raw_result[1] as u32) << 16)
+        | ((raw_result[2] as u32) << 8)
+        | (raw_result[3] as u32);
+
+    // Convert to signed value (24-bit two's complement)
+    let mut retval = raw_distance as i32;
+    if raw_distance >= (1u32 << (bitcnt - 1)) {
+        retval -= 1i32 << bitcnt;
+    }
+
+    // Calculate distance: 300 * bw_scaling * raw / 4096
+    300 * bw_scaling * retval / 4096
+}
+
+/// Convert raw RTToF RSSI result to dBm
+///
+/// # Arguments
+/// * `raw_result` - 4-byte raw RSSI result from device
+///
+/// # Returns
+/// RSSI in dBm
+pub fn rttof_rssi_raw_to_dbm(raw_result: &RttofRawResult) -> i8 {
+    // Only the last byte is meaningful
+    -((raw_result[3] >> 1) as i8)
+}

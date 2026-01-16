@@ -41,6 +41,12 @@ pub use radio_kind_params::{
     CRYPTO_MIC_LENGTH, CRYPTO_AES_CMAC_LENGTH, CRYPTO_DATA_MAX_LENGTH,
     CRYPTO_KEY_LENGTH, CRYPTO_NONCE_LENGTH, CRYPTO_PARAMETER_LENGTH,
 };
+// RTToF (Round-Trip Time of Flight) types
+pub use radio_kind_params::{
+    RttofOpCode, RttofResultType, RttofRawResult, RttofDistanceResult,
+    rttof_distance_raw_to_meters, rttof_rssi_raw_to_dbm,
+    RTTOF_RESULT_LENGTH, RTTOF_DEFAULT_ADDRESS, RTTOF_DEFAULT_NB_SYMBOLS,
+};
 use radio_kind_params::*;
 
 use crate::mod_params::*;
@@ -1373,6 +1379,133 @@ where
         let mut rbuffer = [0u8; 1];
         self.read_command(&cmd, &mut rbuffer).await?;
         Ok(rbuffer[0] != 0)
+    }
+
+    // =========================================================================
+    // RTToF (Round-Trip Time of Flight) Functions (from SWDR001 lr11xx_rttof.c)
+    // =========================================================================
+
+    /// Set the RTToF address for this subordinate device
+    ///
+    /// The address is used in subordinate mode when receiving RTToF requests.
+    /// The subordinate compares `check_length` bytes (LSB first) of the request
+    /// address with its own address. Non-matching packets are discarded.
+    ///
+    /// # Arguments
+    /// * `address` - 32-bit subordinate address (default is 0x00000019)
+    /// * `check_length` - Number of bytes to compare (1..4, default is 4)
+    pub async fn rttof_set_address(&mut self, address: u32, check_length: u8) -> Result<(), RadioError> {
+        let opcode = RttofOpCode::SetAddress.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (address >> 24) as u8,
+            (address >> 16) as u8,
+            (address >> 8) as u8,
+            address as u8,
+            check_length,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Set the RTToF request address for manager mode
+    ///
+    /// The request address is copied into the RTToF request packets sent
+    /// when operating as manager.
+    ///
+    /// # Arguments
+    /// * `request_address` - 32-bit request address (default is 0x00000019)
+    pub async fn rttof_set_request_address(&mut self, request_address: u32) -> Result<(), RadioError> {
+        let opcode = RttofOpCode::SetRequestAddress.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (request_address >> 24) as u8,
+            (request_address >> 16) as u8,
+            (request_address >> 8) as u8,
+            request_address as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Set the RX/TX delay indicator for RTToF calibration
+    ///
+    /// The transceiver hardware induces a delay depending on the physical layer
+    /// configuration (bandwidth, spreading factor). This delay needs to be
+    /// compensated by a calibration value for accurate RTToF measurements.
+    ///
+    /// # Arguments
+    /// * `delay_indicator` - Delay value for the used bandwidth and spreading factor
+    ///
+    /// # Note
+    /// The same delay_indicator must be configured in both manager and subordinate devices.
+    pub async fn rttof_set_rx_tx_delay_indicator(&mut self, delay_indicator: u32) -> Result<(), RadioError> {
+        let opcode = RttofOpCode::SetRxTxDelay.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (delay_indicator >> 24) as u8,
+            (delay_indicator >> 16) as u8,
+            (delay_indicator >> 8) as u8,
+            delay_indicator as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Configure RTToF specific parameters
+    ///
+    /// # Arguments
+    /// * `nb_symbols` - Number of symbols in subordinate responses (recommended: 15)
+    ///
+    /// # Note
+    /// The RTToF parameters must be configured in both manager and subordinate devices.
+    /// A value of 15 symbols balances RTToF accuracy and power consumption.
+    pub async fn rttof_set_parameters(&mut self, nb_symbols: u8) -> Result<(), RadioError> {
+        let opcode = RttofOpCode::SetParameters.bytes();
+        let cmd = [opcode[0], opcode[1], 0x00, nb_symbols];
+        self.write_command(&cmd).await
+    }
+
+    /// Get the raw RTToF result from the manager device
+    ///
+    /// # Arguments
+    /// * `result_type` - Type of result to retrieve (Raw distance or RSSI)
+    ///
+    /// # Returns
+    /// * `Ok(RttofRawResult)` - 4-byte raw result
+    ///
+    /// # Note
+    /// This function is only available on manager devices after RTToF is complete.
+    /// Use `rttof_distance_raw_to_meters()` or `rttof_rssi_raw_to_dbm()` to convert.
+    pub async fn rttof_get_raw_result(&mut self, result_type: RttofResultType) -> Result<RttofRawResult, RadioError> {
+        let opcode = RttofOpCode::GetResult.bytes();
+        let cmd = [opcode[0], opcode[1], result_type.value()];
+
+        let mut rbuffer = [0u8; RTTOF_RESULT_LENGTH];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(rbuffer)
+    }
+
+    /// Get complete RTToF distance result with RSSI
+    ///
+    /// Convenience function that retrieves both distance and RSSI results
+    /// and converts them to meaningful units.
+    ///
+    /// # Arguments
+    /// * `bandwidth` - LoRa bandwidth used during RTToF measurement
+    ///
+    /// # Returns
+    /// * `Ok(RttofDistanceResult)` - Distance in meters and RSSI in dBm
+    pub async fn rttof_get_distance_result(&mut self, bandwidth: Bandwidth) -> Result<RttofDistanceResult, RadioError> {
+        // Get raw distance
+        let raw_distance = self.rttof_get_raw_result(RttofResultType::Raw).await?;
+        let distance_m = rttof_distance_raw_to_meters(bandwidth, &raw_distance);
+
+        // Get raw RSSI
+        let raw_rssi = self.rttof_get_raw_result(RttofResultType::Rssi).await?;
+        let rssi_dbm = rttof_rssi_raw_to_dbm(&raw_rssi);
+
+        Ok(RttofDistanceResult { distance_m, rssi_dbm })
     }
 }
 
