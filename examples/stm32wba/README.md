@@ -57,6 +57,27 @@ Demonstrates receiving LoRa packets in continuous mode.
 cargo run --release --bin lora_p2p_receive
 ```
 
+### lr_fhss_ping
+
+Demonstrates LR-FHSS (Long Range Frequency Hopping Spread Spectrum) transmission using the LR1110 radio. This example matches the configuration from Semtech's SWDM001 LR-FHSS demo package.
+
+**Features:**
+- LR-FHSS modulation (GMSK 488 bps)
+- Frequency hopping with 3.906 kHz grid spacing
+- Coding rate 5/6 with 2 header blocks
+- 136.719 kHz bandwidth
+- Applies High ACP workaround from SWDR001
+- Compatible with Semtech's SWDM001 demo receivers
+
+**Run:**
+```bash
+cargo run --release --bin lr_fhss_ping
+```
+
+**Reference:**
+- [SWDM001 - LR-FHSS Demo Package](https://www.semtech.com)
+- [SWDR001 - LR11xx Driver](https://www.semtech.com)
+
 ## Building
 
 ### Prerequisites

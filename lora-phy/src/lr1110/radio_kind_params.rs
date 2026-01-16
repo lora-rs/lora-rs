@@ -165,7 +165,12 @@ pub enum RegMemOpCode {
     ReadRegMem = 0x0106,
     WriteBuffer8 = 0x0108,
     ReadBuffer8 = 0x0109,
+    /// Write with mask (read-modify-write) - used for High ACP workaround
+    WriteRegMem32Mask = 0x010C,
 }
+
+/// Register address for High ACP workaround (from SWDR001)
+pub const HIGH_ACP_WORKAROUND_REG: u32 = 0x00F30054;
 
 impl RegMemOpCode {
     pub fn bytes(self) -> [u8; 2] {
@@ -453,3 +458,155 @@ pub fn convert_time_in_ms_to_rtc_step(time_in_ms: u32) -> u32 {
     // time_in_ms * 32768 / 1000 = time_in_ms * 32.768
     ((time_in_ms as u64 * LR1110_RTC_FREQ_HZ as u64) / 1000) as u32
 }
+
+// =============================================================================
+// LR-FHSS Types and Parameters
+// =============================================================================
+
+/// LR-FHSS OpCodes (16-bit commands)
+#[derive(Clone, Copy, PartialEq)]
+pub enum LrFhssOpCode {
+    Init = 0x022C,
+    BuildFrame = 0x022D,
+    SetSyncWord = 0x022E,
+}
+
+impl LrFhssOpCode {
+    pub fn bytes(self) -> [u8; 2] {
+        let val = self as u16;
+        [(val >> 8) as u8, (val & 0xFF) as u8]
+    }
+}
+
+/// LR-FHSS modulation type
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum LrFhssModulationType {
+    Gmsk488 = 0x00,
+}
+
+impl LrFhssModulationType {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// LR-FHSS coding rate
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum LrFhssCodingRate {
+    Cr5_6 = 0x00,
+    Cr2_3 = 0x01,
+    Cr1_2 = 0x02,
+    Cr1_3 = 0x03,
+}
+
+impl LrFhssCodingRate {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// LR-FHSS grid spacing
+/// Note: Values match lr_fhss_v1_grid_t from SWDM001/SWDR001
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum LrFhssGrid {
+    /// 25.391 kHz grid (coarse)
+    Grid25391Hz = 0x00,
+    /// 3.906 kHz grid (fine)
+    Grid3906Hz = 0x01,
+}
+
+impl LrFhssGrid {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// LR-FHSS bandwidth
+#[derive(Clone, Copy, PartialEq, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum LrFhssBandwidth {
+    Bw39063Hz = 0x00,
+    Bw85938Hz = 0x01,
+    Bw136719Hz = 0x02,
+    Bw183594Hz = 0x03,
+    Bw335938Hz = 0x04,
+    Bw386719Hz = 0x05,
+    Bw722656Hz = 0x06,
+    Bw773438Hz = 0x07,
+    Bw1523438Hz = 0x08,
+    Bw1574219Hz = 0x09,
+}
+
+impl LrFhssBandwidth {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+
+    /// Get the number of hop sequences for this bandwidth and grid
+    /// Values from SWDM001 lr_fhss_v1_base_types.h
+    pub fn hop_sequence_count(self, grid: LrFhssGrid) -> u16 {
+        match grid {
+            LrFhssGrid::Grid25391Hz => match self {
+                LrFhssBandwidth::Bw39063Hz => 1,
+                LrFhssBandwidth::Bw85938Hz => 1,
+                LrFhssBandwidth::Bw136719Hz => 1,
+                LrFhssBandwidth::Bw183594Hz => 1,
+                LrFhssBandwidth::Bw335938Hz => 44,
+                LrFhssBandwidth::Bw386719Hz => 50,
+                LrFhssBandwidth::Bw722656Hz => 88,
+                LrFhssBandwidth::Bw773438Hz => 94,
+                LrFhssBandwidth::Bw1523438Hz => 176,
+                LrFhssBandwidth::Bw1574219Hz => 182,
+            },
+            LrFhssGrid::Grid3906Hz => match self {
+                LrFhssBandwidth::Bw39063Hz => 1,
+                LrFhssBandwidth::Bw85938Hz => 85,
+                LrFhssBandwidth::Bw136719Hz => 170,
+                LrFhssBandwidth::Bw183594Hz => 255,
+                LrFhssBandwidth::Bw335938Hz => 340,
+                LrFhssBandwidth::Bw386719Hz => 383,
+                LrFhssBandwidth::Bw722656Hz => 639,
+                LrFhssBandwidth::Bw773438Hz => 682,
+                LrFhssBandwidth::Bw1523438Hz => 1192,
+                LrFhssBandwidth::Bw1574219Hz => 1235,
+            },
+        }
+    }
+}
+
+/// Default LR-FHSS sync word from SWDM001: { 0x2C, 0x0F, 0x79, 0x95 }
+pub const LR_FHSS_DEFAULT_SYNC_WORD: [u8; LR_FHSS_SYNC_WORD_BYTES] = [0x2C, 0x0F, 0x79, 0x95];
+
+/// LR-FHSS V1 parameters (matching lr_fhss_v1_params_t from SWDM001/SWDR001)
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct LrFhssV1Params {
+    /// 4-byte sync word (default: 0x2C, 0x0F, 0x79, 0x95)
+    pub sync_word: [u8; LR_FHSS_SYNC_WORD_BYTES],
+    /// Modulation type (GMSK 488 bps)
+    pub modulation_type: LrFhssModulationType,
+    /// Coding rate
+    pub coding_rate: LrFhssCodingRate,
+    /// Grid spacing
+    pub grid: LrFhssGrid,
+    /// Enable frequency hopping
+    pub enable_hopping: bool,
+    /// Bandwidth
+    pub bandwidth: LrFhssBandwidth,
+    /// Number of header blocks
+    pub header_count: u8,
+}
+
+/// LR-FHSS parameters (matching lr11xx_lr_fhss_params_t from SWDR001)
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct LrFhssParams {
+    pub lr_fhss_params: LrFhssV1Params,
+    pub device_offset: i8,
+}
+
+/// LR-FHSS sync word bytes
+pub const LR_FHSS_SYNC_WORD_BYTES: usize = 4;

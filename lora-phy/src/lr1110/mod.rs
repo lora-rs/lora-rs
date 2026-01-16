@@ -1,9 +1,13 @@
-mod radio_kind_params;
-mod variant;
+pub mod radio_kind_params;
+pub mod variant;
 
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
 pub use radio_kind_params::TcxoCtrlVoltage;
+pub use radio_kind_params::{
+    LrFhssBandwidth, LrFhssCodingRate, LrFhssGrid, LrFhssModulationType, LrFhssParams, LrFhssV1Params,
+    LR_FHSS_SYNC_WORD_BYTES, LR_FHSS_DEFAULT_SYNC_WORD,
+};
 use radio_kind_params::*;
 
 use crate::mod_params::*;
@@ -137,6 +141,124 @@ where
         // The formula is: freq_in_hz * 2^25 / XTAL_FREQ
         (((freq_in_hz as u64) << 25) / (LR1110_XTAL_FREQ as u64)) as u32
     }
+
+    // =========================================================================
+    // LR-FHSS Public Methods
+    // =========================================================================
+
+    /// Initialize LR-FHSS mode
+    /// This sets the packet type to LR-FHSS
+    pub async fn lr_fhss_init(&mut self) -> Result<(), RadioError> {
+        let opcode = LrFhssOpCode::Init.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        self.write_command(&cmd).await
+    }
+
+    /// Build and transmit an LR-FHSS frame
+    ///
+    /// This command configures the LR-FHSS parameters, writes the payload,
+    /// and prepares the radio for transmission.
+    pub async fn lr_fhss_build_frame(
+        &mut self,
+        params: &LrFhssParams,
+        hop_sequence_id: u16,
+        payload: &[u8],
+    ) -> Result<(), RadioError> {
+        // Set LR-FHSS sync word from params (matching SWDM001 behavior)
+        self.lr_fhss_set_sync_word(&params.lr_fhss_params.sync_word).await?;
+
+        // Build LR-FHSS frame command
+        // Format: opcode[2] + lr_fhss_params[8] + hop_seq_id[2] + payload_len[2] + payload[n]
+        let opcode = LrFhssOpCode::BuildFrame.bytes();
+
+        // Construct command buffer
+        let lr_fhss_params = &params.lr_fhss_params;
+        let enable_hopping: u8 = if lr_fhss_params.enable_hopping { 1 } else { 0 };
+
+        let mut cmd = [0u8; 14]; // 2 opcode + 8 params + 2 hop_seq_id + 2 payload_len
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2] = lr_fhss_params.bandwidth.value();
+        cmd[3] = lr_fhss_params.coding_rate.value();
+        cmd[4] = lr_fhss_params.grid.value();
+        cmd[5] = enable_hopping;
+        cmd[6] = lr_fhss_params.modulation_type.value();
+        cmd[7] = params.device_offset as u8;
+        cmd[8] = lr_fhss_params.header_count;
+        cmd[9] = 0x00; // Reserved
+        cmd[10] = ((hop_sequence_id >> 8) & 0xFF) as u8;
+        cmd[11] = (hop_sequence_id & 0xFF) as u8;
+        cmd[12] = ((payload.len() >> 8) & 0xFF) as u8;
+        cmd[13] = (payload.len() & 0xFF) as u8;
+
+        // Write command with payload
+        self.intf.write_with_payload(&cmd, payload, false).await
+    }
+
+    /// Set LR-FHSS sync word
+    async fn lr_fhss_set_sync_word(&mut self, sync_word: &[u8; 4]) -> Result<(), RadioError> {
+        let opcode = LrFhssOpCode::SetSyncWord.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            sync_word[0],
+            sync_word[1],
+            sync_word[2],
+            sync_word[3],
+        ];
+        self.write_command(&cmd).await
+    }
+
+    // =========================================================================
+    // High ACP Workaround (from SWDR001)
+    // =========================================================================
+
+    /// Apply the workaround for the High ACP (Adjacent Channel Power) limitation
+    ///
+    /// This workaround should be called when the chip wakes up from sleep mode
+    /// with retention, before any transmission.
+    ///
+    /// Affected firmware versions:
+    /// - LR1110 firmware from 0x0303 to 0x0307
+    /// - LR1120 firmware 0x0101
+    ///
+    /// The workaround resets bit 30 in register 0x00F30054.
+    ///
+    /// Reference: SWDR001 README.md, "LR11xx firmware known limitations"
+    pub async fn apply_high_acp_workaround(&mut self) -> Result<(), RadioError> {
+        // Write 32-bit register with mask: clear bit 30 at address 0x00F30054
+        // Command format: opcode[2] + address[4] + mask[4] + data[4]
+        let opcode = RegMemOpCode::WriteRegMem32Mask.bytes();
+        let address: u32 = HIGH_ACP_WORKAROUND_REG;
+        let mask: u32 = 1 << 30;  // Bit 30
+        let data: u32 = 0;        // Clear bit 30
+
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            ((address >> 24) & 0xFF) as u8,
+            ((address >> 16) & 0xFF) as u8,
+            ((address >> 8) & 0xFF) as u8,
+            (address & 0xFF) as u8,
+            ((mask >> 24) & 0xFF) as u8,
+            ((mask >> 16) & 0xFF) as u8,
+            ((mask >> 8) & 0xFF) as u8,
+            (mask & 0xFF) as u8,
+            ((data >> 24) & 0xFF) as u8,
+            ((data >> 16) & 0xFF) as u8,
+            ((data >> 8) & 0xFF) as u8,
+            (data & 0xFF) as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+}
+
+/// Get the number of hop sequences for given LR-FHSS parameters
+pub fn lr_fhss_get_hop_sequence_count(params: &LrFhssParams) -> u16 {
+    params
+        .lr_fhss_params
+        .bandwidth
+        .hop_sequence_count(params.lr_fhss_params.grid)
 }
 
 // Convert u8 sync word to single byte value for LR1110

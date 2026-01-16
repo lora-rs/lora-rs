@@ -3,9 +3,6 @@
 /// This module provides the hardware abstraction layer between the STM32WBA MCU
 /// and the LR1110 LoRa radio chip over SPI.
 
-use embassy_stm32::exti::ExtiInput;
-use embassy_stm32::gpio::{Level, Output, Speed};
-use embassy_time::Timer;
 use embedded_hal::digital::OutputPin;
 use embedded_hal_async::digital::Wait;
 use lora_phy::mod_params::RadioError;
@@ -81,7 +78,7 @@ where
     }
 
     async fn wait_on_busy(&mut self) -> Result<(), RadioError> {
-        // LR1110 does not expose a BUSY pin, so this is a no-op
+        // LR1110 does not expose a BUSY pin in this configuration
         // The chip is ready quickly after commands
         Ok(())
     }
