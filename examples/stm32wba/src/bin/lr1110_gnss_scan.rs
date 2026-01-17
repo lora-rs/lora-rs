@@ -3,12 +3,22 @@
 //! This example demonstrates using the built-in GNSS scanner of the LR1110 radio:
 //! - Configure constellations (GPS and/or BeiDou)
 //! - Set assistance position (optional, improves performance)
+//! - Optionally update almanac from satellite signals
 //! - Perform autonomous GNSS scan
 //! - Read detected satellites and NAV message
 //!
 //! The NAV message can be sent to LoRa Cloud for position solving.
 //!
-//! Hardware connections for STM32WBA65RI:
+//! ## Configuration
+//!
+//! Set your location via environment variables at build time:
+//! ```bash
+//! GNSS_LAT=19.6925 GNSS_LON=-98.8438 cargo run --release --bin lr1110_gnss_scan
+//! ```
+//!
+//! If not set, uses a default location.
+//!
+//! ## Hardware connections for STM32WBA65RI:
 //! - SPI2_SCK:  PB10
 //! - SPI2_MISO: PA9
 //! - SPI2_MOSI: PC3
@@ -42,6 +52,21 @@ use lora_phy::mod_traits::RadioKind;
 use {defmt_rtt as _, panic_probe as _};
 
 use self::iv::Stm32wbaLr1110InterfaceVariant;
+
+// ============================================================================
+// LOCATION CONFIGURATION
+// ============================================================================
+// Location is set via environment variables at build time:
+//   GNSS_LAT=33.4942 GNSS_LON=-111.9261 cargo run --release --bin lr1110_gnss_scan
+// If not set, uses a default location.
+include!(concat!(env!("OUT_DIR"), "/gnss_location.rs"));
+
+/// Set to true to attempt almanac update from satellite before scanning.
+/// This can take 60+ seconds but helps if almanac is outdated.
+/// Requires clear sky view.
+const UPDATE_ALMANAC_FROM_SAT: bool = true;
+
+// ============================================================================
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
 bind_interrupts!(struct Irqs {
@@ -125,6 +150,30 @@ async fn main(_spawner: Spawner) {
     radio.reset(&mut Delay).await.unwrap();
     embassy_time::Timer::after_millis(100).await;
 
+    // Initialize system (TCXO, DC-DC, calibration) - required before GNSS operations
+    info!("Configuring TCXO and calibrating...");
+    radio.init_system().await.unwrap();
+
+    // Configure RF switches for E516V02B/E516V03A board:
+    // - RFSW0 (DIO5, 0x01): Sub-GHz RX path
+    // - RFSW1 (DIO6, 0x02): Sub-GHz TX path
+    // - RFSW2 (DIO7, 0x04): GNSS LNA enable (BGA524N6)
+    // - RFSW3 (DIO8, 0x08): WiFi LNA enable (if present)
+    info!("Configuring RF switches for GNSS LNA...");
+    radio
+        .set_dio_as_rf_switch(
+            true, // enable
+            0x00, // standby: no switches active
+            0x01, // rx: RFSW0 (DIO5)
+            0x03, // tx: RFSW0 + RFSW1 (DIO5 + DIO6)
+            0x02, // tx_hp: RFSW1 (DIO6)
+            0x00, // tx_hf: none
+            0x04, // gnss: RFSW2 (DIO7) - enables BGA524N6 LNA
+            0x08, // wifi: RFSW3 (DIO8)
+        )
+        .await
+        .unwrap();
+
     // Read GNSS firmware version
     info!("-------------------------------------------");
     info!("GNSS Firmware:");
@@ -165,11 +214,11 @@ async fn main(_spawner: Spawner) {
         info!("  Enabled GPS and BeiDou constellations");
     }
 
-    // Optionally set an assistance position (improves scan performance)
-    // This should be set to an approximate known location
+    // Set assistance position from compile-time environment variables
+    // Usage: GNSS_LAT=33.4942 GNSS_LON=-111.9261 cargo run ...
     let assistance_position = GnssAssistancePosition {
-        latitude: 37.7749,    // San Francisco latitude (example)
-        longitude: -122.4194, // San Francisco longitude (example)
+        latitude: GNSS_LATITUDE,
+        longitude: GNSS_LONGITUDE,
     };
 
     if let Err(e) = radio.gnss_set_assistance_position(&assistance_position).await {
@@ -194,6 +243,7 @@ async fn main(_spawner: Spawner) {
     // Get context status before scan
     info!("-------------------------------------------");
     info!("Context Status:");
+    let mut needs_almanac_update = false;
     match radio.gnss_get_context_status().await {
         Ok(status) => {
             info!("  Firmware version: 0x{:02X}", status.firmware_version);
@@ -201,9 +251,40 @@ async fn main(_spawner: Spawner) {
             info!("  Error code: {:?}", status.error_code);
             info!("  GPS almanac update needed: {}", status.almanac_update_gps);
             info!("  BeiDou almanac update needed: {}", status.almanac_update_beidou);
+            needs_almanac_update = status.almanac_update_gps || status.almanac_update_beidou;
         }
         Err(e) => {
             error!("  Failed to read context status: {:?}", e);
+        }
+    }
+
+    // Optionally update almanac from satellite signals
+    if UPDATE_ALMANAC_FROM_SAT && needs_almanac_update {
+        info!("-------------------------------------------");
+        info!("Updating almanac from satellite signals...");
+        info!("  This may take 60+ seconds. Please ensure clear sky view.");
+
+        if let Err(e) = radio
+            .gnss_almanac_update_from_sat(constellation_mask, GnssSearchMode::HighEffort)
+            .await
+        {
+            error!("  Failed to start almanac update: {:?}", e);
+        } else {
+            info!("  Almanac update started, waiting 90 seconds...");
+            embassy_time::Timer::after_secs(90).await;
+
+            // Check status after update
+            match radio.gnss_get_context_status().await {
+                Ok(status) => {
+                    info!("  After update:");
+                    info!("    Almanac CRC: 0x{:08X}", status.global_almanac_crc);
+                    info!("    GPS almanac update needed: {}", status.almanac_update_gps);
+                    info!("    BeiDou almanac update needed: {}", status.almanac_update_beidou);
+                }
+                Err(e) => {
+                    error!("  Failed to read context status: {:?}", e);
+                }
+            }
         }
     }
 

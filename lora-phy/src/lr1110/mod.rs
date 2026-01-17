@@ -823,6 +823,29 @@ where
         self.intf.write_with_payload(&cmd, payload, false).await
     }
 
+    /// Update almanac by demodulating satellite signals
+    ///
+    /// This launches a scan to receive almanac pages directly from satellites.
+    /// GPS satellites broadcast almanac on subframes 4 and 5.
+    /// The scan runs autonomously and updates are incremental.
+    ///
+    /// # Arguments
+    /// * `constellation_mask` - Which constellations to update (GPS, BeiDou, or both)
+    /// * `effort_mode` - Search effort (LowEffort, MidEffort, HighEffort)
+    ///
+    /// # Note
+    /// This operation can take 30-60+ seconds depending on effort mode and
+    /// satellite visibility. Wait for GnssDone IRQ or use a timeout.
+    pub async fn gnss_almanac_update_from_sat(
+        &mut self,
+        constellation_mask: u8,
+        effort_mode: GnssSearchMode,
+    ) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::AlmanacUpdateFromSat.bytes();
+        let cmd = [opcode[0], opcode[1], effort_mode as u8, constellation_mask];
+        self.write_command(&cmd).await
+    }
+
     // =========================================================================
     // WiFi Functions (based on SWDR001 lr11xx_wifi.c)
     // =========================================================================
