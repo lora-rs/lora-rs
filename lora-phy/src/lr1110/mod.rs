@@ -64,6 +64,14 @@ pub use radio_kind_params::{
 };
 // RegMem (Register/Memory) types
 pub use radio_kind_params::{RegMemOpCode, REGMEM_BUFFER_SIZE_MAX, REGMEM_MAX_READ_WRITE_WORDS};
+// GFSK types
+pub use radio_kind_params::{
+    GfskAddressFiltering, GfskBandwidth, GfskCrcType, GfskDcFree, GfskHeaderType, GfskModulationParams,
+    GfskPacketParams, GfskPreambleDetector, GfskPulseShape, GfskStats, GFSK_DEFAULT_SYNC_WORD,
+    GFSK_SYNC_WORD_MAX_LENGTH,
+};
+// Radio Statistics types
+pub use radio_kind_params::{LoRaStats, RadioStats};
 // Radio Timings helpers
 use radio_kind_params::*;
 pub use radio_kind_params::{
@@ -390,6 +398,21 @@ where
         }
 
         Ok(())
+    }
+
+    /// Wake up the LR1110 from sleep mode
+    ///
+    /// This function wakes the chip from sleep by toggling the NSS line.
+    /// After waking up, the chip enters standby mode with the same configuration
+    /// it had before entering sleep.
+    ///
+    /// Call this before sending commands after the chip has been put to sleep.
+    ///
+    /// # Note
+    /// The wakeup is performed at the HAL level by asserting NSS low and waiting
+    /// for BUSY to go low, which indicates the chip is ready.
+    pub async fn wakeup(&mut self) -> Result<(), RadioError> {
+        self.intf.wakeup().await
     }
 
     /// Configure DIO pins as RF switch control
@@ -844,6 +867,79 @@ where
         let opcode = GnssOpCode::AlmanacUpdateFromSat.bytes();
         let cmd = [opcode[0], opcode[1], effort_mode as u8, constellation_mask];
         self.write_command(&cmd).await
+    }
+
+    /// Read almanac data for one or more satellites
+    ///
+    /// Reads the stored almanac data from the chip's internal memory.
+    /// Each satellite almanac is 22 bytes (GNSS_SINGLE_ALMANAC_READ_SIZE).
+    ///
+    /// # Arguments
+    /// * `sv_id` - Starting satellite vehicle ID (0 for GPS PRN 1, 64 for BeiDou 1)
+    /// * `nb_sv` - Number of satellites to read (1-128)
+    /// * `almanac_buffer` - Buffer to store almanac data (must be at least nb_sv * 22 bytes)
+    ///
+    /// # Returns
+    /// The number of bytes read into the buffer
+    ///
+    /// # Note
+    /// For GPS: sv_id 0-31 maps to PRN 1-32
+    /// For BeiDou: sv_id 64-127 maps to PRN 1-64
+    pub async fn gnss_read_almanac(
+        &mut self,
+        sv_id: u8,
+        nb_sv: u8,
+        almanac_buffer: &mut [u8],
+    ) -> Result<usize, RadioError> {
+        let expected_size = (nb_sv as usize) * GNSS_SINGLE_ALMANAC_READ_SIZE;
+        if almanac_buffer.len() < expected_size {
+            return Err(RadioError::PayloadSizeMismatch(expected_size, almanac_buffer.len()));
+        }
+
+        let opcode = GnssOpCode::AlmanacRead.bytes();
+        let cmd = [opcode[0], opcode[1], sv_id, nb_sv];
+        self.read_command(&cmd, &mut almanac_buffer[..expected_size]).await?;
+
+        Ok(expected_size)
+    }
+
+    /// Read almanac data for a single satellite
+    ///
+    /// Convenience function for reading one satellite's almanac.
+    ///
+    /// # Arguments
+    /// * `sv_id` - Satellite vehicle ID
+    ///
+    /// # Returns
+    /// 22-byte almanac data for the specified satellite
+    pub async fn gnss_read_almanac_single(
+        &mut self,
+        sv_id: u8,
+    ) -> Result<[u8; GNSS_SINGLE_ALMANAC_READ_SIZE], RadioError> {
+        let mut almanac = [0u8; GNSS_SINGLE_ALMANAC_READ_SIZE];
+        self.gnss_read_almanac(sv_id, 1, &mut almanac).await?;
+        Ok(almanac)
+    }
+
+    /// Read almanac per satellite (with detailed info)
+    ///
+    /// Reads almanac data for a specific satellite with additional metadata.
+    /// This uses a different command that returns almanac age information.
+    ///
+    /// # Arguments
+    /// * `sv_id` - Satellite vehicle ID
+    ///
+    /// # Returns
+    /// Almanac data including age information (22 bytes)
+    pub async fn gnss_read_almanac_per_satellite(
+        &mut self,
+        sv_id: u8,
+    ) -> Result<[u8; GNSS_SINGLE_ALMANAC_READ_SIZE], RadioError> {
+        let opcode = GnssOpCode::ReadAlmanacPerSatellite.bytes();
+        let cmd = [opcode[0], opcode[1], sv_id];
+        let mut almanac = [0u8; GNSS_SINGLE_ALMANAC_READ_SIZE];
+        self.read_command(&cmd, &mut almanac).await?;
+        Ok(almanac)
     }
 
     // =========================================================================
@@ -1924,6 +2020,296 @@ where
         let opcode = RadioOpCode::SetLoRaSyncWord.bytes();
         let cmd = [opcode[0], opcode[1], sync_word];
         self.write_command(&cmd).await
+    }
+
+    // =========================================================================
+    // GFSK Functions (from SWDR001 lr11xx_radio.c)
+    // =========================================================================
+
+    /// Set GFSK modulation parameters
+    ///
+    /// # Arguments
+    /// * `params` - GFSK modulation parameters (bitrate, pulse shape, bandwidth, frequency deviation)
+    pub async fn set_gfsk_mod_params(&mut self, params: &GfskModulationParams) -> Result<(), RadioError> {
+        // Convert bitrate to chip format: (32 * 32000000) / bitrate
+        let br = ((32u64 * LR1110_XTAL_FREQ as u64) / params.bitrate_bps as u64) as u32;
+        // Convert frequency deviation to chip format: (fdev * 2^25) / 32000000
+        let fdev = ((params.freq_dev_hz as u64) << 25) / (LR1110_XTAL_FREQ as u64);
+
+        let opcode = RadioOpCode::SetModulationParam.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            ((br >> 24) & 0xFF) as u8,
+            ((br >> 16) & 0xFF) as u8,
+            ((br >> 8) & 0xFF) as u8,
+            (br & 0xFF) as u8,
+            params.pulse_shape.value(),
+            params.bandwidth.value(),
+            ((fdev >> 24) & 0xFF) as u8,
+            ((fdev >> 16) & 0xFF) as u8,
+            ((fdev >> 8) & 0xFF) as u8,
+            (fdev & 0xFF) as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Set GFSK packet parameters
+    ///
+    /// # Arguments
+    /// * `params` - GFSK packet parameters
+    pub async fn set_gfsk_pkt_params(&mut self, params: &GfskPacketParams) -> Result<(), RadioError> {
+        let opcode = RadioOpCode::SetPktParam.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            ((params.preamble_length >> 8) & 0xFF) as u8,
+            (params.preamble_length & 0xFF) as u8,
+            params.preamble_detector.value(),
+            params.sync_word_length_bits,
+            params.address_filtering.value(),
+            params.header_type.value(),
+            params.payload_length,
+            params.crc_type.value(),
+            params.dc_free.value(),
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Set GFSK sync word
+    ///
+    /// Sets the sync word used for GFSK packet detection.
+    /// The sync word can be up to 8 bytes (64 bits).
+    ///
+    /// # Arguments
+    /// * `sync_word` - Sync word bytes (up to 8 bytes)
+    pub async fn set_gfsk_sync_word(&mut self, sync_word: &[u8]) -> Result<(), RadioError> {
+        if sync_word.len() > GFSK_SYNC_WORD_MAX_LENGTH {
+            return Err(RadioError::PayloadSizeMismatch(
+                GFSK_SYNC_WORD_MAX_LENGTH,
+                sync_word.len(),
+            ));
+        }
+
+        let opcode = RadioOpCode::SetGfskSyncWord.bytes();
+        let mut cmd = [0u8; 10]; // 2 opcode + 8 sync word
+        cmd[0] = opcode[0];
+        cmd[1] = opcode[1];
+        cmd[2..2 + sync_word.len()].copy_from_slice(sync_word);
+
+        self.write_command(&cmd[..2 + sync_word.len()]).await
+    }
+
+    /// Set GFSK CRC parameters
+    ///
+    /// # Arguments
+    /// * `seed` - CRC seed value
+    /// * `polynomial` - CRC polynomial
+    pub async fn set_gfsk_crc_params(&mut self, seed: u32, polynomial: u32) -> Result<(), RadioError> {
+        let opcode = RadioOpCode::SetGfskCrcParams.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            ((seed >> 24) & 0xFF) as u8,
+            ((seed >> 16) & 0xFF) as u8,
+            ((seed >> 8) & 0xFF) as u8,
+            (seed & 0xFF) as u8,
+            ((polynomial >> 24) & 0xFF) as u8,
+            ((polynomial >> 16) & 0xFF) as u8,
+            ((polynomial >> 8) & 0xFF) as u8,
+            (polynomial & 0xFF) as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Set GFSK whitening parameters
+    ///
+    /// # Arguments
+    /// * `seed` - Whitening seed value (16-bit)
+    pub async fn set_gfsk_whitening_params(&mut self, seed: u16) -> Result<(), RadioError> {
+        let opcode = RadioOpCode::SetGfskWhiteningParams.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            ((seed >> 8) & 0xFF) as u8,
+            (seed & 0xFF) as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Set node and broadcast addresses for GFSK address filtering
+    ///
+    /// # Arguments
+    /// * `node_address` - Node address
+    /// * `broadcast_address` - Broadcast address
+    pub async fn set_gfsk_pkt_address(&mut self, node_address: u8, broadcast_address: u8) -> Result<(), RadioError> {
+        let opcode = RadioOpCode::SetPktAdrs.bytes();
+        let cmd = [opcode[0], opcode[1], node_address, broadcast_address];
+        self.write_command(&cmd).await
+    }
+
+    /// Get GFSK packet status
+    ///
+    /// # Returns
+    /// (rx_length, rssi_sync_dbm, rssi_avg_dbm)
+    pub async fn get_gfsk_packet_status(&mut self) -> Result<(u8, i16, i16), RadioError> {
+        let opcode = RadioOpCode::GetPktStatus.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 4];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        // Parse RSSI values (raw values are unsigned, convert to dBm)
+        let rssi_sync_dbm = -((rbuffer[1] as i16) / 2);
+        let rssi_avg_dbm = -((rbuffer[2] as i16) / 2);
+
+        Ok((rbuffer[0], rssi_sync_dbm, rssi_avg_dbm))
+    }
+
+    // =========================================================================
+    // Radio Statistics Functions (from SWDR001 lr11xx_radio.c)
+    // =========================================================================
+
+    /// Get radio packet statistics
+    ///
+    /// Returns statistics about received packets. The returned type depends
+    /// on the current packet type (GFSK or LoRa).
+    ///
+    /// # Note
+    /// Call reset_stats() to clear the counters.
+    pub async fn get_stats(&mut self) -> Result<RadioStats, RadioError> {
+        let opcode = RadioOpCode::GetStats.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 8];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        // Parse based on current packet type
+        // For GFSK: 3 x 16-bit counters
+        // For LoRa: 4 x 16-bit counters
+        // We return LoRa stats format (8 bytes) and let caller decide
+        Ok(RadioStats::LoRa(LoRaStats {
+            nb_pkt_received: ((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16),
+            nb_pkt_crc_error: ((rbuffer[2] as u16) << 8) | (rbuffer[3] as u16),
+            nb_pkt_header_error: ((rbuffer[4] as u16) << 8) | (rbuffer[5] as u16),
+            nb_pkt_false_sync: ((rbuffer[6] as u16) << 8) | (rbuffer[7] as u16),
+        }))
+    }
+
+    /// Get GFSK packet statistics
+    pub async fn get_gfsk_stats(&mut self) -> Result<GfskStats, RadioError> {
+        let opcode = RadioOpCode::GetStats.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 6];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        Ok(GfskStats {
+            nb_pkt_received: ((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16),
+            nb_pkt_crc_error: ((rbuffer[2] as u16) << 8) | (rbuffer[3] as u16),
+            nb_pkt_len_error: ((rbuffer[4] as u16) << 8) | (rbuffer[5] as u16),
+        })
+    }
+
+    /// Get LoRa packet statistics
+    pub async fn get_lora_stats(&mut self) -> Result<LoRaStats, RadioError> {
+        let opcode = RadioOpCode::GetStats.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 8];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        Ok(LoRaStats {
+            nb_pkt_received: ((rbuffer[0] as u16) << 8) | (rbuffer[1] as u16),
+            nb_pkt_crc_error: ((rbuffer[2] as u16) << 8) | (rbuffer[3] as u16),
+            nb_pkt_header_error: ((rbuffer[4] as u16) << 8) | (rbuffer[5] as u16),
+            nb_pkt_false_sync: ((rbuffer[6] as u16) << 8) | (rbuffer[7] as u16),
+        })
+    }
+
+    /// Reset radio packet statistics
+    ///
+    /// Clears all packet counters (received, CRC errors, etc.)
+    pub async fn reset_stats(&mut self) -> Result<(), RadioError> {
+        let opcode = RadioOpCode::ResetStats.bytes();
+        let cmd = [opcode[0], opcode[1]];
+        self.write_command(&cmd).await
+    }
+
+    // =========================================================================
+    // Advanced Radio Features (from SWDR001 lr11xx_radio.c)
+    // =========================================================================
+
+    /// Set RX duty cycle mode
+    ///
+    /// The radio alternates between RX and sleep modes to save power.
+    ///
+    /// # Arguments
+    /// * `rx_period_rtc` - RX period in RTC steps (32.768 kHz)
+    /// * `sleep_period_rtc` - Sleep period in RTC steps
+    /// * `rx_period_type` - Period type: 0 = from preamble detect, 1 = from RX start
+    pub async fn set_rx_duty_cycle(
+        &mut self,
+        rx_period_rtc: u32,
+        sleep_period_rtc: u32,
+        rx_period_type: u8,
+    ) -> Result<(), RadioError> {
+        let opcode = RadioOpCode::SetRxDutyCycle.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            ((rx_period_rtc >> 16) & 0xFF) as u8,
+            ((rx_period_rtc >> 8) & 0xFF) as u8,
+            (rx_period_rtc & 0xFF) as u8,
+            ((sleep_period_rtc >> 16) & 0xFF) as u8,
+            ((sleep_period_rtc >> 8) & 0xFF) as u8,
+            (sleep_period_rtc & 0xFF) as u8,
+            rx_period_type,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Configure automatic TX after RX or RX after TX
+    ///
+    /// # Arguments
+    /// * `delay_rtc` - Delay between RX and TX (or TX and RX) in RTC steps
+    pub async fn set_auto_tx_rx(&mut self, delay_rtc: u32) -> Result<(), RadioError> {
+        let opcode = RadioOpCode::AutoTxRx.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            ((delay_rtc >> 16) & 0xFF) as u8,
+            ((delay_rtc >> 8) & 0xFF) as u8,
+            (delay_rtc & 0xFF) as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+
+    /// Set RX/TX fallback mode
+    ///
+    /// Configures what mode the radio enters after TX or RX completes.
+    ///
+    /// # Arguments
+    /// * `fallback_mode` - Mode to enter (StandbyRc, StandbyXosc, or Fs)
+    pub async fn set_rx_tx_fallback_mode(&mut self, fallback_mode: FallbackMode) -> Result<(), RadioError> {
+        let opcode = RadioOpCode::SetRxTxFallbackMode.bytes();
+        let cmd = [opcode[0], opcode[1], fallback_mode.value()];
+        self.write_command(&cmd).await
+    }
+
+    /// Get instantaneous RSSI
+    ///
+    /// Returns the current RSSI value in dBm.
+    /// The radio must be in RX mode for a valid reading.
+    pub async fn get_rssi_inst(&mut self) -> Result<i16, RadioError> {
+        let opcode = RadioOpCode::GetRssiInst.bytes();
+        let cmd = [opcode[0], opcode[1]];
+
+        let mut rbuffer = [0u8; 1];
+        self.read_command(&cmd, &mut rbuffer).await?;
+
+        // RSSI in dBm = -raw/2
+        Ok(-((rbuffer[0] as i16) / 2))
     }
 
     // =========================================================================

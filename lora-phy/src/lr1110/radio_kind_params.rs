@@ -419,6 +419,288 @@ impl FallbackMode {
     }
 }
 
+// =============================================================================
+// GFSK Types and Constants (from SWDR001 lr11xx_radio.c/h)
+// =============================================================================
+
+/// GFSK pulse shaping filter
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GfskPulseShape {
+    /// No filter
+    Off = 0x00,
+    /// Gaussian BT=0.3
+    Bt03 = 0x08,
+    /// Gaussian BT=0.5
+    Bt05 = 0x09,
+    /// Gaussian BT=0.7
+    Bt07 = 0x0A,
+    /// Gaussian BT=1
+    Bt1 = 0x0B,
+}
+
+impl GfskPulseShape {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// GFSK bandwidth (receiver bandwidth for RX)
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GfskBandwidth {
+    /// 4.8 kHz DSB
+    Bw4800 = 0x1F,
+    /// 5.8 kHz DSB
+    Bw5800 = 0x17,
+    /// 7.3 kHz DSB
+    Bw7300 = 0x0F,
+    /// 9.7 kHz DSB
+    Bw9700 = 0x1E,
+    /// 11.7 kHz DSB
+    Bw11700 = 0x16,
+    /// 14.6 kHz DSB
+    Bw14600 = 0x0E,
+    /// 19.5 kHz DSB
+    Bw19500 = 0x1D,
+    /// 23.4 kHz DSB
+    Bw23400 = 0x15,
+    /// 29.3 kHz DSB
+    Bw29300 = 0x0D,
+    /// 39.0 kHz DSB
+    Bw39000 = 0x1C,
+    /// 46.9 kHz DSB
+    Bw46900 = 0x14,
+    /// 58.6 kHz DSB
+    Bw58600 = 0x0C,
+    /// 78.2 kHz DSB
+    Bw78200 = 0x1B,
+    /// 93.8 kHz DSB
+    Bw93800 = 0x13,
+    /// 117.3 kHz DSB
+    Bw117300 = 0x0B,
+    /// 156.2 kHz DSB
+    Bw156200 = 0x1A,
+    /// 187.2 kHz DSB
+    Bw187200 = 0x12,
+    /// 234.3 kHz DSB
+    Bw234300 = 0x0A,
+    /// 312.0 kHz DSB
+    Bw312000 = 0x19,
+    /// 373.6 kHz DSB
+    Bw373600 = 0x11,
+    /// 467.0 kHz DSB
+    Bw467000 = 0x09,
+}
+
+impl GfskBandwidth {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// GFSK preamble detector length
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GfskPreambleDetector {
+    /// Preamble detection disabled
+    Off = 0x00,
+    /// Detect 8 bits preamble
+    Bits8 = 0x04,
+    /// Detect 16 bits preamble
+    Bits16 = 0x05,
+    /// Detect 24 bits preamble
+    Bits24 = 0x06,
+    /// Detect 32 bits preamble
+    Bits32 = 0x07,
+}
+
+impl GfskPreambleDetector {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// GFSK address filtering
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GfskAddressFiltering {
+    /// Address filtering disabled
+    Disabled = 0x00,
+    /// Filter on node address
+    Node = 0x01,
+    /// Filter on node and broadcast addresses
+    NodeAndBroadcast = 0x02,
+}
+
+impl GfskAddressFiltering {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// GFSK packet header type
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GfskHeaderType {
+    /// Fixed length packet (no length field)
+    Fixed = 0x00,
+    /// Variable length packet (length in header)
+    Variable = 0x01,
+}
+
+impl GfskHeaderType {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// GFSK CRC type
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GfskCrcType {
+    /// CRC disabled
+    Off = 0x01,
+    /// 1-byte CRC
+    Crc1Byte = 0x00,
+    /// 2-byte CRC
+    Crc2Bytes = 0x02,
+    /// 1-byte CRC, inverted
+    Crc1ByteInv = 0x04,
+    /// 2-byte CRC, inverted
+    Crc2BytesInv = 0x06,
+}
+
+impl GfskCrcType {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// GFSK whitening configuration
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GfskDcFree {
+    /// Whitening disabled
+    Off = 0x00,
+    /// Whitening enabled
+    Whitening = 0x01,
+}
+
+impl GfskDcFree {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
+/// Maximum length of GFSK sync word in bytes
+pub const GFSK_SYNC_WORD_MAX_LENGTH: usize = 8;
+
+/// GFSK modulation parameters
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GfskModulationParams {
+    /// Bitrate in bits per second (600 to 300000)
+    pub bitrate_bps: u32,
+    /// Pulse shaping filter
+    pub pulse_shape: GfskPulseShape,
+    /// Receiver bandwidth
+    pub bandwidth: GfskBandwidth,
+    /// Frequency deviation in Hz
+    pub freq_dev_hz: u32,
+}
+
+impl Default for GfskModulationParams {
+    fn default() -> Self {
+        Self {
+            bitrate_bps: 50000,
+            pulse_shape: GfskPulseShape::Bt1,
+            bandwidth: GfskBandwidth::Bw117300,
+            freq_dev_hz: 25000,
+        }
+    }
+}
+
+/// GFSK packet parameters
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GfskPacketParams {
+    /// Preamble length in bits (must be multiple of 8)
+    pub preamble_length: u16,
+    /// Preamble detector length
+    pub preamble_detector: GfskPreambleDetector,
+    /// Sync word length in bits (0-64, must be multiple of 8)
+    pub sync_word_length_bits: u8,
+    /// Address filtering mode
+    pub address_filtering: GfskAddressFiltering,
+    /// Header type (fixed or variable length)
+    pub header_type: GfskHeaderType,
+    /// Payload length in bytes (for fixed length packets)
+    pub payload_length: u8,
+    /// CRC type
+    pub crc_type: GfskCrcType,
+    /// DC-free encoding (whitening)
+    pub dc_free: GfskDcFree,
+}
+
+impl Default for GfskPacketParams {
+    fn default() -> Self {
+        Self {
+            preamble_length: 32,
+            preamble_detector: GfskPreambleDetector::Bits16,
+            sync_word_length_bits: 32,
+            address_filtering: GfskAddressFiltering::Disabled,
+            header_type: GfskHeaderType::Variable,
+            payload_length: 255,
+            crc_type: GfskCrcType::Crc2Bytes,
+            dc_free: GfskDcFree::Whitening,
+        }
+    }
+}
+
+/// Default GFSK sync word (4 bytes)
+pub const GFSK_DEFAULT_SYNC_WORD: [u8; 8] = [0xC1, 0x94, 0xC1, 0x94, 0x00, 0x00, 0x00, 0x00];
+
+// =============================================================================
+// Radio Statistics Types (from SWDR001 lr11xx_radio.c/h)
+// =============================================================================
+
+/// GFSK statistics
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GfskStats {
+    /// Number of received packets
+    pub nb_pkt_received: u16,
+    /// Number of packets received with CRC error
+    pub nb_pkt_crc_error: u16,
+    /// Number of packets received with length error
+    pub nb_pkt_len_error: u16,
+}
+
+/// LoRa statistics
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct LoRaStats {
+    /// Number of received packets
+    pub nb_pkt_received: u16,
+    /// Number of packets received with CRC error
+    pub nb_pkt_crc_error: u16,
+    /// Number of packets with header error
+    pub nb_pkt_header_error: u16,
+    /// Number of false sync detected
+    pub nb_pkt_false_sync: u16,
+}
+
+/// Combined radio statistics
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum RadioStats {
+    /// GFSK packet statistics
+    Gfsk(GfskStats),
+    /// LoRa packet statistics
+    LoRa(LoRaStats),
+}
+
 /// Sleep configuration
 pub struct SleepParams {
     pub warm_start: bool,

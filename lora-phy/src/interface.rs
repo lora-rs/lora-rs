@@ -127,4 +127,22 @@ where
 
         Ok(())
     }
+
+    // Wakeup the LR11xx from sleep mode by toggling NSS.
+    // For LR11xx: This is the HAL-level wakeup that simply asserts NSS low,
+    // waits for BUSY to go low, then de-asserts NSS high.
+    // Reference: SWDR001 lr11xx_hal_wakeup()
+    pub async fn wakeup(&mut self) -> Result<(), RadioError> {
+        // Perform a dummy read with an empty buffer
+        // This will assert NSS, wait for BUSY, and de-assert NSS
+        let mut dummy = [0u8; 1];
+        self.spi.read(&mut dummy).await.map_err(|_| SPI)?;
+
+        // Wait for BUSY to go low
+        self.iv.wait_on_busy().await?;
+
+        trace!("wakeup: chip awakened from sleep");
+
+        Ok(())
+    }
 }
