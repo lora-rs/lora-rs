@@ -1,3 +1,9 @@
+//! LR1110 transceiver driver implementation
+//!
+//! This module provides support for the Semtech LR1110 multi-band transceiver.
+
+#![allow(missing_docs)]
+
 pub mod radio_kind_params;
 pub mod variant;
 
@@ -72,6 +78,7 @@ use crate::{InterfaceVariant, RadioKind, SpiInterface};
 pub use variant::*;
 
 // Internal frequency of the radio
+#[allow(dead_code)]
 const LR1110_XTAL_FREQ: u32 = 32_000_000;
 
 // Time required for the TCXO to wakeup [ms]
@@ -126,6 +133,7 @@ where
     }
 
     /// Read a command response with status byte
+    #[allow(dead_code)]
     async fn read_command_with_status(&mut self, write_data: &[u8], read_buffer: &mut [u8]) -> Result<u8, RadioError> {
         self.intf.read_with_status(write_data, read_buffer).await
     }
@@ -192,6 +200,7 @@ where
         (timeout & 0xFF) as u8
     }
 
+    #[allow(dead_code)]
     fn convert_freq_in_hz_to_pll_step(freq_in_hz: u32) -> u32 {
         // LR1110 uses direct frequency value in Hz (not PLL steps like SX126x)
         // The formula is: freq_in_hz * 2^25 / XTAL_FREQ
@@ -571,9 +580,9 @@ where
         let mut rbuffer = [0u8; 128]; // 32 * 4 = 128 max
         self.read_command(&cmd, &mut rbuffer[..n * 4]).await?;
 
-        for i in 0..n {
+        for (i, satellite) in satellites.iter_mut().enumerate().take(n) {
             let offset = i * 4;
-            satellites[i] = GnssDetectedSatellite {
+            *satellite = GnssDetectedSatellite {
                 satellite_id: rbuffer[offset],
                 cnr: (rbuffer[offset + 1] as i8) - GNSS_SNR_TO_CNR_OFFSET,
                 doppler: ((rbuffer[offset + 2] as i16) << 8) | (rbuffer[offset + 3] as i16),
@@ -739,6 +748,7 @@ where
     ///
     /// After calling this, wait for WifiScanDone IRQ, then call wifi_get_nb_results()
     /// and wifi_read_basic_mac_type_channel_results().
+    #[allow(clippy::too_many_arguments)]
     pub async fn wifi_scan(
         &mut self,
         signal_type: WifiSignalTypeScan,
@@ -855,12 +865,12 @@ where
         self.read_command(&cmd, &mut buffer[..total_size]).await?;
 
         // Parse results
-        for i in 0..count as usize {
+        for (i, result) in results.iter_mut().enumerate().take(count as usize) {
             let offset = i * result_size;
-            results[i].data_rate_info_byte = buffer[offset];
-            results[i].channel_info_byte = buffer[offset + 1];
-            results[i].rssi = buffer[offset + 2] as i8;
-            results[i].mac_address.copy_from_slice(&buffer[offset + 3..offset + 9]);
+            result.data_rate_info_byte = buffer[offset];
+            result.channel_info_byte = buffer[offset + 1];
+            result.rssi = buffer[offset + 2] as i8;
+            result.mac_address.copy_from_slice(&buffer[offset + 3..offset + 9]);
         }
 
         Ok(count)
@@ -906,15 +916,15 @@ where
         self.read_command(&cmd, &mut buffer[..total_size]).await?;
 
         // Parse results
-        for i in 0..count as usize {
+        for (i, result) in results.iter_mut().enumerate().take(count as usize) {
             let offset = i * result_size;
-            results[i].data_rate_info_byte = buffer[offset];
-            results[i].channel_info_byte = buffer[offset + 1];
-            results[i].rssi = buffer[offset + 2] as i8;
-            results[i].frame_type_info_byte = buffer[offset + 3];
-            results[i].mac_address.copy_from_slice(&buffer[offset + 4..offset + 10]);
-            results[i].phi_offset = ((buffer[offset + 10] as i16) << 8) | (buffer[offset + 11] as i16);
-            results[i].timestamp_us = ((buffer[offset + 12] as u64) << 56)
+            result.data_rate_info_byte = buffer[offset];
+            result.channel_info_byte = buffer[offset + 1];
+            result.rssi = buffer[offset + 2] as i8;
+            result.frame_type_info_byte = buffer[offset + 3];
+            result.mac_address.copy_from_slice(&buffer[offset + 4..offset + 10]);
+            result.phi_offset = ((buffer[offset + 10] as i16) << 8) | (buffer[offset + 11] as i16);
+            result.timestamp_us = ((buffer[offset + 12] as u64) << 56)
                 | ((buffer[offset + 13] as u64) << 48)
                 | ((buffer[offset + 14] as u64) << 40)
                 | ((buffer[offset + 15] as u64) << 32)
@@ -922,7 +932,7 @@ where
                 | ((buffer[offset + 17] as u64) << 16)
                 | ((buffer[offset + 18] as u64) << 8)
                 | (buffer[offset + 19] as u64);
-            results[i].beacon_period_tu = ((buffer[offset + 20] as u16) << 8) | (buffer[offset + 21] as u16);
+            result.beacon_period_tu = ((buffer[offset + 20] as u16) << 8) | (buffer[offset + 21] as u16);
         }
 
         Ok(count)
@@ -2440,7 +2450,7 @@ where
 
         // Set TX parameters
         let opcode = RadioOpCode::SetTxParams.bytes();
-        let cmd = [opcode[0], opcode[1], tx_power as u8, ramp_time.value()];
+        let cmd = [opcode[0], opcode[1], tx_power, ramp_time.value()];
         self.write_command(&cmd).await
     }
 

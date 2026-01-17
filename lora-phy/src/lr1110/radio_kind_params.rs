@@ -455,7 +455,7 @@ impl CalibrationParams {
             | ((self.adc_bulkp_enable as u8) << 3)
             | ((self.adc_bulkn_enable as u8) << 2)
             | ((self.adc_pulse_enable as u8) << 1)
-            | ((self.pll_enable as u8) << 0)
+            | (self.pll_enable as u8)
     }
 }
 
@@ -2206,8 +2206,7 @@ pub fn calculate_symbol_time_ms(bw: u8, sf: u8) -> f32 {
     };
 
     let sf_val = sf as u32;
-    let symbol_time_ms = (1u32 << sf_val) as f32 / bw_khz;
-    symbol_time_ms
+    (1u32 << sf_val) as f32 / bw_khz
 }
 
 /// Calculate ranging request delay in milliseconds
