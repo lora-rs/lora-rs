@@ -392,6 +392,53 @@ where
         Ok(())
     }
 
+    /// Configure DIO pins as RF switch control
+    ///
+    /// This configures which DIO pins (DIO5-DIO10) are set high for each radio mode.
+    /// Each parameter is a 6-bit bitmask where bit 0 = DIO5, bit 5 = DIO10.
+    ///
+    /// # Arguments
+    /// * `enable` - Enable RF switch control (true to enable)
+    /// * `standby` - DIO mask for standby mode
+    /// * `rx` - DIO mask for sub-GHz RX mode
+    /// * `tx` - DIO mask for sub-GHz TX mode
+    /// * `tx_hp` - DIO mask for sub-GHz high-power TX mode
+    /// * `tx_hf` - DIO mask for 2.4 GHz TX mode
+    /// * `gnss` - DIO mask for GNSS mode
+    /// * `wifi` - DIO mask for WiFi mode
+    ///
+    /// # Example
+    /// ```ignore
+    /// // Configure DIO8 (bit 3 = 0x08) for WiFi LNA enable
+    /// radio.set_dio_as_rf_switch(true, 0x00, 0x01, 0x02, 0x02, 0x00, 0x00, 0x08).await?;
+    /// ```
+    pub async fn set_dio_as_rf_switch(
+        &mut self,
+        enable: bool,
+        standby: u8,
+        rx: u8,
+        tx: u8,
+        tx_hp: u8,
+        tx_hf: u8,
+        gnss: u8,
+        wifi: u8,
+    ) -> Result<(), RadioError> {
+        let opcode = SystemOpCode::SetDioAsRfSwitch.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            if enable { 0x01 } else { 0x00 },
+            standby,
+            rx,
+            tx,
+            tx_hp,
+            tx_hf,
+            gnss,
+            wifi,
+        ];
+        self.write_command(&cmd).await
+    }
+
     /// Get the system version (hardware version, chip type, firmware version)
     ///
     /// Returns version information useful for identifying the chip and

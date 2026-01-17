@@ -126,6 +126,12 @@ async fn main(_spawner: Spawner) {
     radio.reset(&mut Delay).await.unwrap();
     embassy_time::Timer::after_millis(100).await;
 
+    // Initialize system (TCXO, DC-DC, calibration)
+    info!("Configuring TCXO and calibrating...");
+    radio.init_system().await.unwrap();
+
+    // Note: WiFi path on this board has no RF switch - directly connected via BGA524N6 LNA
+
     // Read WiFi firmware version
     info!("-------------------------------------------");
     info!("WiFi Firmware:");
@@ -159,7 +165,7 @@ async fn main(_spawner: Spawner) {
         // - TypeBGN: Scan for all WiFi types (802.11 b/g/n)
         // - ALL_CHANNELS_MASK: Scan all 14 channels
         // - Beacon: Basic scan mode for Beacons and Probe Responses
-        // - max_results: 0 for no limit (up to 32)
+        // - max_results: 32 (maximum allowed, range is 1-32, 0 is forbidden!)
         // - nb_scan_per_channel: 10 scans per channel
         // - timeout_per_scan_ms: 90ms per scan
         // - abort_on_timeout: false (continue scanning on timeout)
@@ -168,7 +174,7 @@ async fn main(_spawner: Spawner) {
                 WifiSignalTypeScan::TypeBGN,
                 WIFI_ALL_CHANNELS_MASK,
                 WifiScanMode::Beacon,
-                0,     // max_results (0 = no limit)
+                32,    // max_results (range 1-32, 0 is forbidden!)
                 10,    // nb_scan_per_channel
                 90,    // timeout_per_scan_ms
                 false, // abort_on_timeout
