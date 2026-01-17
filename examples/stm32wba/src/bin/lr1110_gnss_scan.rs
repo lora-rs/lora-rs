@@ -71,9 +71,17 @@ use self::iv::Stm32wbaLr1110InterfaceVariant;
 include!(concat!(env!("OUT_DIR"), "/gnss_location.rs"));
 
 /// Set to true to attempt almanac update from satellite before scanning.
-/// This can take 60+ seconds but helps if almanac is outdated.
+/// GPS broadcasts full almanac every ~12.5 minutes, so this needs time.
 /// Requires clear sky view.
 const UPDATE_ALMANAC_FROM_SAT: bool = true;
+
+/// Maximum time to wait for almanac update from satellite (in seconds).
+/// GPS broadcasts full almanac every ~12.5 minutes (750 seconds).
+/// Set to 900 (15 min) to ensure at least one full cycle.
+const ALMANAC_UPDATE_TIMEOUT_SECS: u64 = 900;
+
+/// Interval to check almanac status during update (in seconds).
+const ALMANAC_CHECK_INTERVAL_SECS: u64 = 60;
 
 /// Set to true to display almanac status for sample satellites at startup.
 const DISPLAY_ALMANAC_STATUS: bool = true;
@@ -369,7 +377,8 @@ async fn main(_spawner: Spawner) {
     if UPDATE_ALMANAC_FROM_SAT && needs_almanac_update {
         info!("-------------------------------------------");
         info!("Updating almanac from satellite signals...");
-        info!("  This may take 60+ seconds. Please ensure clear sky view.");
+        info!("  GPS broadcasts full almanac every ~12.5 minutes.");
+        info!("  Will wait up to {} minutes. Ensure clear sky view.", ALMANAC_UPDATE_TIMEOUT_SECS / 60);
 
         if let Err(e) = radio
             .gnss_almanac_update_from_sat(constellation_mask, GnssSearchMode::HighEffort)
@@ -377,20 +386,54 @@ async fn main(_spawner: Spawner) {
         {
             error!("  Failed to start almanac update: {:?}", e);
         } else {
-            info!("  Almanac update started, waiting 90 seconds...");
-            embassy_time::Timer::after_secs(90).await;
+            info!("  Almanac update started...");
 
-            // Check status after update
-            match radio.gnss_get_context_status().await {
-                Ok(status) => {
-                    info!("  After update:");
-                    info!("    Almanac CRC: 0x{:08X}", status.global_almanac_crc);
-                    info!("    GPS almanac update needed: {}", status.almanac_update_gps);
-                    info!("    BeiDou almanac update needed: {}", status.almanac_update_beidou);
+            let initial_crc = match radio.gnss_get_context_status().await {
+                Ok(status) => status.global_almanac_crc,
+                Err(_) => 0,
+            };
+
+            let mut elapsed_secs: u64 = 0;
+            let mut update_complete = false;
+
+            // Poll periodically to check if almanac has been updated
+            while elapsed_secs < ALMANAC_UPDATE_TIMEOUT_SECS && !update_complete {
+                embassy_time::Timer::after_secs(ALMANAC_CHECK_INTERVAL_SECS).await;
+                elapsed_secs += ALMANAC_CHECK_INTERVAL_SECS;
+
+                match radio.gnss_get_context_status().await {
+                    Ok(status) => {
+                        let minutes = elapsed_secs / 60;
+                        let seconds = elapsed_secs % 60;
+
+                        // Check if CRC changed (indicates almanac data received)
+                        let crc_changed = status.global_almanac_crc != initial_crc;
+
+                        info!(
+                            "  [{}m {}s] CRC: 0x{:08X}{}, GPS needs update: {}, BeiDou needs update: {}",
+                            minutes,
+                            seconds,
+                            status.global_almanac_crc,
+                            if crc_changed { " (changed!)" } else { "" },
+                            status.almanac_update_gps,
+                            status.almanac_update_beidou
+                        );
+
+                        // Consider update complete if neither constellation needs update
+                        if !status.almanac_update_gps && !status.almanac_update_beidou {
+                            info!("  Almanac update complete!");
+                            update_complete = true;
+                        }
+                    }
+                    Err(e) => {
+                        error!("  Failed to read context status: {:?}", e);
+                    }
                 }
-                Err(e) => {
-                    error!("  Failed to read context status: {:?}", e);
-                }
+            }
+
+            if !update_complete {
+                warn!("  Almanac update timed out after {} minutes.", ALMANAC_UPDATE_TIMEOUT_SECS / 60);
+                warn!("  Continuing with partial/stale almanac data.");
             }
         }
     }
