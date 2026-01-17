@@ -3,9 +3,15 @@
 //! This example demonstrates using the built-in GNSS scanner of the LR1110 radio:
 //! - Configure constellations (GPS and/or BeiDou)
 //! - Set assistance position (optional, improves performance)
+//! - Read and display almanac status for satellites
+//! - Read individual satellite almanac data with age information
 //! - Optionally update almanac from satellite signals
 //! - Perform autonomous GNSS scan
-//! - Read detected satellites and NAV message
+//! - Read detected satellites with almanac age information
+//! - Read NAV message for position solving
+//!
+//! The almanac age is extracted from the first byte of each satellite's almanac data.
+//! A value of 0 indicates a valid (fresh) almanac, while higher values indicate older data.
 //!
 //! The NAV message can be sent to LoRa Cloud for position solving.
 //!
@@ -47,7 +53,10 @@ use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
 use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
-use lora_phy::lr1110::{GNSS_BEIDOU_MASK, GNSS_GPS_MASK, GnssAssistancePosition, GnssDestination, GnssSearchMode};
+use lora_phy::lr1110::{
+    GNSS_BEIDOU_MASK, GNSS_GPS_MASK, GNSS_SINGLE_ALMANAC_READ_SIZE, GnssAssistancePosition, GnssDestination,
+    GnssSearchMode,
+};
 use lora_phy::mod_traits::RadioKind;
 use {defmt_rtt as _, panic_probe as _};
 
@@ -65,6 +74,43 @@ include!(concat!(env!("OUT_DIR"), "/gnss_location.rs"));
 /// This can take 60+ seconds but helps if almanac is outdated.
 /// Requires clear sky view.
 const UPDATE_ALMANAC_FROM_SAT: bool = true;
+
+/// Set to true to display almanac status for sample satellites at startup.
+const DISPLAY_ALMANAC_STATUS: bool = true;
+
+/// Number of sample satellites to display almanac for (per constellation).
+const ALMANAC_SAMPLE_COUNT: u8 = 4;
+
+/// Helper to determine constellation from satellite ID
+fn constellation_name(sv_id: u8) -> &'static str {
+    if sv_id < 32 {
+        "GPS"
+    } else if sv_id >= 64 && sv_id < 128 {
+        "BeiDou"
+    } else {
+        "Unknown"
+    }
+}
+
+/// Helper to convert satellite ID to PRN
+fn sv_id_to_prn(sv_id: u8) -> u8 {
+    if sv_id < 32 {
+        sv_id + 1 // GPS: sv_id 0-31 -> PRN 1-32
+    } else if sv_id >= 64 && sv_id < 128 {
+        sv_id - 64 + 1 // BeiDou: sv_id 64-127 -> PRN 1-64
+    } else {
+        sv_id
+    }
+}
+
+/// Parse almanac age from first byte of almanac data
+/// Returns age in days (0 = valid/fresh, higher = older)
+fn parse_almanac_age(almanac_data: &[u8; GNSS_SINGLE_ALMANAC_READ_SIZE]) -> u8 {
+    // First byte contains almanac age indicator
+    // Bits 7-4: Reserved/status
+    // Bits 3-0: Age in days (0 = fresh, 15 = very old or no data)
+    almanac_data[0] & 0x0F
+}
 
 // ============================================================================
 
@@ -258,6 +304,67 @@ async fn main(_spawner: Spawner) {
         }
     }
 
+    // Display almanac status for sample satellites
+    if DISPLAY_ALMANAC_STATUS {
+        info!("-------------------------------------------");
+        info!("Almanac Status for Sample Satellites:");
+
+        // Read almanac for sample GPS satellites (sv_id 0-31 = PRN 1-32)
+        info!("  GPS Satellites:");
+        for sv_id in 0..ALMANAC_SAMPLE_COUNT {
+            match radio.gnss_read_almanac_per_satellite(sv_id).await {
+                Ok(almanac) => {
+                    let age = parse_almanac_age(&almanac);
+                    let status_str = if age == 0 {
+                        "Valid"
+                    } else if age == 0x0F {
+                        "No data"
+                    } else {
+                        "Stale"
+                    };
+                    info!(
+                        "    PRN {}: Age={} days ({}), Data[0..4]={:02X}",
+                        sv_id_to_prn(sv_id),
+                        age,
+                        status_str,
+                        &almanac[0..4]
+                    );
+                }
+                Err(e) => {
+                    info!("    PRN {}: Failed to read ({:?})", sv_id_to_prn(sv_id), e);
+                }
+            }
+        }
+
+        // Read almanac for sample BeiDou satellites (sv_id 64-127 = PRN 1-64)
+        info!("  BeiDou Satellites:");
+        for i in 0..ALMANAC_SAMPLE_COUNT {
+            let sv_id = 64 + i; // BeiDou sv_id starts at 64
+            match radio.gnss_read_almanac_per_satellite(sv_id).await {
+                Ok(almanac) => {
+                    let age = parse_almanac_age(&almanac);
+                    let status_str = if age == 0 {
+                        "Valid"
+                    } else if age == 0x0F {
+                        "No data"
+                    } else {
+                        "Stale"
+                    };
+                    info!(
+                        "    PRN {}: Age={} days ({}), Data[0..4]={:02X}",
+                        sv_id_to_prn(sv_id),
+                        age,
+                        status_str,
+                        &almanac[0..4]
+                    );
+                }
+                Err(e) => {
+                    info!("    PRN {}: Failed to read ({:?})", sv_id_to_prn(sv_id), e);
+                }
+            }
+        }
+    }
+
     // Optionally update almanac from satellite signals
     if UPDATE_ALMANAC_FROM_SAT && needs_almanac_update {
         info!("-------------------------------------------");
@@ -360,16 +467,43 @@ async fn main(_spawner: Spawner) {
                     let mut satellites = [lora_phy::lr1110::GnssDetectedSatellite::default(); 32];
                     match radio.gnss_get_satellites(&mut satellites, nb_sv).await {
                         Ok(count) => {
+                            // Display satellite details with constellation and almanac info
                             for i in 0..count as usize {
                                 let sv = &satellites[i];
+                                let constellation = constellation_name(sv.satellite_id);
+                                let prn = sv_id_to_prn(sv.satellite_id);
+
+                                // Try to read almanac age for this satellite
+                                let almanac_info = match radio.gnss_read_almanac_per_satellite(sv.satellite_id).await {
+                                    Ok(almanac) => {
+                                        let age = parse_almanac_age(&almanac);
+                                        if age == 0 {
+                                            "Alm:OK"
+                                        } else if age == 0x0F {
+                                            "Alm:None"
+                                        } else {
+                                            "Alm:Old"
+                                        }
+                                    }
+                                    Err(_) => "Alm:Err",
+                                };
+
                                 info!(
-                                    "    SV {}: ID={}, C/N={}dB, Doppler={}Hz",
-                                    i + 1,
-                                    sv.satellite_id,
-                                    sv.cnr,
-                                    sv.doppler
+                                    "    {} PRN {}: C/N={}dB, Doppler={}Hz, {}",
+                                    constellation, prn, sv.cnr, sv.doppler, almanac_info
                                 );
                             }
+
+                            // Summary by constellation
+                            let gps_count = satellites[..count as usize]
+                                .iter()
+                                .filter(|s| s.satellite_id < 32)
+                                .count();
+                            let beidou_count = satellites[..count as usize]
+                                .iter()
+                                .filter(|s| s.satellite_id >= 64 && s.satellite_id < 128)
+                                .count();
+                            info!("  Summary: {} GPS, {} BeiDou", gps_count, beidou_count);
                         }
                         Err(e) => {
                             error!("  Failed to get satellite details: {:?}", e);
