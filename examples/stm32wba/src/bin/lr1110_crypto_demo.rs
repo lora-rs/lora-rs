@@ -115,6 +115,10 @@ async fn main(_spawner: Spawner) {
     radio.reset(&mut Delay).await.unwrap();
     embassy_time::Timer::after_millis(100).await;
 
+    // Initialize system (TCXO, DC-DC, calibration) - required for RNG and crypto operations
+    info!("Configuring TCXO and calibrating...");
+    radio.init_system().await.unwrap();
+
     // =========================================================================
     // Demo 1: Hardware Random Number Generation
     // =========================================================================

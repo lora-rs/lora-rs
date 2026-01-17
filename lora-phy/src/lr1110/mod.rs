@@ -347,6 +347,51 @@ where
     // System Functions (from SWDR001 lr11xx_system.c)
     // =========================================================================
 
+    /// Initialize the system (TCXO, DC-DC regulator, calibration)
+    ///
+    /// This performs basic system initialization without configuring radio modulation.
+    /// Call this after reset() before using system functions like get_random_number().
+    ///
+    /// This is automatically called by init_lora(), so you only need to call this
+    /// explicitly if you want to use system functions (crypto, RNG, GNSS, WiFi)
+    /// without initializing LoRa mode.
+    pub async fn init_system(&mut self) -> Result<(), RadioError> {
+        // DC-DC regulator setup (default is LDO)
+        if self.config.use_dcdc {
+            let opcode = SystemOpCode::SetRegMode.bytes();
+            let cmd = [opcode[0], opcode[1], RegulatorMode::Dcdc.value()];
+            self.write_command(&cmd).await?;
+        }
+
+        // DIO3 acting as TCXO controller
+        if let Some(voltage) = self.config.tcxo_ctrl {
+            // Clear any TCXO startup errors
+            let clear_opcode = SystemOpCode::ClearErrors.bytes();
+            let clear_cmd = [clear_opcode[0], clear_opcode[1]];
+            self.write_command(&clear_cmd).await?;
+
+            // Set TCXO mode - timeout in RTC steps (32.768 kHz)
+            let timeout = BRD_TCXO_WAKEUP_TIME * 32768 / 1000; // Convert ms to RTC steps
+            let opcode = SystemOpCode::SetTcxoMode.bytes();
+            let cmd = [
+                opcode[0],
+                opcode[1],
+                voltage.value(),
+                Self::timeout_1(timeout),
+                Self::timeout_2(timeout),
+                Self::timeout_3(timeout),
+            ];
+            self.write_command(&cmd).await?;
+
+            // Re-run calibration now that chip knows it's running from TCXO
+            let cal_opcode = SystemOpCode::Calibrate.bytes();
+            let cal_cmd = [cal_opcode[0], cal_opcode[1], 0b0111_1111];
+            self.write_command(&cal_cmd).await?;
+        }
+
+        Ok(())
+    }
+
     /// Get the system version (hardware version, chip type, firmware version)
     ///
     /// Returns version information useful for identifying the chip and
@@ -2201,12 +2246,8 @@ where
     C: Lr1110Variant,
 {
     async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError> {
-        // DC-DC regulator setup (default is LDO)
-        if self.config.use_dcdc {
-            let opcode = SystemOpCode::SetRegMode.bytes();
-            let cmd = [opcode[0], opcode[1], RegulatorMode::Dcdc.value()];
-            self.write_command(&cmd).await?;
-        }
+        // Initialize system (DC-DC, TCXO, calibration)
+        self.init_system().await?;
 
         // DIO2 acting as RF Switch (if configured in variant)
         if self.config.chip.use_dio2_as_rfswitch() {
@@ -2224,33 +2265,6 @@ where
                 0x00, // wifi
             ];
             self.write_command(&cmd).await?;
-        }
-
-        // DIO3 acting as TCXO controller
-        if let Some(voltage) = self.config.tcxo_ctrl {
-            // Clear any TCXO startup errors
-            let clear_opcode = SystemOpCode::ClearErrors.bytes();
-            let clear_cmd = [clear_opcode[0], clear_opcode[1]];
-            self.write_command(&clear_cmd).await?;
-
-            // Set TCXO mode - timeout in RTC steps (32.768 kHz)
-            let timeout = BRD_TCXO_WAKEUP_TIME * 32768 / 1000; // Convert ms to RTC steps
-            let opcode = SystemOpCode::SetTcxoMode.bytes();
-            let cmd = [
-                opcode[0],
-                opcode[1],
-                voltage.value(),
-                Self::timeout_1(timeout),
-                Self::timeout_2(timeout),
-                Self::timeout_3(timeout),
-            ];
-            self.write_command(&cmd).await?;
-
-            // Re-run calibration now that chip knows it's running from TCXO
-            let cal_opcode = SystemOpCode::Calibrate.bytes();
-            let cal_cmd = [cal_opcode[0], cal_opcode[1], 0b0111_1111];
-            self.write_command(&cal_cmd).await?;
-            // Note: LR1110 has no BUSY pin, so no wait needed
         }
 
         // Enable LoRa packet engine
