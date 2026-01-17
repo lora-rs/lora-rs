@@ -866,7 +866,8 @@ where
         effort_mode: GnssSearchMode,
     ) -> Result<(), RadioError> {
         let opcode = GnssOpCode::AlmanacUpdateFromSat.bytes();
-        let cmd = [opcode[0], opcode[1], effort_mode as u8, constellation_mask];
+        // Per SWDR001: constellation_mask first, then effort_mode
+        let cmd = [opcode[0], opcode[1], constellation_mask, effort_mode as u8];
         self.write_command(&cmd).await
     }
 
