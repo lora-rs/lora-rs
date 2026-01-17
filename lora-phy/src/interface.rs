@@ -64,13 +64,10 @@ where
 
         // Step 3: Read response in separate transaction
         // First byte is Stat1 (discarded), followed by actual data
-        // We need to read stat1 + data_length bytes
-        let total_len = 1 + read_buffer.len();
-        let mut full_buffer = [0u8; 32]; // Max reasonable size
-        self.spi.read(&mut full_buffer[..total_len]).await.map_err(|_| SPI)?;
-
-        // Copy data (skip stat1 at position 0)
-        read_buffer.copy_from_slice(&full_buffer[1..total_len]);
+        // Read stat1 and data in a single SPI transaction using transfer
+        let mut stat1 = [0u8; 1];
+        let mut ops = [Operation::Read(&mut stat1), Operation::Read(read_buffer)];
+        self.spi.transaction(&mut ops).await.map_err(|_| SPI)?;
 
         trace!(
             "read: addr={=[u8]:02x}, len={}, data={=[u8]:02x}",
@@ -95,22 +92,19 @@ where
 
         // Step 3: Read response in separate transaction
         // First byte is Stat1, followed by actual data
-        let total_len = 1 + read_buffer.len();
-        let mut full_buffer = [0u8; 32]; // Max reasonable size
-        self.spi.read(&mut full_buffer[..total_len]).await.map_err(|_| SPI)?;
-
-        let status = full_buffer[0];
-        read_buffer.copy_from_slice(&full_buffer[1..total_len]);
+        let mut stat1 = [0u8; 1];
+        let mut ops = [Operation::Read(&mut stat1), Operation::Read(read_buffer)];
+        self.spi.transaction(&mut ops).await.map_err(|_| SPI)?;
 
         trace!(
             "read: addr={=[u8]:02x}, len={}, status={:02x}, buf={=[u8]:02x}",
             write_buffer,
             read_buffer.len(),
-            status,
+            stat1[0],
             read_buffer
         );
 
-        Ok(status)
+        Ok(stat1[0])
     }
 
     // Direct read from SPI bus (no command write phase).
