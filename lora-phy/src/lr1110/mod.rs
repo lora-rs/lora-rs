@@ -699,7 +699,8 @@ where
             let offset = i * 4;
             *satellite = GnssDetectedSatellite {
                 satellite_id: rbuffer[offset],
-                cnr: (rbuffer[offset + 1] as i8) - GNSS_SNR_TO_CNR_OFFSET,
+                // CNR = SNR + offset (per SWDR001 lr11xx_gnss.c)
+                cnr: (rbuffer[offset + 1] as i8) + GNSS_SNR_TO_CNR_OFFSET,
                 doppler: ((rbuffer[offset + 2] as i16) << 8) | (rbuffer[offset + 3] as i16),
             };
         }
