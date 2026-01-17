@@ -112,4 +112,19 @@ where
 
         Ok(status)
     }
+
+    // Direct read from SPI bus (no command write phase).
+    // For LR11xx: This is used by lr11xx_system_get_status to read stat1+stat2+irq_status.
+    // Unlike read(), this does NOT skip any bytes - all bytes read are returned.
+    pub async fn direct_read(&mut self, read_buffer: &mut [u8]) -> Result<(), RadioError> {
+        // Wait for BUSY to go low
+        self.iv.wait_on_busy().await?;
+
+        // Read directly - no stat1 skipping
+        self.spi.read(read_buffer).await.map_err(|_| SPI)?;
+
+        trace!("direct_read: len={}, data={=[u8]:02x}", read_buffer.len(), read_buffer);
+
+        Ok(())
+    }
 }

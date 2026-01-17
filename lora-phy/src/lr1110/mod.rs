@@ -1723,32 +1723,22 @@ where
 
     /// Read 32-bit IRQ flags without clearing them.
     ///
-    /// Uses ClearIrq command with zero mask - this reads the current IRQ flags
-    /// without actually clearing any of them (per SWDR001 driver behavior).
+    /// Uses direct_read to get stat1+stat2+irq_status (6 bytes) per SWDR001.
+    /// This is the lr11xx_system_get_status equivalent.
     pub async fn get_irq_flags(&mut self) -> Result<u32, RadioError> {
-        // Wait for chip to be ready
-        self.intf.iv.wait_on_busy().await?;
+        // Direct read returns: stat1 (1) + stat2 (1) + irq_status (4) = 6 bytes
+        let mut rbuffer = [0u8; 6];
+        self.intf.direct_read(&mut rbuffer).await?;
 
-        // LR1110's ClearIrq command (0x0114) returns the current IRQ flags before clearing.
-        // By passing a zero mask, we read the flags without clearing any.
-        let opcode = SystemOpCode::ClearIrq.bytes();
-        let cmd = [
-            opcode[0], opcode[1], 0x00, // Zero mask - don't clear any interrupts
-            0x00, 0x00, 0x00,
-        ];
-
-        let mut rbuffer = [0u8; 4];
-        self.read_command(&cmd, &mut rbuffer).await?;
-
-        // Parse IRQ flags (32-bit, big-endian)
-        let irq_flags = ((rbuffer[0] as u32) << 24)
-            | ((rbuffer[1] as u32) << 16)
-            | ((rbuffer[2] as u32) << 8)
-            | (rbuffer[3] as u32);
+        // Parse IRQ flags from bytes 2-5 (32-bit, big-endian)
+        let irq_flags = ((rbuffer[2] as u32) << 24)
+            | ((rbuffer[3] as u32) << 16)
+            | ((rbuffer[4] as u32) << 8)
+            | (rbuffer[5] as u32);
 
         debug!(
-            "get_irq_flags: raw = [{:02x}, {:02x}, {:02x}, {:02x}], flags = 0x{:08x}",
-            rbuffer[0], rbuffer[1], rbuffer[2], rbuffer[3], irq_flags
+            "get_irq_flags: stat1={:02x}, stat2={:02x}, flags=0x{:08x}",
+            rbuffer[0], rbuffer[1], irq_flags
         );
 
         Ok(irq_flags)
