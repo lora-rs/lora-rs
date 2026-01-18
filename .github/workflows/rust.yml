@@ -35,6 +35,7 @@ jobs:
             examples/rp
             examples/stm32l0
             examples/stm32wl
+            examples/stm32wba
 
       # Format and Clippy steps are executed in separate 'check' workflow
       - name: Build
@@ -61,6 +62,11 @@ jobs:
       - name: Build stm32wl examples
         run: |
           cd examples/stm32wl
+          cargo build --release
+
+      - name: Build stm32wba examples
+        run: |
+          cd examples/stm32wba
           cargo build --release
 
   checks:
