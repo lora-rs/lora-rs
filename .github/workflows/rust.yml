@@ -35,6 +35,7 @@ jobs:
             examples/rp
             examples/stm32l0
             examples/stm32wl
+            examples/stm32wba
 
       # Format and Clippy steps are executed in separate 'check' workflow
       - name: Build
@@ -42,6 +43,9 @@ jobs:
 
       - name: Run tests
         run: cargo test --all-features --verbose
+
+      - name: Install embedded targets
+        run: rustup target add thumbv6m-none-eabi thumbv7em-none-eabi thumbv8m.main-none-eabihf
 
       - name: Build nrf52840 examples
         run: |
@@ -61,6 +65,11 @@ jobs:
       - name: Build stm32wl examples
         run: |
           cd examples/stm32wl
+          cargo build --release
+
+      - name: Build stm32wba examples
+        run: |
+          cd examples/stm32wba
           cargo build --release
 
   checks:
