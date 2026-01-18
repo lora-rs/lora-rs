@@ -452,6 +452,7 @@ where
     /// // Configure DIO8 (bit 3 = 0x08) for WiFi LNA enable
     /// radio.set_dio_as_rf_switch(true, 0x00, 0x01, 0x02, 0x02, 0x00, 0x00, 0x08).await?;
     /// ```
+    #[allow(clippy::too_many_arguments)]
     pub async fn set_dio_as_rf_switch(
         &mut self,
         enable: bool,

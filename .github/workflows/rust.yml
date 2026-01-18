@@ -44,6 +44,9 @@ jobs:
       - name: Run tests
         run: cargo test --all-features --verbose
 
+      - name: Install embedded targets
+        run: rustup target add thumbv6m-none-eabi thumbv7em-none-eabi thumbv8m.main-none-eabihf
+
       - name: Build nrf52840 examples
         run: |
           cd examples/nrf52840
