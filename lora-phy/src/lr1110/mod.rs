@@ -147,17 +147,17 @@ where
     // Internal Utility Functions
     // =========================================================================
 
-    /// Write a command to the LR1110 using 16-bit opcode (internal use)
+    /// Write a command to the LR1110 using 16-bit opcode
     async fn write_command(&mut self, data: &[u8]) -> Result<(), RadioError> {
         self.intf.write(data, false).await
     }
 
-    /// Read a command response from the LR1110 using 16-bit opcode (internal use)
+    /// Read a command response from the LR1110 using 16-bit opcode
     async fn read_command(&mut self, write_data: &[u8], read_buffer: &mut [u8]) -> Result<(), RadioError> {
         self.intf.read(write_data, read_buffer).await
     }
 
-    /// Read a command response with status byte (internal use)
+    /// Read a command response with status byte
     #[allow(dead_code)]
     async fn read_command_with_status(&mut self, write_data: &[u8], read_buffer: &mut [u8]) -> Result<u8, RadioError> {
         self.intf.read_with_status(write_data, read_buffer).await

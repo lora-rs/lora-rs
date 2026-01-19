@@ -35,7 +35,7 @@ Demonstrates sending LoRa packets in point-to-point mode.
 
 **Features:**
 - Initializes LR1110 with TCXO and DCDC
-- Sends a test message "Hello from STM32WBA + LR1110!"
+- Sends "Hello LoRa!" with an incrementing packet counter
 - Uses SF10, BW125kHz, CR 4/5
 - Transmit power: 14 dBm
 - Frequency: 915 MHz (US915 - adjust for your region)
