@@ -274,6 +274,17 @@ where
         Ok(())
     }
 
+    /// Reconfigure radio that is presently receiving to listen to different frequency.
+    pub async fn rx_switch_channel(&mut self, frequency_in_hz: u32) -> Result<(), RadioError> {
+        if let RadioMode::Receive(listen_mode) = self.radio_mode {
+            self.radio_kind.set_standby().await?;
+            self.radio_kind.set_channel(frequency_in_hz).await?;
+            self.radio_kind.do_rx(listen_mode).await
+        } else {
+            Err(RadioError::InvalidRadioMode)
+        }
+    }
+
     /// Switch radio to receive mode (prepared via [`LoRa::prepare_for_rx`]).
     /// Call [`LoRa::complete_rx`] to wait and handle result.
     pub async fn start_rx(&mut self) -> Result<(), RadioError> {
