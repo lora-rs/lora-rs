@@ -204,11 +204,11 @@ impl Sx127xVariant for Sx1276 {
     async fn set_tx_continuous_wave_mode<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
         radio: &mut Sx127x<SPI, IV, Self>,
     ) -> Result<(), RadioError> {
-        radio.intf.iv.enable_rf_switch_rx().await?;
+        radio.intf.iv.enable_rf_switch_tx().await?;
         let pa_config = radio.read_register(Register::RegPaConfig).await?;
         let new_pa_config = pa_config | 0b1000_0000;
         radio.write_register(Register::RegPaConfig, new_pa_config).await?;
-        radio.write_register(Register::RegOpMode, 0b1100_0011).await?;
+        radio.write_register(Register::RegOpMode, 0b1000_0011).await?;
         let modem_config = radio.read_register(Register::RegModemConfig2).await?;
         let new_modem_config = modem_config | 0b0000_1000;
         radio
