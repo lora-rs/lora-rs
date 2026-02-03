@@ -14,8 +14,8 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-aes = { version = "0.8" }
-cmac = { version = "0.7" }
+aes = { version = "0.9.0-rc.4" }
+cmac = { version = "0.8.0-rc.4" }
 hex = { version = "0", default-features = false }
 defmt = { version = "0.3", optional = true }
 serde = { version = "1", default-features = false, features = [
