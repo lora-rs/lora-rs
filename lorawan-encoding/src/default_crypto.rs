@@ -19,16 +19,15 @@ impl CryptoFactory for DefaultFactory {
     type M = Cmac;
 
     fn new_enc(&self, key: &AES128) -> Self::E {
-        Aes128::new(GenericArray::from_slice(&key.0[..]))
+        Self::E::new_from_slice(&key.0[..]).unwrap()
     }
 
     fn new_dec(&self, key: &AES128) -> Self::D {
-        Aes128::new(GenericArray::from_slice(&key.0[..]))
+        Self::D::new_from_slice(&key.0[..]).unwrap()
     }
 
     fn new_mac(&self, key: &AES128) -> Self::M {
-        let key = GenericArray::from_slice(&key.0[..]);
-        Cmac::new(key)
+        Self::M::new_from_slice(&key.0[..]).unwrap()
     }
 }
 
