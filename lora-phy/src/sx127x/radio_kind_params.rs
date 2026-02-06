@@ -5,8 +5,6 @@ use embedded_hal_async::spi::SpiDevice;
 
 #[allow(async_fn_in_trait)]
 pub trait Sx127xVariant {
-    type Data: Default;
-
     async fn init_lora<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
         radio: &mut Sx127x<SPI, IV, Self>,
         sync_word: u8,
