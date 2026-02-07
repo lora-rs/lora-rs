@@ -18,9 +18,9 @@ fixed_len_struct_impl_hash! {
     EUI64[8];
 }
 
-fixed_len_struct_impl_hash! {
-    DevNonce[2];
-}
+// fixed_len_struct_impl_hash! {
+//     DevNonce[2];
+// }
 
 fixed_len_struct_impl_hash! {
     AppNonce[3];

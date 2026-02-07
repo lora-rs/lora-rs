@@ -303,7 +303,7 @@ impl<T: AsRef<[u8]>> JoinRequestPayload<T> {
     }
 
     /// Gives the DEV Nonce of the JoinRequest.
-    pub fn dev_nonce(&self) -> DevNonce<&[u8]> {
+    pub fn dev_nonce(&self) -> DevNonce {
         DevNonce::new_from_raw(&self.0.as_ref()[17..19])
     }
 
@@ -444,9 +444,9 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     /// let nwk_skey = join_accept
     ///     .derive_nwkskey(&lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(), &app_key, &lorawan::default_crypto::DefaultFactory);
     /// ```
-    pub fn derive_nwkskey<TT: AsRef<[u8]>, C: CryptoFactory>(
+    pub fn derive_nwkskey<C: CryptoFactory>(
         &self,
-        dev_nonce: &DevNonce<TT>,
+        dev_nonce: &DevNonce,
         key: &AppKey,
         crypto: &C,
     ) -> NwkSKey {
@@ -454,9 +454,9 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     }
 
     #[deprecated(since = "0.9.1", note = "Please use `derive_nwkskey` instead")]
-    pub fn derive_newskey<TT: AsRef<[u8]>, C: CryptoFactory>(
+    pub fn derive_newskey<C: CryptoFactory>(
         &self,
-        dev_nonce: &DevNonce<TT>,
+        dev_nonce: &DevNonce,
         key: &AppKey,
         crypto: &C,
     ) -> NwkSKey {
@@ -489,19 +489,19 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     /// let app_skey = join_accept
     ///     .derive_appskey(&lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(), &app_key, &lorawan::default_crypto::DefaultFactory);
     /// ```
-    pub fn derive_appskey<TT: AsRef<[u8]>, C: CryptoFactory>(
+    pub fn derive_appskey<C: CryptoFactory>(
         &self,
-        dev_nonce: &DevNonce<TT>,
+        dev_nonce: &DevNonce,
         key: &AppKey,
         crypto: &C,
     ) -> AppSKey {
         AppSKey(self.derive_session_key(0x2, dev_nonce, &key.0, crypto))
     }
 
-    fn derive_session_key<TT: AsRef<[u8]>, C: CryptoFactory>(
+    fn derive_session_key<C: CryptoFactory>(
         &self,
         first_byte: u8,
-        dev_nonce: &DevNonce<TT>,
+        dev_nonce: &DevNonce,
         key: &AES128,
         crypto: &C,
     ) -> AES128 {
@@ -510,8 +510,7 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
         // note: AppNonce is 24 bits, NetId is 24 bits, DevNonce is 16 bits
         let app_nonce = self.app_nonce();
         let nwk_addr = self.net_id();
-        let (app_nonce_arr, nwk_addr_arr, dev_nonce_arr) =
-            (app_nonce.as_ref(), nwk_addr.as_ref(), dev_nonce.as_ref());
+        let (app_nonce_arr, nwk_addr_arr) = (app_nonce.as_ref(), nwk_addr.as_ref());
 
         let mut block = [0u8; 16];
         block[0] = first_byte;
@@ -521,8 +520,8 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
         block[4] = nwk_addr_arr[0];
         block[5] = nwk_addr_arr[1];
         block[6] = nwk_addr_arr[2];
-        block[7] = dev_nonce_arr[0];
-        block[8] = dev_nonce_arr[1];
+        block[7] = dev_nonce.0[0];
+        block[8] = dev_nonce.0[1];
 
         cipher.encrypt_block(&mut block);
         AES128(block)
@@ -975,20 +974,59 @@ fixed_len_struct! {
     struct EUI64[8];
 }
 
+/*
 fixed_len_struct! {
     /// DevNonce represents a 16-bit device nonce.
     struct DevNonce[2];
 }
+*/
 
-impl From<DevNonce<[u8; 2]>> for u16 {
-    fn from(v: DevNonce<[u8; 2]>) -> Self {
-        u16::from_be_bytes(v.0)
+use hybrid_array::{sizes::U2, Array};
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+//#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct DevNonce(Array<u8, U2>);
+
+impl DevNonce {
+    pub fn new(data: &[u8]) -> Option<Self> {
+        if data.len() != 2 {
+            None
+        } else {
+            Some(Self(Array::try_from(data).unwrap()))
+        }
+    }
+
+    pub fn new_from_raw(v: &[u8]) -> Self {
+        Self(Array::try_from(v).unwrap())
+    }
+
+    pub fn as_ref(&self) -> Array<u8, U2> {
+        self.0
     }
 }
 
-impl From<u16> for DevNonce<[u8; 2]> {
+impl From<DevNonce> for u16 {
+    fn from(v: DevNonce) -> Self {
+        u16::from_be_bytes(v.0.into())
+    }
+}
+
+impl From<u16> for DevNonce {
     fn from(v: u16) -> Self {
-        Self::from(v.to_be_bytes())
+        Self(Array(v.to_be_bytes()))
+    }
+}
+
+impl From<[u8; 2]> for DevNonce {
+    fn from(v: [u8; 2]) -> Self {
+        Self(Array(v))
+    }
+}
+
+impl From<&[u8; 2]> for DevNonce {
+    fn from(v: &[u8; 2]) -> Self {
+        Self(Array(*v))
     }
 }
 
