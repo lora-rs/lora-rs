@@ -13,6 +13,7 @@ exclude = [
     "examples/stm32l0",
     "examples/stm32wba",
     "examples/stm32wl",
+    "examples/stm32wle5cx",
 ]
 resolver = "2"
 
