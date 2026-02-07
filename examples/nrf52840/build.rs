@@ -14,7 +14,7 @@ use std::io::{BufWriter, Write};
 use std::path::PathBuf;
 
 fn hex_to_bytes(s: &str) -> Option<Vec<u8>> {
-    if s.len() % 2 == 0 {
+    if s.len().is_multiple_of(2) {
         (0..s.len())
             .step_by(2)
             .map(|i| s.get(i..i + 2).and_then(|sub| u8::from_str_radix(sub, 16).ok()))
@@ -32,7 +32,7 @@ fn parse_lorawan_id(val: Option<&str>, var: &str, len: usize) -> Option<String> 
         if l == 0 {
             return None;
         }
-        if l % 2 == 1 || l != 2 * len {
+        if !l.is_multiple_of(2) || l != 2 * len {
             panic!(
                 "Environment variable {} has invalid length: {}, expecting: {}",
                 &var,
