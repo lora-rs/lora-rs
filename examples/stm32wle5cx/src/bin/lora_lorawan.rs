@@ -1,0 +1,92 @@
+//! This example runs on a RAK3272s, which has a builtin Semtech Sx1262 radio.
+//! It demonstrates LoRaWAN join functionality.
+#![no_std]
+#![no_main]
+
+#[path = "../iv.rs"]
+mod iv;
+
+use defmt::{error, info};
+use embassy_executor::Spawner;
+use embassy_stm32::gpio::{Level, Output, Pin, Speed};
+use embassy_stm32::rng::{self, Rng};
+use embassy_stm32::spi::Spi;
+use embassy_stm32::time::Hertz;
+use embassy_stm32::{bind_interrupts, peripherals};
+use embassy_time::Delay;
+use lora_phy::LoRa;
+use lora_phy::lorawan_radio::LorawanRadio;
+use lora_phy::sx126x::{self, Stm32wl, Sx126x, TcxoCtrlVoltage};
+use lorawan_device::async_device::{Device, EmbassyTimer, JoinMode, region};
+use lorawan_device::{AppEui, AppKey, DevEui};
+use {defmt_rtt as _, panic_probe as _};
+
+use self::iv::{InterruptHandler, Stm32wlInterfaceVariant, SubghzSpiDevice};
+
+// warning: set these appropriately for the region
+const LORAWAN_REGION: region::Region = region::Region::EU868;
+const MAX_TX_POWER: u8 = 14;
+
+bind_interrupts!(struct Irqs{
+    SUBGHZ_RADIO => InterruptHandler;
+    RNG => rng::InterruptHandler<peripherals::RNG>;
+});
+
+#[embassy_executor::main]
+async fn main(_spawner: Spawner) {
+    info!("Setting up...");
+    let mut config = embassy_stm32::Config::default();
+    {
+        use embassy_stm32::rcc::*;
+        config.rcc.msi = Some(embassy_stm32::rcc::MSIRange::RANGE48M);
+        config.rcc.sys = Sysclk::MSI;
+        config.rcc.mux.rngsel = mux::Rngsel::MSI;
+        config.enable_debug_during_sleep = true;
+    }
+    let p = embassy_stm32::init(config);
+
+    info!("config done...");
+    let tx_pin = Output::new(p.PC13, Level::Low, Speed::VeryHigh);
+    let rx_pin = Output::new(p.PB8, Level::Low, Speed::VeryHigh);
+
+    let spi = Spi::new_subghz(p.SUBGHZSPI, p.DMA1_CH1, p.DMA1_CH2);
+    let spi = SubghzSpiDevice(spi);
+    let use_high_power_pa = true;
+    let config = sx126x::Config {
+        chip: Stm32wl { use_high_power_pa },
+        tcxo_ctrl: None,
+        use_dcdc: true,
+        rx_boost: false,
+    };
+    let iv = Stm32wlInterfaceVariant::new(Irqs, use_high_power_pa, Some(rx_pin), Some(tx_pin), None).unwrap();
+    let lora = LoRa::new(Sx126x::new(spi, iv, config), true, Delay).await.unwrap();
+
+    info!("lora setup done ...");
+    let radio: LorawanRadio<_, _, MAX_TX_POWER> = lora.into();
+    let region: region::Configuration = region::Configuration::new(LORAWAN_REGION);
+    info!("Setting up RNG generator");
+    let rng_thing = Rng::new(p.RNG, Irqs);
+    let mut device: Device<_, _, _> = Device::new(region, radio, EmbassyTimer::new(), rng_thing);
+
+    loop {
+        defmt::info!("Joining LoRaWAN network");
+
+        // TODO: Adjust the EUI and Keys according to your network credentials
+        let resp = match device
+            .join(&JoinMode::OTAA {
+                deveui: DevEui::from([0, 0, 0, 0, 0, 0, 0, 0]),
+                appeui: AppEui::from([0, 0, 0, 0, 0, 0, 0, 0]),
+                appkey: AppKey::from([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            })
+            .await
+        {
+            Ok(res) => res,
+            Err(e) => {
+                error!("Error joining network: {:?}", e);
+                continue;
+            }
+        };
+
+        info!("LoRaWAN network joined: {:?}", resp);
+    }
+}
