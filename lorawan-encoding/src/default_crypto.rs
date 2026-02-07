@@ -1,10 +1,13 @@
 //! Provides a default software implementation for LoRaWAN's cryptographic functions.
 use super::keys::*;
-use aes::cipher::generic_array::GenericArray;
-use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
+use aes::cipher::{
+    Array as GenericArray, BlockCipherDecrypt as BlockDecrypt, BlockCipherEncrypt as BlockEncrypt,
+    KeyInit,
+};
 use aes::Aes128;
+use cmac::Cmac as RustCmac;
 
-pub type Cmac = cmac::Cmac<Aes128>;
+pub type Cmac = RustCmac<Aes128>;
 
 /// Provides a default implementation for build object for using the crypto functions.
 #[derive(Default, Debug, PartialEq, Eq)]
@@ -16,16 +19,15 @@ impl CryptoFactory for DefaultFactory {
     type M = Cmac;
 
     fn new_enc(&self, key: &AES128) -> Self::E {
-        Aes128::new(GenericArray::from_slice(&key.0[..]))
+        Self::E::new_from_slice(&key.0[..]).unwrap()
     }
 
     fn new_dec(&self, key: &AES128) -> Self::D {
-        Aes128::new(GenericArray::from_slice(&key.0[..]))
+        Self::D::new_from_slice(&key.0[..]).unwrap()
     }
 
     fn new_mac(&self, key: &AES128) -> Self::M {
-        let key = GenericArray::from_slice(&key.0[..]);
-        Cmac::new(key)
+        Self::M::new_from_slice(&key.0[..]).unwrap()
     }
 }
 

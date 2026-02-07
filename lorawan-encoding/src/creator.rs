@@ -290,12 +290,9 @@ impl<D: AsMut<[u8]>> JoinRequestCreator<D> {
     ///
     /// * dev_nonce - instance of lorawan::parser::DevNonce or anything that can be converted into
     ///   it.
-    pub fn set_dev_nonce<H: AsRef<[u8]>, T: Into<parser::DevNonce<H>>>(
-        &mut self,
-        dev_nonce: T,
-    ) -> &mut Self {
+    pub fn set_dev_nonce<T: Into<parser::DevNonce>>(&mut self, dev_nonce: T) -> &mut Self {
         let converted = dev_nonce.into();
-        self.data.as_mut()[17..19].copy_from_slice(converted.as_ref());
+        self.data.as_mut()[17..19].copy_from_slice(&converted.as_ref());
 
         self
     }
