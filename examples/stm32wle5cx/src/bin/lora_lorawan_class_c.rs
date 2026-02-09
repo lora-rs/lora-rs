@@ -96,15 +96,10 @@ async fn lora_task(
     rx: Receiver<'static, ThreadModeRawMutex, ButtonState, 3>,
 ) {
     let radio: LorawanRadio<_, _, MAX_TX_POWER> = lora.into();
-    // TODO: Set appropriage region
     let conf = Configuration::new(Region::EU868);
-    // Setting join bias causes the device to attempt the first join on subband 2.
-    // If it fails, it will proceed with the other subbands sequentially.
-    // us915.set_join_bias(Subband::_2);
     let mut device: Device<_, _, _, 256, DOWNLINK_BUFFER> = Device::new(conf, radio, EmbassyTimer::new(), rng);
     device.enable_class_c();
 
-    // TODO: Adjust the EUI and Keys according to your network credentials
     let join_mode = JoinMode::OTAA {
         deveui: DevEui::from(DEVEUI.unwrap_or(DEFAULT_DEVEUI)),
         appeui: AppEui::from(APPEUI.unwrap_or(DEFAULT_APPEUI)),
