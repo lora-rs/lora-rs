@@ -648,35 +648,35 @@ where
         rx_pkt_params: &PacketParams,
         receiving_buffer: &mut [u8],
     ) -> Result<u8, RadioError> {
-        let op_code = [OpCode::GetRxBufferStatus.value()];
-        let mut rx_buffer_status = [0x00u8; 2];
-        let read_status = self.intf.read_with_status(&op_code, &mut rx_buffer_status).await?;
-        if OpStatusErrorMask::is_error(read_status) {
-            return Err(RadioError::OpError(read_status));
-        }
+        let (rx_len, offset) = {
+            let mut buf = [0x00u8; 2];
+            let op_code = [OpCode::GetRxBufferStatus.value()];
+            let status = self.intf.read_with_status(&op_code, &mut buf).await?;
+            if OpStatusErrorMask::is_error(status) {
+                return Err(RadioError::OpError(status));
+            }
+            (buf[0], buf[1])
+        };
 
         let payload_length = if rx_pkt_params.implicit_header {
             self.reg_r_8(Register::PayloadLength).await?
         } else {
-            rx_buffer_status[0]
+            rx_len
         };
 
-        let offset = rx_buffer_status[1];
-
         if (payload_length as usize) > receiving_buffer.len() {
-            Err(RadioError::PayloadSizeMismatch(
+            return Err(RadioError::PayloadSizeMismatch(
                 payload_length as usize,
                 receiving_buffer.len(),
-            ))
-        } else {
-            self.intf
-                .read(
-                    &[OpCode::ReadBuffer.value(), offset, 0x00u8],
-                    &mut receiving_buffer[..payload_length as usize],
-                )
-                .await?;
-            Ok(payload_length)
+            ));
         }
+        self.intf
+            .read(
+                &[OpCode::ReadBuffer.value(), offset, 0x00u8],
+                &mut receiving_buffer[..payload_length as usize],
+            )
+            .await?;
+        Ok(payload_length)
     }
 
     async fn get_rx_packet_status(&mut self) -> Result<PacketStatus, RadioError> {
