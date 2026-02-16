@@ -59,11 +59,19 @@ pub enum Register {
     XTATrim = 0x0911,               // device internal trimming capacitor
     OCP = 0x08E7,                   // over current protection max value
     RetentionList = 0x029F,         // retention list
-    /// Inverted IQ operation optimization - possible packet loss for longer packets
-    /// DS.SX1261-2.W.APP Rev.2.1 - Chapter 15.4
+
+    // From 15.4 DS.SX1261-2.W.APP, Rev2.2 Dec 2024
+    // Optimizing the Inverted IQ Operation
     IQPolarity = 0x0736,
-    TxModulation = 0x0889, // modulation quality with 500 kHz LoRa Bandwidth (see DS_SX1261-2_V1.2 datasheet chapter 15.1)
-    TxClampCfg = 0x08D8,   // better resistance to antenna mismatch (see DS_SX1261-2_V1.2 datasheet chapter 15.2)
+
+    // From 15.1 DS.SX1261-2.W.APP, Rev2.2 Dec 2024
+    // Modulation Quality with 500kHz LoRa Bandwidth
+    TxModulation = 0x0889,
+
+    // From 15.2 DS.SX1261-2.W.APP, Rev2.2 Dec 2024
+    // Better Resistance of the SX1261/2 Tx to Antenna Mismatch
+    TxClampCfg = 0x08D8,
+
     // From 15.3 DS.SX1261-2.W.APP, Rev2.2 Dec 2024
     // Implicit Header Mode Timeout Behavior
     RTCCtrl = 0x0902, // RTC control (NB! Datasheet is wrongly showing 0x0920 in code example)
