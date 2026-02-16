@@ -64,8 +64,10 @@ pub enum Register {
     IQPolarity = 0x0736,
     TxModulation = 0x0889, // modulation quality with 500 kHz LoRa Bandwidth (see DS_SX1261-2_V1.2 datasheet chapter 15.1)
     TxClampCfg = 0x08D8,   // better resistance to antenna mismatch (see DS_SX1261-2_V1.2 datasheet chapter 15.2)
-    RTCCtrl = 0x0902,      // RTC control
-    EvtClr = 0x0944,       // event clear
+    // From 15.3 DS.SX1261-2.W.APP, Rev2.2 Dec 2024
+    // Implicit Header Mode Timeout Behavior
+    RTCCtrl = 0x0902, // RTC control (NB! Datasheet is wrongly showing 0x0920 in code example)
+    EvtClr = 0x0944,  // event clear
 }
 
 impl Register {

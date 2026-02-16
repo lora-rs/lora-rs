@@ -137,14 +137,8 @@ where
             .await?;
 
         if symbol_num > 0 {
-            let val = exp + (mant << 3);
-            let buf = [
-                OpCode::WriteRegister.value(),
-                Register::SynchTimeout.addr1(),
-                Register::SynchTimeout.addr2(),
-                val,
-            ];
-            self.intf.write(&buf, false).await?;
+            let timeout = exp + (mant << 3);
+            self.reg_w_8(Register::SynchTimeout, timeout).await?;
         }
         Ok(())
     }
@@ -180,16 +174,20 @@ where
             + (((steps_frac << SX126X_PLL_STEP_SHIFT_AMOUNT) + (SX126X_PLL_STEP_SCALED >> 1)) / SX126X_PLL_STEP_SCALED)
     }
 
-    async fn handle_implicit_header_mode(&mut self) -> Result<(), RadioError> {
-        // implicit header mode timeout behavior (see DS_SX1261-2_V1.2 datasheet chapter 15.3)
-        let register_and_clear = [
-            OpCode::WriteRegister.value(),
-            Register::RTCCtrl.addr1(),
-            Register::RTCCtrl.addr2(),
-            0x00u8,
-        ];
-        self.intf.write(&register_and_clear, false).await?;
+    // SX162x WriteRegister wrapper for single u8 value
+    async fn reg_w_8(&mut self, reg: Register, value: u8) -> Result<(), RadioError> {
+        self.intf
+            .write(&[OpCode::WriteRegister.value(), reg.addr1(), reg.addr2(), value], false)
+            .await
+    }
 
+    // From 15.3 DS.SX1261-2.W.APP, Rev2.2 Dec 2024
+    // Implicit Header Mode Timeout Behavior
+    async fn handle_implicit_header_mode(&mut self) -> Result<(), RadioError> {
+        // Stop RTC counter
+        self.reg_w_8(Register::RTCCtrl, 0).await?;
+
+        // Clear potential event
         let mut evt_clr = [0x00u8];
         self.intf
             .read(
@@ -203,13 +201,7 @@ where
             )
             .await?;
         evt_clr[0] |= 1 << 1;
-        let register_and_evt_clear = [
-            OpCode::WriteRegister.value(),
-            Register::EvtClr.addr1(),
-            Register::EvtClr.addr2(),
-            evt_clr[0],
-        ];
-        self.intf.write(&register_and_evt_clear, false).await
+        self.reg_w_8(Register::EvtClr, evt_clr[0]).await
     }
 }
 
@@ -278,10 +270,8 @@ where
             OpCode::WriteRegister.value(),
             Register::LoRaSyncword.addr1(),
             Register::LoRaSyncword.addr2(),
-            word[0],
-            word[1],
         ];
-        self.intf.write(&lora_syncword_set, false).await?;
+        self.intf.write_with_payload(&lora_syncword_set, &word, false).await?;
 
         self.set_tx_rx_buffer_base_address(0, 0).await?;
         // Update register list to support warm starts from sleep mode
@@ -470,13 +460,7 @@ where
                     )
                     .await?;
                 tx_clamp_cfg[0] |= 0x0F << 1;
-                let register_and_tx_clamp_cfg = [
-                    OpCode::WriteRegister.value(),
-                    Register::TxClampCfg.addr1(),
-                    Register::TxClampCfg.addr2(),
-                    tx_clamp_cfg[0],
-                ];
-                self.intf.write(&register_and_tx_clamp_cfg, false).await?;
+                self.reg_w_8(Register::TxClampCfg, tx_clamp_cfg[0]).await?;
 
                 // From Table 13-21: PA Operating Modes with Optimal Settings
                 match txp {
@@ -542,21 +526,9 @@ where
             )
             .await?;
         if mdltn_params.bandwidth == Bandwidth::_500KHz {
-            let register_and_tx_mod_update = [
-                OpCode::WriteRegister.value(),
-                Register::TxModulation.addr1(),
-                Register::TxModulation.addr2(),
-                tx_mod[0] & (!(1 << 2)),
-            ];
-            self.intf.write(&register_and_tx_mod_update, false).await
+            self.reg_w_8(Register::TxModulation, tx_mod[0] & (!(1 << 2))).await
         } else {
-            let register_and_tx_mod_update = [
-                OpCode::WriteRegister.value(),
-                Register::TxModulation.addr1(),
-                Register::TxModulation.addr2(),
-                tx_mod[0] | (1 << 2),
-            ];
-            self.intf.write(&register_and_tx_mod_update, false).await
+            self.reg_w_8(Register::TxModulation, tx_mod[0] | (1 << 2)).await
         }
     }
 
@@ -586,19 +558,13 @@ where
             )
             .await?;
 
-        let reg = if pkt_params.iq_inverted {
+        let val = if pkt_params.iq_inverted {
             iq_polarity[0] & (!(1 << 2))
         } else {
             iq_polarity[0] | (1 << 2)
         };
 
-        let op = [
-            OpCode::WriteRegister.value(),
-            Register::IQPolarity.addr1(),
-            Register::IQPolarity.addr2(),
-            reg,
-        ];
-        self.intf.write(&op, false).await?;
+        self.reg_w_8(Register::IQPolarity, val).await?;
         Ok(())
     }
 
@@ -671,14 +637,8 @@ where
         };
         self.set_lora_symbol_num_timeout(num_symbols).await?;
 
-        let rx_gain = if self.config.rx_boost { 0x96 } else { 0x94 };
-        let register_and_rx_gain = [
-            OpCode::WriteRegister.value(),
-            Register::RxGain.addr1(),
-            Register::RxGain.addr2(),
-            rx_gain,
-        ];
-        self.intf.write(&register_and_rx_gain, false).await?;
+        let val = if self.config.rx_boost { 0x96 } else { 0x94 };
+        self.reg_w_8(Register::RxGain, val).await?;
 
         match rx_mode {
             RxMode::DutyCycle(args) => {
@@ -797,13 +757,7 @@ where
             rx_gain_final = 0x96u8;
         }
 
-        let register_and_rx_gain = [
-            OpCode::WriteRegister.value(),
-            Register::RxGain.addr1(),
-            Register::RxGain.addr2(),
-            rx_gain_final,
-        ];
-        self.intf.write(&register_and_rx_gain, false).await?;
+        self.reg_w_8(Register::RxGain, rx_gain_final).await?;
 
         // See:
         //  https://lora-developers.semtech.com/documentation/tech-papers-and-guides/channel-activity-detection-ensuring-your-lora-packets-are-sent/how-to-ensure-your-lora-packets-are-sent-properly
