@@ -75,7 +75,7 @@ pub fn handle_class_c_uplink_after_join(
             let mut fctrl = FCtrl::new(0, false);
             fctrl.set_ack();
             phy.set_confirmed(false);
-            phy.set_dev_addr(&[0; 4]);
+            phy.set_dev_addr([0; 4]);
             phy.set_uplink(false);
             phy.set_fctrl(&fctrl);
             // set ack bit

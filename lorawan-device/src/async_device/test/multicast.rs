@@ -28,7 +28,7 @@ fn handle_multicast_setup_req(
     // Create a downlink frame containing the McGroupSetupReq
     let mut phy = DataPayloadCreator::new(rx_buffer).unwrap();
     phy.set_f_port(200); // Remote multicast setup port
-    phy.set_dev_addr(&[0; 4]);
+    phy.set_dev_addr([0; 4]);
     phy.set_uplink(false);
     phy.set_fcnt(0);
 
@@ -133,7 +133,7 @@ fn handle_mc_group_delete_req<const GROUP_ID: u8>(
     // Create a downlink frame containing the McGroupDeleteReq
     let mut phy = DataPayloadCreator::new(rx_buffer).unwrap();
     phy.set_f_port(200); // Remote multicast setup port
-    phy.set_dev_addr(&[0; 4]);
+    phy.set_dev_addr([0; 4]);
     phy.set_uplink(false);
     phy.set_fcnt(1);
 
@@ -168,7 +168,7 @@ fn handle_regular_downlink_msg<const FCNT: u32>(
 ) -> usize {
     let mut phy = DataPayloadCreator::new(rx_buffer).unwrap();
     phy.set_f_port(1); // a random fport that's not the multicast port
-    phy.set_dev_addr(&[0; 4]);
+    phy.set_dev_addr([0; 4]);
     phy.set_uplink(false);
     phy.set_fcnt(FCNT);
 

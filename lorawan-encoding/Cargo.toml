@@ -22,6 +22,7 @@ serde = { version = "1", default-features = false, features = [
     "derive",
 ], optional = true }
 lorawan-macros = { path = "../lorawan-macros", version = "0.1.0" }
+hybrid-array = { version = "0.4.7", features = ["serde"] }
 
 [dev-dependencies]
 criterion = "0"

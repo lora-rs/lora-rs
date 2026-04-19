@@ -12,7 +12,7 @@ pub fn class_c_downlink<const FCNT_DOWN: u32>(
 ) -> usize {
     let mut phy = DataPayloadCreator::new(rx_buffer).unwrap();
     phy.set_f_port(3);
-    phy.set_dev_addr(&[0; 4]);
+    phy.set_dev_addr([0; 4]);
     phy.set_uplink(false);
     phy.set_fcnt(FCNT_DOWN);
 

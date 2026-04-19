@@ -91,12 +91,9 @@ impl<D: AsMut<[u8]>> JoinAcceptCreator<D> {
     ///
     /// * app_nonce - instance of lorawan::parser::AppNonce or anything that can be converted into
     ///   it.
-    pub fn set_app_nonce<H: AsRef<[u8]>, T: Into<parser::AppNonce<H>>>(
-        &mut self,
-        app_nonce: T,
-    ) -> &mut Self {
+    pub fn set_app_nonce<T: Into<parser::AppNonce>>(&mut self, app_nonce: T) -> &mut Self {
         let converted = app_nonce.into();
-        self.data.as_mut()[1..4].copy_from_slice(converted.as_ref());
+        self.data.as_mut()[1..4].copy_from_slice(converted.as_array());
 
         self
     }
@@ -121,12 +118,9 @@ impl<D: AsMut<[u8]>> JoinAcceptCreator<D> {
     /// # Argument
     ///
     /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can be converted into it.
-    pub fn set_dev_addr<H: AsRef<[u8]>, T: Into<parser::DevAddr<H>>>(
-        &mut self,
-        dev_addr: T,
-    ) -> &mut Self {
+    pub fn set_dev_addr<T: Into<parser::DevAddr>>(&mut self, dev_addr: T) -> &mut Self {
         let converted = dev_addr.into();
-        self.data.as_mut()[7..11].copy_from_slice(converted.as_ref());
+        self.data.as_mut()[7..11].copy_from_slice(converted.as_array());
 
         self
     }
@@ -290,12 +284,9 @@ impl<D: AsMut<[u8]>> JoinRequestCreator<D> {
     ///
     /// * dev_nonce - instance of lorawan::parser::DevNonce or anything that can be converted into
     ///   it.
-    pub fn set_dev_nonce<H: AsRef<[u8]>, T: Into<parser::DevNonce<H>>>(
-        &mut self,
-        dev_nonce: T,
-    ) -> &mut Self {
+    pub fn set_dev_nonce<T: Into<parser::DevNonce>>(&mut self, dev_nonce: T) -> &mut Self {
         let converted = dev_nonce.into();
-        self.data.as_mut()[17..19].copy_from_slice(converted.as_ref());
+        self.data.as_mut()[17..19].copy_from_slice(converted.as_array());
 
         self
     }
@@ -389,12 +380,9 @@ impl<D: AsMut<[u8]>> DataPayloadCreator<D> {
     /// # Argument
     ///
     /// * dev_addr - instance of lorawan::parser::DevAddr or anything that can be converted into it.
-    pub fn set_dev_addr<H: AsRef<[u8]>, T: Into<parser::DevAddr<H>>>(
-        &mut self,
-        dev_addr: T,
-    ) -> &mut Self {
+    pub fn set_dev_addr<T: Into<parser::DevAddr>>(&mut self, dev_addr: T) -> &mut Self {
         let converted = dev_addr.into();
-        self.data.as_mut()[1..5].copy_from_slice(converted.as_ref());
+        self.data.as_mut()[1..5].copy_from_slice(converted.as_array());
 
         self
     }

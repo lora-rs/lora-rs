@@ -330,7 +330,7 @@ fn test_complete_data_payload_fhdr() {
 
         let fhdr = phy.fhdr();
 
-        assert_eq!(fhdr.dev_addr(), DevAddr::new([4, 3, 2, 1]).unwrap());
+        assert_eq!(fhdr.dev_addr(), DevAddr::new(&[4, 3, 2, 1]).unwrap());
 
         assert_eq!(fhdr.fcnt(), 1u16);
 
@@ -410,7 +410,7 @@ fn mac_command_in_frmpayload() {
     let mut phy = lorawan::creator::DataPayloadCreator::new(packet).unwrap();
     phy.set_confirmed(false);
     phy.set_f_port(0);
-    phy.set_dev_addr(&[0; 4]);
+    phy.set_dev_addr([0; 4]);
     phy.set_uplink(false);
     phy.set_fcnt(16);
     phy.set_fctrl(&lorawan::parser::FCtrl::new(0x00, true));
@@ -491,7 +491,7 @@ fn test_data_payload_uplink_creator() {
     phy.set_confirmed(false)
         .set_uplink(true)
         .set_f_port(1)
-        .set_dev_addr(&[4, 3, 2, 1])
+        .set_dev_addr([4, 3, 2, 1])
         .set_fctrl(&fctrl) // ADR: true, all others: false
         .set_fcnt(1);
 
@@ -511,7 +511,7 @@ fn test_long_data_payload_uplink_creator() {
     phy.set_confirmed(false)
         .set_uplink(true)
         .set_f_port(1)
-        .set_dev_addr(&[4, 3, 2, 1])
+        .set_dev_addr([4, 3, 2, 1])
         .set_fctrl(&fctrl) // all flags set to false
         .set_fcnt(0);
 
@@ -532,7 +532,7 @@ fn test_data_payload_downlink_creator() {
     phy.set_confirmed(true)
         .set_uplink(false)
         .set_f_port(42)
-        .set_dev_addr(&[4, 3, 2, 1])
+        .set_dev_addr([4, 3, 2, 1])
         .set_fctrl(&fctrl) // ADR: true, all others: false
         .set_fcnt(76543);
 
@@ -593,7 +593,7 @@ fn test_data_payload_creator_when_mac_commands_in_payload() {
     cmds.extend_from_slice(&[&mac_cmd1, &mac_cmd2]);
     let mut cmds_buf = [0u8; 256];
     let cmds_buf_len = build_mac_commands(&cmds, &mut cmds_buf).unwrap();
-    phy.set_confirmed(false).set_uplink(true).set_f_port(0).set_dev_addr(&[4, 3, 2, 1]).set_fcnt(0);
+    phy.set_confirmed(false).set_uplink(true).set_f_port(0).set_dev_addr([4, 3, 2, 1]).set_fcnt(0);
     assert_eq!(
         phy.build(b"", &cmds_buf[..cmds_buf_len], &nwk_skey, &app_skey, &DefaultFactory).unwrap(),
         &data_payload_with_fport_zero()[..]
@@ -614,7 +614,7 @@ fn test_data_payload_creator_when_mac_commands_in_f_opts() {
     let mut cmds_buf = [0u8; 256];
     let cmds_buf_len = build_mac_commands(&cmds, &mut cmds_buf).unwrap();
 
-    phy.set_confirmed(false).set_uplink(true).set_dev_addr(&[4, 3, 2, 1]).set_fcnt(0);
+    phy.set_confirmed(false).set_uplink(true).set_dev_addr([4, 3, 2, 1]).set_fcnt(0);
 
     assert_eq!(
         phy.build(b"", &cmds_buf[..cmds_buf_len], &nwk_skey, &app_skey, &DefaultFactory).unwrap(),
@@ -666,9 +666,9 @@ fn test_join_accept_creator() {
     let mut phy = JoinAcceptCreator::new(&mut buf[..]).unwrap();
     let key = AES128(app_key());
     let app_nonce_bytes = [0xc7, 0x0b, 0x57];
-    phy.set_app_nonce(&app_nonce_bytes)
+    phy.set_app_nonce(app_nonce_bytes)
         .set_net_id(&[0x01, 0x11, 0x22])
-        .set_dev_addr(&[0x80, 0x19, 0x03, 0x02])
+        .set_dev_addr([0x80, 0x19, 0x03, 0x02])
         .set_dl_settings(0)
         .set_rx_delay(0);
 
@@ -680,9 +680,9 @@ fn test_join_accept_creator_long_buffer() {
     let mut phy = JoinAcceptCreator::new(&mut buf[..]).unwrap();
     let key = AES128(app_key());
     let app_nonce_bytes = [0xc7, 0x0b, 0x57];
-    phy.set_app_nonce(&app_nonce_bytes)
+    phy.set_app_nonce(app_nonce_bytes)
         .set_net_id(&[0x01, 0x11, 0x22])
-        .set_dev_addr(&[0x80, 0x19, 0x03, 0x02])
+        .set_dev_addr([0x80, 0x19, 0x03, 0x02])
         .set_dl_settings(0)
         .set_rx_delay(0);
 
@@ -707,9 +707,9 @@ fn test_join_accept_creator_with_cflist() {
         Frequency::new_from_raw(&[0x88, 0x66, 0x84]),
         Frequency::new_from_raw(&[0x58, 0x6E, 0x84]),
     ];
-    phy.set_app_nonce(&app_nonce_bytes)
+    phy.set_app_nonce(app_nonce_bytes)
         .set_net_id(&[0x01, 0x11, 0x22])
-        .set_dev_addr(&[0x80, 0x19, 0x03, 0x02])
+        .set_dev_addr([0x80, 0x19, 0x03, 0x02])
         .set_dl_settings(0)
         .set_rx_delay(0)
         .set_c_f_list(&freqs)
@@ -728,7 +728,7 @@ fn test_join_request_creator() {
     let key = [1; 16].into();
     phy.set_app_eui(&[0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01])
         .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
-        .set_dev_nonce(&[0x2du8, 0x10]);
+        .set_dev_nonce([0x2du8, 0x10]);
 
     assert_eq!(phy.build(&key, &DefaultFactory), &phy_join_request_payload());
 }
@@ -739,7 +739,7 @@ fn test_join_request_creator_long_buffer() {
     let key = [1; 16].into();
     phy.set_app_eui(&[0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01])
         .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
-        .set_dev_nonce(&[0x2du8, 0x10]);
+        .set_dev_nonce([0x2du8, 0x10]);
 
     assert_eq!(phy.build(&key, &DefaultFactory), &phy_join_request_payload()[..]);
 }

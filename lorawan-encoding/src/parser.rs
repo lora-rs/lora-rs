@@ -28,6 +28,11 @@ use super::securityhelpers;
 
 use super::packet_length::phy::{join::*, mac::FPORT_LEN, MHDR_LEN, MIC_LEN, PHY_PAYLOAD_MIN_LEN};
 
+use hybrid_array::{
+    sizes::{U2, U3, U4},
+    Array, ArraySize,
+};
+
 #[derive(Debug, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error {
@@ -49,7 +54,6 @@ macro_rules! fixed_len_struct {
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
         pub struct $type<T: AsRef<[u8]>>(T);
-
 
         impl<T: AsRef<[u8]>> $type<T> {
             pub const fn byte_len() -> usize {
@@ -116,6 +120,79 @@ macro_rules! fixed_len_struct {
             #[inline]
             fn default() -> $type<T> {
                 $type(T::default())
+            }
+        }
+    };
+}
+
+/// Trait for types that wrap a fixed-length array
+pub trait FixedLen: Sized + Copy + Clone {
+    type Size: ArraySize;
+
+    /// Create instance from a slice, returning None if length doesn't match
+    fn new(data: &[u8]) -> Option<Self>;
+
+    /// Create from a raw slice (panics if length doesn't match)
+    fn new_from_raw(data: &[u8]) -> Self;
+}
+
+macro_rules! fixed_len_arr {
+    (
+        $(#[$meta:meta])*
+        $name:ident, $size:ty, $len: expr
+    ) => {
+        $(#[$meta])*
+        #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        pub struct $name(Array<u8, $size>);
+
+        impl FixedLen for $name {
+            type Size = $size;
+
+            fn new(data: &[u8]) -> Option<Self> {
+                if data.len() != $len {
+                    None
+                } else {
+                    Array::try_from(data).ok().map(Self)
+                }
+            }
+
+            fn new_from_raw(data: &[u8]) -> Self {
+                Self(Array::try_from(data).unwrap())
+            }
+        }
+
+        impl $name {
+            pub fn as_array(&self) -> &Array<u8, $size> {
+                &self.0
+            }
+        }
+
+        impl<const N: usize> From<&[u8; N]> for $name
+        where
+            $size: ArraySize,
+            Array<u8, $size>: From<[u8; N]>,
+        {
+            fn from(v: &[u8; N]) -> Self {
+                Self((*v).into())
+            }
+        }
+
+        impl From<[u8; $len]> for $name {
+            fn from(v: [u8; $len]) -> Self {
+                Self(v.into())
+            }
+        }
+
+        #[cfg(feature = "defmt-03")]
+        impl defmt::Format for $name {
+            fn format(&self, fmt: defmt::Formatter<'_>) {
+                defmt::write!(fmt, "{}(", stringify!($name));
+                for (i, b) in self.0.as_slice().iter().enumerate() {
+                    if i > 0 { defmt::write!(fmt, " "); }
+                    defmt::write!(fmt, "{:02x}", b);
+                }
+                defmt::write!(fmt, ")");
             }
         }
 
@@ -303,7 +380,7 @@ impl<T: AsRef<[u8]>> JoinRequestPayload<T> {
     }
 
     /// Gives the DEV Nonce of the JoinRequest.
-    pub fn dev_nonce(&self) -> DevNonce<&[u8]> {
+    pub fn dev_nonce(&self) -> DevNonce {
         DevNonce::new_from_raw(&self.0.as_ref()[17..19])
     }
 
@@ -430,6 +507,7 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     /// # Examples
     ///
     /// ```
+    /// use crate::lorawan::parser::FixedLen;
     /// let dev_nonce = vec![0xcc, 0xdd];
     /// let data = vec![
     ///     0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37, 0x42, 0x97,
@@ -444,9 +522,9 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     /// let nwk_skey = join_accept
     ///     .derive_nwkskey(&lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(), &app_key, &lorawan::default_crypto::DefaultFactory);
     /// ```
-    pub fn derive_nwkskey<TT: AsRef<[u8]>, C: CryptoFactory>(
+    pub fn derive_nwkskey<C: CryptoFactory>(
         &self,
-        dev_nonce: &DevNonce<TT>,
+        dev_nonce: &DevNonce,
         key: &AppKey,
         crypto: &C,
     ) -> NwkSKey {
@@ -454,9 +532,9 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     }
 
     #[deprecated(since = "0.9.1", note = "Please use `derive_nwkskey` instead")]
-    pub fn derive_newskey<TT: AsRef<[u8]>, C: CryptoFactory>(
+    pub fn derive_newskey<C: CryptoFactory>(
         &self,
-        dev_nonce: &DevNonce<TT>,
+        dev_nonce: &DevNonce,
         key: &AppKey,
         crypto: &C,
     ) -> NwkSKey {
@@ -475,6 +553,7 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     /// # Examples
     ///
     /// ```
+    /// use crate::lorawan::parser::FixedLen;
     /// let dev_nonce = vec![0xcc, 0xdd];
     /// let data = vec![
     ///     0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37, 0x42, 0x97,
@@ -489,40 +568,39 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     /// let app_skey = join_accept
     ///     .derive_appskey(&lorawan::parser::DevNonce::new(&dev_nonce[..]).unwrap(), &app_key, &lorawan::default_crypto::DefaultFactory);
     /// ```
-    pub fn derive_appskey<TT: AsRef<[u8]>, C: CryptoFactory>(
+    pub fn derive_appskey<C: CryptoFactory>(
         &self,
-        dev_nonce: &DevNonce<TT>,
+        dev_nonce: &DevNonce,
         key: &AppKey,
         crypto: &C,
     ) -> AppSKey {
         AppSKey(self.derive_session_key(0x2, dev_nonce, &key.0, crypto))
     }
 
-    fn derive_session_key<TT: AsRef<[u8]>, C: CryptoFactory>(
+    fn derive_session_key<C: CryptoFactory>(
         &self,
         first_byte: u8,
-        dev_nonce: &DevNonce<TT>,
+        dev_nonce: &DevNonce,
         key: &AES128,
         crypto: &C,
     ) -> AES128 {
         let cipher = crypto.new_enc(key);
+        let app_nonce = self.app_nonce();
+
+        let nwk_addr = self.net_id();
+        let nwk_addr_arr = nwk_addr.as_ref();
 
         // note: AppNonce is 24 bits, NetId is 24 bits, DevNonce is 16 bits
-        let app_nonce = self.app_nonce();
-        let nwk_addr = self.net_id();
-        let (app_nonce_arr, nwk_addr_arr, dev_nonce_arr) =
-            (app_nonce.as_ref(), nwk_addr.as_ref(), dev_nonce.as_ref());
-
         let mut block = [0u8; 16];
         block[0] = first_byte;
-        block[1] = app_nonce_arr[0];
-        block[2] = app_nonce_arr[1];
-        block[3] = app_nonce_arr[2];
+        block[1] = app_nonce.0[0];
+        block[2] = app_nonce.0[1];
+        block[3] = app_nonce.0[2];
         block[4] = nwk_addr_arr[0];
         block[5] = nwk_addr_arr[1];
         block[6] = nwk_addr_arr[2];
-        block[7] = dev_nonce_arr[0];
-        block[8] = dev_nonce_arr[1];
+        block[7] = dev_nonce.0[0];
+        block[8] = dev_nonce.0[1];
 
         cipher.encrypt_block(&mut block);
         AES128(block)
@@ -537,7 +615,7 @@ pub enum CfList<'a> {
 
 impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     /// Gives the app nonce of the JoinAccept.
-    pub fn app_nonce(&self) -> AppNonce<&[u8]> {
+    pub fn app_nonce(&self) -> AppNonce {
         const OFFSET: usize = MHDR_LEN;
         const END: usize = OFFSET + JOIN_NONCE_LEN;
         AppNonce::new_from_raw(&self.0.as_ref()[OFFSET..END])
@@ -551,7 +629,7 @@ impl<T: AsRef<[u8]>> DecryptedJoinAcceptPayload<T> {
     }
 
     /// Gives the dev address of the JoinAccept.
-    pub fn dev_addr(&self) -> DevAddr<&[u8]> {
+    pub fn dev_addr(&self) -> DevAddr {
         const OFFSET: usize = MHDR_LEN + JOIN_NONCE_LEN + NET_ID_LEN;
         const END: usize = OFFSET + DEV_ADDR_LEN;
         DevAddr::new_from_raw(&self.0.as_ref()[OFFSET..END])
@@ -975,50 +1053,48 @@ fixed_len_struct! {
     struct EUI64[8];
 }
 
-fixed_len_struct! {
-    /// DevNonce represents a 16-bit device nonce.
-    struct DevNonce[2];
-}
+fixed_len_arr!(
+    /// DevNonce is a 2-byte counter preventing replay attacks during the join process.
+    DevNonce, U2, 2
+);
 
-impl From<DevNonce<[u8; 2]>> for u16 {
-    fn from(v: DevNonce<[u8; 2]>) -> Self {
-        u16::from_be_bytes(v.0)
+impl From<DevNonce> for u16 {
+    fn from(v: DevNonce) -> Self {
+        u16::from_be_bytes(v.0.into())
     }
 }
 
-impl From<u16> for DevNonce<[u8; 2]> {
+impl From<u16> for DevNonce {
     fn from(v: u16) -> Self {
-        Self::from(v.to_be_bytes())
+        Self(Array(v.to_be_bytes()))
     }
 }
 
-fixed_len_struct! {
+fixed_len_arr!(
     /// AppNonce represents a 24-bit network server nonce.
-    struct AppNonce[3];
-}
+    AppNonce, U3, 3
+);
 
-fixed_len_struct! {
+fixed_len_arr!(
     /// DevAddr represents a 32-bit device address.
-    struct DevAddr[4];
-}
+    DevAddr, U4, 4
+);
 
-#[allow(clippy::should_implement_trait)]
-impl<T: AsRef<[u8]>> DevAddr<T> {
+/*
+impl DevAddr {
     pub fn nwk_id(&self) -> u8 {
-        self.0.as_ref()[0] >> 1
+        self.0.as_array()[0] >> 1
     }
-    pub fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
+}
+*/
+
+impl From<DevAddr> for u32 {
+    fn from(v: DevAddr) -> Self {
+        u32::from_be_bytes(v.0.into())
     }
 }
 
-impl From<DevAddr<[u8; 4]>> for u32 {
-    fn from(v: DevAddr<[u8; 4]>) -> Self {
-        u32::from_be_bytes(v.0)
-    }
-}
-
-impl From<u32> for DevAddr<[u8; 4]> {
+impl From<u32> for DevAddr {
     fn from(v: u32) -> Self {
         Self::from(v.to_be_bytes())
     }
@@ -1041,9 +1117,9 @@ impl From<u32> for McAddr<[u8; 4]> {
     }
 }
 
-impl From<DevAddr<[u8; 4]>> for McAddr<[u8; 4]> {
-    fn from(v: DevAddr<[u8; 4]>) -> Self {
-        McAddr(v.0)
+impl From<DevAddr> for McAddr<[u8; 4]> {
+    fn from(v: DevAddr) -> Self {
+        McAddr(v.0.into())
     }
 }
 
@@ -1073,7 +1149,7 @@ impl<'a> FHDR<'a> {
     }
 
     /// Gives the device address associated with the given payload.
-    pub fn dev_addr(&self) -> DevAddr<&'a [u8]> {
+    pub fn dev_addr(&self) -> DevAddr {
         DevAddr::new_from_raw(&self.0[0..4])
     }
 

@@ -31,7 +31,7 @@ fn _build(buf: &mut [u8], payload_in_hex: &str, fcnt: u16, fport: u8) -> usize {
     let mut phy = DataPayloadCreator::new(buf).unwrap();
     phy.set_confirmed(false);
     phy.set_f_port(fport);
-    phy.set_dev_addr(&[0; 4]);
+    phy.set_dev_addr([0; 4]);
     phy.set_uplink(false);
     phy.set_fcnt(fcnt.into());
     phy.set_fctrl(&lorawan::parser::FCtrl::new(0x20, true));
