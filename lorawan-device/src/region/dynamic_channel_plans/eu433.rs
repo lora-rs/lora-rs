@@ -26,6 +26,9 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
 }
 
 impl ChannelRegion for EU433Region {
+    const DEFAULT_RX2_FREQ: u32 = 434_665_000;
+    const MAX_RX1_DR_OFFSET: u8 = 5;
+
     fn datarates() -> &'static [Option<Datarate>; NUM_DATARATES as usize] {
         &DATARATES
     }
@@ -39,15 +42,7 @@ impl ChannelRegion for EU433Region {
 }
 
 impl DynamicChannelRegion for EU433Region {
-    const MAX_RX1_DR_OFFSET: u8 = 5;
-
-    fn join_channels() -> u8 {
-        3
-    }
-
-    fn default_rx2_freq() -> u32 {
-        434_665_000
-    }
+    const NUM_JOIN_CHANNELS: u8 = 3;
 
     fn get_rx_datarate(tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {
         match window {
