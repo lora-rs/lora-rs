@@ -23,8 +23,11 @@ pub trait InterfaceVariant {
 /// Specifies an IRQ processing state to run the loop to
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum IrqState {
-    /// Runs the loop until after the preamble has been received
-    PreambleReceived,
+    /// Runs until mode-specific event is detected.
+    /// Depending on Radio mode, it can be either:
+    /// * PreambleReceived in Rx mode
+    /// * CadDetected in CAD mode
+    Detect,
     /// Runs the loop until the operation is fully complete
     Done,
 }
@@ -111,16 +114,11 @@ pub trait RadioKind {
     async fn process_irq_event(
         &mut self,
         radio_mode: RadioMode,
-        cad_activity_detected: Option<&mut bool>,
         clear_interrupts: bool,
     ) -> Result<Option<IrqState>, RadioError>;
 
     /// Get IRQ state
-    async fn get_irq_state(
-        &mut self,
-        radio_mode: RadioMode,
-        cad_activity_detected: Option<&mut bool>,
-    ) -> Result<Option<IrqState>, RadioError>;
+    async fn get_irq_state(&mut self, radio_mode: RadioMode) -> Result<Option<IrqState>, RadioError>;
     /// Clear IRQ status
     async fn clear_irq_status(&mut self) -> Result<(), RadioError>;
 }

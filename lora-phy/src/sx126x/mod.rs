@@ -788,11 +788,7 @@ where
         self.intf.iv.await_irq().await
     }
 
-    async fn get_irq_state(
-        &mut self,
-        radio_mode: RadioMode,
-        cad_activity_detected: Option<&mut bool>,
-    ) -> Result<Option<IrqState>, RadioError> {
+    async fn get_irq_state(&mut self, radio_mode: RadioMode) -> Result<Option<IrqState>, RadioError> {
         let op_code = [OpCode::GetIrqStatus.value()];
         let mut irq_status = [0x00u8, 0x00u8];
         // Assuming intf.read_with_status is an existing async method that reads the IRQ status.
@@ -845,14 +841,14 @@ where
                     return Err(RadioError::ReceiveTimeout);
                 }
                 if IrqMask::PreambleDetected.is_set(irq_flags) || IrqMask::HeaderValid.is_set(irq_flags) {
-                    return Ok(Some(IrqState::PreambleReceived));
+                    return Ok(Some(IrqState::Detect));
                 }
             }
             RadioMode::ChannelActivityDetection => {
+                if IrqMask::CADActivityDetected.is_set(irq_flags) {
+                    return Ok(Some(IrqState::Detect));
+                }
                 if IrqMask::CADDone.is_set(irq_flags) {
-                    if let Some(detected) = cad_activity_detected {
-                        *detected = IrqMask::CADActivityDetected.is_set(irq_flags);
-                    }
                     return Ok(Some(IrqState::Done));
                 }
             }
@@ -879,10 +875,9 @@ where
     async fn process_irq_event(
         &mut self,
         radio_mode: RadioMode,
-        cad_activity_detected: Option<&mut bool>,
         clear_interrupts: bool,
     ) -> Result<Option<IrqState>, RadioError> {
-        let irq_state = self.get_irq_state(radio_mode, cad_activity_detected).await;
+        let irq_state = self.get_irq_state(radio_mode).await;
 
         if clear_interrupts {
             self.clear_irq_status().await?;

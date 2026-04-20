@@ -30,6 +30,11 @@ defmt-03 = ["dep:defmt", "lorawan-device?/defmt-03", "lora-modulation/defmt-03"]
 ## Async LoRaWAN Rx/Tx interface implementation
 lorawan-radio = ["dep:lorawan-device"]
 
+## Include workaround for IRQ handling on STM32's with integrated
+## LoRa chips (for example STM32WLE5Cx)
+## One failure case can be experienced when running CAD detection in loop
+stm32-subghz-irq-quirk = []
+
 [dev-dependencies]
 # Include lorawan-device unconditionally so all regions are enabled for tests
 lorawan-device = { path = "../lorawan-device" }
