@@ -947,7 +947,6 @@ where
     pub async fn bootloader_get_status(&mut self) -> Result<BootloaderStatus, RadioError> {
         // Direct read of 6 bytes (no command, just read status)
         let mut rbuffer = [0u8; 6];
-        self.intf.iv.wait_on_busy().await?;
 
         // Perform a direct read to get status bytes
         let opcode = BootloaderOpCode::GetStatus.bytes();
@@ -1132,7 +1131,6 @@ where
         }
 
         // Write command then data
-        self.intf.iv.wait_on_busy().await?;
         self.intf
             .write_with_payload(&cmd, &cdata[..data.len() * 4], false)
             .await
@@ -1197,7 +1195,6 @@ where
             address as u8,
         ];
 
-        self.intf.iv.wait_on_busy().await?;
         self.intf.write_with_payload(&cmd, data, false).await
     }
 
@@ -1233,7 +1230,6 @@ where
         let opcode = RegMemOpCode::WriteBuffer8.bytes();
         let cmd = [opcode[0], opcode[1]];
 
-        self.intf.iv.wait_on_busy().await?;
         self.intf.write_with_payload(&cmd, data, false).await
     }
 

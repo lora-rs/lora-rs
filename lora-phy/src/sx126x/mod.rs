@@ -253,7 +253,6 @@ where
             self.intf
                 .write(&[OpCode::Calibrate.value(), 0b0111_1111], false)
                 .await?;
-            self.intf.iv.wait_on_busy().await?;
         }
 
         // Enable LoRa packet engine...
@@ -337,12 +336,12 @@ where
 
     // Wakeup the radio if it is in Sleep or ReceiveDutyCycle mode; otherwise, ensure it is not busy.
     async fn ensure_ready(&mut self, mode: RadioMode) -> Result<(), RadioError> {
-        match mode {
-            RadioMode::Sleep | RadioMode::Receive(RxMode::DutyCycle(_)) => {
-                let op_code_and_null = [OpCode::GetStatus.value(), 0x00u8];
-                self.intf.write(&op_code_and_null, false).await?;
-            }
-            _ => self.intf.iv.wait_on_busy().await?,
+        // Wake from sleep: BUSY is stuck HIGH until NSS falls, so pass `true`
+        // to skip the pre-wait added by SpiInterface::write. For other modes
+        // the next op's pre-wait handles readiness on its own.
+        if matches!(mode, RadioMode::Sleep | RadioMode::Receive(RxMode::DutyCycle(_))) {
+            let op_code_and_null = [OpCode::GetStatus.value(), 0x00u8];
+            self.intf.write(&op_code_and_null, true).await?;
         }
         Ok(())
     }
@@ -362,7 +361,7 @@ where
             warm_start: warm_start_if_possible,
         };
         let op_code_and_sleep_params = [OpCode::SetSleep.value(), sleep_params.value()];
-        self.intf.write(&op_code_and_sleep_params, true).await?;
+        self.intf.write(&op_code_and_sleep_params, false).await?;
         delay.delay_ms(2).await;
 
         Ok(())

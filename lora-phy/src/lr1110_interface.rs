@@ -4,8 +4,9 @@
 //! than the SX126x/SX127x radios:
 //!
 //! - Commands are sent in separate SPI transactions from reads
-//! - After writing a command, wait for BUSY to go low
-//! - Then read the response in a new transaction
+//! - Before every command, wait for BUSY to go low (LR1121 UM §3)
+//! - For reads: wait for BUSY again after sending the command, then read
+//!   the response in a new transaction
 //! - Response always starts with a Stat1 status byte
 //!
 //! Reference: SWDR001 LR11xx Driver HAL specification
@@ -29,54 +30,53 @@ where
         Self { spi, iv }
     }
 
-    // Write a buffer to the radio.
+    // Write a buffer to the radio. Pre-waits for BUSY low per LR1121 UM §3.
+    // `is_sleep_command` skips the pre-wait for wake pulses where BUSY is
+    // held HIGH during sleep.
     pub async fn write(&mut self, write_buffer: &[u8], is_sleep_command: bool) -> Result<(), RadioError> {
-        self.spi.write(write_buffer).await.map_err(|_| SPI)?;
-        trace!("write: {=[u8]:02x}", write_buffer);
-
         if !is_sleep_command {
             self.iv.wait_on_busy().await?;
         }
+        self.spi.write(write_buffer).await.map_err(|_| SPI)?;
+        trace!("write: {=[u8]:02x}", write_buffer);
 
         Ok(())
     }
 
-    // Write command with payload appended
+    // Write command with payload appended. Pre-waits as `write()`.
     pub async fn write_with_payload(
         &mut self,
         write_buffer: &[u8],
         payload: &[u8],
         is_sleep_command: bool,
     ) -> Result<(), RadioError> {
-        let mut ops = [Operation::Write(write_buffer), Operation::Write(payload)];
-        self.spi.transaction(&mut ops).await.map_err(|_| SPI)?;
-        trace!("write_buf: {=[u8]:02x} -> {=[u8]:02x}", write_buffer, payload);
-
         if !is_sleep_command {
             self.iv.wait_on_busy().await?;
         }
+        let mut ops = [Operation::Write(write_buffer), Operation::Write(payload)];
+        self.spi.transaction(&mut ops).await.map_err(|_| SPI)?;
+        trace!("write_buf: {=[u8]:02x} -> {=[u8]:02x}", write_buffer, payload);
 
         Ok(())
     }
 
     // Request a read, filling the provided buffer.
-    // For LR11xx: This is a two-step operation per the HAL specification:
-    // 1. Write command (NSS low -> write -> NSS high)
-    // 2. Wait for BUSY to go low
+    // For LR11xx this is a two-transaction operation per the HAL spec:
+    // 1. Pre-wait, then write command (NSS low -> write -> NSS high)
+    // 2. Wait for BUSY to go low (chip preparing response)
     // 3. Read response (NSS low -> read with NOPs -> NSS high)
     // The first byte of the response is Stat1, followed by the actual data.
     pub async fn read(&mut self, write_buffer: &[u8], read_buffer: &mut [u8]) -> Result<(), RadioError> {
-        // Step 1: Write command in separate transaction
+        // Step 1: Pre-wait, then write command in separate transaction
+        self.iv.wait_on_busy().await?;
         if !write_buffer.is_empty() {
             self.spi.write(write_buffer).await.map_err(|_| SPI)?;
         }
 
-        // Step 2: Wait for BUSY to go low
+        // Step 2: Wait for BUSY to go low (chip preparing response on MISO)
         self.iv.wait_on_busy().await?;
 
-        // Step 3: Read response in separate transaction
-        // First byte is Stat1 (discarded), followed by actual data
-        // Read stat1 and data in a single SPI transaction using transfer
+        // Step 3: Read response; first byte is Stat1 (discarded), rest is data
         let mut stat1 = [0u8; 1];
         let mut ops = [Operation::Read(&mut stat1), Operation::Read(read_buffer)];
         self.spi.transaction(&mut ops).await.map_err(|_| SPI)?;
@@ -91,19 +91,19 @@ where
         Ok(())
     }
 
-    // Request a read with status, filling the provided buffer and returning the status.
-    // For LR11xx: Same two-step protocol as read(), but returns the Stat1 byte.
+    // Request a read with status, returning the Stat1 byte. Same two-transaction
+    // protocol as `read()`.
     pub async fn read_with_status(&mut self, write_buffer: &[u8], read_buffer: &mut [u8]) -> Result<u8, RadioError> {
-        // Step 1: Write command in separate transaction
+        // Step 1: Pre-wait, then write command in separate transaction
+        self.iv.wait_on_busy().await?;
         if !write_buffer.is_empty() {
             self.spi.write(write_buffer).await.map_err(|_| SPI)?;
         }
 
-        // Step 2: Wait for BUSY to go low
+        // Step 2: Wait for BUSY to go low (chip preparing response on MISO)
         self.iv.wait_on_busy().await?;
 
-        // Step 3: Read response in separate transaction
-        // First byte is Stat1, followed by actual data
+        // Step 3: Read response; first byte is Stat1, rest is data
         let mut stat1 = [0u8; 1];
         let mut ops = [Operation::Read(&mut stat1), Operation::Read(read_buffer)];
         self.spi.transaction(&mut ops).await.map_err(|_| SPI)?;
@@ -119,14 +119,11 @@ where
         Ok(stat1[0])
     }
 
-    // Direct read from SPI bus (no command write phase).
-    // For LR11xx: This is used by lr11xx_system_get_status to read stat1+stat2+irq_status.
-    // Unlike read(), this does NOT skip any bytes - all bytes read are returned.
+    // Direct read from SPI bus (no command write phase). Used by
+    // lr11xx_system_get_status to read stat1+stat2+irq_status without skipping
+    // any bytes.
     pub async fn direct_read(&mut self, read_buffer: &mut [u8]) -> Result<(), RadioError> {
-        // Wait for BUSY to go low
         self.iv.wait_on_busy().await?;
-
-        // Read directly - no stat1 skipping
         self.spi.read(read_buffer).await.map_err(|_| SPI)?;
 
         trace!("direct_read: len={}, data={=[u8]:02x}", read_buffer.len(), read_buffer);
@@ -134,20 +131,14 @@ where
         Ok(())
     }
 
-    // Wakeup the LR11xx from sleep mode by toggling NSS.
-    // For LR11xx: This is the HAL-level wakeup that simply asserts NSS low,
-    // waits for BUSY to go low, then de-asserts NSS high.
-    // Reference: SWDR001 lr11xx_hal_wakeup()
+    // Wake the LR11xx from sleep mode by pulsing NSS. BUSY is held HIGH in
+    // sleep, so this can't pre-wait — the next SPI op's pre-wait will catch
+    // the chip once it finishes waking. Reference: SWDR001 lr11xx_hal_wakeup().
     pub async fn wakeup(&mut self) -> Result<(), RadioError> {
-        // Perform a dummy read with an empty buffer
-        // This will assert NSS, wait for BUSY, and de-assert NSS
         let mut dummy = [0u8; 1];
         self.spi.read(&mut dummy).await.map_err(|_| SPI)?;
 
-        // Wait for BUSY to go low
-        self.iv.wait_on_busy().await?;
-
-        trace!("wakeup: chip awakened from sleep");
+        trace!("wakeup: NSS pulsed to wake chip");
 
         Ok(())
     }
