@@ -438,6 +438,16 @@ where
         }
         self.write_register(Register::RegLna, lna_gain_final).await?;
 
+        // Clear stale CAD IRQ flags before entering CAD mode. Without
+        // this, a previously-asserted CadDone bit can keep DIO mapped
+        // to "active" and the host-side IRQ wait may not see a fresh
+        // edge. Required by SX1276/77/78/79 datasheet's documented CAD
+        // flow ("clear CadDone/CadDetected IRQs → set mode = CAD →
+        // wait for CadDone IRQ") and the Semtech CAD/LBT guidebook
+        // §7.2 step 3 + rule of thumb #8. Matches RadioLib's
+        // startChannelScan() discipline.
+        self.clear_irq_status().await?;
+
         self.write_register(Register::RegOpMode, LoRaMode::Cad.value()).await
     }
 

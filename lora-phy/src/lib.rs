@@ -412,7 +412,22 @@ where
                 .process_irq_event(self.radio_mode, Some(&mut cad_activity_detected), true)
                 .await
             {
-                Ok(Some(IrqState::Done)) => Ok(cad_activity_detected),
+                Ok(Some(IrqState::Done)) => {
+                    // Force the chip back to a clean Standby before
+                    // returning. After CAD with cadExitMode = CAD_ONLY
+                    // (0x00), SX126x returns to STDBY_RC on its own —
+                    // but our `radio_mode` field still reads
+                    // `ChannelActivityDetection`, and the next
+                    // `prepare_for_tx` / `prepare_for_rx` assumes a
+                    // known starting state. Skipping this explicit
+                    // standby is the cause of RadioLib Issue #1085
+                    // (post-CAD startTransmit fails silently). Apply
+                    // the same workaround here so callers don't have
+                    // to track post-CAD chip state separately.
+                    self.radio_kind.set_standby().await?;
+                    self.radio_mode = RadioMode::Standby;
+                    Ok(cad_activity_detected)
+                }
                 Err(err) => {
                     self.radio_kind.ensure_ready(self.radio_mode).await?;
                     self.radio_kind.set_standby().await?;
