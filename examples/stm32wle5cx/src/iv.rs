@@ -1,3 +1,4 @@
+use cortex_m::peripheral::NVIC;
 use embassy_stm32::interrupt::InterruptExt;
 use embassy_stm32::{interrupt, pac};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -5,10 +6,10 @@ use embassy_sync::signal::Signal;
 use embassy_time::Timer;
 use embedded_hal::digital::OutputPin;
 use embedded_hal_async::spi::{ErrorType, Operation, SpiBus, SpiDevice};
+use lora_phy::DelayNs;
 use lora_phy::mod_params::RadioError;
 use lora_phy::mod_params::RadioError::*;
 use lora_phy::mod_traits::InterfaceVariant;
-use lora_phy::DelayNs;
 
 /// Interrupt handler.
 pub struct InterruptHandler {}
@@ -67,6 +68,8 @@ where
     }
 
     async fn await_irq(&mut self) -> Result<(), RadioError> {
+        // Clear pending interrupts before enabling IRQ
+        NVIC::unpend(pac::Interrupt::SUBGHZ_RADIO);
         unsafe { interrupt::SUBGHZ_RADIO.enable() };
         IRQ_SIGNAL.wait().await;
         Ok(())

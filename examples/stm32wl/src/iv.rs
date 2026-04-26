@@ -1,3 +1,4 @@
+use cortex_m::peripheral::NVIC;
 use embassy_stm32::interrupt::InterruptExt;
 use embassy_stm32::{interrupt, pac};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -67,6 +68,8 @@ where
     }
 
     async fn await_irq(&mut self) -> Result<(), RadioError> {
+        // Clear pending interrupts before enabling IRQ
+        NVIC::unpend(pac::Interrupt::SUBGHZ_RADIO);
         unsafe { interrupt::SUBGHZ_RADIO.enable() };
         IRQ_SIGNAL.wait().await;
         Ok(())
