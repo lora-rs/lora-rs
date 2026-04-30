@@ -706,6 +706,17 @@ where
     }
 
     async fn do_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
+        // Force the chip into a known Standby state at entry. This SPI op
+        // is redundant when our `radio_mode` tracking is accurate — but
+        // when it's not (chip still completing a prior op, IRQ-config
+        // settling, mode transition not yet visible to us), an explicit
+        // SetStandby resolves the race that lets SetCadParams/SetCAD
+        // land mid-busy and silently drop. Mirrors RadioLib's setCad()
+        // and the Semtech CAD/LBT guidebook §8.2 which calls SetStandby
+        // unconditionally before configuring CAD. The interface's pre-
+        // and post-command BUSY waits close the timing window.
+        self.set_standby().await?;
+
         self.intf.iv.enable_rf_switch_rx().await?;
 
         let mut rx_gain_final = 0x94u8;
@@ -715,6 +726,15 @@ where
         }
 
         self.reg_w_8(Register::RxGain, rx_gain_final).await?;
+
+        // Clear stale IRQ flags (CADDone / CADDetected / RxDone) BEFORE
+        // SetCadParams/SetCAD. Without this, a previously-asserted IRQ
+        // bit can keep DIO1 from re-edging when the new CAD completes,
+        // and `wait_for_irq` either returns garbage or hangs. Required
+        // by the Semtech CAD/LBT guidebook §8.2 step 9 and rule of
+        // thumb #8 ("Clear stale IRQs before and after CAD"); also
+        // matches RadioLib's `startChannelScan()` discipline.
+        self.clear_irq_status().await?;
 
         // See:
         //  https://lora-developers.semtech.com/documentation/tech-papers-and-guides/channel-activity-detection-ensuring-your-lora-packets-are-sent/how-to-ensure-your-lora-packets-are-sent-properly
