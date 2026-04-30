@@ -445,6 +445,18 @@ where
     // enable interrupts on DIO pins (sx127x has multiple),
     // and allow interrupts.
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError> {
+        // Clear stale IRQ flags BEFORE reconfiguring mask / DIO mapping.
+        // RegIrqFlags is W1C with no auto-clear on mode transitions
+        // (DS §4.1.2.4); a flag left over from the prior op can keep
+        // DIO0 latched at "active" the moment we remap the DIO. Mirrors
+        // RadioLib's universal stageMode pattern (CLEAR → CONFIG →
+        // MODE_CHANGE) for SX127x. The previous ordering (clear-AFTER-
+        // config) put the flag-clear immediately adjacent to the
+        // caller's eventual `RegOpMode = Tx` write, which empirically
+        // broke TX entry on SX1276 (T-Beam classic) — clearing earlier
+        // separates the two SPI ops with the mask + DIO writes between.
+        self.write_register(Register::RegIrqFlags, 0xffu8).await?;
+
         match radio_mode {
             Some(RadioMode::Transmit) => {
                 self.write_register(
@@ -501,9 +513,6 @@ where
                 self.write_register(Register::RegDioMapping1, dio_mapping_1).await?;
             }
         }
-
-        // clear all active IRQ flags
-        self.write_register(Register::RegIrqFlags, 0xffu8).await?;
 
         Ok(())
     }
