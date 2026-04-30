@@ -374,6 +374,17 @@ where
 
         self.write_register(Register::RegFifoAddrPtr, 0x00u8).await?;
 
+        // Clear stale IRQ flags before entering RxContinuous / RxSingle.
+        // RegIrqFlags is W1C with no auto-clear on mode transitions
+        // (SX1276/77/78/79 datasheet §4.1.2.4); a flag left over from
+        // a prior op (RxDone, RxTimeout, CRCError, ValidHeader) keeps
+        // DIO0 latched at "active" the moment do_rx switches RegOpMode,
+        // so the host-side IRQ wait either fires on the stale edge or
+        // never sees the next real edge. Matches the existing do_cad
+        // hygiene in this driver and RadioLib's universal stageMode
+        // pattern (CLEAR → CONFIG → MODE_CHANGE) for SX127x.
+        self.clear_irq_status().await?;
+
         self.write_register(Register::RegOpMode, mode.value()).await
     }
 
