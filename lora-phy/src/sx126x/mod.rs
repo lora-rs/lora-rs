@@ -288,6 +288,16 @@ where
         Ok(())
     }
 
+    async fn set_lora_sync_word(&mut self, sync_word: u8) -> Result<(), RadioError> {
+        let word = convert_sync_word(sync_word);
+        let lora_syncword_set = [
+            OpCode::WriteRegister.value(),
+            Register::LoRaSyncword.addr1(),
+            Register::LoRaSyncword.addr2(),
+        ];
+        self.intf.write_with_payload(&lora_syncword_set, &word, false).await
+    }
+
     fn create_modulation_params(
         &self,
         spreading_factor: SpreadingFactor,

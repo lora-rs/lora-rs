@@ -187,6 +187,18 @@ where
         self.radio_kind.set_standby().await
     }
 
+    /// Apply a new LoRa sync word to the chip
+    pub async fn set_lora_sync_word(&mut self, sync_word: u8) -> Result<(), RadioError> {
+        self.radio_kind.ensure_ready(self.radio_mode).await?;
+        if self.radio_mode != RadioMode::Standby {
+            self.radio_kind.set_standby().await?;
+            self.radio_mode = RadioMode::Standby;
+        }
+        self.radio_kind.set_lora_sync_word(sync_word).await?;
+        self.sync_word = sync_word;
+        Ok(())
+    }
+
     /// Place the LoRa physical layer in low power mode, specifying cold or
     /// warm start (if chip supports it)
     pub async fn sleep(&mut self, warm_start_if_possible: bool) -> Result<(), RadioError> {

@@ -154,6 +154,10 @@ where
         Ok(())
     }
 
+    async fn set_lora_sync_word(&mut self, sync_word: u8) -> Result<(), RadioError> {
+        self.write_register(Register::RegSyncWord, sync_word).await
+    }
+
     fn create_modulation_params(
         &self,
         spreading_factor: SpreadingFactor,

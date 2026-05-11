@@ -1867,6 +1867,13 @@ where
         Ok(())
     }
 
+    async fn set_lora_sync_word(&mut self, sync_word: u8) -> Result<(), RadioError> {
+        let word = convert_sync_word(sync_word);
+        let sync_opcode = RadioOpCode::SetLoRaSyncWord.bytes();
+        let sync_cmd = [sync_opcode[0], sync_opcode[1], word];
+        self.write_command(&sync_cmd).await
+    }
+
     fn create_modulation_params(
         &self,
         spreading_factor: SpreadingFactor,

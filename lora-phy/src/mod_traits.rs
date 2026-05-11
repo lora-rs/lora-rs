@@ -35,6 +35,8 @@ pub enum IrqState {
 pub trait RadioKind {
     /// Initialize lora radio
     async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError>;
+    /// Apply a new LoRa sync word to the chip
+    async fn set_lora_sync_word(&mut self, sync_word: u8) -> Result<(), RadioError>;
     /// Create modulation parameters specific to the LoRa chip kind and type
     fn create_modulation_params(
         &self,
