@@ -339,8 +339,11 @@ where
     async fn ensure_ready(&mut self, mode: RadioMode) -> Result<(), RadioError> {
         match mode {
             RadioMode::Sleep | RadioMode::Receive(RxMode::DutyCycle(_)) => {
+                // Wake-from-sleep pulse: pass is_sleep_command=true to skip both
+                // BUSY waits, which would otherwise deadlock on the asleep chip.
+                // The next SPI op's pre-command wait absorbs the wake latency.
                 let op_code_and_null = [OpCode::GetStatus.value(), 0x00u8];
-                self.intf.write(&op_code_and_null, false).await?;
+                self.intf.write(&op_code_and_null, true).await?;
             }
             _ => self.intf.iv.wait_on_busy().await?,
         }

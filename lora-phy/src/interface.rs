@@ -17,8 +17,16 @@ where
         Self { spi, iv }
     }
 
+    // Wait for BUSY low before issuing a command (SX1261/2 DS §8.3.1).
+    async fn check_device_ready(&mut self) -> Result<(), RadioError> {
+        self.iv.wait_on_busy().await
+    }
+
     // Write a buffer to the radio.
     pub async fn write(&mut self, write_buffer: &[u8], is_sleep_command: bool) -> Result<(), RadioError> {
+        if !is_sleep_command {
+            self.check_device_ready().await?;
+        }
         self.spi.write(write_buffer).await.map_err(|_| SPI)?;
         trace!("write: {=[u8]:02x}", write_buffer);
 
@@ -36,6 +44,9 @@ where
         payload: &[u8],
         is_sleep_command: bool,
     ) -> Result<(), RadioError> {
+        if !is_sleep_command {
+            self.check_device_ready().await?;
+        }
         let mut ops = [Operation::Write(write_buffer), Operation::Write(payload)];
         self.spi.transaction(&mut ops).await.map_err(|_| SPI)?;
         trace!("write_buf: {=[u8]:02x} -> {=[u8]:02x}", write_buffer, payload);
@@ -49,6 +60,7 @@ where
 
     // Request a read, filling the provided buffer.
     pub async fn read(&mut self, write_buffer: &[u8], read_buffer: &mut [u8]) -> Result<(), RadioError> {
+        self.check_device_ready().await?;
         {
             let mut ops = [Operation::Write(write_buffer), Operation::Read(read_buffer)];
 
@@ -69,6 +81,7 @@ where
 
     // Request a read with status, filling the provided buffer and returning the status.
     pub async fn read_with_status(&mut self, write_buffer: &[u8], read_buffer: &mut [u8]) -> Result<u8, RadioError> {
+        self.check_device_ready().await?;
         let mut status = [0u8];
         {
             let mut ops = [
