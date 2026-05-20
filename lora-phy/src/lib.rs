@@ -460,7 +460,13 @@ where
                 .process_irq_event(self.radio_mode, Some(&mut cad_activity_detected), true)
                 .await
             {
-                Ok(Some(IrqState::Done)) => Ok(cad_activity_detected),
+                Ok(Some(IrqState::Done)) => {
+                    // CAD_ONLY exit returns the chip to STDBY_RC on its own; sync
+                    // radio_mode so the next operation starts from a known state.
+                    self.radio_kind.set_standby().await?;
+                    self.radio_mode = RadioMode::Standby;
+                    Ok(cad_activity_detected)
+                }
                 Err(err) => {
                     self.radio_kind.ensure_ready(self.radio_mode).await?;
                     self.radio_kind.set_standby().await?;

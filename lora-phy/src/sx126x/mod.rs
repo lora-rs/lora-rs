@@ -674,6 +674,9 @@ where
     }
 
     async fn do_cad(&mut self, mdltn_params: &ModulationParams) -> Result<(), RadioError> {
+        // Enter CAD from a known Standby state.
+        self.set_standby().await?;
+
         self.intf.iv.enable_rf_switch_rx().await?;
 
         let mut rx_gain_final = 0x94u8;
@@ -683,6 +686,11 @@ where
         }
 
         self.reg_w_8(Register::RxGain, rx_gain_final).await?;
+
+        // Clear stale IRQ flags before SetCadParams/SetCAD. IRQ status bits are
+        // latched and DIO1 is the OR of masked bits (SX1261/2 DS §8.5), so a
+        // leftover bit can suppress the next CadDone edge. Defensive.
+        self.clear_irq_status().await?;
 
         // See:
         //  https://lora-developers.semtech.com/documentation/tech-papers-and-guides/channel-activity-detection-ensuring-your-lora-packets-are-sent/how-to-ensure-your-lora-packets-are-sent-properly
