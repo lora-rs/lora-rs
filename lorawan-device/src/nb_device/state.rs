@@ -40,7 +40,7 @@ else(Ready)║ ╚═════════════╝   ║              
  */
 use super::super::*;
 use super::{
-    mac::{Frame, Mac, Window},
+    mac::{Frame, Mac, RxWindows, Window},
     radio, Event, RadioBuffer, Response, Timings,
 };
 
@@ -137,15 +137,20 @@ impl Idle {
         event: Event<'_, R>,
     ) -> (State, Result<Response, super::Error<R>>) {
         enum IntermediateResponse<R: radio::PhyRxTx> {
-            RadioTx((Frame, radio::TxConfig, u32)),
+            RadioTx((Frame, radio::TxConfig, RxWindows, u32)),
             EarlyReturn(Result<Response, super::Error<R>>),
         }
 
         let response = match event {
             // tolerate unexpected timeout
             Event::Join(creds) => {
-                let (tx_config, dev_nonce) = mac.join_otaa::<RNG, N>(rng, creds, buf);
-                IntermediateResponse::RadioTx((Frame::Join, tx_config, dev_nonce as u32))
+                let (tx_config, rx_windows, dev_nonce) = mac.join_otaa::<RNG, N>(rng, creds, buf);
+                IntermediateResponse::RadioTx((
+                    Frame::Join,
+                    tx_config,
+                    rx_windows,
+                    dev_nonce as u32,
+                ))
             }
             Event::TimeoutFired => IntermediateResponse::EarlyReturn(Ok(Response::NoUpdate)),
             Event::RadioEvent(_radio_event) => {
@@ -155,15 +160,15 @@ impl Idle {
                 let tx_config = mac.send::<RNG, N>(rng, buf, &send_data);
                 match tx_config {
                     Err(e) => IntermediateResponse::EarlyReturn(Err(e.into())),
-                    Ok((tx_config, fcnt_up)) => {
-                        IntermediateResponse::RadioTx((Frame::Data, tx_config, fcnt_up))
+                    Ok((tx_config, rx_windows, fcnt_up)) => {
+                        IntermediateResponse::RadioTx((Frame::Data, tx_config, rx_windows, fcnt_up))
                     }
                 }
             }
         };
         match response {
             IntermediateResponse::EarlyReturn(response) => (State::Idle(self), response),
-            IntermediateResponse::RadioTx((frame, tx_config, fcnt_up)) => {
+            IntermediateResponse::RadioTx((frame, tx_config, rx_windows, fcnt_up)) => {
                 let event: radio::Event<'_, R> =
                     radio::Event::TxRequest(tx_config, buf.as_ref_for_read());
                 match radio.handle_event(event) {
@@ -172,13 +177,13 @@ impl Idle {
                             // intermediate state where we wait for Join to complete sending
                             // allows for asynchronous sending
                             radio::Response::Txing => (
-                                State::SendingData(SendingData { frame }),
+                                State::SendingData(SendingData { frame, rx_windows }),
                                 Ok(Response::UplinkSending(fcnt_up)),
                             ),
                             // directly jump to waiting for RxWindow
                             // allows for synchronous sending
                             radio::Response::TxDone(ms) => {
-                                data_rxwindow1_timeout::<R, N>(frame, mac, radio, ms)
+                                data_rxwindow1_timeout::<R, N>(frame, rx_windows, mac, radio, ms)
                             }
                             _ => (State::Idle(self), Err(Error::UnexpectedRadioResponse.into())),
                         }
@@ -193,6 +198,7 @@ impl Idle {
 #[derive(Copy, Clone)]
 pub struct SendingData {
     frame: Frame,
+    rx_windows: RxWindows,
 }
 
 impl SendingData {
@@ -210,9 +216,13 @@ impl SendingData {
                     Ok(response) => {
                         match response {
                             // expect a complete transmit
-                            radio::Response::TxDone(ms) => {
-                                data_rxwindow1_timeout::<R, N>(self.frame, mac, radio, ms)
-                            }
+                            radio::Response::TxDone(ms) => data_rxwindow1_timeout::<R, N>(
+                                self.frame,
+                                self.rx_windows,
+                                mac,
+                                radio,
+                                ms,
+                            ),
                             // anything other than TxComplete is unexpected
                             _ => {
                                 panic!("SendingData: Unexpected radio response");
@@ -235,6 +245,7 @@ impl SendingData {
 #[derive(Copy, Clone)]
 pub struct WaitingForRxWindow {
     frame: Frame,
+    rx_windows: RxWindows,
     window: Rx,
 }
 
@@ -248,7 +259,7 @@ impl WaitingForRxWindow {
         match event {
             // we are waiting for a Timeout
             Event::TimeoutFired => {
-                let rf_config = mac.get_rf_config(&self.frame, &self.window.into());
+                let rf_config = self.rx_windows.get(&self.window.into());
                 let window_start = mac.get_rx_delay(&self.frame, &self.window.into());
                 // configure the radio for the RX
                 match radio.handle_event(radio::Event::RxRequest(rf_config)) {
@@ -270,6 +281,7 @@ impl WaitingForRxWindow {
                         (
                             State::WaitingForRx(WaitingForRx {
                                 frame: self.frame,
+                                rx_windows: self.rx_windows,
                                 window: self.window,
                                 rf_config,
                             }),
@@ -298,6 +310,7 @@ impl WaitingForRxWindow {
 #[derive(Copy, Clone)]
 pub struct WaitingForRx {
     frame: Frame,
+    rx_windows: RxWindows,
     window: Rx,
     rf_config: radio::RfConfig,
 }
@@ -356,6 +369,7 @@ impl WaitingForRx {
                         (
                             State::WaitingForRxWindow(WaitingForRxWindow {
                                 frame: self.frame,
+                                rx_windows: self.rx_windows,
                                 window: Rx::_2(t2),
                             }),
                             Ok(Response::TimeoutRequest(t2)),
@@ -386,6 +400,7 @@ enum Rx {
 
 fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, const N: usize>(
     frame: Frame,
+    rx_windows: RxWindows,
     mac: &mut Mac,
     radio: &mut R,
     timestamp_ms: u32,
@@ -393,7 +408,7 @@ fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, const N: usize>(
     let delay = mac.get_rx_delay(&frame, &Window::_1);
     let t1 = (delay as i32 + timestamp_ms as i32 + radio.get_rx_window_offset_ms()) as u32;
     (
-        State::WaitingForRxWindow(WaitingForRxWindow { frame, window: Rx::_1(t1) }),
+        State::WaitingForRxWindow(WaitingForRxWindow { frame, rx_windows, window: Rx::_1(t1) }),
         Ok(Response::TimeoutRequest(t1)),
     )
 }

@@ -63,7 +63,6 @@ type ChannelPlan = [Option<Channel>; NUM_CHANNELS_DYNAMIC as usize];
 pub(crate) struct DynamicChannelPlan<R: DynamicChannelRegion> {
     channels: ChannelPlan,
     channel_mask: ChannelMask<9>,
-    last_tx_channel: u8,
     _dynamic_channel_region: PhantomData<R>,
     frequency_valid: fn(u32) -> bool,
 }
@@ -76,7 +75,6 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
         Self {
             channels,
             channel_mask: Default::default(),
-            last_tx_channel: Default::default(),
             _dynamic_channel_region: Default::default(),
             frequency_valid: freq_fn,
         }
@@ -197,12 +195,12 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         R::datarates()[dr as usize].as_ref()
     }
 
-    fn get_tx_dr_and_frequency<RNG: RngCore>(
+    fn select_tx_channel<RNG: RngCore>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> (Datarate, u32) {
+    ) -> TxChannel {
         match frame {
             Frame::Join => {
                 // There are at most 3 join channels in dynamic regions,
@@ -211,22 +209,27 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
                 while index >= R::NUM_JOIN_CHANNELS {
                     index = (rng.next_u32() & 0b11) as u8;
                 }
-                self.last_tx_channel = index;
 
                 // SAFETY: Join channels SHALL be always present
                 let channel = self.channels[index as usize].unwrap();
-                (R::datarates()[datarate as usize].clone().unwrap(), channel.frequency)
+                TxChannel {
+                    datarate: R::datarates()[datarate as usize].clone().unwrap(),
+                    dr: datarate,
+                    frequency: channel.ul_frequency(),
+                    rx1_frequency: channel.rx1_frequency(),
+                }
             }
             Frame::Data => {
                 let mut channel = self.get_random_in_range(rng);
                 loop {
                     if self.channel_mask.is_enabled(channel).unwrap() {
                         if let Some(ch) = self.channels[channel] {
-                            self.last_tx_channel = channel as u8;
-                            return (
-                                R::datarates()[datarate as usize].clone().unwrap(),
-                                ch.ul_frequency(),
-                            );
+                            return TxChannel {
+                                datarate: R::datarates()[datarate as usize].clone().unwrap(),
+                                dr: datarate,
+                                frequency: ch.ul_frequency(),
+                                rx1_frequency: ch.rx1_frequency(),
+                            };
                         }
                     }
                     channel = self.get_random_in_range(rng)
@@ -235,12 +238,8 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         }
     }
 
-    fn get_rx_frequency(&self, _frame: &Frame, window: &Window) -> u32 {
-        match window {
-            // SAFETY: self.last_tx_channel will be populated after correct channel is chosen
-            Window::_1 => self.channels[self.last_tx_channel as usize].unwrap().rx1_frequency(),
-            Window::_2 => R::DEFAULT_RX2_FREQ,
-        }
+    fn get_rx2_frequency(&self) -> u32 {
+        R::DEFAULT_RX2_FREQ
     }
 
     fn get_rx_datarate(&self, tx_datarate: DR, rx1_dr_offset: u8, window: &Window) -> DR {

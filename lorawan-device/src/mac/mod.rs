@@ -45,6 +45,30 @@ pub(crate) enum Window {
     _2,
 }
 
+/// RF configurations for the RX1 and RX2 windows of an uplink, derived at TX time from the
+/// channel and datarate actually used for the transmission. Binding the windows to the uplink by
+/// value (instead of recalling the TX channel from region state at RX time) guarantees the
+/// windows match the transmission even if MAC state changes in between.
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub(crate) struct RxWindows {
+    pub(crate) rx1: RfConfig,
+    pub(crate) rx2: RfConfig,
+}
+
+impl RxWindows {
+    pub(crate) fn get(&self, window: &Window) -> RfConfig {
+        match window {
+            Window::_1 => self.rx1,
+            Window::_2 => self.rx2,
+        }
+    }
+
+    pub(crate) fn rx_config(&self, buffer_ms: u32, window: &Window) -> RxConfig {
+        RxConfig { rf: self.get(window), mode: RxMode::Single { ms: buffer_ms } }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 /// LoRaWAN Session and Network Configurations
@@ -124,20 +148,20 @@ impl Mac {
     }
 
     /// Prepare the radio buffer with transmitting a join request frame and provides the radio
-    /// configuration for the transmission.
+    /// configuration for the transmission along with the RX window configurations bound to it.
     pub(crate) fn join_otaa<RNG: RngCore, const N: usize>(
         &mut self,
         rng: &mut RNG,
         credentials: NetworkCredentials,
         buf: &mut RadioBuffer<N>,
-    ) -> (radio::TxConfig, u16) {
+    ) -> (radio::TxConfig, RxWindows, u16) {
         let mut otaa = otaa::Otaa::new(credentials);
         let dev_nonce = otaa.prepare_buffer::<RNG, N>(rng, buf);
         self.state = State::Otaa(otaa);
-        let mut tx_config =
+        let (mut tx_config, tx_channel) =
             self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Join);
         tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
-        (tx_config, dev_nonce)
+        (tx_config, self.rx_windows(&tx_channel), dev_nonce)
     }
 
     /// Join via ABP. This does not transmit a join request frame, but instead sets the session.
@@ -162,19 +186,19 @@ impl Mac {
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
         send_data: &SendData<'_>,
-    ) -> Result<(radio::TxConfig, FcntUp)> {
+    ) -> Result<(radio::TxConfig, RxWindows, FcntUp)> {
         let fcnt = match &mut self.state {
             State::Joined(ref mut session) => Ok(session.prepare_buffer::<N>(send_data, buf)),
             State::Otaa(_) => Err(Error::NotJoined),
             State::Unjoined => Err(Error::NotJoined),
         }?;
-        let mut tx_config =
+        let (mut tx_config, tx_channel) =
             self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
         tx_config.adjust_power(
             self.configuration.tx_power.unwrap_or(self.board_eirp.max_power),
             self.board_eirp.antenna_gain,
         );
-        Ok((tx_config, fcnt))
+        Ok((tx_config, self.rx_windows(&tx_channel), fcnt))
     }
 
     pub(crate) fn add_uplink<M: SerializableMacCommand>(&mut self, cmd: M) -> Result<()> {
@@ -196,7 +220,8 @@ impl Mac {
         buf: &mut RadioBuffer<N>,
     ) -> Result<(radio::TxConfig, FcntUp)> {
         self.multicast.setup_send::<N>(&mut self.state, buf).map(|fcnt_up| {
-            let mut tx_config =
+            // No RX windows follow this uplink; the caller re-arms the RXC window.
+            let (mut tx_config, _) =
                 self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
             tx_config.adjust_power(
                 self.configuration.tx_power.unwrap_or(self.board_eirp.max_power),
@@ -213,7 +238,8 @@ impl Mac {
         buf: &mut RadioBuffer<N>,
     ) -> Result<(radio::TxConfig, FcntUp)> {
         self.certification.setup_send::<N>(&mut self.state, buf).map(|fcnt_up| {
-            let mut tx_config =
+            // No RX windows follow this uplink; the caller completes with rx2_complete().
+            let (mut tx_config, _) =
                 self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
             tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
             (tx_config, fcnt_up)
@@ -340,47 +366,16 @@ impl Mac {
         }
     }
 
-    /// Build RfConfig for given `Frame` and `Window` and apply
-    /// network-specific overrides.
-    pub(crate) fn get_rf_config(&self, frame: &Frame, window: &Window) -> RfConfig {
-        let (frequency, dr) = match window {
-            Window::_1 => (
-                self.region.get_rx_frequency(frame, window),
-                self.region.get_rx_datarate(
-                    self.configuration.data_rate,
-                    self.configuration.rx1_dr_offset,
-                    window,
-                ),
-            ),
-            Window::_2 => {
-                (
-                    // RX2 frequency override
-                    self.configuration
-                        .rx2_frequency
-                        .unwrap_or_else(|| self.region.get_rx_frequency(frame, window)),
-                    // RX2 datarate override
-                    self.configuration.rx2_data_rate.unwrap_or_else(|| {
-                        self.region.get_rx_datarate(
-                            self.configuration.data_rate,
-                            self.configuration.rx1_dr_offset,
-                            window,
-                        )
-                    }),
-                )
-            }
-        };
-
-        // Handle possibly unsupported datarates by falling back to RX2 datarate
+    /// Build the RfConfig for a window given its frequency and datarate, handling possibly
+    /// unsupported datarates by falling back to the RX2 datarate.
+    fn build_rf_config(&self, frequency: u32, dr: DR, tx_dr: DR, window: &Window) -> RfConfig {
         let datarate = match self.region.get_datarate(dr as u8) {
             Some(d) => d,
             None => {
-                warn!(
-                    "Unsupported DR: {:?} (TX DR: {:?}, Window: {:?})",
-                    dr, self.configuration.data_rate, window
-                );
+                warn!("Unsupported DR: {:?} (TX DR: {:?}, Window: {:?})", dr, tx_dr, window);
                 self.region
                     .get_datarate(self.region.get_rx_datarate(
-                        self.configuration.data_rate,
+                        tx_dr,
                         self.configuration.rx1_dr_offset,
                         &Window::_2,
                     ) as u8)
@@ -399,13 +394,35 @@ impl Mac {
         }
     }
 
-    pub(crate) fn get_rx_config(&self, buffer_ms: u32, frame: &Frame, window: &Window) -> RxConfig {
-        RxConfig { rf: self.get_rf_config(frame, window), mode: RxMode::Single { ms: buffer_ms } }
+    /// Build the RX2 RfConfig, applying network-specific overrides.
+    fn rx2_rf_config(&self, tx_dr: DR) -> RfConfig {
+        // RX2 frequency override
+        let frequency =
+            self.configuration.rx2_frequency.unwrap_or_else(|| self.region.get_rx2_frequency());
+        // RX2 datarate override
+        let dr = self.configuration.rx2_data_rate.unwrap_or_else(|| {
+            self.region.get_rx_datarate(tx_dr, self.configuration.rx1_dr_offset, &Window::_2)
+        });
+        self.build_rf_config(frequency, dr, tx_dr, &Window::_2)
+    }
+
+    /// Derive the RX1/RX2 window configurations for an uplink from the channel selection actually
+    /// used to transmit it.
+    fn rx_windows(&self, tx_channel: &region::TxChannel) -> RxWindows {
+        let rx1_dr = self.region.get_rx_datarate(
+            tx_channel.dr,
+            self.configuration.rx1_dr_offset,
+            &Window::_1,
+        );
+        RxWindows {
+            rx1: self.build_rf_config(tx_channel.rx1_frequency, rx1_dr, tx_channel.dr, &Window::_1),
+            rx2: self.rx2_rf_config(tx_channel.dr),
+        }
     }
 
     #[cfg(feature = "class-c")]
     pub(crate) fn get_rxc_config(&self) -> RxConfig {
-        RxConfig { rf: self.get_rf_config(&Frame::Data, &Window::_2), mode: RxMode::Continuous }
+        RxConfig { rf: self.rx2_rf_config(self.configuration.data_rate), mode: RxMode::Continuous }
     }
 }
 

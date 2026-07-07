@@ -310,7 +310,7 @@ where
     pub async fn join(&mut self, join_mode: &JoinMode) -> Result<JoinResponse, Error<R::PhyError>> {
         match join_mode {
             JoinMode::OTAA { deveui, appeui, appkey } => {
-                let (tx_config, _) = self.mac.join_otaa::<G, N>(
+                let (tx_config, rx_windows, _) = self.mac.join_otaa::<G, N>(
                     &mut self.rng,
                     NetworkCredentials::new(*appeui, *deveui, *appkey),
                     &mut self.radio_buffer,
@@ -325,7 +325,7 @@ where
 
                 // Receive join response within RX window
                 self.timer.reset();
-                Ok(self.rx_downlink(&Frame::Join, ms).await?.into())
+                Ok(self.rx_downlink(&Frame::Join, ms, &rx_windows).await?.into())
             }
             JoinMode::ABP { nwkskey, appskey, devaddr } => {
                 self.mac.join_abp(*nwkskey, *appskey, *devaddr);
@@ -351,7 +351,7 @@ where
         confirmed: bool,
     ) -> Result<SendResponse, Error<R::PhyError>> {
         // Prepare transmission buffer
-        let (tx_config, _fcnt_up) = self.mac.send::<G, N>(
+        let (tx_config, rx_windows, _fcnt_up) = self.mac.send::<G, N>(
             &mut self.rng,
             &mut self.radio_buffer,
             &SendData { data, fport, confirmed },
@@ -365,7 +365,7 @@ where
 
         // Wait for received data within window
         self.timer.reset();
-        Ok(self.rx_downlink(&Frame::Data, ms).await?.into())
+        Ok(self.rx_downlink(&Frame::Data, ms, &rx_windows).await?.into())
     }
 
     /// Take the downlink data from the device. This is typically called after a
@@ -512,6 +512,7 @@ where
         &mut self,
         frame: &Frame,
         window_delay: u32,
+        rx_windows: &mac::RxWindows,
     ) -> Result<mac::Response, Error<R::PhyError>> {
         self.radio_buffer.clear();
 
@@ -523,8 +524,7 @@ where
         let _ = self.between_windows(rx1_start_delay).await?;
 
         // RX1
-        let rx_config =
-            self.mac.get_rx_config(self.radio.get_rx_window_buffer(), frame, &Window::_1);
+        let rx_config = rx_windows.rx_config(self.radio.get_rx_window_buffer(), &Window::_1);
         debug!("Configuring RX1 window with config {}.", rx_config);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
 
@@ -540,8 +540,7 @@ where
         let _ = self.between_windows(rx2_start_delay).await?;
 
         // RX2
-        let rx_config =
-            self.mac.get_rx_config(self.radio.get_rx_window_buffer(), frame, &Window::_2);
+        let rx_config = rx_windows.rx_config(self.radio.get_rx_window_buffer(), &Window::_2);
         debug!("Configuring RX2 window with config {}.", rx_config);
         self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
 

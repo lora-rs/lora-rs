@@ -40,7 +40,6 @@ impl From<Subband> for usize {
 
 #[derive(Clone)]
 pub(crate) struct FixedChannelPlan<F: FixedChannelRegion> {
-    last_tx_channel: u8,
     channel_mask: ChannelMask<9>,
     _fixed_channel_region: PhantomData<F>,
     join_channels: JoinChannels,
@@ -51,7 +50,6 @@ pub(crate) struct FixedChannelPlan<F: FixedChannelRegion> {
 impl<F: FixedChannelRegion> FixedChannelPlan<F> {
     pub fn new(freq_fn: fn(u32) -> bool) -> Self {
         Self {
-            last_tx_channel: Default::default(),
             channel_mask: Default::default(),
             _fixed_channel_region: Default::default(),
             join_channels: Default::default(),
@@ -172,13 +170,13 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         F::datarates()[dr as usize].as_ref()
     }
 
-    fn get_tx_dr_and_frequency<RNG: RngCore>(
+    fn select_tx_channel<RNG: RngCore>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> (Datarate, u32) {
-        match frame {
+    ) -> TxChannel {
+        let (dr, channel) = match frame {
             Frame::Join => {
                 let channel = self.join_channels.get_next_channel(rng);
                 let dr = if channel < 64 {
@@ -186,33 +184,31 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
                 } else {
                     DR::_4
                 };
-                self.last_tx_channel = channel;
-                let data_rate = F::datarates()[dr as usize].clone().unwrap();
-                (data_rate, F::uplink_channels()[channel as usize])
+                (dr, channel)
             }
             Frame::Data => {
                 // The join bias gets reset after receiving CFList in Join Frame
                 // or ChannelMask in the LinkADRReq in Data Frame.
                 // If it has not been reset yet, we continue to use the bias for the data frames.
                 // We hope to acquire ChannelMask via LinkADRReq.
-                let (data_rate, channel) = if self.join_channels.has_bias_and_not_exhausted() {
+                if self.join_channels.has_bias_and_not_exhausted() {
                     let channel = self.join_channels.get_next_channel(rng);
                     let dr = if channel < 64 {
                         DR::_0
                     } else {
                         DR::_4
                     };
-                    (F::datarates()[dr as usize].clone().unwrap(), channel)
+                    (dr, channel)
                 // Alternatively, we will ask JoinChannel logic to determine a channel from the
                 // subband that  the join succeeded on.
                 } else if let Some(channel) = self.join_channels.first_data_channel(rng) {
-                    (F::datarates()[datarate as usize].clone().unwrap(), channel)
+                    (datarate, channel)
                 } else {
                     // For the data frame, the datarate impacts which channel sets we can choose
                     // from. If the datarate bandwidth is 500 kHz, we must use
                     // channels 64..=71. Else, we must use 0-63
-                    let datarate = F::datarates()[datarate as usize].clone().unwrap();
-                    if datarate.bandwidth == Bandwidth::_500KHz {
+                    let bandwidth = F::datarates()[datarate as usize].as_ref().unwrap().bandwidth;
+                    if bandwidth == Bandwidth::_500KHz {
                         let mut channel = (rng.next_u32() & 0b111) as u8;
                         // keep selecting a random channel until we find one that is enabled
                         while !self.channel_mask.is_enabled((channel + 64).into()).unwrap() {
@@ -227,19 +223,19 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
                         }
                         (datarate, channel)
                     }
-                };
-                self.last_tx_channel = channel;
-                (data_rate, F::uplink_channels()[channel as usize])
+                }
             }
+        };
+        TxChannel {
+            datarate: F::datarates()[dr as usize].clone().unwrap(),
+            dr,
+            frequency: F::uplink_channels()[channel as usize],
+            rx1_frequency: F::downlink_channels()[(channel % 8) as usize],
         }
     }
 
-    fn get_rx_frequency(&self, _frame: &Frame, window: &Window) -> u32 {
-        let channel = self.last_tx_channel % 8;
-        match window {
-            Window::_1 => F::downlink_channels()[channel as usize],
-            Window::_2 => F::DEFAULT_RX2_FREQ,
-        }
+    fn get_rx2_frequency(&self) -> u32 {
+        F::DEFAULT_RX2_FREQ
     }
 
     fn get_rx_datarate(&self, tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {

@@ -201,6 +201,17 @@ pub(crate) struct Datarate {
     pub(crate) max_mac_payload_size: u8,
     max_mac_payload_size_with_dwell_time: u8,
 }
+
+/// The result of TX channel selection. Carries the DR actually used for the uplink (which may
+/// differ from the requested DR, eg: fixed-plan join frames force DR0/DR4 by channel) and the
+/// RX1 frequency paired with the selected channel, so RX windows can be derived from the
+/// transmission itself rather than recalled from region state at RX time.
+pub(crate) struct TxChannel {
+    pub(crate) datarate: Datarate,
+    pub(crate) dr: DR,
+    pub(crate) frequency: u32,
+    pub(crate) rx1_frequency: u32,
+}
 macro_rules! mut_region_dispatch {
   ($s:expr, $t:tt) => {
       match &mut $s.state {
@@ -371,21 +382,22 @@ impl Configuration {
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> TxConfig {
-        let (dr, frequency) = self.get_tx_dr_and_frequency(rng, datarate, frame);
-        TxConfig {
+    ) -> (TxConfig, TxChannel) {
+        let tx_channel = self.select_tx_channel(rng, datarate, frame);
+        let tx_config = TxConfig {
             // We can do this safely, as default output power will be positive
             pw: self.check_tx_power(0).unwrap().unwrap() as i8,
             rf: RfConfig {
-                frequency,
+                frequency: tx_channel.frequency,
                 bb: BaseBandModulationParams::new(
-                    dr.spreading_factor,
-                    dr.bandwidth,
+                    tx_channel.datarate.spreading_factor,
+                    tx_channel.datarate.bandwidth,
                     self.get_coding_rate(),
                 ),
-                max_payload_len: dr.max_mac_payload_size,
+                max_payload_len: tx_channel.datarate.max_mac_payload_size,
             },
-        }
+        };
+        (tx_config, tx_channel)
     }
 
     pub(crate) fn get_datarate(&self, dr: u8) -> Option<&Datarate> {
@@ -396,13 +408,13 @@ impl Configuration {
         region_dispatch!(self, check_tx_power, tx_power).map(Some)
     }
 
-    fn get_tx_dr_and_frequency<RNG: RngCore>(
+    fn select_tx_channel<RNG: RngCore>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> (Datarate, u32) {
-        mut_region_dispatch!(self, get_tx_dr_and_frequency, rng, datarate, frame)
+    ) -> TxChannel {
+        mut_region_dispatch!(self, select_tx_channel, rng, datarate, frame)
     }
 
     pub(crate) fn process_join_accept<T: AsRef<[u8]>>(
@@ -441,8 +453,8 @@ impl Configuration {
         region_dispatch!(self, get_rx_datarate, tx_dr, rx1_dr_offset, window)
     }
 
-    pub(crate) fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32 {
-        region_dispatch!(self, get_rx_frequency, frame, window)
+    pub(crate) fn get_rx2_frequency(&self) -> u32 {
+        region_dispatch!(self, get_rx2_frequency)
     }
 
     pub(crate) fn get_default_datarate(&self) -> DR {
@@ -546,15 +558,15 @@ pub(crate) trait RegionHandler {
         DR::_0
     }
 
-    fn get_tx_dr_and_frequency<RNG: RngCore>(
+    fn select_tx_channel<RNG: RngCore>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
         frame: &Frame,
-    ) -> (Datarate, u32);
+    ) -> TxChannel;
 
     fn get_rx_datarate(&self, datarate: DR, rx1_dr_offset: u8, window: &Window) -> DR;
-    fn get_rx_frequency(&self, frame: &Frame, window: &Window) -> u32;
+    fn get_rx2_frequency(&self) -> u32;
     fn get_coding_rate(&self) -> CodingRate {
         DEFAULT_CODING_RATE
     }

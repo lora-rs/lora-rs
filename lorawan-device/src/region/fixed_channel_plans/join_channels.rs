@@ -292,6 +292,48 @@ mod test {
         }
     }
 
+    /// A standard (unbiased) US915 join walk hits the 500 kHz bank (channels 64-71) once every
+    /// 9 attempts, where the join is forced to DR4. RX1 must then be derived from DR4 (=> DR13),
+    /// not from the device's configured data rate.
+    #[test]
+    fn test_join_rx1_datarate_follows_forced_join_dr() {
+        use lora_modulation::{Bandwidth, SpreadingFactor};
+
+        let mut rng = rand_core::OsRng;
+        let mut mac = Mac::new(US915::new().into(), 21, 2);
+        let mut buf: RadioBuffer<255> = RadioBuffer::new();
+        let credentials = NetworkCredentials::new(
+            AppEui::from([0x0; 8]),
+            DevEui::from([0x0; 8]),
+            AppKey::from(get_key()),
+        );
+
+        let mut checked_fat_bank = false;
+        for _ in 0..9 {
+            let (tx_config, rx_windows, _) =
+                mac.join_otaa::<_, 255>(&mut rng, credentials.clone(), &mut buf);
+            if tx_config.rf.bb.bw == Bandwidth::_500KHz {
+                // Join on the fat bank is forced to DR4 (SF8/500kHz)...
+                assert_eq!(tx_config.rf.bb.sf, SpreadingFactor::_8);
+                // ...so RX1 must open at DR13 (SF7/500kHz), not at the DR derived from the
+                // device's configured data rate (DR0 => RX1 DR10, SF10/500kHz).
+                assert_eq!(rx_windows.rx1.bb.bw, Bandwidth::_500KHz);
+                assert_eq!(rx_windows.rx1.bb.sf, SpreadingFactor::_7);
+                checked_fat_bank = true;
+            } else {
+                // Joins on 125 kHz channels are forced to DR0 => RX1 at DR10 (SF10/500kHz)
+                assert_eq!(tx_config.rf.bb.sf, SpreadingFactor::_10);
+                assert_eq!(rx_windows.rx1.bb.bw, Bandwidth::_500KHz);
+                assert_eq!(rx_windows.rx1.bb.sf, SpreadingFactor::_10);
+            }
+            // RX2 is always DR8 (SF12/500kHz) at 923.3 MHz for US915
+            assert_eq!(rx_windows.rx2.frequency, 923_300_000);
+            assert_eq!(rx_windows.rx2.bb.sf, SpreadingFactor::_12);
+            mac.rx2_complete();
+        }
+        assert!(checked_fat_bank, "9 join attempts must include one 500 kHz channel");
+    }
+
     #[test]
     fn test_full_mac_compliant_bias() {
         let mut us915 = US915::new();
@@ -299,7 +341,7 @@ mod test {
         let mut mac = Mac::new(us915.into(), 21, 2);
 
         let mut buf: RadioBuffer<255> = RadioBuffer::new();
-        let (tx_config, _len) = mac.join_otaa::<_, 255>(
+        let (tx_config, rx_windows, _dev_nonce) = mac.join_otaa::<_, 255>(
             &mut rand::rngs::OsRng,
             NetworkCredentials::new(
                 AppEui::from([0x0; 8]),
@@ -329,13 +371,12 @@ mod test {
         buf.clear();
         buf.extend_from_slice(&rx_buf[..len]).unwrap();
 
-        let rx_config = mac.get_rx_config(0, &Frame::Data, &Window::_1);
-        let response = mac.handle_rx::<255, 3>(&mut buf, &mut downlinks, 0, &rx_config.rf);
+        let response = mac.handle_rx::<255, 3>(&mut buf, &mut downlinks, 0, &rx_windows.rx1);
         if let Response::JoinSuccess = response {
         } else {
             panic!("Did not receive join success");
         }
-        let (tx_config, _len) = mac
+        let (tx_config, _rx_windows, _fcnt) = mac
             .send::<_, 255>(
                 &mut rand::rngs::OsRng,
                 &mut buf,
@@ -362,7 +403,7 @@ mod test {
         let mut mac = Mac::new(us915.into(), 21, 2);
 
         let mut buf: RadioBuffer<255> = RadioBuffer::new();
-        let (tx_config, _len) = mac.join_otaa::<_, 255>(
+        let (tx_config, rx_windows, _dev_nonce) = mac.join_otaa::<_, 255>(
             &mut rand::rngs::OsRng,
             NetworkCredentials::new(
                 AppEui::from([0x0; 8]),
@@ -391,14 +432,13 @@ mod test {
         let len = handle_join_request::<0>(Some(uplink), tx_config.rf, &mut rx_buf);
         buf.clear();
         buf.extend_from_slice(&rx_buf[..len]).unwrap();
-        let rx_config = mac.get_rx_config(0, &Frame::Data, &Window::_1);
-        let response = mac.handle_rx::<255, 3>(&mut buf, &mut downlinks, 0, &rx_config.rf);
+        let response = mac.handle_rx::<255, 3>(&mut buf, &mut downlinks, 0, &rx_windows.rx1);
         if let Response::JoinSuccess = response {
         } else {
             panic!("Did not receive JoinSuccess")
         }
         for _ in 0..8 {
-            let (tx_config, _len) = mac
+            let (tx_config, _rx_windows, _fcnt) = mac
                 .send::<_, 255>(
                     &mut rand::rngs::OsRng,
                     &mut buf,
