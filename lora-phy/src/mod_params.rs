@@ -1,3 +1,4 @@
+use lora_modulation::BaseBandModulationParams;
 pub use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 
 /// Errors types reported during LoRa physical layer processing
@@ -95,6 +96,12 @@ pub struct ModulationParams {
     pub low_data_rate_optimize: u8,
     /// Channel frequency in Hertz
     pub frequency_in_hz: u32,
+}
+
+impl From<ModulationParams> for BaseBandModulationParams {
+    fn from(value: ModulationParams) -> Self {
+        Self::new(value.spreading_factor, value.bandwidth, value.coding_rate)
+    }
 }
 
 /// Packet parameters for a send or receive communication channel
