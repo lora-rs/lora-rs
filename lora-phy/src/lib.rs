@@ -23,6 +23,8 @@ pub mod iv;
 pub mod lr1110;
 /// LR11xx-specific SPI interface (different protocol than SX126x/SX127x)
 pub(crate) mod lr1110_interface;
+/// Mock radio to be used for unit testing
+pub mod mock;
 /// Parameters used across the lora-phy crate to support various use cases
 pub mod mod_params;
 /// Traits implemented externally or internally to support control of LoRa chips
