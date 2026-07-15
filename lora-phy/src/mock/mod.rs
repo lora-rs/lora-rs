@@ -1,4 +1,5 @@
-mod radio_kind_params;
+/// The IRQ flags available for mock impl
+pub mod radio_kind_params;
 
 use crate::{
     mock::radio_kind_params::IrqMask,
@@ -31,9 +32,24 @@ pub struct MockRadio {
 }
 
 impl MockRadio {
+    /// Create empty mock radio
+    pub fn new() -> Self {
+        Self {
+            state: MockState::Standby,
+            warm_start: false,
+            irq_flags: IrqMask::None.value(),
+        }
+    }
+
     /// Sets internal flag, to be used for checking different failure states
     pub fn set_irq_flags(&mut self, flag: u16) {
         self.irq_flags = flag;
+    }
+}
+
+impl Default for MockRadio {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -127,10 +143,6 @@ impl RadioKind for MockRadio {
         &mut self,
         _mdltn_params: &ModulationParams,
     ) -> Result<(), crate::mod_params::RadioError> {
-        // let spreading_factor_val = spreading_factor_value(mdltn_params.spreading_factor)?;
-        // let bandwidth_val = bandwidth_value(mdltn_params.bandwidth)?;
-        // let coding_rate_val = coding_rate_value(mdltn_params.coding_rate?;
-        // self.mod_params = mdltn_params;
         Ok(())
     }
 
