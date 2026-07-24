@@ -6,11 +6,18 @@ mod fixtures;
 use emulator::{get_emulated_sx1261, Chip, Mode};
 use fixtures::{get_sx126x, Delayer, TestFixture};
 
-use crate::mod_params::RxMode;
+use crate::mod_params::{RadioMode, RxMode};
 use crate::mod_traits::RadioKind;
 use crate::LoRa;
 use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
-use smtc_modem_cores::sx126x::{Context, SleepCfg};
+use smtc_modem_cores::sx126x::{
+    sx126x_lora_bw_e, sx126x_lora_cr_e, sx126x_lora_pkt_len_modes_e, sx126x_lora_sf_e, sx126x_mod_params_lora_t,
+    sx126x_pkt_params_lora_t, sx126x_standby_cfgs_e, Context, SleepCfg,
+};
+
+fn reference() -> Context<TestFixture> {
+    Context::new(TestFixture::new())
+}
 
 #[tokio::test]
 async fn test_sleep_cold_start() {
@@ -28,6 +35,159 @@ async fn test_sleep_warm_start() {
     let mut sx1261 = get_sx126x();
     sx1261.set_sleep(true, &mut Delayer).await.unwrap();
     assert_eq!(sx1261.take_spi(), smtc_sx126x.inner);
+}
+
+#[tokio::test]
+async fn test_standby() {
+    let mut reference = reference();
+    reference.set_standby(sx126x_standby_cfgs_e::SX126X_STANDBY_CFG_RC);
+    let mut sx1261 = get_sx126x();
+    sx1261.set_standby().await.unwrap();
+    assert_eq!(sx1261.take_spi(), reference.inner);
+}
+
+#[tokio::test]
+async fn test_set_channel() {
+    for freq in [433_000_000u32, 868_100_000, TEST_FREQ_HZ] {
+        let mut reference = reference();
+        reference.set_rf_freq(freq);
+        let mut sx1261 = get_sx126x();
+        sx1261.set_channel(freq).await.unwrap();
+        assert_eq!(sx1261.take_spi(), reference.inner, "freq {freq}");
+    }
+}
+
+#[tokio::test]
+async fn test_modulation_params() {
+    // Second case exercises the 500 kHz TxModulation workaround branch and
+    // the low-data-rate-optimize flag
+    let cases = [
+        (
+            SpreadingFactor::_7,
+            Bandwidth::_125KHz,
+            sx126x_lora_sf_e::SX126X_LORA_SF7,
+            sx126x_lora_bw_e::SX126X_LORA_BW_125,
+            0u8,
+        ),
+        (
+            SpreadingFactor::_12,
+            Bandwidth::_500KHz,
+            sx126x_lora_sf_e::SX126X_LORA_SF12,
+            sx126x_lora_bw_e::SX126X_LORA_BW_500,
+            0u8,
+        ),
+        (
+            SpreadingFactor::_11,
+            Bandwidth::_125KHz,
+            sx126x_lora_sf_e::SX126X_LORA_SF11,
+            sx126x_lora_bw_e::SX126X_LORA_BW_125,
+            1u8,
+        ),
+    ];
+    for (sf, bw, c_sf, c_bw, ldro) in cases {
+        let mut reference = reference();
+        reference.set_lora_mod_params(&sx126x_mod_params_lora_t {
+            sf: c_sf,
+            bw: c_bw,
+            cr: sx126x_lora_cr_e::SX126X_LORA_CR_4_5,
+            ldro,
+        });
+        let mut sx1261 = get_sx126x();
+        let mdltn_params = sx1261
+            .create_modulation_params(sf, bw, CodingRate::_4_5, TEST_FREQ_HZ)
+            .unwrap();
+        assert_eq!(mdltn_params.low_data_rate_optimize, ldro, "ldro for {sf:?}/{bw:?}");
+        sx1261.set_modulation_params(&mdltn_params).await.unwrap();
+        assert_eq!(sx1261.take_spi(), reference.inner, "{sf:?}/{bw:?}");
+    }
+}
+
+#[tokio::test]
+async fn test_packet_params() {
+    for iq_inverted in [false, true] {
+        let mut reference = reference();
+        reference.set_lora_pkt_params(&sx126x_pkt_params_lora_t {
+            preamble_len_in_symb: 8,
+            header_type: sx126x_lora_pkt_len_modes_e::SX126X_LORA_PKT_EXPLICIT,
+            pld_len_in_bytes: 32,
+            crc_is_on: true,
+            invert_iq_is_on: iq_inverted,
+        });
+        let mut sx1261 = get_sx126x();
+        let mdltn_params = sx1261
+            .create_modulation_params(SpreadingFactor::_7, Bandwidth::_125KHz, CodingRate::_4_5, TEST_FREQ_HZ)
+            .unwrap();
+        let pkt_params = sx1261
+            .create_packet_params(8, false, 32, true, iq_inverted, &mdltn_params)
+            .unwrap();
+        sx1261.set_packet_params(&pkt_params).await.unwrap();
+        assert_eq!(sx1261.take_spi(), reference.inner, "iq_inverted {iq_inverted}");
+    }
+}
+
+#[tokio::test]
+async fn test_sync_word() {
+    // Our driver skips the read-modify-write and writes the known reset
+    // values (0x14 0x24) with the sync nibbles applied; prime the reference
+    // with those reset values and both land on the same register write.
+    let mut fixture = TestFixture::new();
+    fixture.prime_read(&[0x1D, 0x07, 0x40, 0x00], &[0x14, 0x24]);
+    let mut reference = Context::new(fixture);
+    reference.set_lora_sync_word(0x34);
+    match reference.inner.writes()[..] {
+        [fixtures::Ops::Write(bytes)] => assert_eq!(bytes, &[0x0D, 0x07, 0x40, 0x34, 0x44]),
+        ref other => panic!("unexpected write stream {other:?}"),
+    }
+    // 0x34 -> [0x34, 0x44] is asserted against our driver in
+    // sx126x::tests::test_convert_sync_word
+}
+
+#[tokio::test]
+async fn test_buffer_base_address() {
+    let mut reference = reference();
+    reference.set_buffer_base_address(0, 0);
+    let mut sx1261 = get_sx126x();
+    sx1261.set_tx_rx_buffer_base_address(0, 0).await.unwrap();
+    assert_eq!(sx1261.take_spi(), reference.inner);
+}
+
+#[tokio::test]
+async fn test_write_buffer() {
+    let payload = b"hello reference driver";
+    let mut reference = reference();
+    reference.write_buffer(0, payload);
+    let mut sx1261 = get_sx126x();
+    sx1261.set_payload(payload).await.unwrap();
+    assert_eq!(sx1261.take_spi(), reference.inner);
+}
+
+#[tokio::test]
+async fn test_set_tx() {
+    let mut reference = reference();
+    reference.set_tx(0);
+    let mut sx1261 = get_sx126x();
+    sx1261.do_tx().await.unwrap();
+    assert_eq!(sx1261.take_spi(), reference.inner);
+}
+
+#[tokio::test]
+async fn test_dio_irq_params() {
+    // Transmit mode masks: TxDone | RxTxTimeout
+    let mask = 0x0201;
+    let mut reference = reference();
+    reference.set_dio_irq_params(mask, mask, 0, 0);
+    let mut sx1261 = get_sx126x();
+    sx1261.set_irq_params(Some(RadioMode::Transmit)).await.unwrap();
+    assert_eq!(sx1261.take_spi(), reference.inner);
+}
+
+#[tokio::test]
+async fn test_clear_irq_status() {
+    let mut reference = reference();
+    reference.clear_irq_status(0xFFFF);
+    let mut sx1261 = get_sx126x();
+    sx1261.clear_irq_status().await.unwrap();
+    assert_eq!(sx1261.take_spi(), reference.inner);
 }
 
 const TEST_FREQ_HZ: u32 = 903_900_000;
