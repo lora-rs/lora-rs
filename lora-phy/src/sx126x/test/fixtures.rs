@@ -4,7 +4,7 @@ use crate::sx126x::{Config, Sx1261, Sx1262, Sx126x};
 use embedded_hal::spi::{ErrorKind, Operation};
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::SpiDevice;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
 /// Records every SPI operation so the byte stream of our driver can be
 /// compared against the byte stream of Semtech's reference driver. Implements
@@ -15,7 +15,7 @@ use std::collections::HashMap;
 #[derive(Clone, Debug)]
 pub struct TestFixture {
     pub ops: Vec<Ops>,
-    read_responses: HashMap<Vec<u8>, Vec<u8>>,
+    read_responses: HashMap<Vec<u8>, VecDeque<Vec<u8>>>,
 }
 
 /// Wire-canonical form of one SPI transaction: (written bytes with trailing
@@ -52,9 +52,14 @@ impl TestFixture {
         }
     }
 
-    /// Canned response for a read identified by its full command bytes
+    /// Canned response for a read identified by its full command bytes.
+    /// Priming the same command again queues a response for the next read
+    /// (read-modify-write sequences hit the same command repeatedly).
     pub fn prime_read(&mut self, command: &[u8], response: &[u8]) {
-        self.read_responses.insert(command.to_vec(), response.to_vec());
+        self.read_responses
+            .entry(command.to_vec())
+            .or_default()
+            .push_back(response.to_vec());
     }
 
     pub fn writes(&self) -> Vec<&Ops> {
@@ -75,7 +80,11 @@ impl TestFixture {
             self.ops.push(Ops::Write(cmd));
             return;
         }
-        let response = self.read_responses.get(&cmd).cloned().unwrap_or_default();
+        let response = self
+            .read_responses
+            .get_mut(&cmd)
+            .and_then(|queue| queue.pop_front())
+            .unwrap_or_default();
         let mut cursor = response.iter().copied();
         for op in operations.iter_mut() {
             if let Operation::Read(buf) = op {
