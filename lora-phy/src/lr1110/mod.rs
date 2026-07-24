@@ -164,33 +164,29 @@ where
         self.intf.read_with_status(write_data, read_buffer).await
     }
 
-    /// Write data to the TX buffer
-    async fn write_buffer(&mut self, offset: u8, data: &[u8]) -> Result<(), RadioError> {
+    /// Write data to the TX buffer. Unlike the SX126x command, WriteBuffer8
+    /// takes no offset — data always lands at the write pointer.
+    async fn write_buffer(&mut self, data: &[u8]) -> Result<(), RadioError> {
         let opcode = RegMemOpCode::WriteBuffer8.bytes();
-        let header = [opcode[0], opcode[1], offset];
+        let header = [opcode[0], opcode[1]];
         self.intf.write_with_payload(&header, data, false).await
     }
 
     /// Read data from the RX buffer
     async fn read_buffer(&mut self, offset: u8, length: u8, buffer: &mut [u8]) -> Result<(), RadioError> {
         let opcode = RegMemOpCode::ReadBuffer8.bytes();
-        let header = [opcode[0], opcode[1], offset, 0x00];
+        let header = [opcode[0], opcode[1], offset, length];
         self.intf.read(&header, &mut buffer[..length as usize]).await
     }
 
-    /// Set the number of symbols the radio will wait to detect a reception
+    /// Set the number of symbols the radio will wait to detect a reception.
+    /// Values up to 255 go on the wire as the raw symbol count; the SX126x
+    /// mantissa/exponent encoding only exists in an extended form of this
+    /// command for larger values, which the capped range never needs.
     async fn set_lora_symbol_num_timeout(&mut self, symbol_num: u16) -> Result<(), RadioError> {
-        let mut exp = 0u8;
-        let mut mant = ((symbol_num.min(LR1110_MAX_LORA_SYMB_NUM_TIMEOUT.into()) + 1) >> 1) as u8;
-
-        while mant > 31 {
-            mant = (mant + 3) >> 2;
-            exp += 1;
-        }
-
-        let timeout_value = exp + (mant << 3);
+        let symbol_num = symbol_num.min(LR1110_MAX_LORA_SYMB_NUM_TIMEOUT.into()) as u8;
         let opcode = RadioOpCode::SetLoRaSyncTimeout.bytes();
-        let cmd = [opcode[0], opcode[1], timeout_value];
+        let cmd = [opcode[0], opcode[1], symbol_num];
         self.write_command(&cmd).await
     }
 
@@ -647,10 +643,10 @@ where
     /// # Arguments
     /// * `params` - GFSK modulation parameters (bitrate, pulse shape, bandwidth, frequency deviation)
     pub async fn set_gfsk_mod_params(&mut self, params: &GfskModulationParams) -> Result<(), RadioError> {
-        // Convert bitrate to chip format: (32 * 32000000) / bitrate
-        let br = ((32u64 * LR1110_XTAL_FREQ as u64) / params.bitrate_bps as u64) as u32;
-        // Convert frequency deviation to chip format: (fdev * 2^25) / 32000000
-        let fdev = ((params.freq_dev_hz as u64) << 25) / (LR1110_XTAL_FREQ as u64);
+        // Unlike the SX126x, the LR11xx takes the bitrate in raw bps and the
+        // frequency deviation in raw Hz — no chip-format conversion
+        let br = params.bitrate_bps;
+        let fdev = params.freq_dev_hz;
 
         let opcode = RadioOpCode::SetModulationParam.bytes();
         let cmd = [
@@ -707,13 +703,16 @@ where
             ));
         }
 
+        // The command always carries 8 sync word bytes; shorter words are
+        // zero-padded (sync_word_length_bits in the packet params decides
+        // how many bits the chip matches)
         let opcode = RadioOpCode::SetGfskSyncWord.bytes();
         let mut cmd = [0u8; 10]; // 2 opcode + 8 sync word
         cmd[0] = opcode[0];
         cmd[1] = opcode[1];
         cmd[2..2 + sync_word.len()].copy_from_slice(sync_word);
 
-        self.write_command(&cmd[..2 + sync_word.len()]).await
+        self.write_command(&cmd).await
     }
 
     /// Set GFSK CRC parameters
@@ -770,11 +769,11 @@ where
         let mut rbuffer = [0u8; 4];
         self.read_command(&cmd, &mut rbuffer).await?;
 
-        // Parse RSSI values (raw values are unsigned, convert to dBm)
-        let rssi_sync_dbm = -((rbuffer[1] as i16) / 2);
-        let rssi_avg_dbm = -((rbuffer[2] as i16) / 2);
+        // Response layout: rssi_sync, rssi_avg, rx_len, status bits
+        let rssi_sync_dbm = -((rbuffer[0] as i16) / 2);
+        let rssi_avg_dbm = -((rbuffer[1] as i16) / 2);
 
-        Ok((rbuffer[0], rssi_sync_dbm, rssi_avg_dbm))
+        Ok((rbuffer[2], rssi_sync_dbm, rssi_avg_dbm))
     }
 
     // =========================================================================
@@ -884,7 +883,14 @@ where
     ///
     /// # Arguments
     /// * `delay_rtc` - Delay between RX and TX (or TX and RX) in RTC steps
-    pub async fn set_auto_tx_rx(&mut self, delay_rtc: u32) -> Result<(), RadioError> {
+    /// * `intermediary_mode` - Mode the chip waits in during the delay
+    /// * `timeout_rtc` - Timeout of the second activity in RTC steps
+    pub async fn set_auto_tx_rx(
+        &mut self,
+        delay_rtc: u32,
+        intermediary_mode: IntermediaryMode,
+        timeout_rtc: u32,
+    ) -> Result<(), RadioError> {
         let opcode = RadioOpCode::AutoTxRx.bytes();
         let cmd = [
             opcode[0],
@@ -892,6 +898,10 @@ where
             ((delay_rtc >> 16) & 0xFF) as u8,
             ((delay_rtc >> 8) & 0xFF) as u8,
             (delay_rtc & 0xFF) as u8,
+            intermediary_mode.value(),
+            ((timeout_rtc >> 16) & 0xFF) as u8,
+            ((timeout_rtc >> 8) & 0xFF) as u8,
+            (timeout_rtc & 0xFF) as u8,
         ];
         self.write_command(&cmd).await
     }
@@ -1607,7 +1617,7 @@ where
     }
 
     async fn set_payload(&mut self, payload: &[u8]) -> Result<(), RadioError> {
-        self.write_buffer(0x00, payload).await
+        self.write_buffer(payload).await
     }
 
     async fn do_tx(&mut self) -> Result<(), RadioError> {
@@ -1632,6 +1642,10 @@ where
             ];
             self.write_command(&tcxo_cmd).await?;
         }
+
+        // The reference driver applies the high-ACP workaround on every
+        // SetTx/SetRx/SetCad (harmless register write on unaffected firmware)
+        self.apply_high_acp_workaround().await?;
 
         // Disable timeout (0 = no timeout)
         let opcode = RadioOpCode::SetTx.bytes();
@@ -1693,6 +1707,10 @@ where
                 } else {
                     0
                 };
+
+                // Reference driver behavior; RX duty cycle notably does NOT
+                // get the workaround there
+                self.apply_high_acp_workaround().await?;
 
                 let opcode = RadioOpCode::SetRx.bytes();
                 let cmd = [
@@ -1784,7 +1802,9 @@ where
         ];
         self.write_command(&cad_cmd).await?;
 
-        // Start CAD
+        // Start CAD (reference driver applies the high-ACP workaround here
+        // too)
+        self.apply_high_acp_workaround().await?;
         let start_opcode = RadioOpCode::SetCad.bytes();
         let start_cmd = [start_opcode[0], start_opcode[1]];
         self.write_command(&start_cmd).await
