@@ -25,6 +25,10 @@ jobs:
         with:
           access_token: ${{ github.token }}
 
+      # Needed to build the smtc-modem-cores bindings used by lora-phy tests
+      - name: Setup apt packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake llvm-dev clang libclang-dev
+
       - name: Setup Cache
         uses: Swatinem/rust-cache@v2
         with:
@@ -87,6 +91,10 @@ jobs:
         uses: styfle/cancel-workflow-action@0.12.1
         with:
           access_token: ${{ github.token }}
+
+      # Needed to build the smtc-modem-cores bindings used by lora-phy tests
+      - name: Setup apt packages
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake llvm-dev clang libclang-dev
 
       - name: Setup Cache
         uses: Swatinem/rust-cache@v2

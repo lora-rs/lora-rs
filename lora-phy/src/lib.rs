@@ -1,4 +1,6 @@
-#![no_std]
+// std is allowed under test so the sx126x tests can compare against the
+// reference driver bindings, which are std-only
+#![cfg_attr(not(test), no_std)]
 #![deny(rust_2018_idioms)]
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
