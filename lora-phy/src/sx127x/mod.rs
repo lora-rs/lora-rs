@@ -3,6 +3,8 @@ mod sx1272;
 pub use sx1272::Sx1272;
 mod sx1276;
 pub use sx1276::Sx1276;
+#[cfg(test)]
+mod test;
 
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
