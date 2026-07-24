@@ -35,6 +35,7 @@ const IRQ_TX_DONE: u16 = 0x0001;
 const IRQ_RX_DONE: u16 = 0x0002;
 const IRQ_CAD_DONE: u16 = 0x0080;
 const IRQ_CAD_DETECTED: u16 = 0x0100;
+const IRQ_RX_TX_TIMEOUT: u16 = 0x0200;
 
 // No Tx variant: the model completes transmissions instantly inside SET_TX,
 // so the chip is never observable mid-transmit
@@ -181,6 +182,15 @@ impl ChipModel {
                     self.registers.insert(REG_RSSI_SHADOW, (-2 * rx.rssi_dbm) as u8);
                     self.registers.insert(REG_SNR_SHADOW, (4 * rx.snr_db) as u8);
                     self.raise_irq(IRQ_RX_DONE);
+                } else if params[..3] != [0xFF, 0xFF, 0xFF] {
+                    // Anything but continuous mode times out when no packet
+                    // is pending. The wait is collapsed to zero — the model
+                    // has no clock, and nothing can arrive once SetRx has
+                    // executed — so this exercises the driver's timeout path
+                    // (single-mode symbol timeout and timed RX alike), not
+                    // timeout durations.
+                    self.mode = Mode::Standby;
+                    self.raise_irq(IRQ_RX_TX_TIMEOUT);
                 }
                 vec![]
             }
