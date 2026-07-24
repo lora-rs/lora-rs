@@ -400,3 +400,37 @@ async fn test_rssi_value_parity() {
 
     assert_eq!(rssi, c_rssi);
 }
+
+#[tokio::test]
+async fn test_bw500_sensitivity_errata() {
+    // Errata 2.1: with 500 kHz bandwidth in the HF band, RegHighBwOptimize1/2
+    // take 0x02/0x64. The reference applies this inside its set_rx composite
+    // (sx1276_fix_lora_500_khz_bw_sensitivity); ours applies it at
+    // set_modulation_params time when the chip version quirk matches, so the
+    // reference side mirrors the same register values raw. The frequency
+    // gate in ours compared kHz literals against Hz until this test — the
+    // errata values were never written on real channels.
+    let mut reference_radio = reference();
+    reference_radio.set_lora_sync_word(0x34);
+    reference_radio.write_register(0x0E, &[0x00]);
+    reference_radio.write_register(0x0F, &[0x00]);
+    reference_radio.set_lora_mod_params(&sys::sx127x_lora_mod_params_t {
+        sf: sys::sx127x_lora_sf_e_SX127X_LORA_SF9,
+        bw: sys::sx127x_lora_bw_e_SX127X_LORA_BW_500,
+        cr: sys::sx127x_lora_cr_e_SX127X_LORA_CR_4_5,
+        ldro: 0,
+    });
+    reference_radio.write_register(0x36, &[0x02]);
+    reference_radio.write_register(0x3A, &[0x64]);
+
+    let mut radio = get_sx1276();
+    // init_lora reads the chip version (seeded 0x12) which arms the quirk
+    radio.init_lora(0x34).await.unwrap();
+    let params = radio
+        .create_modulation_params(SpreadingFactor::_9, Bandwidth::_500KHz, CodingRate::_4_5, 868_100_000)
+        .unwrap();
+    radio.set_modulation_params(&params).await.unwrap();
+    assert_eq!(radio.take_spi(), *reference_radio.spi());
+    assert_eq!(reference_radio.spi().reg(0x36), 0x02);
+    assert_eq!(reference_radio.spi().reg(0x3A), 0x64);
+}
