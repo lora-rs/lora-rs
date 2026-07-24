@@ -11,8 +11,9 @@ use crate::mod_traits::RadioKind;
 use crate::LoRa;
 use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 use smtc_modem_cores::sx126x::{
-    sx126x_lora_bw_e, sx126x_lora_cr_e, sx126x_lora_pkt_len_modes_e, sx126x_lora_sf_e, sx126x_mod_params_lora_t,
-    sx126x_pkt_params_lora_t, sx126x_standby_cfgs_e, Context, SleepCfg,
+    sx126x_cad_exit_modes_e, sx126x_cad_params_t, sx126x_cad_symbs_e, sx126x_lora_bw_e, sx126x_lora_cr_e,
+    sx126x_lora_pkt_len_modes_e, sx126x_lora_sf_e, sx126x_mod_params_lora_t, sx126x_pkt_params_lora_t,
+    sx126x_standby_cfgs_e, Context, SleepCfg,
 };
 
 fn reference() -> Context<TestFixture> {
@@ -187,6 +188,47 @@ async fn test_clear_irq_status() {
     reference.clear_irq_status(0xFFFF);
     let mut sx1261 = get_sx126x();
     sx1261.clear_irq_status().await.unwrap();
+    assert_eq!(sx1261.take_spi(), reference.inner);
+}
+
+#[tokio::test]
+async fn test_do_rx() {
+    // (mode, symbol timeout the driver programs, SetRx timeout in rtc steps)
+    let cases = [
+        ("continuous", RxMode::Continuous, 0u8, 0xFFFFFF_u32),
+        ("single8", RxMode::Single(8), 8, 0),
+    ];
+    for (label, mode, symbs, rtc_timeout) in cases {
+        let mut reference = reference();
+        reference.stop_timer_on_preamble(true);
+        reference.set_lora_symb_nb_timeout(symbs);
+        reference.cfg_rx_boosted(true);
+        reference.set_rx_with_timeout_in_rtc_step(rtc_timeout);
+
+        let mut sx1261 = get_sx126x();
+        sx1261.do_rx(mode).await.unwrap();
+        assert_eq!(sx1261.take_spi(), reference.inner, "{label}");
+    }
+}
+
+#[tokio::test]
+async fn test_do_cad() {
+    let mut reference = reference();
+    reference.cfg_rx_boosted(true);
+    reference.set_cad_params(&sx126x_cad_params_t {
+        cad_symb_nb: sx126x_cad_symbs_e::SX126X_CAD_08_SYMB,
+        cad_detect_peak: 7 + 13, // SF7 + 13, per Semtech's CAD application note
+        cad_detect_min: 10,
+        cad_exit_mode: sx126x_cad_exit_modes_e::SX126X_CAD_ONLY,
+        cad_timeout: 0,
+    });
+    reference.set_cad();
+
+    let mut sx1261 = get_sx126x();
+    let mdltn_params = sx1261
+        .create_modulation_params(SpreadingFactor::_7, Bandwidth::_125KHz, CodingRate::_4_5, TEST_FREQ_HZ)
+        .unwrap();
+    sx1261.do_cad(&mdltn_params).await.unwrap();
     assert_eq!(sx1261.take_spi(), reference.inner);
 }
 
