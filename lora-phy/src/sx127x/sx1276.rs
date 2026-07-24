@@ -63,8 +63,11 @@ impl Sx127xVariant for Sx1276 {
             // Output via PA_BOOST: [2, 20] dBm
             let txp = p_out.clamp(2, 20);
 
-            // Pout=17-(15-OutputPower)
-            let output_power: i32 = txp - 2;
+            // PaDac off: Pout = 2 + OutputPower; PaDac on: Pout = 5 + OutputPower.
+            // The pre-fix code used txp - 2 in both branches, so 18..20 dBm
+            // requests overflowed the 4-bit OutputPower field (20 dBm wrote
+            // OutputPower 2 and bled a bit into MaxPower).
+            let output_power: i32 = if txp > 17 { txp - 5 } else { txp - 2 };
 
             if txp > 17 {
                 radio.write_register(pa_reg, PaDac::_20DbmOn.value()).await?;
@@ -80,17 +83,22 @@ impl Sx127xVariant for Sx1276 {
             // Clamp output: [-4, 14] dBm
             let txp = p_out.clamp(-4, 14);
 
-            // Pmax=10.8+0.6*MaxPower, where MaxPower is set below as 7 and therefore Pmax is 15
-            // Pout=Pmax-(15-OutputPower)
-            let output_power: i32 = txp;
+            // Pout = Pmax - (15 - OutputPower) with Pmax = 10.8 + 0.6 * MaxPower.
+            // Positive targets use MaxPower=7 (Pmax 15) so Pout = OutputPower;
+            // 0 dBm and below drop to MaxPower=0 (Pmax 10.8) so OutputPower =
+            // txp + 4 stays in the 4-bit field. The pre-fix code kept
+            // MaxPower=7 for negative targets, casting a negative OutputPower
+            // to u8 and corrupting the register (PA_BOOST bit included).
+            let (max_power, output_power) = if txp > 0 {
+                (PaConfig::MaxPower7NoPaBoost.value(), txp)
+            } else {
+                (0x00, txp + 4)
+            };
 
             radio.write_register(pa_reg, PaDac::_20DbmOff.value()).await?;
             radio.set_ocp(OcpTrim::_100Ma).await?;
             radio
-                .write_register(
-                    Register::RegPaConfig,
-                    PaConfig::MaxPower7NoPaBoost.value() | (output_power as u8),
-                )
+                .write_register(Register::RegPaConfig, max_power | (output_power as u8))
                 .await?;
         }
         Ok(())
