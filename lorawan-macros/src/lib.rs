@@ -427,7 +427,7 @@ fn attr_handle_cmd(attr: &syn::Attribute) -> Option<(syn::Expr, Option<syn::Expr
                                 len = Some(v.value);
                             }
                             &_ => {
-                                panic!("Invalid argument: {}", &id);
+                                panic!("Invalid argument: {}", id);
                             }
                         }
                     } else {
