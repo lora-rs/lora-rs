@@ -479,8 +479,13 @@ where
                     }
                     HIGH_POWER_MIN..=14 => {
                         self.set_pa_config(0x02, 0x02, DeviceSel::HighPowerPA).await?;
-                        // table indicates 14 dBm => txp = 22, therefore we should add 8 to this range
-                        // this however seems to be wrong when looking at the reference driver
+                        // The vendors disagree on this row. Datasheet Table
+                        // 13-21 (through Rev 2.2) says SetTxParams +22 with
+                        // this PA config; ST's STM32CubeWL driver — an SX126x
+                        // die inside the STM32WL — commands +14 with the same
+                        // config, while agreeing with the datasheet on every
+                        // other row. We follow ST. Settling which is right
+                        // for a discrete SX1262 needs a power measurement.
                         // https://github.com/STMicroelectronics/STM32CubeWL/blob/139e8d28bcec6af78dec8b52a9b9f9057868cc2e/Middlewares/Third_Party/SubGHz_Phy/stm32_radio_driver/radio_driver.c#L675
                         tx_params_power = txp as u8;
                     }
