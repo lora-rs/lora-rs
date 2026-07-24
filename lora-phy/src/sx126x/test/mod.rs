@@ -559,3 +559,47 @@ async fn test_init_lora_composed() {
 
     assert_eq!(sx1261.take_spi().writes(), reference_radio.inner.writes());
 }
+
+#[tokio::test]
+async fn test_emulated_cad_end_to_end() {
+    let chip = Chip::new();
+    let mut lora = LoRa::new(get_emulated_sx1261(&chip), true, Delayer).await.unwrap();
+
+    // Quiet channel
+    let mdltn_params = modulation(&mut lora);
+    lora.prepare_for_cad(&mdltn_params).await.unwrap();
+    assert!(!lora.cad(&mdltn_params).await.unwrap());
+
+    // Busy channel
+    chip.with_model(|m| m.cad_activity = true);
+    lora.prepare_for_cad(&mdltn_params).await.unwrap();
+    assert!(lora.cad(&mdltn_params).await.unwrap());
+}
+
+#[tokio::test]
+async fn test_emulated_rx_single_timeout() {
+    let chip = Chip::new();
+    let mut lora = LoRa::new(get_emulated_sx1261(&chip), true, Delayer).await.unwrap();
+
+    // Nothing injected: single-mode reception must surface ReceiveTimeout
+    // (the model collapses the symbol-timeout wait to zero)
+    let mdltn_params = modulation(&mut lora);
+    let rx_pkt_params = lora
+        .create_rx_packet_params(8, false, 255, true, false, &mdltn_params)
+        .unwrap();
+    lora.prepare_for_rx(RxMode::Single(8), &mdltn_params, &rx_pkt_params)
+        .await
+        .unwrap();
+
+    let mut buf = [0u8; 255];
+    let result = lora.rx(&rx_pkt_params, &mut buf).await;
+    assert!(matches!(result, Err(crate::mod_params::RadioError::ReceiveTimeout)));
+
+    // The same radio still receives fine afterwards
+    lora.prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params)
+        .await
+        .unwrap();
+    chip.inject_rx(b"after-timeout", -90, 2);
+    let (len, _) = lora.rx(&rx_pkt_params, &mut buf).await.unwrap();
+    assert_eq!(&buf[..len as usize], b"after-timeout");
+}
