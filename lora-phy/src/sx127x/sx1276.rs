@@ -140,31 +140,44 @@ impl Sx127xVariant for Sx1276 {
         radio.write_register(Register::RegModemConfig3, config_3).await?;
 
         if radio.data.sensitivity_quirk {
-            // apply Errata 2.1: Sensitivity optimization with 500 kHz bandwidth
-
-            if mdltn_params.bandwidth == Bandwidth::_500KHz {
-                let val_1 = 0x02;
-                // Errata band edges are in Hz; these literals used to be in
-                // kHz, so no real frequency ever matched and the optimization
-                // values were never written
-                match mdltn_params.frequency_in_hz {
-                    862_000_000..=1_020_000_000 => {
-                        radio.write_register(Register::RegHighBwOptimize1, val_1).await?;
-                        radio.write_register(Register::RegHighBwOptimize2, 0x64).await?;
-                        return Ok(());
-                    }
-                    410_000_000..=525_000_000 => {
-                        radio.write_register(Register::RegHighBwOptimize1, val_1).await?;
-                        radio.write_register(Register::RegHighBwOptimize2, 0x7f).await?;
-                        return Ok(());
-                    }
-                    // fall through...
-                    _ => {}
-                }
+            // apply Errata 2.1: Sensitivity optimization with 500 kHz bandwidth.
+            // Errata band edges are in Hz; these literals used to be in kHz,
+            // so no real frequency ever matched and the optimization values
+            // were never written
+            let bw500_optimize = match (mdltn_params.bandwidth, mdltn_params.frequency_in_hz) {
+                (Bandwidth::_500KHz, 862_000_000..=1_020_000_000) => Some(0x64),
+                (Bandwidth::_500KHz, 410_000_000..=525_000_000) => Some(0x7f),
+                _ => None,
+            };
+            if let Some(val_2) = bw500_optimize {
+                radio.write_register(Register::RegHighBwOptimize1, 0x02).await?;
+                radio.write_register(Register::RegHighBwOptimize2, val_2).await?;
+            } else {
+                // for all other combinations of bandwidth / frequencies, reset to
+                // 0x03 (RegHighBwOptimize2 is automatically set by the chip)
+                radio.write_register(Register::RegHighBwOptimize1, 0x03).await?;
             }
+        }
 
-            // for all other combinations of bandwidth / frequencies, reset to 0x03 (RegHighBwOptimize2 is automatically set by the chip)
-            radio.write_register(Register::RegHighBwOptimize1, 0x03).await?;
+        // Errata 2.3: receiver spurious reception of a LoRa signal. At
+        // 500 kHz AutomaticIFOn stays set (reset default); other bandwidths
+        // need it cleared plus a manual IF of 0x40/0x00 in RegIfFreq1/2.
+        // The reference applies this on every SetRx; the registers only
+        // affect the receiver, so setting them with the modulation config
+        // is equivalent. Bandwidths below 62.5 kHz additionally require the
+        // RF frequency shifted up by one bandwidth, which set_channel owns —
+        // those keep chip defaults (as before this change).
+        let detect_optimize = radio.read_register(Register::RegDetectionOptimize).await?;
+        if mdltn_params.bandwidth == Bandwidth::_500KHz {
+            radio
+                .write_register(Register::RegDetectionOptimize, detect_optimize | 0x80)
+                .await?;
+        } else if mdltn_params.bandwidth.hz() >= 62_500 {
+            radio
+                .write_register(Register::RegDetectionOptimize, detect_optimize & 0x7f)
+                .await?;
+            radio.write_register(Register::RegIfFreq1, 0x40).await?;
+            radio.write_register(Register::RegIfFreq2, 0x00).await?;
         }
 
         Ok(())
