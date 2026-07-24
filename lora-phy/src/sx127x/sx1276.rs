@@ -144,13 +144,16 @@ impl Sx127xVariant for Sx1276 {
 
             if mdltn_params.bandwidth == Bandwidth::_500KHz {
                 let val_1 = 0x02;
+                // Errata band edges are in Hz; these literals used to be in
+                // kHz, so no real frequency ever matched and the optimization
+                // values were never written
                 match mdltn_params.frequency_in_hz {
-                    862_000..=1_020_000 => {
+                    862_000_000..=1_020_000_000 => {
                         radio.write_register(Register::RegHighBwOptimize1, val_1).await?;
                         radio.write_register(Register::RegHighBwOptimize2, 0x64).await?;
                         return Ok(());
                     }
-                    410_000..=525_000 => {
+                    410_000_000..=525_000_000 => {
                         radio.write_register(Register::RegHighBwOptimize1, val_1).await?;
                         radio.write_register(Register::RegHighBwOptimize2, 0x7f).await?;
                         return Ok(());
