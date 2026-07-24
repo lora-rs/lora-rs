@@ -182,6 +182,11 @@ where
         self.intf.spi
     }
 
+    #[cfg(test)]
+    fn spi_mut(&mut self) -> &mut SPI {
+        &mut self.intf.spi
+    }
+
     // SX162x WriteRegister wrapper for single u8 value writes
     async fn reg_w_8(&mut self, reg: Register, value: u8) -> Result<(), RadioError> {
         self.intf

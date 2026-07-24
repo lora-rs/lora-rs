@@ -232,6 +232,123 @@ async fn test_do_cad() {
     assert_eq!(sx1261.take_spi(), reference.inner);
 }
 
+#[tokio::test]
+async fn test_get_rx_payload() {
+    // Chip reports 4 bytes at offset 0. Ours reads a status byte our
+    // reference discards via a NOP write; wire streams are canonically equal.
+    let mut sx1261 = get_sx126x();
+    sx1261.spi_mut().prime_read(&[0x13], &[0x00, 4, 0]);
+    let mdltn_params = sx1261
+        .create_modulation_params(SpreadingFactor::_7, Bandwidth::_125KHz, CodingRate::_4_5, TEST_FREQ_HZ)
+        .unwrap();
+    let pkt_params = sx1261
+        .create_packet_params(8, false, 255, true, false, &mdltn_params)
+        .unwrap();
+    let mut buf = [0u8; 255];
+    let len = sx1261.get_rx_payload(&pkt_params, &mut buf).await.unwrap();
+    assert_eq!(len, 4);
+
+    let mut reference = reference();
+    let (_, rx_status) = reference.get_rx_buffer_status();
+    let mut c_buf = [0u8; 4];
+    reference.read_buffer(rx_status.buffer_start_pointer, &mut c_buf);
+    assert_eq!(sx1261.take_spi(), reference.inner);
+}
+
+#[tokio::test]
+async fn test_get_packet_status() {
+    // Raw chip bytes: rssi 160, snr 20, signal rssi 162
+    let mut sx1261 = get_sx126x();
+    sx1261.spi_mut().prime_read(&[0x14], &[0x00, 160, 20, 162]);
+    let pkt_status = sx1261.get_rx_packet_status().await.unwrap();
+
+    let mut fixture = TestFixture::new();
+    fixture.prime_read(&[0x14, 0x00], &[160, 20, 162]);
+    let mut reference = Context::new(fixture);
+    let (_, c_status) = reference.get_lora_pkt_status();
+
+    // Byte streams and the decoded values both match the reference
+    assert_eq!(sx1261.take_spi(), reference.inner);
+    assert_eq!(pkt_status.rssi, c_status.rssi_pkt_in_dbm as i16);
+    assert_eq!(pkt_status.snr, c_status.snr_pkt_in_db as i16);
+}
+
+#[tokio::test]
+async fn test_get_rssi() {
+    let mut sx1261 = get_sx126x();
+    sx1261.spi_mut().prime_read(&[0x15], &[0x00, 161]);
+    let rssi = sx1261.get_rssi().await.unwrap();
+
+    let mut fixture = TestFixture::new();
+    fixture.prime_read(&[0x15, 0x00], &[161]);
+    let mut reference = Context::new(fixture);
+    let (_, c_rssi) = reference.get_rssi_inst();
+
+    assert_eq!(sx1261.take_spi(), reference.inner);
+    assert_eq!(rssi, c_rssi);
+}
+
+#[tokio::test]
+async fn test_get_irq_status() {
+    use crate::mod_traits::IrqState;
+    let mut sx1261 = get_sx126x();
+    sx1261.spi_mut().prime_read(&[0x12], &[0x00, 0x00, 0x01]); // TxDone
+    let state = sx1261
+        .process_irq_event(RadioMode::Transmit, None, false)
+        .await
+        .unwrap();
+    assert!(matches!(state, Some(IrqState::Done)));
+
+    let mut fixture = TestFixture::new();
+    fixture.prime_read(&[0x12, 0x00], &[0x00, 0x01]);
+    let mut reference = Context::new(fixture);
+    let (_, c_irq) = reference.get_irq_status();
+
+    assert_eq!(sx1261.take_spi(), reference.inner);
+    assert_eq!(c_irq, 0x0001);
+}
+
+#[tokio::test]
+async fn test_ensure_ready_after_sleep() {
+    // Waking from sleep: ours writes GetStatus + NOP, the reference reads one
+    // status byte after GetStatus — same bytes on the wire
+    let mut sx1261 = get_sx126x();
+    sx1261.ensure_ready(RadioMode::Sleep).await.unwrap();
+
+    let mut reference = reference();
+    reference.get_status();
+    assert_eq!(sx1261.take_spi(), reference.inner);
+}
+
+#[tokio::test]
+async fn test_calibrate_image() {
+    // Our band table follows datasheet Table 9-2. The reference's Hz helper
+    // (cal_img_in_mhz) computes ceil(band_end/4) instead, which lands one
+    // step short of the table for most bands (e.g. 928 MHz -> 0xE8 vs 0xE9),
+    // so compare against cal_img with the table bytes.
+    let cases = [
+        (903_900_000u32, 0xE1u8, 0xE9u8),
+        (868_100_000, 0xD7, 0xDB),
+        (433_000_000, 0x6B, 0x6F),
+    ];
+    for (freq_hz, f1, f2) in cases {
+        let mut reference = reference();
+        reference.cal_img(f1, f2);
+        let mut sx1261 = get_sx126x();
+        sx1261.calibrate_image(freq_hz).await.unwrap();
+        assert_eq!(sx1261.take_spi(), reference.inner, "freq {freq_hz}");
+    }
+}
+
+#[tokio::test]
+async fn test_tx_continuous_wave() {
+    let mut reference = reference();
+    reference.set_tx_cw();
+    let mut sx1261 = get_sx126x();
+    sx1261.set_tx_continuous_wave_mode().await.unwrap();
+    assert_eq!(sx1261.take_spi(), reference.inner);
+}
+
 const TEST_FREQ_HZ: u32 = 903_900_000;
 
 fn modulation(lora: &mut LoRa<impl RadioKind, Delayer>) -> crate::mod_params::ModulationParams {

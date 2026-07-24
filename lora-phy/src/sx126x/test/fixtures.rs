@@ -17,9 +17,28 @@ pub struct TestFixture {
     read_responses: HashMap<Vec<u8>, Vec<u8>>,
 }
 
+/// Wire-canonical form of one SPI transaction: (written bytes with trailing
+/// NOPs trimmed, total bytes clocked). The two drivers split transactions
+/// differently — C sends `[opcode, NOP]` then reads N, ours sends `[opcode]`
+/// then reads status + N — but on the wire both clock the same bytes: MOSI
+/// idles at 0x00 during reads, so a trailing NOP write and a read byte are
+/// indistinguishable to the chip.
+fn canonical(ops: &[Ops]) -> Vec<(&[u8], usize)> {
+    ops.iter()
+        .map(|op| {
+            let (cmd, total) = match op {
+                Ops::Write(cmd) => (cmd, cmd.len()),
+                Ops::Read(cmd, read_len) => (cmd, cmd.len() + read_len),
+            };
+            let trimmed = cmd.len() - cmd.iter().rev().take_while(|b| **b == 0).count();
+            (&cmd[..trimmed], total)
+        })
+        .collect()
+}
+
 impl PartialEq for TestFixture {
     fn eq(&self, other: &Self) -> bool {
-        self.ops == other.ops
+        canonical(&self.ops) == canonical(&other.ops)
     }
 }
 impl Eq for TestFixture {}
