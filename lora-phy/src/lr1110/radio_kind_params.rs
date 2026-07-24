@@ -419,6 +419,21 @@ impl FallbackMode {
     }
 }
 
+/// Mode the chip waits in between the two activities of AutoTxRx
+#[derive(Clone, Copy)]
+pub enum IntermediaryMode {
+    Sleep = 0x00,
+    StandbyRc = 0x01,
+    StandbyXosc = 0x02,
+    Fs = 0x03,
+}
+
+impl IntermediaryMode {
+    pub fn value(self) -> u8 {
+        self as u8
+    }
+}
+
 // =============================================================================
 // GFSK Types and Constants (from SWDR001 lr11xx_radio.c/h)
 // =============================================================================
@@ -709,12 +724,14 @@ pub struct SleepParams {
 
 impl SleepParams {
     pub fn value(self) -> u8 {
+        // LR11xx SetSleep config: bit 0 = warm start (retention), bit 1 =
+        // wake-up on RTC timeout — not the SX126x bit layout
         let mut val = 0u8;
         if self.warm_start {
-            val |= 0x04;
+            val |= 0x01;
         }
         if self.rtc_wakeup {
-            val |= 0x01;
+            val |= 0x02;
         }
         val
     }
