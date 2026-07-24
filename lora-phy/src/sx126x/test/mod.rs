@@ -4,7 +4,7 @@
 mod emulator;
 mod fixtures;
 use emulator::{get_emulated_sx1261, Chip, Mode};
-use fixtures::{get_sx126x, Delayer, TestFixture};
+use fixtures::{get_sx1262, get_sx126x, Delayer, TestFixture};
 
 use crate::mod_params::{RadioMode, RxMode};
 use crate::mod_traits::RadioKind;
@@ -12,8 +12,8 @@ use crate::LoRa;
 use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 use smtc_modem_cores::sx126x::{
     sx126x_cad_exit_modes_e, sx126x_cad_params_t, sx126x_cad_symbs_e, sx126x_lora_bw_e, sx126x_lora_cr_e,
-    sx126x_lora_pkt_len_modes_e, sx126x_lora_sf_e, sx126x_mod_params_lora_t, sx126x_pkt_params_lora_t,
-    sx126x_standby_cfgs_e, Context, SleepCfg,
+    sx126x_lora_pkt_len_modes_e, sx126x_lora_sf_e, sx126x_mod_params_lora_t, sx126x_pa_cfg_params_t,
+    sx126x_pkt_params_lora_t, sx126x_ramp_time_e, sx126x_standby_cfgs_e, Context, SleepCfg,
 };
 
 fn reference() -> Context<TestFixture> {
@@ -346,6 +346,97 @@ async fn test_tx_continuous_wave() {
     reference.set_tx_cw();
     let mut sx1261 = get_sx126x();
     sx1261.set_tx_continuous_wave_mode().await.unwrap();
+    assert_eq!(sx1261.take_spi(), reference.inner);
+}
+
+/// Reference-side mirror of one row of datasheet Table 13-21 (PA Operating
+/// Modes with Optimal Settings): SetPaConfig values + the SetTxParams power
+/// the chip should be handed for a requested dBm. The table itself lives in
+/// our driver; SWL2001 leaves it to the BSP layer, so the C driver is fed
+/// these values and verifies the command encoding around them.
+fn reference_tx_power(
+    reference: &mut Context<TestFixture>,
+    pa_duty_cycle: u8,
+    hp_max: u8,
+    device_sel: u8,
+    tx_power: i8,
+    ramp: sx126x_ramp_time_e,
+) {
+    reference.set_pa_cfg(&sx126x_pa_cfg_params_t {
+        pa_duty_cycle,
+        hp_max,
+        device_sel,
+        pa_lut: 0x01,
+    });
+    reference.set_tx_params(tx_power, ramp);
+}
+
+#[tokio::test]
+async fn test_tx_power_sx1261() {
+    // (requested dBm, paDutyCycle, hpMax, SetTxParams power)
+    // -30 clamps to the low-power PA floor of -17
+    let cases = [
+        (15i32, 0x06u8, 0x00u8, 14i8),
+        (14, 0x04, 0x00, 14),
+        (10, 0x01, 0x00, 13),
+        (0, 0x01, 0x00, 3),
+        (-17, 0x01, 0x00, -14),
+        (-30, 0x01, 0x00, -14),
+    ];
+    for (dbm, duty, hp_max, tx_power) in cases {
+        let mut reference = reference();
+        reference_tx_power(
+            &mut reference,
+            duty,
+            hp_max,
+            1, // device_sel: SX1261
+            tx_power,
+            sx126x_ramp_time_e::SX126X_RAMP_40_US,
+        );
+        let mut sx1261 = get_sx126x();
+        sx1261.set_tx_power_and_ramp_time(dbm, None, true).await.unwrap();
+        assert_eq!(sx1261.take_spi(), reference.inner, "{dbm} dBm");
+    }
+}
+
+#[tokio::test]
+async fn test_tx_power_sx1262() {
+    // The high-power path first applies the TX clamp workaround (datasheet
+    // §15.2), matching the reference's cfg_tx_clamp read-modify-write.
+    // 30 clamps to 22; 14 keeps txp per the STM32 reference driver (our
+    // driver's comment documents the datasheet table disagreement there).
+    let cases = [
+        (22i32, 0x04u8, 0x07u8, 22i8),
+        (30, 0x04, 0x07, 22),
+        (20, 0x03, 0x05, 22),
+        (17, 0x02, 0x03, 22),
+        (14, 0x02, 0x02, 14),
+        (-9, 0x02, 0x02, -9),
+    ];
+    for (dbm, duty, hp_max, tx_power) in cases {
+        let mut reference = reference();
+        reference.cfg_tx_clamp();
+        reference_tx_power(
+            &mut reference,
+            duty,
+            hp_max,
+            0, // device_sel: SX1262
+            tx_power,
+            sx126x_ramp_time_e::SX126X_RAMP_40_US,
+        );
+        let mut sx1262 = get_sx1262();
+        sx1262.set_tx_power_and_ramp_time(dbm, None, true).await.unwrap();
+        assert_eq!(sx1262.take_spi(), reference.inner, "{dbm} dBm");
+    }
+}
+
+#[tokio::test]
+async fn test_tx_power_init_ramp() {
+    // Outside TX prep (e.g. at init) the driver uses the slower 200 us ramp
+    let mut reference = reference();
+    reference_tx_power(&mut reference, 0x01, 0x00, 1, 3, sx126x_ramp_time_e::SX126X_RAMP_200_US);
+    let mut sx1261 = get_sx126x();
+    sx1261.set_tx_power_and_ramp_time(0, None, false).await.unwrap();
     assert_eq!(sx1261.take_spi(), reference.inner);
 }
 
