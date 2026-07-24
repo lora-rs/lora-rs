@@ -81,6 +81,14 @@ async fn compare_mod_params(sf: SpreadingFactor, c_sf: u32, bw: Bandwidth, c_bw:
         ldro,
     });
 
+    // errata 2.3 registers: SWL2001 writes these on every SetRx, ours with
+    // the modulation config; mirror the same end state (none of these
+    // bandwidths are 500 kHz, so AutomaticIFOn clears + manual IF 0x40)
+    let detect_optimize = reference_radio.spi().reg(0x31);
+    reference_radio.write_register(0x31, &[detect_optimize & 0x7F]);
+    reference_radio.write_register(0x2F, &[0x40]);
+    reference_radio.write_register(0x30, &[0x00]);
+
     let mut radio = get_sx1276();
     let params = radio.create_modulation_params(sf, bw, cr, 868_100_000).unwrap();
     radio.set_modulation_params(&params).await.unwrap();
@@ -246,6 +254,11 @@ async fn test_tx_flow() {
         cr: sys::sx127x_lora_cr_e_SX127X_LORA_CR_4_5,
         ldro: 0,
     });
+    // errata 2.3 mirror (125 kHz): AutomaticIFOn off + manual IF
+    let detect_optimize = reference_radio.spi().reg(0x31);
+    reference_radio.write_register(0x31, &[detect_optimize & 0x7F]);
+    reference_radio.write_register(0x2F, &[0x40]);
+    reference_radio.write_register(0x30, &[0x00]);
     reference_radio.set_lora_pkt_params(&sys::sx127x_lora_pkt_params_t {
         preamble_len_in_symb: 8,
         header_type: sys::sx127x_lora_pkt_len_modes_e_SX127X_LORA_PKT_EXPLICIT,
@@ -433,4 +446,35 @@ async fn test_bw500_sensitivity_errata() {
     assert_eq!(radio.take_spi(), *reference_radio.spi());
     assert_eq!(reference_radio.spi().reg(0x36), 0x02);
     assert_eq!(reference_radio.spi().reg(0x3A), 0x64);
+}
+
+#[tokio::test]
+async fn test_spurious_rx_errata_round_trip() {
+    // Errata 2.3 mirrors SWL2001's sx1276_fix_lora_rx_spurious_signal:
+    // 125 kHz clears AutomaticIFOn and programs a manual IF of 0x40/0x00;
+    // going back to 500 kHz must re-set AutomaticIFOn. The reference applies
+    // this inside set_rx; ours with the modulation config — same end state.
+    let mut radio = get_sx1276();
+    let params_125 = radio
+        .create_modulation_params(SpreadingFactor::_7, Bandwidth::_125KHz, CodingRate::_4_5, 868_100_000)
+        .unwrap();
+    let params_500 = radio
+        .create_modulation_params(SpreadingFactor::_7, Bandwidth::_500KHz, CodingRate::_4_5, 868_100_000)
+        .unwrap();
+
+    radio.set_modulation_params(&params_125).await.unwrap();
+    assert_eq!(
+        radio.spi_mut().reg(0x31) & 0x80,
+        0,
+        "AutomaticIFOn must clear at 125 kHz"
+    );
+    assert_eq!(radio.spi_mut().reg(0x2F), 0x40);
+    assert_eq!(radio.spi_mut().reg(0x30), 0x00);
+
+    radio.set_modulation_params(&params_500).await.unwrap();
+    assert_eq!(
+        radio.spi_mut().reg(0x31) & 0x80,
+        0x80,
+        "AutomaticIFOn must re-arm at 500 kHz"
+    );
 }

@@ -182,6 +182,8 @@ pub enum Register {
     RegFreqErrorMid = 0x29,
     RegFreqErrorLsb = 0x2a,
     RegRssiWideband = 0x2c,
+    RegIfFreq1 = 0x2f,
+    RegIfFreq2 = 0x30,
     RegDetectionOptimize = 0x31,
     RegInvertiq = 0x33,
     RegHighBwOptimize1 = 0x36,
