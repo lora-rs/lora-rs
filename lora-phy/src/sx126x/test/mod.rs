@@ -13,7 +13,7 @@ use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 use smtc_modem_cores::sx126x::{
     sx126x_cad_exit_modes_e, sx126x_cad_params_t, sx126x_cad_symbs_e, sx126x_lora_bw_e, sx126x_lora_cr_e,
     sx126x_lora_pkt_len_modes_e, sx126x_lora_sf_e, sx126x_mod_params_lora_t, sx126x_pa_cfg_params_t,
-    sx126x_pkt_params_lora_t, sx126x_ramp_time_e, sx126x_standby_cfgs_e, Context, SleepCfg,
+    sx126x_pkt_params_lora_t, sx126x_pkt_types_e, sx126x_ramp_time_e, sx126x_standby_cfgs_e, Context, SleepCfg,
 };
 
 fn reference() -> Context<TestFixture> {
@@ -521,4 +521,41 @@ async fn test_emulated_sleep_and_wake() {
         assert_eq!(m.tx_log.len(), 1);
         assert_eq!(m.tx_log[0].payload, b"wake");
     });
+}
+
+#[tokio::test]
+async fn test_init_lora_composed() {
+    // The whole init_lora sequence against the reference calls chained in
+    // the same order. Writes-only comparison, same as the single sync-word
+    // test: the C sync word setter is a read-modify-write where ours writes
+    // the known reset-derived values directly, so the read halves differ by
+    // design (primed with the reset values, the write halves converge).
+    const RETENTION_READ: [u8; 4] = [0x1D, 0x02, 0x9F, 0x00];
+    const RETENTION_AFTER_RX_GAIN: [u8; 9] = [1, 0x08, 0xAC, 0, 0, 0, 0, 0, 0];
+
+    let mut reference_radio = reference();
+    reference_radio.set_dio2_as_rf_sw_ctrl(true);
+    reference_radio.set_pkt_type(sx126x_pkt_types_e::SX126X_PKT_TYPE_LORA);
+    reference_radio
+        .inner
+        .prime_read(&[0x1D, 0x07, 0x40, 0x00], &[0x14, 0x24]);
+    reference_radio.set_lora_sync_word(0x34);
+    reference_radio.set_buffer_base_address(0, 0);
+    // Retention list, mirroring ours' one-register-at-a-time factoring; the
+    // queued second response lets the second add see the first (the batch
+    // form add_registers_to_retention_list(&[both]) would collapse this to
+    // one read + one write — a different transaction count by design)
+    reference_radio.inner.prime_read(&RETENTION_READ, &[0u8; 9]);
+    reference_radio.add_registers_to_retention_list(&[0x08AC]);
+    reference_radio
+        .inner
+        .prime_read(&RETENTION_READ, &RETENTION_AFTER_RX_GAIN);
+    reference_radio.add_registers_to_retention_list(&[0x0889]);
+
+    let mut sx1261 = get_sx126x();
+    sx1261.spi_mut().prime_read(&RETENTION_READ, &[0u8; 9]);
+    sx1261.spi_mut().prime_read(&RETENTION_READ, &RETENTION_AFTER_RX_GAIN);
+    sx1261.init_lora(0x34).await.unwrap();
+
+    assert_eq!(sx1261.take_spi().writes(), reference_radio.inner.writes());
 }
