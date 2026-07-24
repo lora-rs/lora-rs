@@ -1,4 +1,4 @@
-use crate::sx126x::{Config, Sx1261, Sx126x};
+use crate::sx126x::{Config, Sx1261, Sx1262, Sx126x};
 pub use crate::test_fixtures::{Delayer, DummyVariant, SpiError};
 use embedded_hal::spi::Operation;
 use embedded_hal_async::spi::SpiDevice;
@@ -134,6 +134,19 @@ pub fn get_sx126x() -> Sx126x<TestFixture, DummyVariant, Sx1261> {
         DummyVariant,
         Config {
             chip: Sx1261,
+            tcxo_ctrl: None,
+            use_dcdc: false,
+            rx_boost: true,
+        },
+    )
+}
+
+pub fn get_sx1262() -> Sx126x<TestFixture, DummyVariant, Sx1262> {
+    Sx126x::new(
+        TestFixture::new(),
+        DummyVariant,
+        Config {
+            chip: Sx1262,
             tcxo_ctrl: None,
             use_dcdc: false,
             rx_boost: true,
