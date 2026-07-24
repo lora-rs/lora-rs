@@ -479,15 +479,20 @@ where
                     }
                     HIGH_POWER_MIN..=14 => {
                         self.set_pa_config(0x02, 0x02, DeviceSel::HighPowerPA).await?;
-                        // The vendors disagree on this row. Datasheet Table
-                        // 13-21 (through Rev 2.2) says SetTxParams +22 with
-                        // this PA config; ST's STM32CubeWL driver — an SX126x
-                        // die inside the STM32WL — commands +14 with the same
-                        // config, while agreeing with the datasheet on every
-                        // other row. We follow ST. Settling which is right
-                        // for a discrete SX1262 needs a power measurement.
+                        // The only row where ST's table for the STM32WL (an
+                        // SX126x die integrated into ST's part) differs from
+                        // datasheet Table 13-21: same PA config, but ST
+                        // commands the target dBm directly where the
+                        // datasheet interpolates from its +22 setpoint
+                        // (table row: 14 dBm => SetTxParams +22, so add 8).
+                        // Each part takes the table it was characterized
+                        // with.
                         // https://github.com/STMicroelectronics/STM32CubeWL/blob/139e8d28bcec6af78dec8b52a9b9f9057868cc2e/Middlewares/Third_Party/SubGHz_Phy/stm32_radio_driver/radio_driver.c#L675
-                        tx_params_power = txp as u8;
+                        tx_params_power = if self.config.chip.use_st_power_table() {
+                            txp as u8
+                        } else {
+                            (txp + 8) as u8
+                        };
                     }
                     _ => {
                         unreachable!("Invalid output power value for high power PA!")

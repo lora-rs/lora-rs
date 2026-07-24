@@ -403,15 +403,17 @@ async fn test_tx_power_sx1261() {
 async fn test_tx_power_sx1262() {
     // The high-power path first applies the TX clamp workaround (datasheet
     // §15.2), matching the reference's cfg_tx_clamp read-modify-write.
-    // 30 clamps to 22; 14 keeps txp per the STM32 reference driver (our
-    // driver's comment documents the datasheet table disagreement there).
+    // 30 clamps to 22. The discrete SX1262 takes datasheet Table 13-21
+    // throughout: the 14 dBm-and-below rows keep PA config 0x02/0x02 and
+    // interpolate SetTxParams from the +22 setpoint (txp + 8); the ST table
+    // for that row belongs to the Stm32wl variant only.
     let cases = [
         (22i32, 0x04u8, 0x07u8, 22i8),
         (30, 0x04, 0x07, 22),
         (20, 0x03, 0x05, 22),
         (17, 0x02, 0x03, 22),
-        (14, 0x02, 0x02, 14),
-        (-9, 0x02, 0x02, -9),
+        (14, 0x02, 0x02, 22),
+        (-9, 0x02, 0x02, -1),
     ];
     for (dbm, duty, hp_max, tx_power) in cases {
         let mut reference = reference();
@@ -602,4 +604,46 @@ async fn test_emulated_rx_single_timeout() {
     chip.inject_rx(b"after-timeout", -90, 2);
     let (len, _) = lora.rx(&rx_pkt_params, &mut buf).await.unwrap();
     assert_eq!(&buf[..len as usize], b"after-timeout");
+}
+
+#[tokio::test]
+async fn test_tx_power_stm32wl() {
+    // The Stm32wl variant takes ST's table: identical to the datasheet on
+    // every row except 14 dBm and below, where ST commands the target dBm
+    // directly with the same 0x02/0x02 PA config (STM32CubeWL
+    // SUBGRF_SetTxParams). Each part uses the table it was characterized
+    // with — the STM32WL is an SX126x die integrated into ST's package.
+    use crate::sx126x::Stm32wl;
+    let cases = [
+        (22i32, 0x04u8, 0x07u8, 22i8),
+        (17, 0x02, 0x03, 22),
+        (14, 0x02, 0x02, 14),
+        (-9, 0x02, 0x02, -9),
+    ];
+    for (dbm, duty, hp_max, tx_power) in cases {
+        let mut reference = reference();
+        reference.cfg_tx_clamp();
+        reference_tx_power(
+            &mut reference,
+            duty,
+            hp_max,
+            0, // device_sel: high-power PA
+            tx_power,
+            sx126x_ramp_time_e::SX126X_RAMP_40_US,
+        );
+        let mut radio = crate::sx126x::Sx126x::new(
+            fixtures::TestFixture::new(),
+            fixtures::DummyVariant,
+            crate::sx126x::Config {
+                chip: Stm32wl {
+                    use_high_power_pa: true,
+                },
+                tcxo_ctrl: None,
+                use_dcdc: false,
+                rx_boost: true,
+            },
+        );
+        radio.set_tx_power_and_ramp_time(dbm, None, true).await.unwrap();
+        assert_eq!(radio.take_spi(), reference.inner, "{dbm} dBm");
+    }
 }
