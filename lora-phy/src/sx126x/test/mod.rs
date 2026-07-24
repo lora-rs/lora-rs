@@ -407,9 +407,12 @@ async fn test_tx_power_sx1262() {
     // throughout: the 14 dBm-and-below rows keep PA config 0x02/0x02 and
     // interpolate SetTxParams from the +22 setpoint (txp + 8); the ST table
     // for that row belongs to the Stm32wl variant only.
+    // 21 interpolates within the +22 row (the old range code over-commanded
+    // 22 for a 21 dBm request)
     let cases = [
         (22i32, 0x04u8, 0x07u8, 22i8),
         (30, 0x04, 0x07, 22),
+        (21, 0x04, 0x07, 21),
         (20, 0x03, 0x05, 22),
         (17, 0x02, 0x03, 22),
         (14, 0x02, 0x02, 22),
