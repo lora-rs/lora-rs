@@ -25,20 +25,16 @@ const SX1276_RSSI_OFFSET_LF: i16 = -164;
 const SX1276_RSSI_OFFSET_HF: i16 = -157;
 const SX1276_RF_MID_BAND_THRESH: u32 = 525_000_000;
 
-// Frequency synthesizer step for frequency calculation (Hz)
-// FXOSC (32 MHz) * 1000000 (Hz/MHz) / 524288 (2^19)
-const SCALE: u32 = 8;
-const STEP_SCALED: u32 = 32_000_000 >> (19 - SCALE);
-
+// Frequency synthesizer step: FXOSC (32 MHz) / 524288 (2^19) = 61.03515625 Hz
 fn freq_to_pll_step(freq_in_hz: u32) -> u32 {
-    // We can use simplified integer formula which gives the same
-    // value for whole and half Mhz values ((i.e. 868.0, 868.5, 869, ...)
-    // `(freq_in_hz as f64 / 61.03515625) as u32`
-    (freq_in_hz / STEP_SCALED) << SCALE
+    // Full-precision integer form of freq / 61.03515625. The previous
+    // truncate-then-shift shortcut zeroed the low 8 pll-step bits, putting
+    // fractional-MHz channels (868.1, 903.9, ...) up to ~15 kHz off.
+    (((freq_in_hz as u64) << 19) / 32_000_000) as u32
 }
 
 fn pll_step_to_freq(pll_step: u32) -> u32 {
-    (pll_step >> SCALE) * STEP_SCALED
+    (((pll_step as u64) * 32_000_000) >> 19) as u32
 }
 
 // RSSI requires linearization when SNR >= 0
@@ -123,6 +119,16 @@ where
     // Set the over current protection (mA) on the radio
     async fn set_ocp(&mut self, ocp_trim: OcpTrim) -> Result<(), RadioError> {
         self.write_register(Register::RegOcp, ocp_trim.value()).await
+    }
+
+    #[cfg(test)]
+    fn take_spi(self) -> SPI {
+        self.intf.spi
+    }
+
+    #[cfg(test)]
+    fn spi_mut(&mut self) -> &mut SPI {
+        &mut self.intf.spi
     }
 }
 
@@ -279,8 +285,8 @@ where
             _ => (0x03, 0x0a),
         };
         let reg_val = self.read_register(Register::RegDetectionOptimize).await?;
-        // Keep reserved bits [6:3] for RegDetectOptimize
-        let val = (reg_val & 0b0111_1000) | opt;
+        // Keep AutomaticIFOn [7] (errata 2.3) and reserved bits [6:3]
+        let val = (reg_val & 0b1111_1000) | opt;
         self.write_register(Register::RegDetectionOptimize, val).await?;
         self.write_register(Register::RegDetectionThreshold, thr).await?;
         // Spreading Factor, Bandwidth, codingrate, ldro
@@ -413,10 +419,13 @@ where
 
             let rssi_offset = C::rssi_offset(self).await?;
 
+            // Section 5.5.5: the 16/15 linearization applies to the raw
+            // packet RSSI in both branches (the reference driver and
+            // LoRaMac-node agree; only the negative-SNR term differs)
             if snr >= 0 {
                 rssi_offset + linearize_rssi(packet_rssi)
             } else {
-                rssi_offset + (packet_rssi as i16) + snr
+                rssi_offset + linearize_rssi(packet_rssi) + snr
             }
         };
 
