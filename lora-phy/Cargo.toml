@@ -35,5 +35,5 @@ lorawan-radio = ["dep:lorawan-device"]
 lorawan-device = { path = "../lorawan-device" }
 # Bindings to Semtech's reference driver (SWL2001), used to test our
 # implementation against the vendor's SPI byte stream
-smtc-modem-cores = { git = "https://github.com/lora-rs/smtc-modem-cores", rev = "70c6e87" }
+smtc-modem-cores = { git = "https://github.com/lora-rs/smtc-modem-cores", rev = "42d8559" }
 tokio = { version = "1", features = ["rt", "macros"] }

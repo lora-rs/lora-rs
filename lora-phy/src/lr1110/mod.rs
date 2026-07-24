@@ -5,6 +5,8 @@
 #![allow(missing_docs)]
 
 pub mod radio_kind_params;
+#[cfg(test)]
+mod test;
 
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
