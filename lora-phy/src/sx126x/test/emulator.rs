@@ -3,6 +3,7 @@
 //! `Chip` handle to inject received packets and inspect transmitted ones.
 use crate::mod_params::RadioError;
 use crate::mod_traits::InterfaceVariant;
+use crate::sx126x::radio_kind_params::{IrqMask, OpCode};
 use crate::sx126x::{Config, Sx1261, Sx126x};
 use crate::test_fixtures::SpiError;
 use embedded_hal::spi::Operation;
@@ -12,30 +13,34 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::vec::Vec;
 
-// Opcodes as the chip sees them (subset the driver uses)
-const WRITE_REGISTER: u8 = 0x0D;
-const READ_REGISTER: u8 = 0x1D;
-const WRITE_BUFFER: u8 = 0x0E;
-const READ_BUFFER: u8 = 0x1E;
-const SET_SLEEP: u8 = 0x84;
-const SET_STANDBY: u8 = 0x80;
-const SET_TX: u8 = 0x83;
-const SET_RX: u8 = 0x82;
-const SET_RF_FREQUENCY: u8 = 0x86;
-const SET_PACKET_PARAMS: u8 = 0x8C;
-const SET_BUFFER_BASE_ADDRESS: u8 = 0x8F;
-const CFG_DIO_IRQ: u8 = 0x08;
-const GET_IRQ_STATUS: u8 = 0x12;
-const CLR_IRQ_STATUS: u8 = 0x02;
-const GET_RX_BUFFER_STATUS: u8 = 0x13;
-const GET_PACKET_STATUS: u8 = 0x14;
-const SET_CAD: u8 = 0xC5;
+// Dispatch constants derived from the driver's enums (enum variants can't
+// be `match` patterns against a raw byte, consts can). The byte values
+// themselves are pinned independently by the SWL2001 comparison suite, so
+// deriving from the driver here is not circular — the emulator's job is
+// behavior, not encoding.
+const WRITE_REGISTER: u8 = OpCode::WriteRegister as u8;
+const READ_REGISTER: u8 = OpCode::ReadRegister as u8;
+const WRITE_BUFFER: u8 = OpCode::WriteBuffer as u8;
+const READ_BUFFER: u8 = OpCode::ReadBuffer as u8;
+const SET_SLEEP: u8 = OpCode::SetSleep as u8;
+const SET_STANDBY: u8 = OpCode::SetStandby as u8;
+const SET_TX: u8 = OpCode::SetTx as u8;
+const SET_RX: u8 = OpCode::SetRx as u8;
+const SET_RF_FREQUENCY: u8 = OpCode::SetRFFrequency as u8;
+const SET_PACKET_PARAMS: u8 = OpCode::SetPacketParams as u8;
+const SET_BUFFER_BASE_ADDRESS: u8 = OpCode::SetBufferBaseAddress as u8;
+const CFG_DIO_IRQ: u8 = OpCode::CfgDIOIrq as u8;
+const GET_IRQ_STATUS: u8 = OpCode::GetIrqStatus as u8;
+const CLR_IRQ_STATUS: u8 = OpCode::ClrIrqStatus as u8;
+const GET_RX_BUFFER_STATUS: u8 = OpCode::GetRxBufferStatus as u8;
+const GET_PACKET_STATUS: u8 = OpCode::GetPacketStatus as u8;
+const SET_CAD: u8 = OpCode::SetCAD as u8;
 
-const IRQ_TX_DONE: u16 = 0x0001;
-const IRQ_RX_DONE: u16 = 0x0002;
-const IRQ_CAD_DONE: u16 = 0x0080;
-const IRQ_CAD_DETECTED: u16 = 0x0100;
-const IRQ_RX_TX_TIMEOUT: u16 = 0x0200;
+const IRQ_TX_DONE: u16 = IrqMask::TxDone as u16;
+const IRQ_RX_DONE: u16 = IrqMask::RxDone as u16;
+const IRQ_CAD_DONE: u16 = IrqMask::CADDone as u16;
+const IRQ_CAD_DETECTED: u16 = IrqMask::CADActivityDetected as u16;
+const IRQ_RX_TX_TIMEOUT: u16 = IrqMask::RxTxTimeout as u16;
 
 // No Tx variant: the model completes transmissions instantly inside SET_TX,
 // so the chip is never observable mid-transmit
