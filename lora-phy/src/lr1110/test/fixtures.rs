@@ -1,9 +1,7 @@
 use crate::lr1110::radio_kind_params::PaSelection;
 use crate::lr1110::{Config, Lr1110};
-use crate::mod_params::RadioError;
-use crate::mod_traits::InterfaceVariant;
-use embedded_hal::spi::{ErrorKind, Operation};
-use embedded_hal_async::delay::DelayNs;
+pub use crate::test_fixtures::{Delayer, DummyVariant, SpiError};
+use embedded_hal::spi::Operation;
 use embedded_hal_async::spi::SpiDevice;
 use std::collections::{HashMap, VecDeque};
 
@@ -105,15 +103,8 @@ impl TestFixture {
     }
 }
 
-#[derive(Debug)]
-pub enum Error {}
-impl embedded_hal::spi::Error for Error {
-    fn kind(&self) -> ErrorKind {
-        todo!()
-    }
-}
 impl embedded_hal::spi::ErrorType for TestFixture {
-    type Error = Error;
+    type Error = SpiError;
 }
 
 impl embedded_hal::spi::SpiDevice for TestFixture {
@@ -209,32 +200,4 @@ pub fn get_lr1110_boosted() -> Lr1110<TestFixture, DummyVariant> {
             rx_boost: true,
         },
     )
-}
-
-pub struct Delayer;
-impl DelayNs for Delayer {
-    async fn delay_ns(&mut self, _ns: u32) {}
-}
-
-pub struct DummyVariant;
-
-impl InterfaceVariant for DummyVariant {
-    async fn reset(&mut self, _delay: &mut impl DelayNs) -> Result<(), RadioError> {
-        Ok(())
-    }
-    async fn wait_on_busy(&mut self) -> Result<(), RadioError> {
-        Ok(())
-    }
-    async fn await_irq(&mut self) -> Result<(), RadioError> {
-        Ok(())
-    }
-    async fn enable_rf_switch_rx(&mut self) -> Result<(), RadioError> {
-        Ok(())
-    }
-    async fn enable_rf_switch_tx(&mut self) -> Result<(), RadioError> {
-        Ok(())
-    }
-    async fn disable_rf_switch(&mut self) -> Result<(), RadioError> {
-        Ok(())
-    }
 }
