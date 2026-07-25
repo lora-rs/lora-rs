@@ -28,6 +28,11 @@ pub struct TestFixture {
     fifo_read: VecDeque<u8>,
 }
 
+// Deliberately hardcoded (datasheet addresses), NOT derived from the
+// driver's Register enum: the special-case handling below keys off these,
+// and FIFO/IRQ traffic is excluded from the register-file equality. If a
+// driver enum value went wrong and these followed it, the special-casing
+// would absorb the misdirected write instead of the comparison catching it.
 const REG_FIFO: u8 = 0x00;
 const REG_OP_MODE: u8 = 0x01;
 const REG_IRQ_FLAGS: u8 = 0x12;
