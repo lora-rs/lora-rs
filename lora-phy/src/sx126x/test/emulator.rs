@@ -11,6 +11,7 @@ use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::SpiDevice;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::vec::Vec;
 
 // Dispatch constants derived from the driver's enums (enum variants can't
 // be `match` patterns against a raw byte, consts can). The byte values

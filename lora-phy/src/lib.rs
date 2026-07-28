@@ -1,6 +1,4 @@
-// std is allowed under test so the sx126x tests can compare against the
-// reference driver bindings, which are std-only
-#![cfg_attr(not(test), no_std)]
+#![no_std]
 #![deny(rust_2018_idioms)]
 #![warn(missing_docs)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
@@ -33,6 +31,9 @@ pub mod mod_traits;
 pub mod sx126x;
 /// Specific implementation to support Semtech Sx127x chips
 pub mod sx127x;
+#[cfg(test)]
+#[macro_use]
+extern crate std;
 #[cfg(test)]
 pub(crate) mod test_fixtures;
 

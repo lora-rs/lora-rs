@@ -3,6 +3,7 @@ pub use crate::test_fixtures::{Delayer, DummyVariant, SpiError};
 use embedded_hal::spi::Operation;
 use embedded_hal_async::spi::SpiDevice;
 use std::collections::{HashMap, VecDeque};
+use std::vec::Vec;
 
 /// Records every SPI operation so the byte stream of our driver can be
 /// compared against the byte stream of Semtech's reference driver. Implements

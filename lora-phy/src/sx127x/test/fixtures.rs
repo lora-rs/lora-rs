@@ -3,6 +3,7 @@ pub use crate::test_fixtures::{Delayer, DummyVariant, SpiError};
 use embedded_hal::spi::Operation;
 use embedded_hal_async::spi::SpiDevice;
 use std::collections::{BTreeMap, VecDeque};
+use std::vec::Vec;
 
 /// Register-file SPI fixture for the sx127x.
 ///
