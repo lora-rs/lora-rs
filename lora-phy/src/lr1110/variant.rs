@@ -1,3 +1,5 @@
+use super::radio_kind_params::SetDioAsRfSwitchParams;
+
 /// LR1110 chip variant trait
 ///
 /// This trait defines the interface for different LR1110 chip variants (LR1110, LR1120, LR1121)
@@ -14,12 +16,22 @@ pub trait Lr1110Variant {
     /// Returns the PA type to use (LP, HP, or HF)
     fn get_pa_selection(&self) -> PaSelection;
 
-    /// Whether to use DIO2 as RF switch control
+    /// Whether to use DIO as RF switch control
     ///
-    /// When true, DIO2 is automatically configured to control the RF switch.
-    /// Default implementation returns true.
-    fn use_dio2_as_rfswitch(&self) -> bool {
-        true
+    /// The default keeps the previous behavior: only DIO5 (bit 0) is enabled, so
+    /// the DIO6 bit set in `tx_lp`/`tx_hp` is configured but never driven. Boards
+    /// that switch TX via DIO6 need to override this and add bit 1 to `enable`.
+    fn dio_as_rf_switch(&self) -> Option<SetDioAsRfSwitchParams> {
+        Some(SetDioAsRfSwitchParams {
+            enable: 0x01,
+            standby: 0x00,
+            rx: 0x01,
+            tx_lp: 0x02,
+            tx_hp: 0x02,
+            tx_hf: 0x00,
+            gnss: 0x00,
+            wifi: 0x00,
+        })
     }
 
     /// Get the power amplifier supply source

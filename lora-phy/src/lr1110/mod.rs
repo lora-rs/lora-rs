@@ -435,10 +435,15 @@ where
     /// Configure DIO pins as RF switch control
     ///
     /// This configures which DIO pins (DIO5-DIO10) are set high for each radio mode.
-    /// Each parameter is a 6-bit bitmask where bit 0 = DIO5, bit 5 = DIO10.
+    /// Each parameter is a 5-bit bitmask
+    /// bit 0 = rfsw0 (DIO5)
+    /// bit 1 = rfsw1 (DIO6)
+    /// bit 2 = rfsw2 (DIO7)
+    /// bit 3 = rfsw3 (DIO8)
+    /// bit 4 = rfsw4 (DIO10)
     ///
     /// # Arguments
-    /// * `enable` - Enable RF switch control (true to enable)
+    /// * `enable` - DIO mask for enable
     /// * `standby` - DIO mask for standby mode
     /// * `rx` - DIO mask for sub-GHz RX mode
     /// * `tx` - DIO mask for sub-GHz TX mode
@@ -447,35 +452,19 @@ where
     /// * `gnss` - DIO mask for GNSS mode
     /// * `wifi` - DIO mask for WiFi mode
     ///
-    /// # Example
-    /// ```ignore
-    /// // Configure DIO8 (bit 3 = 0x08) for WiFi LNA enable
-    /// radio.set_dio_as_rf_switch(true, 0x00, 0x01, 0x02, 0x02, 0x00, 0x00, 0x08).await?;
-    /// ```
-    #[allow(clippy::too_many_arguments)]
-    pub async fn set_dio_as_rf_switch(
-        &mut self,
-        enable: bool,
-        standby: u8,
-        rx: u8,
-        tx: u8,
-        tx_hp: u8,
-        tx_hf: u8,
-        gnss: u8,
-        wifi: u8,
-    ) -> Result<(), RadioError> {
+    pub async fn set_dio_as_rf_switch(&mut self, c: SetDioAsRfSwitchParams) -> Result<(), RadioError> {
         let opcode = SystemOpCode::SetDioAsRfSwitch.bytes();
         let cmd = [
             opcode[0],
             opcode[1],
-            if enable { 0x01 } else { 0x00 },
-            standby,
-            rx,
-            tx,
-            tx_hp,
-            tx_hf,
-            gnss,
-            wifi,
+            c.enable & 0x1f,
+            c.standby & 0x1f,
+            c.rx & 0x1f,
+            c.tx_lp & 0x1f,
+            c.tx_hp & 0x1f,
+            c.tx_hf & 0x1f,
+            c.gnss & 0x1f,
+            c.wifi & 0x1f,
         ];
         self.write_command(&cmd).await
     }
@@ -1316,22 +1305,8 @@ where
         // Initialize system (DC-DC, TCXO, calibration)
         self.init_system().await?;
 
-        // DIO2 acting as RF Switch (if configured in variant)
-        if self.config.chip.use_dio2_as_rfswitch() {
-            // LR1110 uses SetDioAsRfSwitch command with expanded configuration
-            // For now, use simple configuration
-            let opcode = SystemOpCode::SetDioAsRfSwitch.bytes();
-            let cmd = [
-                opcode[0], opcode[1], 0x01, // enable
-                0x00, // standby
-                0x01, // rx
-                0x02, // tx
-                0x02, // tx_hp
-                0x00, // tx_hf
-                0x00, // gnss
-                0x00, // wifi
-            ];
-            self.write_command(&cmd).await?;
+        if let Some(cfg) = self.config.chip.dio_as_rf_switch() {
+            self.set_dio_as_rf_switch(cfg).await?;
         }
 
         // Enable LoRa packet engine

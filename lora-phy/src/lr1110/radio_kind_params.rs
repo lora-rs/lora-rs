@@ -1347,3 +1347,31 @@ pub fn delay_between_last_bit_sent_and_rx_done_in_us(spreading_factor: Spreading
 pub fn delay_between_last_bit_sent_and_tx_done_in_us(ramp_time: RampTime) -> u32 {
     ramp_time.to_us() + TX_DONE_IRQ_PROCESSING_TIME_IN_US
 }
+
+/// Parameters for SetDioAsRfSwitch command
+/// every field is a bitfield of the corresponding DIO
+/// bit 0 = rfsw0 (DIO5)
+/// bit 1 = rfsw1 (DIO6)
+/// bit 2 = rfsw2 (DIO7)
+/// bit 3 = rfsw3 (DIO8)
+/// bit 4 = rfsw4 (DIO10)
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct SetDioAsRfSwitchParams {
+    /// indicates which switch is used
+    pub enable: u8,
+    /// DIO states when in standby mode
+    pub standby: u8,
+    /// DIO states when in rx mode
+    pub rx: u8,
+    /// DIO states when in low power tx mode
+    pub tx_lp: u8,
+    /// DIO states when in high power tx mode
+    pub tx_hp: u8,
+    /// DIO states when in 2.4 GHz tx mode
+    pub tx_hf: u8,
+    /// DIO states when in GNSS scanning mode
+    pub gnss: u8,
+    /// DIO states when in Wi-Fi scanning mode
+    pub wifi: u8,
+}
