@@ -75,18 +75,28 @@ where
         self.iv.wait_on_busy().await?;
 
         // Step 3: Read response in separate transaction
-        // First byte is Stat1 (discarded), followed by actual data
-        // Read stat1 and data in a single SPI transaction using transfer
+        // First byte is Stat1, followed by actual data.
         let mut stat1 = [0u8; 1];
         let mut ops = [Operation::Read(&mut stat1), Operation::Read(read_buffer)];
         self.spi.transaction(&mut ops).await.map_err(|_| SPI)?;
 
         trace!(
-            "read: addr={=[u8]:02x}, len={}, data={=[u8]:02x}",
+            "read: addr={=[u8]:02x}, len={}, stat1={:02x}, data={=[u8]:02x}",
             write_buffer,
             read_buffer.len(),
+            stat1[0],
             read_buffer
         );
+
+        // Stat1 bits[3:1] encode the command status:
+        //   0 = CMD_FAIL  (command could not be executed)
+        //   1 = CMD_PERR  (wrong opcode or arguments)
+        //   2 = CMD_OK    (success)
+        //   3 = CMD_DAT   (success, data available)
+        // Anything below CMD_OK means the response data is invalid.
+        if (stat1[0] >> 1) & 0x07 < 2 {
+            return Err(RadioError::OpError(stat1[0]));
+        }
 
         Ok(())
     }
