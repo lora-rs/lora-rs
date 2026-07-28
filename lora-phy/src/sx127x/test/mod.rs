@@ -183,6 +183,18 @@ async fn test_set_lora_sync_word() {
 }
 
 #[tokio::test]
+async fn test_runtime_sync_word() {
+    for sync_word in [0x34u8, 0x12] {
+        let mut reference_radio = reference();
+        reference_radio.set_lora_sync_word(sync_word);
+
+        let mut radio = get_sx1276();
+        radio.set_lora_sync_word(sync_word).await.unwrap();
+        assert_eq!(radio.take_spi(), *reference_radio.spi(), "sync word {sync_word:#x}");
+    }
+}
+
+#[tokio::test]
 async fn test_symbol_timeout() {
     let mut reference_radio = reference();
     reference_radio.set_lora_sync_timeout(100);

@@ -157,6 +157,18 @@ async fn test_init_lora() {
 }
 
 #[tokio::test]
+async fn test_runtime_sync_word() {
+    for sync_word in [0x34u8, 0x12] {
+        let mut reference_radio = reference();
+        reference_radio.set_lora_sync_word(sync_word);
+
+        let mut radio = get_lr1110();
+        radio.set_lora_sync_word(sync_word).await.unwrap();
+        assert_eq!(radio.intf.spi, reference_radio.inner, "sync word {sync_word:#x}");
+    }
+}
+
+#[tokio::test]
 async fn test_set_tx_power_and_ramp_time_hp() {
     // High-power PA at max output
     let mut reference_radio = reference();

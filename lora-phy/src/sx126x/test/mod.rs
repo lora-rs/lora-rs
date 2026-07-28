@@ -144,6 +144,21 @@ async fn test_sync_word() {
 }
 
 #[tokio::test]
+async fn test_runtime_sync_word() {
+    // The runtime setter skips the reference's read-modify-write and writes
+    // both bytes directly; prime the reference with the reset values so both
+    // land on the same register write.
+    let mut fixture = TestFixture::new();
+    fixture.prime_read(&[0x1D, 0x07, 0x40, 0x00], &[0x14, 0x24]);
+    let mut reference = Context::new(fixture);
+    reference.set_lora_sync_word(0x34);
+
+    let mut sx1261 = get_sx126x();
+    sx1261.set_lora_sync_word(0x34).await.unwrap();
+    assert_eq!(sx1261.take_spi().writes(), reference.inner.writes());
+}
+
+#[tokio::test]
 async fn test_buffer_base_address() {
     let mut reference = reference();
     reference.set_buffer_base_address(0, 0);
