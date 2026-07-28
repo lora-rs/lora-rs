@@ -26,6 +26,9 @@ pub struct TestFixture {
     read_responses: HashMap<Vec<u8>, Vec<u8>>,
     direct_read_responses: VecDeque<Vec<u8>>,
     last_cmd: Vec<u8>,
+    /// Stat1 byte prepended to every command-response read. Defaults to
+    /// CMD_DAT (bits[3:1] = 3) as real hardware returns on success.
+    pub stat1: u8,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -42,12 +45,13 @@ impl TestFixture {
             read_responses: HashMap::new(),
             direct_read_responses: VecDeque::new(),
             last_cmd: vec![],
+            stat1: 0x06, // CMD_DAT
         }
     }
 
     /// Canned response for the read phase of the command identified by its
-    /// full command bytes. Covers the data only — the leading status byte
-    /// both drivers discard always reads 0.
+    /// full command bytes. Covers the data only — the leading Stat1 byte
+    /// reads as `self.stat1`.
     pub fn prime_read(&mut self, command: &[u8], response: &[u8]) {
         self.read_responses.insert(command.to_vec(), response.to_vec());
     }
@@ -88,7 +92,7 @@ impl TestFixture {
         } else {
             let data = self.read_responses.get(&self.last_cmd).cloned().unwrap_or_default();
             // status byte first, then the data
-            let mut full = vec![0u8];
+            let mut full = vec![self.stat1];
             full.extend_from_slice(&data);
             full
         };
