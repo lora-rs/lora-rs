@@ -10,12 +10,15 @@
 //! The reference is SX1276-only here (our test variant); C composite calls
 //! like `sx127x_set_rx` fold in errata our driver applies elsewhere or not
 //! at all — noted per test.
+mod emulator;
 mod fixtures;
+use emulator::{get_emulated_sx1276, Chip, Mode};
 use fixtures::{get_sx1276, get_sx1276_boost, Delayer, TestFixture};
 
-use crate::mod_params::RadioMode;
+use crate::mod_params::{RadioMode, RxMode};
 use crate::mod_traits::RadioKind;
 use crate::sx127x::radio_kind_params::Register;
+use crate::LoRa;
 use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 use smtc_modem_cores::sx127x::{sx127x_radio_id_e, Context};
 use smtc_modem_cores::sys;
@@ -476,5 +479,98 @@ async fn test_spurious_rx_errata_round_trip() {
         radio.spi_mut().reg(0x31) & 0x80,
         0x80,
         "AutomaticIFOn must re-arm at 500 kHz"
+    );
+}
+
+fn emulated_modulation(lora: &mut LoRa<impl RadioKind, Delayer>) -> crate::mod_params::ModulationParams {
+    lora.create_modulation_params(SpreadingFactor::_7, Bandwidth::_125KHz, CodingRate::_4_5, 868_100_000)
+        .unwrap()
+}
+
+#[tokio::test]
+async fn test_emulated_tx_end_to_end() {
+    let chip = Chip::new();
+    let mut lora = LoRa::new(get_emulated_sx1276(&chip), true, Delayer).await.unwrap();
+
+    let mdltn_params = emulated_modulation(&mut lora);
+    let mut tx_pkt_params = lora
+        .create_tx_packet_params(8, false, true, false, &mdltn_params)
+        .unwrap();
+
+    let payload = b"hello sx1276";
+    lora.prepare_for_tx(&mdltn_params, &mut tx_pkt_params, 10, payload)
+        .await
+        .unwrap();
+    lora.tx().await.unwrap();
+
+    chip.with_model(|m| {
+        assert_eq!(m.tx_log.len(), 1);
+        assert_eq!(m.tx_log[0].payload, payload);
+        assert_eq!(m.mode(), Mode::Standby);
+
+        // Frequency round-trips through the chip's PLL-step encoding
+        let hz = (m.tx_log[0].frequency_raw as u64 * 32_000_000) >> 19;
+        assert!((hz as i64 - 868_100_000i64).abs() <= 61, "freq {hz}");
+    });
+}
+
+#[tokio::test]
+async fn test_emulated_rx_end_to_end() {
+    let chip = Chip::new();
+    let mut lora = LoRa::new(get_emulated_sx1276(&chip), true, Delayer).await.unwrap();
+
+    let mdltn_params = emulated_modulation(&mut lora);
+    let rx_pkt_params = lora
+        .create_rx_packet_params(8, false, 255, true, false, &mdltn_params)
+        .unwrap();
+    lora.prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params)
+        .await
+        .unwrap();
+
+    // Queued until the chip enters RX, then delivered while the host waits
+    // on the DIO0 edge
+    chip.inject_rx(b"ping", 100, 5);
+
+    let mut buf = [0u8; 255];
+    let (len, status) = lora.rx(&rx_pkt_params, &mut buf).await.unwrap();
+    assert_eq!(&buf[..len as usize], b"ping");
+    // HF port offset -157, raw 100 linearized by 16/15: -157 + 107
+    assert_eq!(status.rssi, -50);
+    assert_eq!(status.snr, 5);
+}
+
+#[tokio::test]
+#[ignore = "documents a known bug: do_rx does not clear stale IRQ flags, so a \
+            restarted receive reports the abandoned session's RxDone as a fresh \
+            packet. Un-ignore when the stale-flag clear lands."]
+async fn test_restarted_rx_ignores_stale_flags() {
+    // RegIrqFlags stays latched until the host clears it by writing a 1 —
+    // mode changes don't reset it — so a receive that was started but never
+    // processed (e.g. its complete_rx future was cancelled by a select
+    // timeout) leaves RxDone latched. A restarted receive must not report
+    // that stale flag as a fresh packet.
+    let chip = Chip::new();
+    let mut lora = LoRa::new(get_emulated_sx1276(&chip), true, Delayer).await.unwrap();
+
+    let mdltn_params = emulated_modulation(&mut lora);
+    let rx_pkt_params = lora
+        .create_rx_packet_params(8, false, 255, true, false, &mdltn_params)
+        .unwrap();
+    lora.prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params)
+        .await
+        .unwrap();
+    lora.start_rx().await.unwrap();
+
+    // A packet arrives, latching RxDone — but the caller abandons the
+    // receive without ever processing it
+    chip.inject_rx(b"stale", 100, 5);
+
+    // ...and later restarts reception. Nothing arrives this session.
+    lora.start_rx().await.unwrap();
+    let mut buf = [0u8; 255];
+    let result = lora.complete_rx(&rx_pkt_params, &mut buf).await.map(|(len, _)| len);
+    assert!(
+        result.is_err(),
+        "reported a phantom packet from a stale RxDone flag: {result:?}"
     );
 }

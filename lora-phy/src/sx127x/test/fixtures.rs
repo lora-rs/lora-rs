@@ -43,7 +43,8 @@ const REG_IRQ_FLAGS: u8 = 0x12;
 
 /// SX1276 power-on defaults (datasheet table 41) for every register either
 /// driver touches in the compared flows; both sides start from the same file.
-const RESET_VALUES: &[(u8, u8)] = &[
+/// Also seeds the behavioral emulator's register file.
+pub(super) const RESET_VALUES: &[(u8, u8)] = &[
     (0x01, 0x80), // RegOpMode: LoRa, sleep (both drivers enter LoRa mode from reset)
     (0x06, 0x6C), // RegFrfMsb..Lsb: 434 MHz
     (0x07, 0x80),
