@@ -416,6 +416,19 @@ async fn test_get_version() {
 }
 
 #[tokio::test]
+async fn test_read_stat1_failure_surfaces() {
+    // A Stat1 of CMD_FAIL (bits[3:1] = 0) or CMD_PERR (= 1) means the
+    // response data is invalid and must surface as an error.
+    for stat1 in [0x00u8, 0x02] {
+        let mut radio = get_lr1110();
+        radio.intf.spi.stat1 = stat1;
+        radio.intf.spi.prime_read(&[0x01, 0x01], &[0x22, 0x01, 0x03, 0x08]);
+        let err = radio.get_version().await.unwrap_err();
+        assert!(matches!(err, crate::mod_params::RadioError::OpError(s) if s == stat1));
+    }
+}
+
+#[tokio::test]
 async fn test_get_temp_vbat_errors() {
     let mut reference_radio = reference();
     reference_radio.inner.prime_read(&[0x01, 0x1A], &[0x08, 0x50]);
