@@ -25,6 +25,11 @@ pub struct TestFixture {
     pub fifo_written: Vec<u8>,
     pub irq_flags_written: Vec<u8>,
     fifo_read: VecDeque<u8>,
+    /// Every register write in wire order as (address, value), excluded from
+    /// equality — for tests asserting write *ordering* (e.g. where an IRQ
+    /// clear lands relative to mode/DIO writes), which the register file
+    /// can't see.
+    pub write_log: Vec<(u8, u8)>,
 }
 
 // Deliberately hardcoded (datasheet addresses), NOT derived from the
@@ -74,8 +79,8 @@ impl PartialEq for TestFixture {
         // irq_flags_written is deliberately NOT compared: the reference
         // driver clears IRQ flags at the chip only inside its DIO interrupt
         // handlers (its public clear_irq_status is shadow-state only), so
-        // the W1C traffic has no C counterpart in these flows. Tests assert
-        // ours' clears explicitly where they matter.
+        // our flag-clearing writes have no C counterpart in these flows.
+        // Tests assert ours' clears explicitly where they matter.
         self.regs == other.regs && self.fifo_written == other.fifo_written
     }
 }
@@ -94,6 +99,7 @@ impl TestFixture {
             fifo_written: vec![],
             irq_flags_written: vec![],
             fifo_read: VecDeque::new(),
+            write_log: vec![],
         }
     }
 
@@ -143,6 +149,13 @@ impl TestFixture {
             assert!(wnr, "write transaction without wnr bit: {cmd:02x?}");
             for (i, b) in cmd[1..].iter().enumerate() {
                 let mut b = *b;
+                // FIFO writes don't auto-increment the address
+                let logged_addr = if address == REG_FIFO {
+                    address
+                } else {
+                    address + i as u8
+                };
+                self.write_log.push((logged_addr, b));
                 if address == REG_FIFO {
                     self.fifo_written.push(b);
                     continue;
