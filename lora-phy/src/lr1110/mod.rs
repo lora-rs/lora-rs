@@ -66,6 +66,535 @@ const LR1110_MAX_LORA_SYMB_NUM_TIMEOUT: u8 = 248;
 // SetRx timeout argument for enabling continuous mode
 const RX_CONTINUOUS_TIMEOUT: u32 = 0xFFFFFF;
 
+/// One entry of a PA power table: the vendor's calibrated SetPaConfig /
+/// SetTxParams values for a single requested dBm.
+struct PaCfg {
+    /// Power commanded via SetTxParams (may be remapped up or down from the
+    /// requested dBm); negative on the LP and HF PAs.
+    configured_power: i8,
+    /// SetPaConfig paDutyCycle
+    pa_duty_cycle: u8,
+    /// SetPaConfig paHPSel
+    pa_hp_sel: u8,
+}
+
+// PA power tables transcribed from Semtech's SWL2001 reference BSP
+// (lbm_examples/radio_hal/lr11xx_pa_pwr_cfg.h: LR11XX_PA_LP_LF_CFG_TABLE,
+// LR11XX_PA_HP_LF_CFG_TABLE, LR11XX_PA_HF_CFG_TABLE). Each table is indexed by
+// (clamped_requested_dBm - MIN). Power bounds and the Vreg/Vbat switch come
+// from lbm_examples/radio_hal/ral_lr11xx_bsp.c. The LR1110 v2.1 datasheet
+// (July 2025) confirms the sub-GHz LP PA reaches +15 dBm.
+
+// LP PA output-power bounds [dBm]
+const LP_MIN: i8 = -17;
+const LP_MAX: i8 = 15;
+// HP PA output-power bounds [dBm]
+const HP_MIN: i8 = -9;
+const HP_MAX: i8 = 22;
+// HF PA output-power bounds [dBm]
+const HF_MIN: i8 = -18;
+const HF_MAX: i8 = 13;
+// At or below this requested power the HP PA runs from the regulator (Vreg)
+// for better efficiency; above it, from the battery (Vbat).
+const HP_VREG_VBAT_SWITCH: i8 = 8;
+
+/// LP sub-GHz PA, requests -17..=+15 dBm (33 entries)
+const LR11XX_PA_LP_LF_CFG_TABLE: [PaCfg; (LP_MAX - LP_MIN + 1) as usize] = [
+    PaCfg {
+        configured_power: -15,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -17 dBm
+    PaCfg {
+        configured_power: -14,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -16 dBm
+    PaCfg {
+        configured_power: -13,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -15 dBm
+    PaCfg {
+        configured_power: -12,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -14 dBm
+    PaCfg {
+        configured_power: -11,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -13 dBm
+    PaCfg {
+        configured_power: -9,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -12 dBm
+    PaCfg {
+        configured_power: -8,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -11 dBm
+    PaCfg {
+        configured_power: -7,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -10 dBm
+    PaCfg {
+        configured_power: -6,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -9 dBm
+    PaCfg {
+        configured_power: -5,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -8 dBm
+    PaCfg {
+        configured_power: -4,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -7 dBm
+    PaCfg {
+        configured_power: -3,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -6 dBm
+    PaCfg {
+        configured_power: -2,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -5 dBm
+    PaCfg {
+        configured_power: -1,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -4 dBm
+    PaCfg {
+        configured_power: 0,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -3 dBm
+    PaCfg {
+        configured_power: 1,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -2 dBm
+    PaCfg {
+        configured_power: 2,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -1 dBm
+    PaCfg {
+        configured_power: 3,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   0 dBm
+    PaCfg {
+        configured_power: 3,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x00,
+    }, //   1 dBm
+    PaCfg {
+        configured_power: 4,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x00,
+    }, //   2 dBm
+    PaCfg {
+        configured_power: 7,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   3 dBm
+    PaCfg {
+        configured_power: 8,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   4 dBm
+    PaCfg {
+        configured_power: 9,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   5 dBm
+    PaCfg {
+        configured_power: 10,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   6 dBm
+    PaCfg {
+        configured_power: 12,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   7 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   8 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   9 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x00,
+    }, //  10 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x00,
+    }, //  11 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x00,
+    }, //  12 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x03,
+        pa_hp_sel: 0x00,
+    }, //  13 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  14 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x07,
+        pa_hp_sel: 0x00,
+    }, //  15 dBm
+];
+
+/// HP sub-GHz PA, requests -9..=+22 dBm (32 entries)
+const LR11XX_PA_HP_LF_CFG_TABLE: [PaCfg; (HP_MAX - HP_MIN + 1) as usize] = [
+    PaCfg {
+        configured_power: 9,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -9 dBm
+    PaCfg {
+        configured_power: 10,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -8 dBm
+    PaCfg {
+        configured_power: 11,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -7 dBm
+    PaCfg {
+        configured_power: 12,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -6 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -5 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x00,
+    }, //  -4 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x00,
+    }, //  -3 dBm
+    PaCfg {
+        configured_power: 17,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x00,
+    }, //  -2 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -1 dBm
+    PaCfg {
+        configured_power: 12,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x01,
+    }, //   0 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x01,
+    }, //   1 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x01,
+    }, //   2 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x01,
+    }, //   3 dBm
+    PaCfg {
+        configured_power: 15,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x02,
+    }, //   4 dBm
+    PaCfg {
+        configured_power: 15,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x01,
+    }, //   5 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x02,
+    }, //   6 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x03,
+    }, //   7 dBm
+    PaCfg {
+        configured_power: 17,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x02,
+    }, //   8 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x01,
+    }, //   9 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x01,
+    }, //  10 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x01,
+    }, //  11 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x03,
+        pa_hp_sel: 0x01,
+    }, //  12 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x03,
+    }, //  13 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x03,
+    }, //  14 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x02,
+    }, //  15 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x04,
+    }, //  16 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x04,
+    }, //  17 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x06,
+    }, //  18 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x03,
+        pa_hp_sel: 0x05,
+    }, //  19 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x03,
+        pa_hp_sel: 0x07,
+    }, //  20 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x06,
+    }, //  21 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x07,
+    }, //  22 dBm
+];
+
+/// HF (2.4 GHz) PA, requests -18..=+13 dBm (32 entries)
+const LR11XX_PA_HF_CFG_TABLE: [PaCfg; (HF_MAX - HF_MIN + 1) as usize] = [
+    PaCfg {
+        configured_power: -18,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -18 dBm
+    PaCfg {
+        configured_power: -18,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -17 dBm
+    PaCfg {
+        configured_power: -17,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -16 dBm
+    PaCfg {
+        configured_power: -16,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -15 dBm
+    PaCfg {
+        configured_power: -15,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -14 dBm
+    PaCfg {
+        configured_power: -14,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -13 dBm
+    PaCfg {
+        configured_power: -14,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -12 dBm
+    PaCfg {
+        configured_power: -12,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -11 dBm
+    PaCfg {
+        configured_power: -10,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -10 dBm
+    PaCfg {
+        configured_power: -9,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -9 dBm
+    PaCfg {
+        configured_power: -8,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -8 dBm
+    PaCfg {
+        configured_power: -7,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -7 dBm
+    PaCfg {
+        configured_power: -6,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -6 dBm
+    PaCfg {
+        configured_power: -5,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -5 dBm
+    PaCfg {
+        configured_power: -4,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -4 dBm
+    PaCfg {
+        configured_power: -3,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -3 dBm
+    PaCfg {
+        configured_power: -2,
+        pa_duty_cycle: 0x03,
+        pa_hp_sel: 0x00,
+    }, //  -2 dBm
+    PaCfg {
+        configured_power: -1,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -1 dBm
+    PaCfg {
+        configured_power: 0,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   0 dBm
+    PaCfg {
+        configured_power: 1,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   1 dBm
+    PaCfg {
+        configured_power: 2,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   2 dBm
+    PaCfg {
+        configured_power: 4,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   3 dBm
+    PaCfg {
+        configured_power: 5,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   4 dBm
+    PaCfg {
+        configured_power: 6,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   5 dBm
+    PaCfg {
+        configured_power: 7,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   6 dBm
+    PaCfg {
+        configured_power: 8,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   7 dBm
+    PaCfg {
+        configured_power: 9,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   8 dBm
+    PaCfg {
+        configured_power: 10,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   9 dBm
+    PaCfg {
+        configured_power: 11,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  10 dBm
+    PaCfg {
+        configured_power: 12,
+        pa_duty_cycle: 0x03,
+        pa_hp_sel: 0x00,
+    }, //  11 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  12 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  13 dBm
+];
+
 /// Configuration for LR1110-based boards
 pub struct Config {
     /// Which power amplifier to use: LP up to +14 dBm, HP up to +22 dBm, HF for the 2.4 GHz band
@@ -1462,23 +1991,19 @@ where
         let ramp_time = RampTime::Ramp208Us;
 
         let pa_selection = self.config.pa_selection;
-        // Per LR1110 User Manual Tables 9-1 and 9-2 and the SWL2001 reference BSP
-        // (ral_lr11xx_bsp.c, lr11xx_get_tx_cfg): the LP and HF PAs run from the
-        // internal regulator (Vreg), only the HP PA draws from VBAT.
-        let pa_supply = match pa_selection {
-            PaSelection::Lp | PaSelection::Hf => PaRegSupply::Vreg,
-            PaSelection::Hp => PaRegSupply::Vbat,
-        };
 
-        let (tx_power, pa_duty_cycle, pa_hp_sel) = match pa_selection {
+        // Look up the PA config for the requested power. The tables (below)
+        // are the vendor's per-dBm calibration: each entry remaps the request
+        // to a configured chip power and its paDutyCycle / paHPSel.
+        let (tx_power, pa_duty_cycle, pa_hp_sel, pa_supply) = match pa_selection {
             PaSelection::Lp => {
-                // Low Power PA: -17 to +14 dBm
-                const LP_MIN: i32 = -17;
-                const LP_MAX: i32 = 14;
-                let txp = output_power.clamp(LP_MIN, LP_MAX);
+                let clamped = output_power.clamp(LP_MIN as i32, LP_MAX as i32);
+                let entry = &LR11XX_PA_LP_LF_CFG_TABLE[(clamped - LP_MIN as i32) as usize];
 
-                // Validate frequency constraint for max power
-                if txp == LP_MAX {
+                // Duty cycles above 0x04 are not allowed below 400 MHz per the
+                // LR1110 User Manual. With the vendor table only the +15 dBm
+                // entry (duty 0x07) trips this.
+                if entry.pa_duty_cycle > 0x04 {
                     if let Some(m_p) = mdltn_params {
                         if m_p.frequency_in_hz < 400_000_000 {
                             return Err(RadioError::InvalidOutputPowerForFrequency);
@@ -1486,40 +2011,45 @@ where
                     }
                 }
 
-                // PA configuration for LP PA
-                // Per LR1110 User Manual Table 9-1 and SWDM001 demo:
-                // LP PA uses paDutyCycle = 0x04, paHPSel = 0x00
-                let (duty_cycle, hp_sel, power) = (0x04, 0x00, txp as u8);
-                (power, duty_cycle, hp_sel)
+                // LP PA always runs from the internal regulator.
+                (
+                    entry.configured_power as u8,
+                    entry.pa_duty_cycle,
+                    entry.pa_hp_sel,
+                    PaRegSupply::Vreg,
+                )
             }
             PaSelection::Hp => {
-                // High Power PA: -9 to +22 dBm
-                const HP_MIN: i32 = -9;
-                const HP_MAX: i32 = 22;
-                let txp = output_power.clamp(HP_MIN, HP_MAX);
+                let clamped = output_power.clamp(HP_MIN as i32, HP_MAX as i32);
+                let entry = &LR11XX_PA_HP_LF_CFG_TABLE[(clamped - HP_MIN as i32) as usize];
 
-                let (duty_cycle, hp_sel, power) = match txp {
-                    22 => (0x04, 0x07, 22),
-                    18..=21 => (0x03, 0x05, txp as u8),
-                    15..=17 => (0x02, 0x03, txp as u8),
-                    HP_MIN..=14 => (0x02, 0x02, txp as u8),
-                    _ => unreachable!(),
+                // Efficiency switch from the vendor BSP (ral_lr11xx_bsp.c,
+                // LR11XX_PWR_VREG_VBAT_SWITCH = 8): at or below 8 dBm the HP PA
+                // runs from the regulator, above it from the battery.
+                let supply = if clamped <= HP_VREG_VBAT_SWITCH as i32 {
+                    PaRegSupply::Vreg
+                } else {
+                    PaRegSupply::Vbat
                 };
-                (power, duty_cycle, hp_sel)
+
+                (
+                    entry.configured_power as u8,
+                    entry.pa_duty_cycle,
+                    entry.pa_hp_sel,
+                    supply,
+                )
             }
             PaSelection::Hf => {
-                // High Frequency PA (2.4 GHz): -18 to +13 dBm
-                const HF_MIN: i32 = -18;
-                const HF_MAX: i32 = 13;
-                let txp = output_power.clamp(HF_MIN, HF_MAX);
+                let clamped = output_power.clamp(HF_MIN as i32, HF_MAX as i32);
+                let entry = &LR11XX_PA_HF_CFG_TABLE[(clamped - HF_MIN as i32) as usize];
 
-                let (duty_cycle, hp_sel, power) = match txp {
-                    13 => (0x04, 0x00, 13),
-                    10..=12 => (0x02, 0x00, txp as u8),
-                    HF_MIN..=9 => (0x01, 0x00, txp as u8),
-                    _ => unreachable!(),
-                };
-                (power, duty_cycle, hp_sel)
+                // HF PA always runs from the internal regulator.
+                (
+                    entry.configured_power as u8,
+                    entry.pa_duty_cycle,
+                    entry.pa_hp_sel,
+                    PaRegSupply::Vreg,
+                )
             }
         };
 
