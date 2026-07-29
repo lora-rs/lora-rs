@@ -179,20 +179,70 @@ async fn test_set_tx_power_and_ramp_time_hp() {
 }
 
 #[tokio::test]
+async fn test_set_tx_power_and_ramp_time_hp_low_power() {
+    // At or below 8 dBm the HP PA runs from VREG for efficiency (vendor BSP
+    // LR11XX_PWR_VREG_VBAT_SWITCH = 8). A 5 dBm request maps, per the vendor HP
+    // table, to configured power 15, duty 0x04, hp_sel 0x01.
+    let mut reference_radio = reference();
+    reference_radio.set_pa_cfg(&sys::lr11xx_radio_pa_cfg_t {
+        pa_sel: sys::lr11xx_radio_pa_selection_t_LR11XX_RADIO_PA_SEL_HP,
+        pa_reg_supply: sys::lr11xx_radio_pa_reg_supply_t_LR11XX_RADIO_PA_REG_SUPPLY_VREG,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x01,
+    });
+    reference_radio.set_tx_params(15, sys::lr11xx_radio_ramp_time_t_LR11XX_RADIO_RAMP_208_US);
+
+    let mut radio = get_lr1110();
+    radio.set_tx_power_and_ramp_time(5, None, true).await.unwrap();
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+}
+
+#[tokio::test]
 async fn test_set_tx_power_and_ramp_time_lp() {
-    // Low-power PA mid range
+    // Low-power PA mid range. The vendor LP table (LR11XX_PA_LP_LF_CFG_TABLE)
+    // remaps a 10 dBm request to a configured power of 13 with duty 0x01, VREG.
     let mut reference_radio = reference();
     reference_radio.set_pa_cfg(&sys::lr11xx_radio_pa_cfg_t {
         pa_sel: sys::lr11xx_radio_pa_selection_t_LR11XX_RADIO_PA_SEL_LP,
         pa_reg_supply: sys::lr11xx_radio_pa_reg_supply_t_LR11XX_RADIO_PA_REG_SUPPLY_VREG,
-        pa_duty_cycle: 0x04,
+        pa_duty_cycle: 0x01,
         pa_hp_sel: 0x00,
     });
-    reference_radio.set_tx_params(10, sys::lr11xx_radio_ramp_time_t_LR11XX_RADIO_RAMP_208_US);
+    reference_radio.set_tx_params(13, sys::lr11xx_radio_ramp_time_t_LR11XX_RADIO_RAMP_208_US);
 
     let mut radio = get_lr1110_lp();
     radio.set_tx_power_and_ramp_time(10, None, true).await.unwrap();
     assert_eq!(radio.intf.spi, reference_radio.inner);
+
+    // Max output (+15 dBm) per the LR1110 v2.1 datasheet: configured power 14,
+    // duty 0x07, VREG.
+    let mut reference_radio = reference();
+    reference_radio.set_pa_cfg(&sys::lr11xx_radio_pa_cfg_t {
+        pa_sel: sys::lr11xx_radio_pa_selection_t_LR11XX_RADIO_PA_SEL_LP,
+        pa_reg_supply: sys::lr11xx_radio_pa_reg_supply_t_LR11XX_RADIO_PA_REG_SUPPLY_VREG,
+        pa_duty_cycle: 0x07,
+        pa_hp_sel: 0x00,
+    });
+    reference_radio.set_tx_params(14, sys::lr11xx_radio_ramp_time_t_LR11XX_RADIO_RAMP_208_US);
+
+    let mut radio = get_lr1110_lp();
+    radio.set_tx_power_and_ramp_time(15, None, true).await.unwrap();
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+
+    // At +15 dBm the LP entry's duty (0x07) exceeds 0x04, which is not allowed
+    // below 400 MHz: with a sub-400 MHz modulation the driver rejects it.
+    let mut radio = get_lr1110_lp();
+    let mod_params = radio
+        .create_modulation_params(SpreadingFactor::_10, Bandwidth::_125KHz, CodingRate::_4_5, 169_000_000)
+        .unwrap();
+    let err = radio
+        .set_tx_power_and_ramp_time(15, Some(&mod_params), true)
+        .await
+        .unwrap_err();
+    assert!(matches!(
+        err,
+        crate::mod_params::RadioError::InvalidOutputPowerForFrequency
+    ));
 }
 
 #[tokio::test]
@@ -200,15 +250,13 @@ async fn test_set_tx_power_and_ramp_time_hf() {
     // High-frequency (2.4 GHz) PA at max output. The vendor BSP always supplies
     // the HF PA from VREG (it tops out at +13 dBm, below where VBAT is needed).
     //
-    // The pa_duty_cycle / pa_hp_sel / power values below are the driver's own
-    // static mapping, not the vendor EVK board calibration table
-    // (LR11XX_PA_HF_CFG_TABLE), which uses different values at the same power
-    // (e.g. duty 0x00 at 13 dBm). The board table is kept as-is for now.
+    // Values come from the vendor HF table (LR11XX_PA_HF_CFG_TABLE): +13 dBm
+    // maps to configured power 13, duty 0x00, hp_sel 0x00.
     let mut reference_radio = reference();
     reference_radio.set_pa_cfg(&sys::lr11xx_radio_pa_cfg_t {
         pa_sel: sys::lr11xx_radio_pa_selection_t_LR11XX_RADIO_PA_SEL_HF,
         pa_reg_supply: sys::lr11xx_radio_pa_reg_supply_t_LR11XX_RADIO_PA_REG_SUPPLY_VREG,
-        pa_duty_cycle: 0x04,
+        pa_duty_cycle: 0x00,
         pa_hp_sel: 0x00,
     });
     reference_radio.set_tx_params(13, sys::lr11xx_radio_ramp_time_t_LR11XX_RADIO_RAMP_208_US);
