@@ -650,3 +650,66 @@ async fn test_tx_power_stm32wl() {
         assert_eq!(radio.take_spi(), reference.inner, "{dbm} dBm");
     }
 }
+
+/// Pin every `OpCode` discriminant to Semtech's SWL2001 command values
+/// (`sx126x_commands_e`, SWL2001 sx126x_driver/src/sx126x.c). The driver
+/// builds every SPI command from this enum and the emulator dispatches on
+/// it, so a wrong byte here silently talks to the wrong command on real
+/// hardware. The transaction-comparison tests above only pin the opcodes
+/// their flows exercise; this pins all of them in one place. The vendor
+/// values are transcribed independently of the driver enum, so a typo in
+/// either side won't match the other.
+#[test]
+fn opcodes_match_swl2001() {
+    use crate::sx126x::radio_kind_params::OpCode;
+    // (name, our driver's byte, SWL2001's byte)
+    let cases: &[(&str, u8, u8)] = &[
+        ("GetStatus", OpCode::GetStatus as u8, 0xC0),
+        ("WriteRegister", OpCode::WriteRegister as u8, 0x0D),
+        ("ReadRegister", OpCode::ReadRegister as u8, 0x1D),
+        ("WriteBuffer", OpCode::WriteBuffer as u8, 0x0E),
+        ("ReadBuffer", OpCode::ReadBuffer as u8, 0x1E),
+        ("SetSleep", OpCode::SetSleep as u8, 0x84),
+        ("SetStandby", OpCode::SetStandby as u8, 0x80),
+        ("SetFS", OpCode::SetFS as u8, 0xC1),
+        ("SetTx", OpCode::SetTx as u8, 0x83),
+        ("SetRx", OpCode::SetRx as u8, 0x82),
+        ("SetRxDutyCycle", OpCode::SetRxDutyCycle as u8, 0x94),
+        ("SetCAD", OpCode::SetCAD as u8, 0xC5),
+        ("SetTxContinuousWave", OpCode::SetTxContinuousWave as u8, 0xD1),
+        ("SetTxContinuousPremable", OpCode::SetTxContinuousPremable as u8, 0xD2),
+        ("SetPacketType", OpCode::SetPacketType as u8, 0x8A),
+        ("GetPacketType", OpCode::GetPacketType as u8, 0x11),
+        ("SetRFFrequency", OpCode::SetRFFrequency as u8, 0x86),
+        ("SetTxParams", OpCode::SetTxParams as u8, 0x8E),
+        ("SetPAConfig", OpCode::SetPAConfig as u8, 0x95),
+        ("SetCADParams", OpCode::SetCADParams as u8, 0x88),
+        ("SetBufferBaseAddress", OpCode::SetBufferBaseAddress as u8, 0x8F),
+        ("SetModulationParams", OpCode::SetModulationParams as u8, 0x8B),
+        ("SetPacketParams", OpCode::SetPacketParams as u8, 0x8C),
+        ("GetRxBufferStatus", OpCode::GetRxBufferStatus as u8, 0x13),
+        ("GetPacketStatus", OpCode::GetPacketStatus as u8, 0x14),
+        ("GetRSSIInst", OpCode::GetRSSIInst as u8, 0x15),
+        ("GetStats", OpCode::GetStats as u8, 0x10),
+        ("ResetStats", OpCode::ResetStats as u8, 0x00),
+        ("CfgDIOIrq", OpCode::CfgDIOIrq as u8, 0x08),
+        ("GetIrqStatus", OpCode::GetIrqStatus as u8, 0x12),
+        ("ClrIrqStatus", OpCode::ClrIrqStatus as u8, 0x02),
+        ("Calibrate", OpCode::Calibrate as u8, 0x89),
+        ("CalibrateImage", OpCode::CalibrateImage as u8, 0x98),
+        ("SetRegulatorMode", OpCode::SetRegulatorMode as u8, 0x96),
+        ("GetDeviceErrors", OpCode::GetDeviceErrors as u8, 0x17),
+        ("ClearDeviceErrors", OpCode::ClearDeviceErrors as u8, 0x07),
+        ("SetTCXOMode", OpCode::SetTCXOMode as u8, 0x97),
+        ("SetTxFallbackMode", OpCode::SetTxFallbackMode as u8, 0x93),
+        ("SetDIO2AsRfSwitchCtrl", OpCode::SetDIO2AsRfSwitchCtrl as u8, 0x9D),
+        ("SetStopRxTimerOnPreamble", OpCode::SetStopRxTimerOnPreamble as u8, 0x9F),
+        ("SetLoRaSymbTimeout", OpCode::SetLoRaSymbTimeout as u8, 0xA0),
+    ];
+    for (name, driver, vendor) in cases {
+        assert_eq!(
+            driver, vendor,
+            "OpCode::{name} = {driver:#04x}, SWL2001 = {vendor:#04x}"
+        );
+    }
+}
