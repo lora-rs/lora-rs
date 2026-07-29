@@ -5,7 +5,7 @@
 [![Matrix](https://img.shields.io/matrix/public-lora-wan-rs%3Amatrix.org)](https://matrix.to/#/#public-lora-wan-rs:matrix.org)
 
 This repository aims to provide a set of compatible crates for implementing LoRa end devices in Rust. 
-As a general rule, all crates are `nostd` and designed to be friendly for embedded projects.
+As a general rule, all crates are `no_std` and designed to be friendly for embedded projects.
 
 ## Crates
 
