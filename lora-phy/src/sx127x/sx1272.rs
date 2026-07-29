@@ -1,16 +1,16 @@
 use crate::mod_params::{ModulationParams, PacketParams, RadioError};
 use crate::mod_traits::InterfaceVariant;
 use crate::sx127x::radio_kind_params::{coding_rate_value, spreading_factor_value, RampTime, Register, Sx127xVariant};
-use crate::sx127x::{Sx127x, SX1272_RSSI_OFFSET};
+use crate::sx127x::Sx127x;
 use embedded_hal_async::spi::SpiDevice;
 use lora_modulation::Bandwidth;
+
+const SX1272_RSSI_OFFSET: i16 = -139;
 
 /// Sx1272 implements the Sx127xVariant trait
 pub struct Sx1272;
 
 impl Sx127xVariant for Sx1272 {
-    type Data = ();
-
     async fn init_lora<SPI: SpiDevice<u8>, IV: InterfaceVariant>(
         _radio: &mut Sx127x<SPI, IV, Self>,
         _sync_word: u8,
