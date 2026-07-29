@@ -128,7 +128,7 @@ The LR1110 has three power amplifiers:
 
 To change PA selection:
 ```rust
-chip: lora_phy::lr1110::Lr1110::with_pa(PaSelection::Lp),
+pa_selection: PaSelection::Lp,
 ```
 
 ## Troubleshooting

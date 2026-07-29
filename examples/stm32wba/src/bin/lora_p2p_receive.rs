@@ -28,8 +28,7 @@ use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericLr1110InterfaceVariant;
-use lora_phy::lr1110::variant::Lr1110 as Lr1110Chip;
-use lora_phy::lr1110::{self as lr1110_module, TcxoCtrlVoltage};
+use lora_phy::lr1110::{self as lr1110_module, PaSelection, TcxoCtrlVoltage};
 use lora_phy::mod_params::{Bandwidth, CodingRate, RxMode, SpreadingFactor};
 use lora_phy::LoRa;
 use {defmt_rtt as _, panic_probe as _};
@@ -101,7 +100,8 @@ async fn main(_spawner: Spawner) {
 
     // Configure LR1110 chip variant
     let lr_config = lr1110_module::Config {
-        chip: Lr1110Chip::new(),
+        pa_selection: PaSelection::Hp,
+        dio_as_rf_switch: Some(Default::default()),
         tcxo_ctrl: Some(TcxoCtrlVoltage::Ctrl3V0),
         use_dcdc: true,
         rx_boost: true, // Enable RX boost for better sensitivity
