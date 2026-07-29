@@ -200,13 +200,13 @@ macro_rules! lorawan_eui {
         $(#[$outer])*
         #[doc = concat!(
             "# Usage\n\n",
-            "## Creating from a hex-encoded LSB string:\n",
+            "## Creating from a human-readable, MSB-first hex string:\n",
             "```\n",
             "use lorawan::keys::", stringify!($type), ";\n",
             "use core::str::FromStr;\n",
             "let eui = ", stringify!($type), "::from_str(\"0011223344556677\").unwrap();\n",
             "```\n\n",
-            "## Creating from a byte array in LSB format:\n",
+            "## Creating from a byte array in LoRaWAN wire order (LSB first):\n",
             "```\n",
             "use lorawan::keys::", stringify!($type), ";\n",
             "let eui = ", stringify!($type), "::from([\n",

@@ -25,7 +25,12 @@ fn hex_to_bytes(s: &str) -> Option<Vec<u8>> {
 }
 
 /// Read and parse LoRaWAN keys as HEX strings from an environment variable
-fn parse_lorawan_id(val: Option<&str>, var: &str, len: usize) -> Option<String> {
+fn parse_lorawan_id(
+    val: Option<&str>,
+    var: &str,
+    len: usize,
+    lsb_first: bool,
+) -> Option<String> {
     if let Some(s) = val {
         let l = s.len();
         // Allow empty keys
@@ -40,7 +45,12 @@ fn parse_lorawan_id(val: Option<&str>, var: &str, len: usize) -> Option<String> 
                 2 * len
             );
         }
-        if let Some(v) = hex_to_bytes(s) {
+        if let Some(mut v) = hex_to_bytes(s) {
+            // Environment variables use the conventional MSB-first display form.
+            // EUIs must be stored in the generated array in LoRaWAN wire order.
+            if lsb_first {
+                v.reverse();
+            }
             return Some(format!("Some({:?})", v));
         } else {
             panic!(
@@ -71,9 +81,9 @@ fn main() {
             const DEVEUI: Option<[u8; 8]> = {};\n\
             const APPEUI: Option<[u8; 8]> = {};\n\
             const APPKEY: Option<[u8; 16]> = {};\n",
-                parse_lorawan_id(option_env!("LORA_DEVEUI"), "LORA_DEVEUI", 8).unwrap_or("None".to_string()),
-                parse_lorawan_id(option_env!("LORA_APPEUI"), "LORA_APPEUI", 8).unwrap_or("None".to_string()),
-                parse_lorawan_id(option_env!("LORA_APPKEY"), "LORA_APPKEY", 16).unwrap_or("None".to_string()),
+                parse_lorawan_id(option_env!("LORA_DEVEUI"), "LORA_DEVEUI", 8, true).unwrap_or("None".to_string()),
+                parse_lorawan_id(option_env!("LORA_APPEUI"), "LORA_APPEUI", 8, true).unwrap_or("None".to_string()),
+                parse_lorawan_id(option_env!("LORA_APPKEY"), "LORA_APPKEY", 16, false).unwrap_or("None".to_string()),
             )
         )
         .unwrap();
