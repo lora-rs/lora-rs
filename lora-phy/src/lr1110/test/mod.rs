@@ -5,7 +5,9 @@
 //! transaction, then a separate read transaction clocking a discarded status
 //! byte plus data — so transactions are compared exactly.
 mod fixtures;
-use fixtures::{get_lr1110, get_lr1110_boosted, get_lr1110_dcdc_tcxo, get_lr1110_lp, Delayer, TestFixture};
+use fixtures::{
+    get_lr1110, get_lr1110_boosted, get_lr1110_dcdc_tcxo, get_lr1110_hf, get_lr1110_lp, Delayer, TestFixture,
+};
 
 use crate::mod_params::{RadioMode, RxMode};
 use crate::mod_traits::RadioKind;
@@ -190,6 +192,34 @@ async fn test_set_tx_power_and_ramp_time_lp() {
 
     let mut radio = get_lr1110_lp();
     radio.set_tx_power_and_ramp_time(10, None, true).await.unwrap();
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+}
+
+#[tokio::test]
+async fn test_set_tx_power_and_ramp_time_hf() {
+    // High-frequency (2.4 GHz) PA at max output. The vendor BSP always supplies
+    // the HF PA from VREG (it tops out at +13 dBm, below where VBAT is needed).
+    //
+    // The pa_duty_cycle / pa_hp_sel / power values below are the driver's own
+    // static mapping, not the vendor EVK board calibration table
+    // (LR11XX_PA_HF_CFG_TABLE), which uses different values at the same power
+    // (e.g. duty 0x00 at 13 dBm). The board table is kept as-is for now.
+    let mut reference_radio = reference();
+    reference_radio.set_pa_cfg(&sys::lr11xx_radio_pa_cfg_t {
+        pa_sel: sys::lr11xx_radio_pa_selection_t_LR11XX_RADIO_PA_SEL_HF,
+        pa_reg_supply: sys::lr11xx_radio_pa_reg_supply_t_LR11XX_RADIO_PA_REG_SUPPLY_VREG,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    });
+    reference_radio.set_tx_params(13, sys::lr11xx_radio_ramp_time_t_LR11XX_RADIO_RAMP_208_US);
+
+    let mut radio = get_lr1110_hf();
+    radio.set_tx_power_and_ramp_time(13, None, true).await.unwrap();
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+
+    // Above-range power clamps to 13 dBm
+    let mut radio = get_lr1110_hf();
+    radio.set_tx_power_and_ramp_time(20, None, true).await.unwrap();
     assert_eq!(radio.intf.spi, reference_radio.inner);
 }
 
