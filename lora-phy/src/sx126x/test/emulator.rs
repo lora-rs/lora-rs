@@ -13,28 +13,10 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::vec::Vec;
 
-// Dispatch constants derived from the driver's enums (enum variants can't
-// be `match` patterns against a raw byte, consts can). The byte values
-// themselves are pinned independently by the SWL2001 comparison suite, so
-// deriving from the driver here is not circular — the emulator's job is
-// behavior, not encoding.
-const WRITE_REGISTER: u8 = OpCode::WriteRegister as u8;
-const READ_REGISTER: u8 = OpCode::ReadRegister as u8;
-const WRITE_BUFFER: u8 = OpCode::WriteBuffer as u8;
-const READ_BUFFER: u8 = OpCode::ReadBuffer as u8;
-const SET_SLEEP: u8 = OpCode::SetSleep as u8;
-const SET_STANDBY: u8 = OpCode::SetStandby as u8;
-const SET_TX: u8 = OpCode::SetTx as u8;
-const SET_RX: u8 = OpCode::SetRx as u8;
-const SET_RF_FREQUENCY: u8 = OpCode::SetRFFrequency as u8;
-const SET_PACKET_PARAMS: u8 = OpCode::SetPacketParams as u8;
-const SET_BUFFER_BASE_ADDRESS: u8 = OpCode::SetBufferBaseAddress as u8;
-const CFG_DIO_IRQ: u8 = OpCode::CfgDIOIrq as u8;
-const GET_IRQ_STATUS: u8 = OpCode::GetIrqStatus as u8;
-const CLR_IRQ_STATUS: u8 = OpCode::ClrIrqStatus as u8;
-const GET_RX_BUFFER_STATUS: u8 = OpCode::GetRxBufferStatus as u8;
-const GET_PACKET_STATUS: u8 = OpCode::GetPacketStatus as u8;
-const SET_CAD: u8 = OpCode::SetCAD as u8;
+// The wire byte is parsed back into an `OpCode` via `from_repr` and matched by
+// variant. The byte values themselves are pinned independently by the SWL2001
+// comparison suite, so dispatching on the driver's enum here is not circular:
+// the emulator's job is behavior, not encoding.
 
 const IRQ_TX_DONE: u16 = IrqMask::TxDone as u16;
 const IRQ_RX_DONE: u16 = IrqMask::RxDone as u16;
@@ -110,65 +92,65 @@ impl ChipModel {
     /// response bytes for opcodes the driver reads from (status byte first).
     fn execute(&mut self, opcode: u8, params: &[u8]) -> Vec<u8> {
         const STATUS_OK: u8 = 0x00;
-        match opcode {
-            WRITE_REGISTER => {
+        match OpCode::from_repr(opcode) {
+            Some(OpCode::WriteRegister) => {
                 let addr = u16::from_be_bytes([params[0], params[1]]);
                 for (i, b) in params[2..].iter().enumerate() {
                     self.registers.insert(addr + i as u16, *b);
                 }
                 vec![]
             }
-            READ_REGISTER => {
+            Some(OpCode::ReadRegister) => {
                 // params: addr(2) + nop; length comes from the driver's read buffer
                 let addr = u16::from_be_bytes([params[0], params[1]]);
                 (0..=u8::MAX).map(|i| self.reg_read(addr + i as u16)).collect()
             }
-            WRITE_BUFFER => {
+            Some(OpCode::WriteBuffer) => {
                 let offset = params[0] as usize;
                 self.buffer[offset..offset + params[1..].len()].copy_from_slice(&params[1..]);
                 vec![]
             }
-            READ_BUFFER => {
+            Some(OpCode::ReadBuffer) => {
                 // No status prefix: the driver reads this via plain read(),
                 // clocking the status byte out during its trailing nop write
                 let offset = params[0] as usize;
                 self.buffer[offset..].to_vec()
             }
-            SET_SLEEP => {
+            Some(OpCode::SetSleep) => {
                 self.mode = Mode::Sleep;
                 vec![]
             }
-            SET_STANDBY => {
+            Some(OpCode::SetStandby) => {
                 self.mode = Mode::Standby;
                 vec![]
             }
-            SET_RF_FREQUENCY => {
+            Some(OpCode::SetRFFrequency) => {
                 self.frequency_raw = u32::from_be_bytes([params[0], params[1], params[2], params[3]]);
                 vec![]
             }
-            SET_BUFFER_BASE_ADDRESS => {
+            Some(OpCode::SetBufferBaseAddress) => {
                 self.tx_base_addr = params[0];
                 vec![]
             }
-            SET_PACKET_PARAMS => {
+            Some(OpCode::SetPacketParams) => {
                 // LoRa: preamble(2), header type, payload length, crc, invert IQ
                 self.payload_length = params[3];
                 vec![]
             }
-            CFG_DIO_IRQ => {
+            Some(OpCode::CfgDIOIrq) => {
                 self.irq_mask = u16::from_be_bytes([params[0], params[1]]);
                 self.dio1_mask = u16::from_be_bytes([params[2], params[3]]);
                 vec![]
             }
-            CLR_IRQ_STATUS => {
+            Some(OpCode::ClrIrqStatus) => {
                 self.irq_status &= !u16::from_be_bytes([params[0], params[1]]);
                 vec![]
             }
-            GET_IRQ_STATUS => {
+            Some(OpCode::GetIrqStatus) => {
                 let [hi, lo] = self.irq_status.to_be_bytes();
                 vec![STATUS_OK, hi, lo]
             }
-            SET_TX => {
+            Some(OpCode::SetTx) => {
                 let base = self.tx_base_addr as usize;
                 self.tx_log.push(TxRecord {
                     frequency_raw: self.frequency_raw,
@@ -179,7 +161,7 @@ impl ChipModel {
                 self.raise_irq(IRQ_TX_DONE);
                 vec![]
             }
-            SET_RX => {
+            Some(OpCode::SetRx) => {
                 self.mode = Mode::Rx;
                 if let Some(rx) = self.pending_rx.take() {
                     self.buffer[..rx.payload.len()].copy_from_slice(&rx.payload);
@@ -199,14 +181,14 @@ impl ChipModel {
                 }
                 vec![]
             }
-            GET_RX_BUFFER_STATUS => vec![STATUS_OK, self.rx_len, 0x00],
-            GET_PACKET_STATUS => vec![
+            Some(OpCode::GetRxBufferStatus) => vec![STATUS_OK, self.rx_len, 0x00],
+            Some(OpCode::GetPacketStatus) => vec![
                 STATUS_OK,
                 self.reg_read(REG_RSSI_SHADOW),
                 self.reg_read(REG_SNR_SHADOW),
                 self.reg_read(REG_RSSI_SHADOW),
             ],
-            SET_CAD => {
+            Some(OpCode::SetCAD) => {
                 if self.cad_activity {
                     self.raise_irq(IRQ_CAD_DONE | IRQ_CAD_DETECTED);
                 } else {
@@ -214,7 +196,8 @@ impl ChipModel {
                 }
                 vec![]
             }
-            // Configuration commands the model accepts without side effects
+            // Configuration commands the model accepts without side effects,
+            // plus any opcode byte the driver never sends (from_repr → None)
             _ => vec![STATUS_OK; 16],
         }
     }
