@@ -5,7 +5,6 @@
 #![allow(missing_docs)]
 
 pub mod radio_kind_params;
-pub mod variant;
 
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
@@ -50,7 +49,7 @@ use crate::lr1110_interface::Lr1110SpiInterface;
 use crate::mod_params::*;
 use crate::mod_traits::IrqState;
 use crate::{InterfaceVariant, RadioKind};
-pub use variant::*;
+pub use radio_kind_params::{PaSelection, SetDioAsRfSwitchParams};
 
 // Internal frequency of the radio
 #[allow(dead_code)]
@@ -66,9 +65,12 @@ const LR1110_MAX_LORA_SYMB_NUM_TIMEOUT: u8 = 248;
 const RX_CONTINUOUS_TIMEOUT: u32 = 0xFFFFFF;
 
 /// Configuration for LR1110-based boards
-pub struct Config<C: Lr1110Variant> {
-    /// LoRa chip variant on this board
-    pub chip: C,
+pub struct Config {
+    /// Which power amplifier to use: LP up to +14 dBm, HP up to +22 dBm, HF for the 2.4 GHz band
+    pub pa_selection: PaSelection,
+    /// RF switch configuration: None means don't configure the DIOs as an RF switch;
+    /// `Some(Default::default())` covers the common DIO5/DIO6 board wiring
+    pub dio_as_rf_switch: Option<SetDioAsRfSwitchParams>,
     /// Board is using TCXO
     pub tcxo_ctrl: Option<TcxoCtrlVoltage>,
     /// Whether board is using optional DCDC in addition to LDO
@@ -78,19 +80,18 @@ pub struct Config<C: Lr1110Variant> {
 }
 
 /// Base for the RadioKind implementation for the LR1110 chip kind and board type
-pub struct Lr1110<SPI, IV, C: Lr1110Variant> {
+pub struct Lr1110<SPI, IV> {
     intf: Lr1110SpiInterface<SPI, IV>,
-    config: Config<C>,
+    config: Config,
 }
 
-impl<SPI, IV, C> Lr1110<SPI, IV, C>
+impl<SPI, IV> Lr1110<SPI, IV>
 where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
-    C: Lr1110Variant,
 {
     /// Create an instance of the RadioKind implementation for the LR1110 chip
-    pub fn new(spi: SPI, iv: IV, config: Config<C>) -> Self {
+    pub fn new(spi: SPI, iv: IV, config: Config) -> Self {
         let intf = Lr1110SpiInterface::new(spi, iv);
         Self { intf, config }
     }
@@ -1295,17 +1296,16 @@ fn convert_sync_word(sync_word: u8) -> u8 {
     sync_word
 }
 
-impl<SPI, IV, C> RadioKind for Lr1110<SPI, IV, C>
+impl<SPI, IV> RadioKind for Lr1110<SPI, IV>
 where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
-    C: Lr1110Variant,
 {
     async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError> {
         // Initialize system (DC-DC, TCXO, calibration)
         self.init_system().await?;
 
-        if let Some(cfg) = self.config.chip.dio_as_rf_switch() {
+        if let Some(cfg) = self.config.dio_as_rf_switch {
             self.set_dio_as_rf_switch(cfg).await?;
         }
 
@@ -1444,8 +1444,14 @@ where
         // Shorter ramp times can cause TX issues with some configurations
         let ramp_time = RampTime::Ramp208Us;
 
-        let pa_selection = self.config.chip.get_pa_selection();
-        let pa_supply = self.config.chip.get_pa_supply();
+        let pa_selection = self.config.pa_selection;
+        // Per LR1110 User Manual Tables 9-1 and 9-2 and the SWL2001 reference BSP
+        // (ral_lr11xx_bsp.c, lr11xx_get_tx_cfg): the LP and HF PAs run from the
+        // internal regulator (Vreg), only the HP PA draws from VBAT.
+        let pa_supply = match pa_selection {
+            PaSelection::Lp | PaSelection::Hf => PaRegSupply::Vreg,
+            PaSelection::Hp => PaRegSupply::Vbat,
+        };
 
         let (tx_power, pa_duty_cycle, pa_hp_sel) = match pa_selection {
             PaSelection::Lp => {

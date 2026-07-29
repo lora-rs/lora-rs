@@ -1375,3 +1375,21 @@ pub struct SetDioAsRfSwitchParams {
     /// DIO states when in Wi-Fi scanning mode
     pub wifi: u8,
 }
+
+impl Default for SetDioAsRfSwitchParams {
+    /// The default enables only DIO5 (bit 0), so the DIO6 bit set in
+    /// `tx_lp`/`tx_hp` is configured but never driven. Boards that switch TX
+    /// via DIO6 need to add bit 1 to `enable`.
+    fn default() -> Self {
+        Self {
+            enable: 0x01,
+            standby: 0x00,
+            rx: 0x01,
+            tx_lp: 0x02,
+            tx_hp: 0x02,
+            tx_hf: 0x00,
+            gnss: 0x00,
+            wifi: 0x00,
+        }
+    }
+}
