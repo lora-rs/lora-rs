@@ -3,6 +3,7 @@ use super::{
     uplink, FcntUp, Response, SendData,
 };
 use crate::radio::RadioBuffer;
+use crate::region::constants::MAX_FCNT_GAP;
 use crate::{region, AppSKey, Downlink, NwkSKey};
 use heapless::Vec;
 use lorawan::maccommandcreator::{
@@ -31,7 +32,10 @@ pub struct Session {
     pub appskey: AppSKey,
     pub devaddr: DevAddr<[u8; 4]>,
     pub fcnt_up: u32,
-    pub fcnt_down: u32,
+    /// Frame counter of the last accepted downlink, or `None` before the first
+    /// downlink of the session. Only the low 16 bits of the counter are on the
+    /// wire; the high 16 bits kept here are used to rebuild the full value.
+    fcnt_down: Option<u32>,
     // TODO: ADR handling
     #[cfg(feature = "certification")]
     /// Whether to force ADR bit for subsequent frames
@@ -83,7 +87,7 @@ impl Session {
             appskey,
             devaddr,
             confirmed: false,
-            fcnt_down: 0,
+            fcnt_down: None,
             fcnt_up: 0,
             uplink: uplink::Uplink::default(),
 
@@ -109,6 +113,12 @@ impl Session {
 
     pub fn nwkskey(&self) -> &NwkSKey {
         &self.nwkskey
+    }
+
+    /// Frame counter of the last accepted downlink, or `None` before the first
+    /// downlink of the session.
+    pub fn fcnt_down(&self) -> Option<u32> {
+        self.fcnt_down
     }
 
     pub fn get_session_keys(&self) -> Option<SessionKeys> {
@@ -163,18 +173,18 @@ impl Session {
                     return multicast.handle_rx(dl, encrypted_data).into();
                 }
             }
-            let fcnt = encrypted_data.fhdr().fcnt() as u32;
             let confirmed = encrypted_data.is_confirmed();
-            if encrypted_data.validate_mic(self.nwkskey().inner(), fcnt, &DefaultFactory)
-                && (fcnt > self.fcnt_down || fcnt == 0)
-            {
-                self.fcnt_down = fcnt;
+            let Some(fcnt) = next_fcnt_down(self.fcnt_down, encrypted_data.fhdr().fcnt()) else {
+                return Response::NoUpdate;
+            };
+            if encrypted_data.validate_mic(self.nwkskey().inner(), fcnt, &DefaultFactory) {
+                self.fcnt_down = Some(fcnt);
                 // We can safely unwrap here because we already validated the MIC
                 let decrypted = encrypted_data
                     .decrypt(
                         Some(self.nwkskey().inner()),
                         Some(self.appskey().inner()),
-                        self.fcnt_down,
+                        fcnt,
                         &DefaultFactory,
                     )
                     .unwrap();
@@ -213,9 +223,7 @@ impl Session {
                         #[cfg(feature = "certification")]
                         if certification.fport(fport) {
                             use crate::mac::certification::Response::*;
-                            match certification
-                                .handle_message(data, self.fcnt_down.try_into().unwrap())
-                            {
+                            match certification.handle_message(data, fcnt as u16) {
                                 AdrBitChange(adr) => {
                                     self.override_adr = adr;
                                 }
@@ -490,5 +498,98 @@ impl Session {
                 _ => (),
             }
         }
+    }
+}
+
+/// Rebuild the full 32-bit downlink frame counter from the 16-bit value carried
+/// on the wire and decide whether the frame is fresh.
+///
+/// Only the low 16 bits of the counter are transmitted (LoRaWAN 1.0.2
+/// §4.3.1.5); the receiver keeps the high 16 bits in `last` and advances them
+/// when the low half wraps. Returns the reconstructed counter to store, or
+/// `None` when the frame must be dropped because its counter does not advance
+/// past `last` or jumps further ahead than `MAX_FCNT_GAP` allows.
+///
+/// `last` is `None` until the first downlink of a session has been accepted, so
+/// that first frame is taken at face value instead of being compared against an
+/// initial counter.
+fn next_fcnt_down(last: Option<u32>, wire: u16) -> Option<u32> {
+    let Some(last) = last else {
+        return Some(u32::from(wire));
+    };
+    let high = last & 0xFFFF_0000;
+    let reconstructed = if wire >= last as u16 {
+        high | u32::from(wire)
+    } else {
+        // The low half wrapped, so the frame belongs to the next 16-bit epoch.
+        high.wrapping_add(0x1_0000) | u32::from(wire)
+    };
+    // Drop replays and counters that jump too far ahead. A stale frame from an
+    // earlier counter reconstructs to a value far beyond `last`, so the gap
+    // bound rejects it here before the MIC is even checked.
+    match reconstructed.checked_sub(last) {
+        Some(gap) if gap > 0 && gap <= MAX_FCNT_GAP as u32 => Some(reconstructed),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::next_fcnt_down;
+
+    #[test]
+    fn first_downlink_taken_at_face_value() {
+        // Before any downlink is seen, the wire value is accepted as-is even
+        // when it is zero (the counter both ends start from).
+        assert_eq!(next_fcnt_down(None, 0), Some(0));
+        assert_eq!(next_fcnt_down(None, 7), Some(7));
+    }
+
+    #[test]
+    fn increasing_counter_in_same_epoch() {
+        assert_eq!(next_fcnt_down(Some(5), 6), Some(6));
+        assert_eq!(next_fcnt_down(Some(100), 200), Some(200));
+    }
+
+    #[test]
+    fn jump_beyond_max_fcnt_gap_is_dropped() {
+        use super::MAX_FCNT_GAP;
+        let last = 5;
+        // A jump of exactly MAX_FCNT_GAP is still accepted.
+        let at_limit = last + MAX_FCNT_GAP as u16;
+        assert_eq!(next_fcnt_down(Some(last as u32), at_limit), Some(at_limit as u32));
+        // One past the limit is rejected.
+        assert_eq!(next_fcnt_down(Some(last as u32), at_limit + 1), None);
+    }
+
+    #[test]
+    fn replayed_or_stale_counter_is_dropped() {
+        // Exact replay of the last counter.
+        assert_eq!(next_fcnt_down(Some(6), 6), None);
+        // An older counter from the same epoch.
+        assert_eq!(next_fcnt_down(Some(6), 5), None);
+        // A wire value of zero no longer resets the counter or bypasses the
+        // freshness check once a downlink has been seen.
+        assert_eq!(next_fcnt_down(Some(6), 0), None);
+    }
+
+    #[test]
+    fn counter_is_reconstructed_past_16_bits() {
+        // Wire wraps 0xFFFF -> 0x0000: the reconstructed value crosses into the
+        // next epoch rather than folding back to zero.
+        assert_eq!(next_fcnt_down(Some(0xFFFF), 0), Some(0x1_0000));
+        // Further progress inside the high epoch.
+        assert_eq!(next_fcnt_down(Some(0x1_0000), 1), Some(0x1_0001));
+        // A frame far into the session reconstructs correctly instead of
+        // capping at 0xFFFF.
+        assert_eq!(next_fcnt_down(Some(0x0003_FFFE), 0xFFFF), Some(0x0003_FFFF));
+        assert_eq!(next_fcnt_down(Some(0x0003_FFFF), 0), Some(0x0004_0000));
+    }
+
+    #[test]
+    fn near_top_of_range_does_not_wrap_backwards() {
+        // Reconstruction that would overflow the 32-bit counter is rejected
+        // rather than wrapping to a smaller value.
+        assert_eq!(next_fcnt_down(Some(0xFFFF_FFFE), 0), None);
     }
 }

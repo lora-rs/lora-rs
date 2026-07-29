@@ -30,7 +30,9 @@ fn handle_multicast_setup_req(
     phy.set_f_port(200); // Remote multicast setup port
     phy.set_dev_addr(&[0; 4]);
     phy.set_uplink(false);
-    phy.set_fcnt(0);
+    // The class C setup already delivered a downlink at counter 0, so this one
+    // advances the downlink counter.
+    phy.set_fcnt(1);
 
     let finished =
         phy.build(setup_req, [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
@@ -135,7 +137,7 @@ fn handle_mc_group_delete_req<const GROUP_ID: u8>(
     phy.set_f_port(200); // Remote multicast setup port
     phy.set_dev_addr(&[0; 4]);
     phy.set_uplink(false);
-    phy.set_fcnt(1);
+    phy.set_fcnt(2);
 
     let finished =
         phy.build(setup_req, [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
@@ -202,7 +204,7 @@ async fn test_multicast_group_delete() {
     // Send the McGroupDeleteReq with correct groupID
     radio.handle_rxtx(handle_mc_group_delete_req::<0x01>).await;
     radio.handle_rxtx(verify_mc_group_delete_ans).await;
-    radio.handle_rxtx(handle_regular_downlink_msg::<2>).await;
+    radio.handle_rxtx(handle_regular_downlink_msg::<3>).await;
     let _ = task.await.unwrap();
 }
 
@@ -250,6 +252,6 @@ async fn test_multicast_invalid_group_delete() {
     // Send the McGroupDeleteReq with correct groupID
     radio.handle_rxtx(handle_mc_group_delete_req::<0x03>).await;
     radio.handle_rxtx(verify_mc_group_delete_ans_undefined).await;
-    radio.handle_rxtx(handle_regular_downlink_msg::<2>).await;
+    radio.handle_rxtx(handle_regular_downlink_msg::<3>).await;
     let _ = task.await.unwrap();
 }

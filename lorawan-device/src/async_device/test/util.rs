@@ -9,21 +9,7 @@ pub(crate) use crate::test_util::{handle_data_uplink_with_link_adr_req, Uplink};
 use crate::{AppSKey, NwkSKey};
 
 fn default_session() -> Session {
-    Session {
-        nwkskey: NwkSKey::from(get_key()),
-        appskey: AppSKey::from(get_key()),
-        devaddr: get_dev_addr(),
-        fcnt_up: 0,
-        fcnt_down: 0,
-        confirmed: false,
-        uplink: Default::default(),
-        #[cfg(feature = "certification")]
-        override_adr: false,
-        #[cfg(feature = "certification")]
-        override_confirmed: None,
-        #[cfg(feature = "certification")]
-        rx_app_cnt: 0,
-    }
+    Session::new(NwkSKey::from(get_key()), AppSKey::from(get_key()), get_dev_addr())
 }
 
 pub fn session_with_region(region: region::Configuration) -> (RadioChannel, TimerChannel, Device) {
