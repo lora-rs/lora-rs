@@ -81,6 +81,7 @@ impl<D: AsMut<[u8]>> JoinAcceptCreator<D> {
         if d.len() < JOIN_ACCEPT_LEN {
             return Err(Error::BufferTooShort);
         }
+        d[..JOIN_ACCEPT_LEN - MIC_LEN].fill(0);
         d[0] = 0x20;
         Ok(Self { data, with_c_f_list: false, encrypted: false })
     }
@@ -172,6 +173,7 @@ impl<D: AsMut<[u8]>> JoinAcceptCreator<D> {
         if d.len() < JOIN_ACCEPT_WITH_CFLIST_LEN {
             return Err(Error::BufferTooShort);
         }
+        d[13..JOIN_ACCEPT_WITH_CFLIST_LEN - MIC_LEN].fill(0);
         ch_list.iter().enumerate().for_each(|(i, fr)| {
             let v = fr.value() / 100;
             d[13 + i * 3] = (v & 0xff) as u8;
@@ -250,6 +252,7 @@ impl<D: AsMut<[u8]>> JoinRequestCreator<D> {
         if d.len() < JOIN_REQUEST_LEN {
             return Err(Error::BufferTooShort);
         }
+        d[..JOIN_REQUEST_LEN - MIC_LEN].fill(0);
         d[0] = 0x00;
         Ok(Self { data })
     }
@@ -348,6 +351,7 @@ impl<D: AsMut<[u8]>> DataPayloadCreator<D> {
         if d.len() < PHY_PAYLOAD_MIN_LEN {
             return Err(Error::BufferTooShort);
         }
+        d[..PHY_PAYLOAD_MIN_LEN - MIC_LEN].fill(0);
         d[0] = 0x40;
         Ok(DataPayloadCreator { data, data_f_port: None, fcnt: 0 })
     }
@@ -504,12 +508,13 @@ impl<D: AsMut<[u8]>> DataPayloadCreator<D> {
         if !has_fport && payload_len > 0 {
             return Err(Error::FRMPayloadWithFportZero);
         }
-        // Set FOptsLen if present
+        // Set FOptsLen, including clearing a value from a previous build.
+        d[5] &= 0xf0;
         if !has_fport_zero && mac_cmds_len > 0 {
             if d.len() < last_filled + mac_cmds_len + MIC_LEN {
                 return Err(Error::BufferTooShort);
             }
-            d[5] |= mac_cmds_len as u8 & 0x0f;
+            d[5] |= mac_cmds_len as u8;
             // copy mac commmands into d
             d[last_filled..last_filled + mac_cmds_len].copy_from_slice(mac_cmds.as_ref());
             last_filled += mac_cmds_len;

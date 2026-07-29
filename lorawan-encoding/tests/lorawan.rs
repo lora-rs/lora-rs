@@ -502,6 +502,40 @@ fn test_data_payload_uplink_creator() {
 }
 
 #[test]
+fn test_data_payload_creator_does_not_depend_on_buffer_contents() {
+    let mut clean_buf = [0u8; 12];
+    let mut dirty_buf = [0xa5; 12];
+    let nwk_skey = [2; 16].into();
+    let app_skey = [1; 16].into();
+
+    let clean = DataPayloadCreator::new(&mut clean_buf)
+        .unwrap()
+        .build(b"", [], &nwk_skey, &app_skey, &DefaultFactory)
+        .unwrap()
+        .to_owned();
+    let dirty = DataPayloadCreator::new(&mut dirty_buf)
+        .unwrap()
+        .build(b"", [], &nwk_skey, &app_skey, &DefaultFactory)
+        .unwrap()
+        .to_owned();
+
+    assert_eq!(dirty, clean);
+}
+
+#[test]
+fn test_data_payload_creator_clears_previous_fopts_len() {
+    let mut buf = [0u8; 32];
+    let nwk_skey = [2; 16].into();
+    let app_skey = [1; 16].into();
+    let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
+
+    phy.build(b"", [0x02, 0x03], &nwk_skey, &app_skey, &DefaultFactory).unwrap();
+    let rebuilt = phy.build(b"", [], &nwk_skey, &app_skey, &DefaultFactory).unwrap();
+
+    assert_eq!(rebuilt[5] & 0x0f, 0);
+}
+
+#[test]
 fn test_long_data_payload_uplink_creator() {
     let mut buf = [0u8; 256];
     let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
@@ -674,6 +708,52 @@ fn test_join_accept_creator() {
 
     assert_eq!(phy.build(&key, &DefaultFactory), Ok(&phy_join_accept_payload()[..]));
 }
+
+#[test]
+fn test_join_accept_creator_does_not_depend_on_buffer_contents() {
+    let mut clean_buf = [0u8; 17];
+    let mut dirty_buf = [0xa5; 17];
+    let key = AES128(app_key());
+
+    let clean = JoinAcceptCreator::new(&mut clean_buf)
+        .unwrap()
+        .build(&key, &DefaultFactory)
+        .unwrap()
+        .to_owned();
+    let dirty = JoinAcceptCreator::new(&mut dirty_buf)
+        .unwrap()
+        .build(&key, &DefaultFactory)
+        .unwrap()
+        .to_owned();
+
+    assert_eq!(dirty, clean);
+}
+
+#[test]
+fn test_join_accept_creator_clears_unused_cflist_entries() {
+    let mut clean_buf = [0u8; 33];
+    let mut dirty_buf = [0xa5; 33];
+    let key = AES128(app_key());
+    let freqs = [Frequency::new_from_raw(&[0x18, 0x4f, 0x84])];
+
+    let clean = JoinAcceptCreator::new(&mut clean_buf)
+        .unwrap()
+        .set_c_f_list(&freqs)
+        .unwrap()
+        .build(&key, &DefaultFactory)
+        .unwrap()
+        .to_owned();
+    let dirty = JoinAcceptCreator::new(&mut dirty_buf)
+        .unwrap()
+        .set_c_f_list(&freqs)
+        .unwrap()
+        .build(&key, &DefaultFactory)
+        .unwrap()
+        .to_owned();
+
+    assert_eq!(dirty, clean);
+}
+
 #[test]
 fn test_join_accept_creator_long_buffer() {
     let mut buf = [0u8; 255];
@@ -732,6 +812,19 @@ fn test_join_request_creator() {
 
     assert_eq!(phy.build(&key, &DefaultFactory), &phy_join_request_payload());
 }
+
+#[test]
+fn test_join_request_creator_does_not_depend_on_buffer_contents() {
+    let clean_buf = [0u8; 23];
+    let dirty_buf = [0xa5; 23];
+    let key = [1; 16].into();
+
+    let clean = JoinRequestCreator::new(clean_buf).unwrap().build(&key, &DefaultFactory).to_owned();
+    let dirty = JoinRequestCreator::new(dirty_buf).unwrap().build(&key, &DefaultFactory).to_owned();
+
+    assert_eq!(dirty, clean);
+}
+
 #[test]
 fn test_join_request_creator_long_buffer() {
     let buf = [0u8; 255];
