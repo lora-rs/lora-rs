@@ -574,3 +574,70 @@ async fn test_restarted_rx_ignores_stale_flags() {
         "reported a phantom packet from a stale RxDone flag: {result:?}"
     );
 }
+
+/// Pin every `Register` address to Semtech's SWL2001 register maps
+/// (`sx127x_registers_common_e` in sx127x_regs_common_defs.h,
+/// `sx127x_registers_lora_e` in sx127x_regs_lora_defs.h). The driver
+/// addresses every register through this enum and the emulator's register
+/// file is keyed by these bytes, so a wrong address silently reads or writes
+/// the wrong register on real hardware. Vendor values are transcribed
+/// independently of the driver enum, so a typo in either won't match.
+///
+/// The driver names the frequency-error registers `RegFreqError*`; the
+/// vendor calls the same 0x28..0x2A registers `FEI_*` (frequency error
+/// indicator) — same address, different label.
+///
+/// Not pinned (no entry in the vendor register-address enums, so nothing to
+/// compare against): RegModemConfig3 (0x26) and the errata/chip-specific
+/// RegIfFreq1/2, RegHighBwOptimize1/2, RegPaDac*, and RegTcxo*. Their bytes
+/// are still exercised by the register-file comparison tests above.
+#[test]
+fn registers_match_swl2001() {
+    // (name, our driver's address, SWL2001's address)
+    let cases: &[(&str, u8, u8)] = &[
+        ("RegFifo", Register::RegFifo as u8, 0x00),
+        ("RegOpMode", Register::RegOpMode as u8, 0x01),
+        ("RegFrfMsb", Register::RegFrfMsb as u8, 0x06),
+        ("RegFrfMid", Register::RegFrfMid as u8, 0x07),
+        ("RegFrfLsb", Register::RegFrfLsb as u8, 0x08),
+        ("RegPaConfig", Register::RegPaConfig as u8, 0x09),
+        ("RegPaRamp", Register::RegPaRamp as u8, 0x0A),
+        ("RegOcp", Register::RegOcp as u8, 0x0B),
+        ("RegLna", Register::RegLna as u8, 0x0C),
+        ("RegFifoAddrPtr", Register::RegFifoAddrPtr as u8, 0x0D),
+        ("RegFifoTxBaseAddr", Register::RegFifoTxBaseAddr as u8, 0x0E),
+        ("RegFifoRxBaseAddr", Register::RegFifoRxBaseAddr as u8, 0x0F),
+        ("RegFifoRxCurrentAddr", Register::RegFifoRxCurrentAddr as u8, 0x10),
+        ("RegIrqFlagsMask", Register::RegIrqFlagsMask as u8, 0x11),
+        ("RegIrqFlags", Register::RegIrqFlags as u8, 0x12),
+        ("RegRxNbBytes", Register::RegRxNbBytes as u8, 0x13),
+        ("RegModemStat", Register::RegModemStat as u8, 0x18),
+        ("RegPktSnrValue", Register::RegPktSnrValue as u8, 0x19),
+        ("RegPktRssiValue", Register::RegPktRssiValue as u8, 0x1A),
+        ("RegRssiValue", Register::RegRssiValue as u8, 0x1B),
+        ("RegModemConfig1", Register::RegModemConfig1 as u8, 0x1D),
+        ("RegModemConfig2", Register::RegModemConfig2 as u8, 0x1E),
+        ("RegSymbTimeoutLsb", Register::RegSymbTimeoutLsb as u8, 0x1F),
+        ("RegPreambleMsb", Register::RegPreambleMsb as u8, 0x20),
+        ("RegPreambleLsb", Register::RegPreambleLsb as u8, 0x21),
+        ("RegPayloadLength", Register::RegPayloadLength as u8, 0x22),
+        ("RegMaxPayloadLength", Register::RegMaxPayloadLength as u8, 0x23),
+        ("RegFreqErrorMsb", Register::RegFreqErrorMsb as u8, 0x28),
+        ("RegFreqErrorMid", Register::RegFreqErrorMid as u8, 0x29),
+        ("RegFreqErrorLsb", Register::RegFreqErrorLsb as u8, 0x2A),
+        ("RegRssiWideband", Register::RegRssiWideband as u8, 0x2C),
+        ("RegDetectionOptimize", Register::RegDetectionOptimize as u8, 0x31),
+        ("RegInvertiq", Register::RegInvertiq as u8, 0x33),
+        ("RegDetectionThreshold", Register::RegDetectionThreshold as u8, 0x37),
+        ("RegSyncWord", Register::RegSyncWord as u8, 0x39),
+        ("RegInvertiq2", Register::RegInvertiq2 as u8, 0x3B),
+        ("RegDioMapping1", Register::RegDioMapping1 as u8, 0x40),
+        ("RegVersion", Register::RegVersion as u8, 0x42),
+    ];
+    for (name, driver, vendor) in cases {
+        assert_eq!(
+            driver, vendor,
+            "Register::{name} = {driver:#04x}, SWL2001 = {vendor:#04x}"
+        );
+    }
+}
