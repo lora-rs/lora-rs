@@ -177,6 +177,21 @@ pub fn get_lr1110_lp() -> Lr1110<TestFixture, DummyVariant> {
     )
 }
 
+/// HF-PA variant for the 2.4 GHz high-frequency TX path
+pub fn get_lr1110_hf() -> Lr1110<TestFixture, DummyVariant> {
+    Lr1110::new(
+        TestFixture::new(),
+        DummyVariant,
+        Config {
+            pa_selection: PaSelection::Hf,
+            dio_as_rf_switch: Some(Default::default()),
+            tcxo_ctrl: None,
+            use_dcdc: false,
+            rx_boost: false,
+        },
+    )
+}
+
 /// TCXO + DC-DC board, for the init_system and TCXO-before-TX paths
 pub fn get_lr1110_dcdc_tcxo() -> Lr1110<TestFixture, DummyVariant> {
     Lr1110::new(
