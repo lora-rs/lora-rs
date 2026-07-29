@@ -1445,11 +1445,12 @@ where
         let ramp_time = RampTime::Ramp208Us;
 
         let pa_selection = self.config.pa_selection;
-        // Per LR1110 User Manual Tables 9-1 and 9-2: the LP PA runs from the internal
-        // regulator (Vreg), the HP PA from VBAT. HF also runs from VBAT.
+        // Per LR1110 User Manual Tables 9-1 and 9-2 and the SWL2001 reference BSP
+        // (ral_lr11xx_bsp.c, lr11xx_get_tx_cfg): the LP and HF PAs run from the
+        // internal regulator (Vreg), only the HP PA draws from VBAT.
         let pa_supply = match pa_selection {
-            PaSelection::Lp => PaRegSupply::Vreg,
-            PaSelection::Hp | PaSelection::Hf => PaRegSupply::Vbat,
+            PaSelection::Lp | PaSelection::Hf => PaRegSupply::Vreg,
+            PaSelection::Hp => PaRegSupply::Vbat,
         };
 
         let (tx_power, pa_duty_cycle, pa_hp_sel) = match pa_selection {
