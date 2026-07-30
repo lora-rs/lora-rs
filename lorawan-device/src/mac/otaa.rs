@@ -57,16 +57,21 @@ impl Otaa {
             lorawan_parse(rx.as_mut_for_read())
         {
             let decrypt = encrypted.decrypt(&self.network_credentials.appkey, &DefaultFactory);
-            region.process_join_accept(&decrypt);
-            // TODO: dlsettings (rx1_dr_offset / rx2_datarate)
-            configuration.rx1_delay = del_to_delay_ms(decrypt.rx_delay());
-            if decrypt.validate_mic(&self.network_credentials.appkey, &DefaultFactory) {
-                return Some(Session::derive_new(
-                    &decrypt,
-                    self.dev_nonce,
-                    &self.network_credentials,
-                ));
+            if !decrypt.validate_mic(&self.network_credentials.appkey, &DefaultFactory) {
+                return None;
             }
+            region.process_join_accept(&decrypt);
+            configuration.rx1_delay = del_to_delay_ms(decrypt.rx_delay());
+            let dl_settings = decrypt.dl_settings();
+            if let Some(rx1_dr_offset) = region.rx1_dr_offset_validate(dl_settings.rx1_dr_offset())
+            {
+                configuration.rx1_dr_offset = rx1_dr_offset;
+            }
+            let rx2_data_rate = dl_settings.rx2_data_rate();
+            if region.get_datarate(rx2_data_rate as u8).is_some() {
+                configuration.rx2_data_rate = Some(rx2_data_rate);
+            }
+            return Some(Session::derive_new(&decrypt, self.dev_nonce, &self.network_credentials));
         }
         None
     }
