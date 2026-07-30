@@ -151,15 +151,15 @@ impl Idle {
 
         let response = match event {
             // tolerate unexpected timeout
-            Event::Join(creds) => {
-                let (tx_config, rx_windows, dev_nonce) = mac.join_otaa::<RNG, N>(rng, creds, buf);
-                IntermediateResponse::RadioTx((
+            Event::Join(creds) => match mac.join_otaa::<RNG, N>(rng, creds, buf) {
+                Err(e) => IntermediateResponse::EarlyReturn(Err(e.into())),
+                Ok((tx_config, rx_windows, dev_nonce)) => IntermediateResponse::RadioTx((
                     Frame::Join,
                     tx_config,
                     rx_windows,
                     dev_nonce as u32,
-                ))
-            }
+                )),
+            },
             Event::TimeoutFired => IntermediateResponse::EarlyReturn(Ok(Response::NoUpdate)),
             Event::RadioEvent(_radio_event) => {
                 IntermediateResponse::EarlyReturn(Err(Error::RadioEventWhileIdle.into()))
