@@ -1,4 +1,5 @@
 use super::{Response, del_to_delay_ms, session::Session};
+use crate::nvm::PersistentIdentity;
 use crate::radio::RadioBuffer;
 use crate::region::Configuration;
 use crate::{AppEui, AppKey, DevEui};
@@ -28,12 +29,15 @@ impl Otaa {
 
     /// Prepare a join request to be sent. This populates the radio buffer with the request to be
     /// sent, and returns the radio config to use for transmitting.
+    ///
+    /// `dev_nonce` is the 1.0.4 monotonic counter value; `None` draws a random 1.0.2 nonce.
     pub(crate) fn prepare_buffer<G: RngCore, const N: usize>(
         &mut self,
         rng: &mut G,
+        dev_nonce: Option<u16>,
         buf: &mut RadioBuffer<N>,
     ) -> u16 {
-        self.dev_nonce = DevNonce::from_value(rng.next_u32() as u16);
+        self.dev_nonce = DevNonce::from_value(dev_nonce.unwrap_or_else(|| rng.next_u32() as u16));
         buf.clear();
         let request = JoinRequest {
             join_eui: self.network_credentials.appeui.into(),
@@ -50,12 +54,25 @@ impl Otaa {
         &mut self,
         region: &mut Configuration,
         configuration: &mut super::Configuration,
+        identity: Option<&mut PersistentIdentity>,
         rx: &mut RadioBuffer<N>,
     ) -> Option<Session> {
         if let Ok(decrypt) = DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(
             rx.as_mut_for_read(),
             &DefaultCrypto::new(self.network_credentials.appkey.inner()),
         ) {
+            if let Some(identity) = identity {
+                // A replayed JoinAccept passes the MIC check (it does not cover
+                // DevNonce) but repeats the last JoinNonce. 1.0.4 only guarantees a
+                // non-repeating JoinNonce, so equality is the only usable test.
+                // Rejected before any region or configuration state is touched.
+                let join_nonce = decrypt.join_nonce().value();
+                if identity.last_join_nonce == Some(join_nonce) {
+                    return None;
+                }
+                identity.last_join_nonce = Some(join_nonce);
+                identity.join_epoch = identity.join_epoch.wrapping_add(1);
+            }
             region.process_join_accept(decrypt.c_f_list().as_ref());
             configuration.rx1_delay = del_to_delay_ms(decrypt.rx_delay());
             let dl_settings = decrypt.dl_settings();
