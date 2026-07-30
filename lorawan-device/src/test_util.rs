@@ -79,6 +79,15 @@ static SESSION: LazyLock<Mutex<HashMap<usize, Session>>> =
 /// Handle join request and pack a JoinAccept into RxBuffer
 pub fn handle_join_request<const I: usize>(
     uplink: Option<Uplink>,
+    config: RfConfig,
+    rx_buffer: &mut [u8],
+) -> usize {
+    handle_join_request_with_dl_settings::<I, 0>(uplink, config, rx_buffer)
+}
+
+/// Handle join request and pack a JoinAccept carrying the given DLSettings byte into RxBuffer
+pub fn handle_join_request_with_dl_settings<const I: usize, const DL_SETTINGS: u8>(
+    uplink: Option<Uplink>,
     _config: RfConfig,
     rx_buffer: &mut [u8],
 ) -> usize {
@@ -92,6 +101,7 @@ pub fn handle_join_request<const I: usize>(
             phy.set_app_nonce(&app_nonce_bytes);
             phy.set_net_id(&[1; 3]);
             phy.set_dev_addr(get_dev_addr());
+            phy.set_dl_settings(DL_SETTINGS);
             let finished = phy.build(&get_key().into(), &DefaultFactory).unwrap();
             rx_buffer[..finished.len()].copy_from_slice(finished);
 
@@ -174,6 +184,36 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
         }
     } else {
         panic!("No uplink passed to handle_data_uplink_with_link_adr_req");
+    }
+}
+
+/// Handle join request and respond with a JoinAccept built with the wrong key, so its MIC is
+/// invalid. Sets RxDelay and DLSettings so tests can verify a rejected accept changes nothing.
+pub fn handle_join_request_bad_mic(
+    uplink: Option<Uplink>,
+    _config: RfConfig,
+    rx_buffer: &mut [u8],
+) -> usize {
+    if let Some(mut uplink) = uplink {
+        if let PhyPayload::JoinRequest(join_request) = uplink.get_payload() {
+            assert!(join_request.validate_mic(&get_key().into(), &DefaultFactory));
+            let mut buffer: [u8; 17] = [0; 17];
+            let mut phy = lorawan::creator::JoinAcceptCreator::new(&mut buffer[..]).unwrap();
+            let app_nonce_bytes = [1; 3];
+            phy.set_app_nonce(&app_nonce_bytes);
+            phy.set_net_id(&[1; 3]);
+            phy.set_dev_addr(get_dev_addr());
+            phy.set_dl_settings(0x2A);
+            phy.set_rx_delay(3);
+            let wrong_key = [1; 16];
+            let finished = phy.build(&wrong_key.into(), &DefaultFactory).unwrap();
+            rx_buffer[..finished.len()].copy_from_slice(finished);
+            finished.len()
+        } else {
+            panic!("Did not parse join request from uplink");
+        }
+    } else {
+        panic!("No uplink passed to handle_join_request_bad_mic");
     }
 }
 
