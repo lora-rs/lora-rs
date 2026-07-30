@@ -261,6 +261,11 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
     /// Update channel's downlink frequency for RX1 slot
     fn channel_dl_update(&mut self, index: u8, freq: u32) -> (bool, bool) {
         let freq_valid = self.frequency_valid(freq);
+        // A crafted DlChannelReq can carry any index in 0..=255; reject anything
+        // past the channel plan before indexing self.channels (len NUM_CHANNELS_DYNAMIC).
+        if index >= NUM_CHANNELS_DYNAMIC {
+            return (freq_valid, false);
+        }
         if self.channel_mask.is_enabled(index as usize).is_ok()
             && self.channel_mask.is_enabled(index as usize).unwrap()
         {
@@ -291,6 +296,11 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         if index < R::NUM_JOIN_CHANNELS {
             return (false, false);
         }
+        // A crafted NewChannelReq can carry any index in 0..=255; reject anything
+        // past the channel plan before indexing self.channels (len NUM_CHANNELS_DYNAMIC).
+        if index >= NUM_CHANNELS_DYNAMIC {
+            return (false, false);
+        }
         // Disable channel if frequency is 0
         if freq == 0 {
             self.channels[index as usize] = None;
@@ -319,5 +329,49 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         } else {
             None
         }
+    }
+}
+
+#[cfg(all(test, feature = "region-eu868"))]
+mod tests {
+    use super::*;
+    use crate::region::{Configuration, Region};
+
+    // A valid EU868 channel frequency (863..=870 MHz), used to reach the indexing paths.
+    const VALID_FREQ: u32 = 868_100_000;
+
+    // NewChannelReq carries a raw u8 channel index. Indices beyond the channel plan
+    // (NUM_CHANNELS_DYNAMIC) must be rejected, not used to index self.channels.
+    #[test]
+    fn new_channel_index_out_of_range_is_rejected() {
+        let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));
+        for index in NUM_CHANNELS_DYNAMIC..=u8::MAX {
+            let mut config = Configuration::new(Region::EU868);
+            // create path (freq != 0) must not panic and must NAK
+            assert_eq!(config.handle_new_channel(index, VALID_FREQ, dr), (false, false));
+            // disable path (freq == 0) must not panic and must NAK
+            assert_eq!(config.handle_new_channel(index, 0, dr), (false, false));
+        }
+    }
+
+    // DlChannelReq shares the same raw u8 index; an out-of-range index must not
+    // index self.channels either.
+    #[test]
+    fn channel_dl_update_index_out_of_range_is_rejected() {
+        for index in NUM_CHANNELS_DYNAMIC..=u8::MAX {
+            let mut config = Configuration::new(Region::EU868);
+            // frequency-valid flag may be true, but the update flag must be false
+            let (_freq_ack, updated) = config.channel_dl_update(index, VALID_FREQ);
+            assert!(!updated);
+        }
+    }
+
+    // In-range indices past the join channels still work as before.
+    #[test]
+    fn new_channel_in_range_index_is_accepted() {
+        let mut config = Configuration::new(Region::EU868);
+        let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));
+        let index = NUM_CHANNELS_DYNAMIC - 1;
+        assert_eq!(config.handle_new_channel(index, VALID_FREQ, dr), (true, true));
     }
 }
