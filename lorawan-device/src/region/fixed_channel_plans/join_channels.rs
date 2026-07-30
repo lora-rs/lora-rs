@@ -311,7 +311,7 @@ mod test {
         let mut checked_fat_bank = false;
         for _ in 0..9 {
             let (tx_config, rx_windows, _) =
-                mac.join_otaa::<_, 255>(&mut rng, credentials.clone(), &mut buf);
+                mac.join_otaa::<_, 255>(&mut rng, credentials.clone(), &mut buf).unwrap();
             if tx_config.rf.bb.bw == Bandwidth::_500KHz {
                 // Join on the fat bank is forced to DR4 (SF8/500kHz)...
                 assert_eq!(tx_config.rf.bb.sf, SpreadingFactor::_8);
@@ -341,15 +341,17 @@ mod test {
         let mut mac = Mac::new(us915.into(), 21, 2);
 
         let mut buf: RadioBuffer<255> = RadioBuffer::new();
-        let (tx_config, rx_windows, _dev_nonce) = mac.join_otaa::<_, 255>(
-            &mut rand::rngs::OsRng,
-            NetworkCredentials::new(
-                AppEui::from([0x0; 8]),
-                DevEui::from([0x0; 8]),
-                AppKey::from(get_key()),
-            ),
-            &mut buf,
-        );
+        let (tx_config, rx_windows, _dev_nonce) = mac
+            .join_otaa::<_, 255>(
+                &mut rand::rngs::OsRng,
+                NetworkCredentials::new(
+                    AppEui::from([0x0; 8]),
+                    DevEui::from([0x0; 8]),
+                    AppKey::from(get_key()),
+                ),
+                &mut buf,
+            )
+            .unwrap();
         // Confirm that the join request occurs on our subband
         assert!(
             tx_config.rf.frequency >= 903_900_000,
@@ -403,15 +405,17 @@ mod test {
         let mut mac = Mac::new(us915.into(), 21, 2);
 
         let mut buf: RadioBuffer<255> = RadioBuffer::new();
-        let (tx_config, rx_windows, _dev_nonce) = mac.join_otaa::<_, 255>(
-            &mut rand::rngs::OsRng,
-            NetworkCredentials::new(
-                AppEui::from([0x0; 8]),
-                DevEui::from([0x0; 8]),
-                AppKey::from(get_key()),
-            ),
-            &mut buf,
-        );
+        let (tx_config, rx_windows, _dev_nonce) = mac
+            .join_otaa::<_, 255>(
+                &mut rand::rngs::OsRng,
+                NetworkCredentials::new(
+                    AppEui::from([0x0; 8]),
+                    DevEui::from([0x0; 8]),
+                    AppKey::from(get_key()),
+                ),
+                &mut buf,
+            )
+            .unwrap();
         // Confirm that the join request occurs on our subband
         assert!(
             tx_config.rf.frequency >= 903_900_000,
