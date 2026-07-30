@@ -17,6 +17,8 @@ mod radio;
 pub mod mac;
 use mac::NetworkCredentials;
 
+pub mod nvm;
+
 pub mod region;
 pub use region::Region;
 
