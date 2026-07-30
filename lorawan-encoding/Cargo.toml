@@ -14,7 +14,9 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
+# https://github.com/RustCrypto/block-ciphers
 aes = { version = "0.9.2" }
+# https://github.com/RustCrypto/MACs
 cmac = { version = "0.8.0" }
 hex = { version = "0", default-features = false }
 defmt = { version = "0.3", optional = true }
