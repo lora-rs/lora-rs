@@ -4,6 +4,7 @@
 
 use crate::{
     AppSKey, Downlink, NwkSKey,
+    nvm::{PersistentIdentity, PersistentSession},
     radio::{self, RadioBuffer, RfConfig, RxConfig, RxMode},
     region,
 };
@@ -97,6 +98,9 @@ pub(crate) struct Mac {
     pub region: region::Configuration,
     board_eirp: BoardEirp,
     state: State,
+    /// 1.0.4 join anti-replay counters; `None` keeps the 1.0.2 behavior (random
+    /// DevNonce, no JoinNonce check). Set only when a persistent store backs them.
+    identity: Option<PersistentIdentity>,
     #[cfg(feature = "certification")]
     certification: certification::Certification,
     /// Actual TX duration and RX windows of the prepared certification answer
@@ -124,6 +128,8 @@ pub(crate) enum State {
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error {
     NotJoined,
+    /// The persisted DevNonce counter reached `u16::MAX`; this identity can no longer join.
+    DevNonceExhausted,
     #[cfg(feature = "multicast")]
     Multicast(multicast::Error),
 }
@@ -143,6 +149,7 @@ impl Mac {
             board_eirp: BoardEirp { max_power, antenna_gain },
             region,
             state: State::Unjoined,
+            identity: None,
             configuration: Configuration {
                 data_rate,
                 rx1_delay: region::constants::RECEIVE_DELAY1,
@@ -171,19 +178,46 @@ impl Mac {
         rng: &mut RNG,
         credentials: NetworkCredentials,
         buf: &mut RadioBuffer<N>,
-    ) -> (radio::TxConfig, RxWindows, u16) {
+    ) -> Result<(radio::TxConfig, RxWindows, u16)> {
         let mut otaa = otaa::Otaa::new(credentials);
-        let dev_nonce = otaa.prepare_buffer::<RNG, N>(rng, buf);
+        // With a persistent identity the DevNonce is the monotonic counter. The caller
+        // commits the increment to the store before transmitting.
+        let next_dev_nonce = match self.identity.as_mut() {
+            Some(id) if id.dev_nonce == u16::MAX => return Err(Error::DevNonceExhausted),
+            Some(id) => {
+                let n = id.dev_nonce;
+                id.dev_nonce += 1;
+                Some(n)
+            }
+            None => None,
+        };
+        let dev_nonce = otaa.prepare_buffer::<RNG, N>(rng, next_dev_nonce, buf);
         self.state = State::Otaa(otaa);
         let (mut tx_config, tx_channel) =
             self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Join);
         tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
-        (tx_config, self.rx_windows(&tx_channel), dev_nonce)
+        Ok((tx_config, self.rx_windows(&tx_channel), dev_nonce))
     }
 
     /// Join via ABP. This does not transmit a join request frame, but instead sets the session.
-    pub(crate) fn join_abp(&mut self, nwkskey: NwkSKey, appskey: AppSKey, devaddr: DevAddr) {
+    /// With a persistent identity, a restored session for the same keys and address is kept
+    /// so its frame counters continue; returns whether that happened.
+    pub(crate) fn join_abp(
+        &mut self,
+        nwkskey: NwkSKey,
+        appskey: AppSKey,
+        devaddr: DevAddr,
+    ) -> bool {
+        if self.identity.is_some()
+            && let State::Joined(session) = &self.state
+            && session.nwkskey == nwkskey
+            && session.appskey == appskey
+            && session.devaddr == devaddr
+        {
+            return true;
+        }
         self.state = State::Joined(Session::new(nwkskey, appskey, devaddr));
+        false
     }
 
     /// Join via ABP. This does not transmit a join request frame, but instead sets the session.
@@ -347,9 +381,12 @@ impl Mac {
                 false,
             ),
             State::Otaa(otaa) => {
-                if let Some(session) =
-                    otaa.handle_rx::<N>(&mut self.region, &mut self.configuration, buf)
-                {
+                if let Some(session) = otaa.handle_rx::<N>(
+                    &mut self.region,
+                    &mut self.configuration,
+                    self.identity.as_mut(),
+                    buf,
+                ) {
                     self.state = State::Joined(session);
                     Response::JoinSuccess
                 } else {
@@ -434,6 +471,59 @@ impl Mac {
             State::Otaa(_) => None,
             State::Unjoined => None,
         }
+    }
+
+    pub(crate) fn get_fcnt_down(&self) -> Option<FcntDown> {
+        self.get_session().and_then(|session| session.fcnt_down())
+    }
+
+    pub(crate) fn set_identity(&mut self, identity: PersistentIdentity) {
+        self.identity = Some(identity);
+    }
+
+    pub(crate) fn identity(&self) -> Option<&PersistentIdentity> {
+        self.identity.as_ref()
+    }
+
+    /// Snapshot the active session and negotiated MAC state for persistence.
+    /// `fcnt_up_checkpoint` is chosen by the device layer.
+    pub(crate) fn snapshot_session(&self, fcnt_up_checkpoint: u32) -> Option<PersistentSession> {
+        let session = self.get_session()?;
+        Some(PersistentSession {
+            nwkskey: session.nwkskey,
+            appskey: session.appskey,
+            devaddr: session.devaddr,
+            fcnt_up_checkpoint,
+            fcnt_down: session.fcnt_down(),
+            join_epoch: self.identity.as_ref().map_or(0, |id| id.join_epoch),
+            data_rate: self.configuration.data_rate,
+            rx1_delay: self.configuration.rx1_delay,
+            rx1_dr_offset: self.configuration.rx1_dr_offset,
+            rx2_data_rate: self.configuration.rx2_data_rate,
+            rx2_frequency: self.configuration.rx2_frequency,
+            tx_power: self.configuration.tx_power,
+            adr_enabled: self.configuration.adr_enabled,
+        })
+    }
+
+    /// Rebuild the joined state from a persisted session. `fcnt_up` resumes from the
+    /// checkpoint, which is ahead of any counter that went on the air.
+    pub(crate) fn restore_session(&mut self, ps: &PersistentSession) {
+        let mut session = Session::new(ps.nwkskey, ps.appskey, ps.devaddr);
+        session.fcnt_up = ps.fcnt_up_checkpoint;
+        session.restore_fcnt_down(ps.fcnt_down);
+        // Ignore persisted data rates the current region does not support.
+        if self.region.get_datarate(ps.data_rate as u8).is_some() {
+            self.configuration.data_rate = ps.data_rate;
+        }
+        self.configuration.rx2_data_rate =
+            ps.rx2_data_rate.filter(|dr| self.region.get_datarate(*dr as u8).is_some());
+        self.configuration.rx1_delay = ps.rx1_delay;
+        self.configuration.rx1_dr_offset = ps.rx1_dr_offset;
+        self.configuration.rx2_frequency = ps.rx2_frequency;
+        self.configuration.tx_power = ps.tx_power;
+        self.configuration.adr_enabled = ps.adr_enabled;
+        self.state = State::Joined(session);
     }
 
     /// Build the RfConfig for a window given its frequency and datarate, handling possibly
