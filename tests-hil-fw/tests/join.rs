@@ -100,16 +100,24 @@ mod tests {
         assert_eq!(2 + 2, 4);
     }
 
+    // embedded-test's macro rejects plain helper fns inside this mod, so the
+    // JoinMode construction is inlined per test.
+    macro_rules! join_mode {
+        () => {
+            JoinMode::OTAA {
+                deveui: DevEui::from(DEVEUI),
+                appeui: AppEui::from(APPEUI),
+                appkey: AppKey::from(APPKEY),
+            }
+        };
+    }
+
     /// Full OTAA join against the harness, then one confirmed-path uplink.
     /// Allows a few attempts: the bench antenna is damaged and RSSI swings.
     #[test]
     #[timeout(120)]
     async fn join_ok(mut device: HilDevice) {
-        let join_mode = JoinMode::OTAA {
-            deveui: DevEui::from(DEVEUI),
-            appeui: AppEui::from(APPEUI),
-            appkey: AppKey::from(APPKEY),
-        };
+        let join_mode = join_mode!();
 
         let mut joined = false;
         for attempt in 0..5u32 {
@@ -132,5 +140,27 @@ mod tests {
             matches!(sent, Ok(SendResponse::RxComplete | SendResponse::NoAck)),
             "post-join uplink failed"
         );
+    }
+
+    /// Negative: paired with a harness that ignores JoinRequests or answers
+    /// with a MIC-tampered JoinAccept. Passes only if no attempt ever joins.
+    /// The network-side fixture separately asserts no heartbeat decrypts.
+    #[test]
+    #[timeout(90)]
+    async fn join_never_accepted(mut device: HilDevice) {
+        let join_mode = join_mode!();
+        for attempt in 0..3u32 {
+            match device.join(&join_mode).await {
+                Ok(JoinResponse::JoinSuccess) => {
+                    defmt::error!("attempt {}: join unexpectedly succeeded", attempt);
+                    assert!(false, "device joined; it must reject/miss this accept");
+                }
+                Ok(JoinResponse::NoJoinAccept) => {
+                    defmt::info!("attempt {}: no JoinAccept, as expected", attempt)
+                }
+                Err(e) => defmt::warn!("attempt {}: join error {:?}", attempt, e),
+            }
+            embassy_time::Timer::after_secs(2).await;
+        }
     }
 }
