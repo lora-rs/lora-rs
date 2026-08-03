@@ -252,7 +252,7 @@ impl From<u8> for DataRateRange {
 }
 
 /// DLSettings represents LoRaWAN DLSettings.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DLSettings(u8);
 
 impl DLSettings {

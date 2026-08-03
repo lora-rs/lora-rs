@@ -39,6 +39,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
     let mut impl_bytes = Vec::new();
     let mut impl_cid = Vec::new();
     let mut impl_iter_next = Vec::new();
+    let mut impl_parse_one = Vec::new();
     let mut payload_struct_impls = Vec::new();
     let mut payload_struct_creator_impls = Vec::new();
 
@@ -94,6 +95,41 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
                                 None
                             }
                         } else
+                    });
+                }
+            }
+        }
+
+        // crate::v2::mac::MacCommandSet::parse_one(): fallible framing.
+        // Truncation and unknown CIDs are reported instead of silently
+        // ending the stream, and payload len() helpers are never invoked on
+        // an empty slice (the legacy iterator can panic that way).
+        if let Some((ref cid, ref len_opt)) = attributes.attrs {
+            match len_opt {
+                Some(_) => {
+                    impl_parse_one.push(quote! {
+                        #cid => {
+                            let len = #t::max_len();
+                            if data.len() < 1 + len {
+                                return Err(crate::v2::mac::Error::Truncated { cid });
+                            }
+                            Ok((Self::#n(#t::new_from_raw(&data[1..1 + len])), 1 + len))
+                        }
+                    });
+                }
+                None => {
+                    impl_parse_one.push(quote! {
+                        #cid => {
+                            let rest = &data[1..];
+                            if rest.is_empty() {
+                                return Err(crate::v2::mac::Error::Truncated { cid });
+                            }
+                            let len = #t::new_from_raw(rest).len();
+                            if rest.len() < len {
+                                return Err(crate::v2::mac::Error::Truncated { cid });
+                            }
+                            Ok((Self::#n(#t::new_from_raw(&rest[..len])), 1 + len))
+                        }
                     });
                 }
             }
@@ -274,8 +310,37 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
         }
     }
 
+    // The v2 fallible-framing impl. All current command sets carry exactly
+    // one lifetime; support lifetime-less enums for completeness.
+    let parse_one_body = quote! {
+        let cid = data[0];
+        match cid {
+            #( #impl_parse_one )*
+            _ => Err(crate::v2::mac::Error::UnknownCid(cid)),
+        }
+    };
+    let impl_command_set = if let Some(lt) = handler_lifetimes.first() {
+        quote! {
+            impl<#lt> crate::v2::mac::MacCommandSet<#lt> for #handler<#lt> {
+                fn parse_one(data: &#lt [u8]) -> Result<(Self, usize), crate::v2::mac::Error> {
+                    #parse_one_body
+                }
+            }
+        }
+    } else {
+        quote! {
+            impl<'a> crate::v2::mac::MacCommandSet<'a> for #handler {
+                fn parse_one(data: &'a [u8]) -> Result<(Self, usize), crate::v2::mac::Error> {
+                    #parse_one_body
+                }
+            }
+        }
+    };
+
     // Generate the final implementations
     quote! {
+        #impl_command_set
+
         impl #handler_lt #handler #handler_lt {
             /// Get the length.
             #[allow(clippy::len_without_is_empty)]

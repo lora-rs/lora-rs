@@ -14,6 +14,7 @@ pub mod packet_length;
 pub mod parser;
 pub mod string;
 pub mod types;
+pub mod v2;
 
 #[cfg(feature = "full")]
 pub mod extra;
