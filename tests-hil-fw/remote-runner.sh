@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
-# cargo runner: ship the test ELF to the lora-hil Pi and run it there under
-# probe-rs. embedded-test's host side lives inside probe-rs, so all libtest
-# args (--list, --exact, --format ...) pass straight through.
+# cargo runner: run the test ELF on the lora-hil Pi's DUT through probe-rs
+# remote (probe-rs-serve.service on the Pi, port 3000; client uploads the
+# ELF over the websocket). embedded-test's host side lives inside probe-rs,
+# so all libtest args (--list, --exact, --format ...) pass straight through.
+# Both ends run probe-rs 0.32.0 built with --features remote (not in the
+# release binaries); rebuild from the probe-rs checkout on lounas if either
+# end is reinstalled.
+#
+# Fallback if the server is down: scp "$1" lora-hil:/tmp/hil-test.elf &&
+# ssh lora-hil probe-rs run --chip STM32WL55JCIx /tmp/hil-test.elf <args>
 set -euo pipefail
-ELF="$1"
-shift
-scp -q "$ELF" lora-hil:/tmp/hil-test.elf
-exec ssh lora-hil "probe-rs run --chip STM32WL55JCIx /tmp/hil-test.elf $(printf '%q ' "$@")"
+exec "$HOME/.cargo/bin/probe-rs" run --chip STM32WL55JCIx \
+    --host ws://192.168.1.190:3000 \
+    --token "$(cat "$HOME/.config/probe-rs/remote-token")" \
+    "$@"
