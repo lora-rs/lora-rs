@@ -1,0 +1,28 @@
+name: HIL bench
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [hil-tests]
+  pull_request:
+    branches: [hil-tests]
+
+concurrency:
+  group: hil-bench
+  cancel-in-progress: false
+
+jobs:
+  paired-scenarios:
+    runs-on: [self-hosted, lora-hil]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run paired HIL scenarios
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          export HIL_FW_CRATE="$GITHUB_WORKSPACE/tests-hil-fw"
+          export HIL_FW_OFFLINE=0
+          export CARGO_TARGET_DIR=/tmp/hil-target
+          cd /bench/lora-hil-harness
+          cargo test --locked --test scenarios -- --test-threads 1
