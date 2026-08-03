@@ -100,8 +100,13 @@ mod tests {
         assert_eq!(2 + 2, 4);
     }
 
+    /// Downlink the harness sends in the DLSettings scenarios (fixture keeps
+    /// these in tests/scenarios.rs; change them together).
+    const MAGIC_DOWNLINK: &[u8] = &[0xBE, 0xEF, 0x42];
+    const MAGIC_FPORT: u8 = 42;
+
     // embedded-test's macro rejects plain helper fns inside this mod, so the
-    // JoinMode construction is inlined per test.
+    // shared steps are macros.
     macro_rules! join_mode {
         () => {
             JoinMode::OTAA {
@@ -112,27 +117,63 @@ mod tests {
         };
     }
 
+    /// OTAA join, allowing a few attempts: the bench antenna is damaged and
+    /// RSSI swings.
+    macro_rules! join_with_retries {
+        ($device:expr) => {{
+            let join_mode = join_mode!();
+            let mut joined = false;
+            for attempt in 0..5u32 {
+                match $device.join(&join_mode).await {
+                    Ok(JoinResponse::JoinSuccess) => {
+                        defmt::info!("joined on attempt {}", attempt);
+                        joined = true;
+                        break;
+                    }
+                    Ok(JoinResponse::NoJoinAccept) => {
+                        defmt::warn!("attempt {}: no JoinAccept", attempt)
+                    }
+                    Err(e) => defmt::warn!("attempt {}: join error {:?}", attempt, e),
+                }
+                embassy_time::Timer::after_secs(5).await;
+            }
+            assert!(joined, "no successful join in 5 attempts");
+        }};
+    }
+
+    /// Send heartbeats until the harness's reply downlink arrives, then check
+    /// its FPort and payload. Reception is the proof that the device is
+    /// listening where the JoinAccept's DLSettings/RxDelay told it to.
+    macro_rules! expect_magic_downlink {
+        ($device:expr) => {{
+            let mut downlink = None;
+            for i in 0..4u32 {
+                match $device.send(&[0xC0, 0xFF, 0xEE, 0x02], 1, false).await {
+                    Ok(SendResponse::DownlinkReceived(fcnt)) => {
+                        defmt::info!("downlink received on send {} (FCntDown {})", i, fcnt);
+                        downlink = $device.take_downlink();
+                        break;
+                    }
+                    Ok(r) => defmt::warn!("send {}: no downlink ({:?})", i, r),
+                    Err(e) => defmt::warn!("send {}: error {:?}", i, e),
+                }
+                embassy_time::Timer::after_secs(2).await;
+            }
+            match downlink {
+                Some(dl) => {
+                    assert_eq!(dl.fport, MAGIC_FPORT);
+                    assert_eq!(&dl.data[..], MAGIC_DOWNLINK);
+                }
+                None => assert!(false, "no downlink received in 4 uplinks"),
+            }
+        }};
+    }
+
     /// Full OTAA join against the harness, then one confirmed-path uplink.
-    /// Allows a few attempts: the bench antenna is damaged and RSSI swings.
     #[test]
     #[timeout(120)]
     async fn join_ok(mut device: HilDevice) {
-        let join_mode = join_mode!();
-
-        let mut joined = false;
-        for attempt in 0..5u32 {
-            match device.join(&join_mode).await {
-                Ok(JoinResponse::JoinSuccess) => {
-                    defmt::info!("joined on attempt {}", attempt);
-                    joined = true;
-                    break;
-                }
-                Ok(JoinResponse::NoJoinAccept) => defmt::warn!("attempt {}: no JoinAccept", attempt),
-                Err(e) => defmt::warn!("attempt {}: join error {:?}", attempt, e),
-            }
-            embassy_time::Timer::after_secs(5).await;
-        }
-        assert!(joined, "no successful join in 5 attempts");
+        join_with_retries!(device);
 
         // One post-join uplink so the harness can verify session keys.
         let sent = device.send(&[0xC0, 0xFF, 0xEE, 0x01], 1, false).await;
@@ -162,5 +203,26 @@ mod tests {
             }
             embassy_time::Timer::after_secs(2).await;
         }
+    }
+
+    /// PR #461 hardware validation, RX1 leg: the JoinAccept carries
+    /// RX1DROffset 2 and RxDelay 3, so the harness's reply downlink comes
+    /// 3 s after the uplink at DR8 (SF12/500) instead of the default 1 s at
+    /// DR10 (SF10/500). A device that ignores DLSettings misses it.
+    #[test]
+    #[timeout(120)]
+    async fn join_dlsettings_rx1(mut device: HilDevice) {
+        join_with_retries!(device);
+        expect_magic_downlink!(device);
+    }
+
+    /// PR #461 hardware validation, RX2 leg: the JoinAccept sets RX2 DR10
+    /// (default DR8). The harness leaves RX1 silent and transmits in RX2 at
+    /// 923.3 MHz DR10; reception proves the RX2 datarate was adopted.
+    #[test]
+    #[timeout(120)]
+    async fn join_dlsettings_rx2(mut device: HilDevice) {
+        join_with_retries!(device);
+        expect_magic_downlink!(device);
     }
 }
