@@ -21,8 +21,11 @@ jobs:
       - name: Run paired HIL scenarios
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          export HIL_FW_CRATE="$GITHUB_WORKSPACE/tests-hil-fw"
           export HIL_FW_OFFLINE=0
           export CARGO_TARGET_DIR=/tmp/hil-target
-          cd /bench/lora-hil-harness
+          # Rig marker lives on the bench (read-only mount), not in the repo:
+          # its presence is what marks this runner as rig-attached. The suite
+          # itself now comes from the checkout, like tests-hil-fw always has.
+          export BANC_RIG=/bench/lora-hil-harness/banc-rig.toml
+          cd "$GITHUB_WORKSPACE/tests-hil"
           cargo test --locked --test scenarios -- --test-threads 1
