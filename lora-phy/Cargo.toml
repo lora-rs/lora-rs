@@ -36,4 +36,6 @@ lorawan-device = { path = "../lorawan-device" }
 # Bindings to Semtech's reference driver (SWL2001), used to test our
 # implementation against the vendor's SPI byte stream
 smtc-modem-cores = "0.2.1"
+# Derive `OpCode::from_repr` for the sx126x behavioral emulator (test-only)
+strum = { version = "0.28", default-features = false, features = ["derive"] }
 tokio = { version = "1", features = ["rt", "macros"] }

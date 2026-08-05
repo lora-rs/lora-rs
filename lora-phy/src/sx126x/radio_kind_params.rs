@@ -88,6 +88,9 @@ impl Register {
 }
 
 #[derive(Clone, Copy, PartialEq)]
+// `from_repr` lets the sx126x emulator dispatch a wire byte back to a variant
+#[cfg_attr(test, derive(strum::FromRepr))]
+#[repr(u8)]
 #[allow(dead_code)]
 pub enum OpCode {
     GetStatus = 0xC0,

@@ -1,5 +1,8 @@
 mod radio_kind_params;
 
+#[cfg(test)]
+mod test;
+
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
 pub use radio_kind_params::TcxoCtrlVoltage;
@@ -172,6 +175,16 @@ where
 
         (steps_int << SX126X_PLL_STEP_SHIFT_AMOUNT)
             + (((steps_frac << SX126X_PLL_STEP_SHIFT_AMOUNT) + (SX126X_PLL_STEP_SCALED >> 1)) / SX126X_PLL_STEP_SCALED)
+    }
+
+    #[cfg(test)]
+    fn take_spi(self) -> SPI {
+        self.intf.spi
+    }
+
+    #[cfg(test)]
+    fn spi_mut(&mut self) -> &mut SPI {
+        &mut self.intf.spi
     }
 
     // SX162x WriteRegister wrapper for single u8 value writes
@@ -394,89 +407,39 @@ where
         mdltn_params: Option<&ModulationParams>,
         is_tx_prep: bool,
     ) -> Result<(), RadioError> {
-        let tx_params_power;
         let ramp_time = match is_tx_prep {
             true => RampTime::Ramp40Us,   // for instance, prior to TX or CAD
             false => RampTime::Ramp200Us, // for instance, on initialization
         };
 
+        // PA-specific preconditions
         match self.config.chip.get_device_sel() {
             DeviceSel::LowPowerPA => {
-                const LOW_POWER_MIN: i32 = -17;
-                const LOW_POWER_MAX: i32 = 15;
-                // Clamp power between [-17, 15] dBm
-                let txp = output_power.clamp(LOW_POWER_MIN, LOW_POWER_MAX);
-
-                if txp == 15 {
+                // For SX1261 the +15 dBm row is only valid above 400 MHz
+                // (below, paDutyCycle must not exceed 0x04)
+                if output_power >= 15 {
                     if let Some(m_p) = mdltn_params {
                         if m_p.frequency_in_hz < 400_000_000 {
                             return Err(RadioError::InvalidOutputPowerForFrequency);
                         }
                     }
                 }
-
-                // For SX1261:
-                // if f < 400 MHz, paDutyCycle should not be higher than 0x04,
-                // if f > 400 Mhz, paDutyCycle should not be higher than 0x07.
-                // From Table 13-21: PA Operating Modes with Optimal Settings
-                match txp {
-                    LOW_POWER_MAX => {
-                        self.set_pa_config(0x06, 0x00, DeviceSel::LowPowerPA).await?;
-                        tx_params_power = 14;
-                    }
-                    11..=14 => {
-                        self.set_pa_config(0x04, 0x00, DeviceSel::LowPowerPA).await?;
-                        tx_params_power = txp as u8;
-                    }
-                    // 10 and less
-                    LOW_POWER_MIN..=10 => {
-                        self.set_pa_config(0x01, 0x00, DeviceSel::LowPowerPA).await?;
-                        // table indicates 10 dBm => txp = 13, therefore we add 3 to values below 10
-                        tx_params_power = txp as u8 + 3;
-                    }
-                    _ => unreachable!("Invalid output power value for low power PA!"),
-                }
             }
             DeviceSel::HighPowerPA => {
-                const HIGH_POWER_MIN: i32 = -9;
-                const HIGH_POWER_MAX: i32 = 22;
-                // Clamp power between [-9, 22] dBm
-                let txp = output_power.clamp(HIGH_POWER_MIN, HIGH_POWER_MAX);
-
                 // Provide better resistance of the SX1262 Tx to antenna mismatch
                 // Bits 4-1 must be set to `1111`
                 let tx_clamp_val = self.reg_r_8(Register::TxClampCfg).await?;
                 self.reg_w_8(Register::TxClampCfg, tx_clamp_val | 0b11110).await?;
-
-                // From Table 13-21: PA Operating Modes with Optimal Settings
-                match txp {
-                    21..=HIGH_POWER_MAX => {
-                        self.set_pa_config(0x04, 0x07, DeviceSel::HighPowerPA).await?;
-                        tx_params_power = 22;
-                    }
-                    18..=20 => {
-                        self.set_pa_config(0x03, 0x05, DeviceSel::HighPowerPA).await?;
-                        // table indicates 20 dBm => txp = 22, therefore we add 2 to this range
-                        tx_params_power = txp as u8 + 2;
-                    }
-                    15..=17 => {
-                        self.set_pa_config(0x02, 0x03, DeviceSel::HighPowerPA).await?;
-                        // table indicates 17 dBm => txp = 22, therefore we add 5 to this range
-                        tx_params_power = txp as u8 + 5;
-                    }
-                    HIGH_POWER_MIN..=14 => {
-                        self.set_pa_config(0x02, 0x02, DeviceSel::HighPowerPA).await?;
-                        // table indicates 14 dBm => txp = 22, therefore we should add 8 to this range
-                        // this however seems to be wrong when looking at the reference driver
-                        // https://github.com/STMicroelectronics/STM32CubeWL/blob/139e8d28bcec6af78dec8b52a9b9f9057868cc2e/Middlewares/Third_Party/SubGHz_Phy/stm32_radio_driver/radio_driver.c#L675
-                        tx_params_power = txp as u8;
-                    }
-                    _ => {
-                        unreachable!("Invalid output power value for high power PA!")
-                    }
-                }
             }
         }
+
+        // PA config and SetTxParams power come from the variant's const
+        // power table (datasheet Table 13-21 for discrete parts; boards
+        // with their own PA characterization supply their own table)
+        let (entry, tx_params_power) = self.config.chip.pa_table().lookup(output_power);
+        self.set_pa_config(entry.pa_duty_cycle, entry.hp_max, self.config.chip.get_device_sel())
+            .await?;
+
         let op_code_and_tx_params = [OpCode::SetTxParams.value(), tx_params_power, ramp_time.value()];
         self.intf.write(&op_code_and_tx_params, false).await
     }
