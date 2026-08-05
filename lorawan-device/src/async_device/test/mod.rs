@@ -100,6 +100,76 @@ async fn test_no_join_accept() {
 }
 
 #[tokio::test]
+async fn test_join_accept_dl_settings_applied() {
+    let (radio, timer, mut async_device) = setup();
+    // Run the device
+    let task = tokio::spawn(async move {
+        let response = async_device.join(&get_otaa_credentials()).await;
+        (async_device, response)
+    });
+
+    // Trigger beginning of RX1
+    timer.fire_most_recent().await;
+    // JoinAccept with RX1DROffset = 2 and RX2DataRate = DR10 (both valid for US915)
+    radio.handle_rxtx(handle_join_request_with_dl_settings::<5, 0x2A>).await;
+
+    let (device, response) = task.await.unwrap();
+    assert!(matches!(response, Ok(JoinResponse::JoinSuccess)));
+    assert_eq!(device.mac.configuration.rx1_dr_offset, 2);
+    assert_eq!(device.mac.configuration.rx2_data_rate, Some(region::DR::_10));
+}
+
+#[tokio::test]
+async fn test_join_accept_dl_settings_invalid_values_ignored() {
+    let (radio, timer, mut async_device) = setup();
+    // Run the device
+    let task = tokio::spawn(async move {
+        let response = async_device.join(&get_otaa_credentials()).await;
+        (async_device, response)
+    });
+
+    // Trigger beginning of RX1
+    timer.fire_most_recent().await;
+    // RX1DROffset = 7 (US915 max is 3) and RX2DataRate = DR7 (RFU in US915)
+    radio.handle_rxtx(handle_join_request_with_dl_settings::<6, 0x77>).await;
+
+    let (device, response) = task.await.unwrap();
+    assert!(matches!(response, Ok(JoinResponse::JoinSuccess)));
+    // Invalid values are ignored; defaults remain
+    assert_eq!(device.mac.configuration.rx1_dr_offset, 0);
+    assert_eq!(device.mac.configuration.rx2_data_rate, None);
+}
+
+#[tokio::test]
+async fn test_join_accept_bad_mic_changes_nothing() {
+    let (radio, timer, mut async_device) = setup();
+    let rx1_delay_default = async_device.mac.configuration.rx1_delay;
+    // Run the device
+    let task = tokio::spawn(async move {
+        let response = async_device.join(&get_otaa_credentials()).await;
+        (async_device, response)
+    });
+
+    // Trigger beginning of RX1
+    timer.fire_most_recent().await;
+    // JoinAccept built with the wrong key; carries RxDelay = 3 and DLSettings = 0x2A
+    radio.handle_rxtx(handle_join_request_bad_mic).await;
+    // Trigger end of RX1
+    radio.handle_timeout().await;
+    // Trigger start of RX2
+    timer.fire_most_recent().await;
+    // Trigger end of RX2
+    radio.handle_timeout().await;
+
+    let (device, response) = task.await.unwrap();
+    assert!(matches!(response, Ok(JoinResponse::NoJoinAccept)));
+    // The rejected accept must not have touched the configuration
+    assert_eq!(device.mac.configuration.rx1_delay, rx1_delay_default);
+    assert_eq!(device.mac.configuration.rx1_dr_offset, 0);
+    assert_eq!(device.mac.configuration.rx2_data_rate, None);
+}
+
+#[tokio::test]
 async fn test_unconfirmed_uplink_no_downlink() {
     let (radio, timer, mut async_device) = setup_with_session();
     let send_await_complete = Arc::new(Mutex::new(false));
