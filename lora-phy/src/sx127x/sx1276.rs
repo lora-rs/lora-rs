@@ -63,8 +63,11 @@ impl Sx127xVariant for Sx1276 {
             // Output via PA_BOOST: [2, 20] dBm
             let txp = p_out.clamp(2, 20);
 
-            // Pout=17-(15-OutputPower)
-            let output_power: i32 = txp - 2;
+            // PaDac off: Pout = 2 + OutputPower; PaDac on: Pout = 5 + OutputPower.
+            // The pre-fix code used txp - 2 in both branches, so 18..20 dBm
+            // requests overflowed the 4-bit OutputPower field (20 dBm wrote
+            // OutputPower 2 and bled a bit into MaxPower).
+            let output_power: i32 = if txp > 17 { txp - 5 } else { txp - 2 };
 
             if txp > 17 {
                 radio.write_register(pa_reg, PaDac::_20DbmOn.value()).await?;
@@ -80,17 +83,22 @@ impl Sx127xVariant for Sx1276 {
             // Clamp output: [-4, 14] dBm
             let txp = p_out.clamp(-4, 14);
 
-            // Pmax=10.8+0.6*MaxPower, where MaxPower is set below as 7 and therefore Pmax is 15
-            // Pout=Pmax-(15-OutputPower)
-            let output_power: i32 = txp;
+            // Pout = Pmax - (15 - OutputPower) with Pmax = 10.8 + 0.6 * MaxPower.
+            // Positive targets use MaxPower=7 (Pmax 15) so Pout = OutputPower;
+            // 0 dBm and below drop to MaxPower=0 (Pmax 10.8) so OutputPower =
+            // txp + 4 stays in the 4-bit field. The pre-fix code kept
+            // MaxPower=7 for negative targets, casting a negative OutputPower
+            // to u8 and corrupting the register (PA_BOOST bit included).
+            let (max_power, output_power) = if txp > 0 {
+                (PaConfig::MaxPower7NoPaBoost.value(), txp)
+            } else {
+                (0x00, txp + 4)
+            };
 
             radio.write_register(pa_reg, PaDac::_20DbmOff.value()).await?;
             radio.set_ocp(OcpTrim::_100Ma).await?;
             radio
-                .write_register(
-                    Register::RegPaConfig,
-                    PaConfig::MaxPower7NoPaBoost.value() | (output_power as u8),
-                )
+                .write_register(Register::RegPaConfig, max_power | (output_power as u8))
                 .await?;
         }
         Ok(())
@@ -132,28 +140,44 @@ impl Sx127xVariant for Sx1276 {
         radio.write_register(Register::RegModemConfig3, config_3).await?;
 
         if radio.data.sensitivity_quirk {
-            // apply Errata 2.1: Sensitivity optimization with 500 kHz bandwidth
-
-            if mdltn_params.bandwidth == Bandwidth::_500KHz {
-                let val_1 = 0x02;
-                match mdltn_params.frequency_in_hz {
-                    862_000..=1_020_000 => {
-                        radio.write_register(Register::RegHighBwOptimize1, val_1).await?;
-                        radio.write_register(Register::RegHighBwOptimize2, 0x64).await?;
-                        return Ok(());
-                    }
-                    410_000..=525_000 => {
-                        radio.write_register(Register::RegHighBwOptimize1, val_1).await?;
-                        radio.write_register(Register::RegHighBwOptimize2, 0x7f).await?;
-                        return Ok(());
-                    }
-                    // fall through...
-                    _ => {}
-                }
+            // apply Errata 2.1: Sensitivity optimization with 500 kHz bandwidth.
+            // Errata band edges are in Hz; these literals used to be in kHz,
+            // so no real frequency ever matched and the optimization values
+            // were never written
+            let bw500_optimize = match (mdltn_params.bandwidth, mdltn_params.frequency_in_hz) {
+                (Bandwidth::_500KHz, 862_000_000..=1_020_000_000) => Some(0x64),
+                (Bandwidth::_500KHz, 410_000_000..=525_000_000) => Some(0x7f),
+                _ => None,
+            };
+            if let Some(val_2) = bw500_optimize {
+                radio.write_register(Register::RegHighBwOptimize1, 0x02).await?;
+                radio.write_register(Register::RegHighBwOptimize2, val_2).await?;
+            } else {
+                // for all other combinations of bandwidth / frequencies, reset to
+                // 0x03 (RegHighBwOptimize2 is automatically set by the chip)
+                radio.write_register(Register::RegHighBwOptimize1, 0x03).await?;
             }
+        }
 
-            // for all other combinations of bandwidth / frequencies, reset to 0x03 (RegHighBwOptimize2 is automatically set by the chip)
-            radio.write_register(Register::RegHighBwOptimize1, 0x03).await?;
+        // Errata 2.3: receiver spurious reception of a LoRa signal. At
+        // 500 kHz AutomaticIFOn stays set (reset default); other bandwidths
+        // need it cleared plus a manual IF of 0x40/0x00 in RegIfFreq1/2.
+        // The reference applies this on every SetRx; the registers only
+        // affect the receiver, so setting them with the modulation config
+        // is equivalent. Bandwidths below 62.5 kHz additionally require the
+        // RF frequency shifted up by one bandwidth, which set_channel owns —
+        // those keep chip defaults (as before this change).
+        let detect_optimize = radio.read_register(Register::RegDetectionOptimize).await?;
+        if mdltn_params.bandwidth == Bandwidth::_500KHz {
+            radio
+                .write_register(Register::RegDetectionOptimize, detect_optimize | 0x80)
+                .await?;
+        } else if mdltn_params.bandwidth.hz() >= 62_500 {
+            radio
+                .write_register(Register::RegDetectionOptimize, detect_optimize & 0x7f)
+                .await?;
+            radio.write_register(Register::RegIfFreq1, 0x40).await?;
+            radio.write_register(Register::RegIfFreq2, 0x00).await?;
         }
 
         Ok(())
