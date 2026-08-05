@@ -5,6 +5,8 @@
 #![allow(missing_docs)]
 
 pub mod radio_kind_params;
+#[cfg(test)]
+mod test;
 
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
@@ -63,6 +65,535 @@ const LR1110_MAX_LORA_SYMB_NUM_TIMEOUT: u8 = 248;
 
 // SetRx timeout argument for enabling continuous mode
 const RX_CONTINUOUS_TIMEOUT: u32 = 0xFFFFFF;
+
+/// One entry of a PA power table: the vendor's calibrated SetPaConfig /
+/// SetTxParams values for a single requested dBm.
+struct PaCfg {
+    /// Power commanded via SetTxParams (may be remapped up or down from the
+    /// requested dBm); negative on the LP and HF PAs.
+    configured_power: i8,
+    /// SetPaConfig paDutyCycle
+    pa_duty_cycle: u8,
+    /// SetPaConfig paHPSel
+    pa_hp_sel: u8,
+}
+
+// PA power tables transcribed from Semtech's SWL2001 reference BSP
+// (lbm_examples/radio_hal/lr11xx_pa_pwr_cfg.h: LR11XX_PA_LP_LF_CFG_TABLE,
+// LR11XX_PA_HP_LF_CFG_TABLE, LR11XX_PA_HF_CFG_TABLE). Each table is indexed by
+// (clamped_requested_dBm - MIN). Power bounds and the Vreg/Vbat switch come
+// from lbm_examples/radio_hal/ral_lr11xx_bsp.c. The LR1110 v2.1 datasheet
+// (July 2025) confirms the sub-GHz LP PA reaches +15 dBm.
+
+// LP PA output-power bounds [dBm]
+const LP_MIN: i8 = -17;
+const LP_MAX: i8 = 15;
+// HP PA output-power bounds [dBm]
+const HP_MIN: i8 = -9;
+const HP_MAX: i8 = 22;
+// HF PA output-power bounds [dBm]
+const HF_MIN: i8 = -18;
+const HF_MAX: i8 = 13;
+// At or below this requested power the HP PA runs from the regulator (Vreg)
+// for better efficiency; above it, from the battery (Vbat).
+const HP_VREG_VBAT_SWITCH: i8 = 8;
+
+/// LP sub-GHz PA, requests -17..=+15 dBm (33 entries)
+const LR11XX_PA_LP_LF_CFG_TABLE: [PaCfg; (LP_MAX - LP_MIN + 1) as usize] = [
+    PaCfg {
+        configured_power: -15,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -17 dBm
+    PaCfg {
+        configured_power: -14,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -16 dBm
+    PaCfg {
+        configured_power: -13,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -15 dBm
+    PaCfg {
+        configured_power: -12,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -14 dBm
+    PaCfg {
+        configured_power: -11,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -13 dBm
+    PaCfg {
+        configured_power: -9,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -12 dBm
+    PaCfg {
+        configured_power: -8,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -11 dBm
+    PaCfg {
+        configured_power: -7,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, // -10 dBm
+    PaCfg {
+        configured_power: -6,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -9 dBm
+    PaCfg {
+        configured_power: -5,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -8 dBm
+    PaCfg {
+        configured_power: -4,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -7 dBm
+    PaCfg {
+        configured_power: -3,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -6 dBm
+    PaCfg {
+        configured_power: -2,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -5 dBm
+    PaCfg {
+        configured_power: -1,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -4 dBm
+    PaCfg {
+        configured_power: 0,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -3 dBm
+    PaCfg {
+        configured_power: 1,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -2 dBm
+    PaCfg {
+        configured_power: 2,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -1 dBm
+    PaCfg {
+        configured_power: 3,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   0 dBm
+    PaCfg {
+        configured_power: 3,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x00,
+    }, //   1 dBm
+    PaCfg {
+        configured_power: 4,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x00,
+    }, //   2 dBm
+    PaCfg {
+        configured_power: 7,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   3 dBm
+    PaCfg {
+        configured_power: 8,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   4 dBm
+    PaCfg {
+        configured_power: 9,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   5 dBm
+    PaCfg {
+        configured_power: 10,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   6 dBm
+    PaCfg {
+        configured_power: 12,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   7 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   8 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   9 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x00,
+    }, //  10 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x00,
+    }, //  11 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x00,
+    }, //  12 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x03,
+        pa_hp_sel: 0x00,
+    }, //  13 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  14 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x07,
+        pa_hp_sel: 0x00,
+    }, //  15 dBm
+];
+
+/// HP sub-GHz PA, requests -9..=+22 dBm (32 entries)
+const LR11XX_PA_HP_LF_CFG_TABLE: [PaCfg; (HP_MAX - HP_MIN + 1) as usize] = [
+    PaCfg {
+        configured_power: 9,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -9 dBm
+    PaCfg {
+        configured_power: 10,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -8 dBm
+    PaCfg {
+        configured_power: 11,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -7 dBm
+    PaCfg {
+        configured_power: 12,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -6 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  -5 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x00,
+    }, //  -4 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x00,
+    }, //  -3 dBm
+    PaCfg {
+        configured_power: 17,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x00,
+    }, //  -2 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -1 dBm
+    PaCfg {
+        configured_power: 12,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x01,
+    }, //   0 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x01,
+    }, //   1 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x01,
+    }, //   2 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x01,
+    }, //   3 dBm
+    PaCfg {
+        configured_power: 15,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x02,
+    }, //   4 dBm
+    PaCfg {
+        configured_power: 15,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x01,
+    }, //   5 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x02,
+    }, //   6 dBm
+    PaCfg {
+        configured_power: 14,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x03,
+    }, //   7 dBm
+    PaCfg {
+        configured_power: 17,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x02,
+    }, //   8 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x01,
+    }, //   9 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x01,
+    }, //  10 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x01,
+    }, //  11 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x03,
+        pa_hp_sel: 0x01,
+    }, //  12 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x03,
+    }, //  13 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x03,
+    }, //  14 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x02,
+    }, //  15 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x04,
+    }, //  16 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x02,
+        pa_hp_sel: 0x04,
+    }, //  17 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x01,
+        pa_hp_sel: 0x06,
+    }, //  18 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x03,
+        pa_hp_sel: 0x05,
+    }, //  19 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x03,
+        pa_hp_sel: 0x07,
+    }, //  20 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x06,
+    }, //  21 dBm
+    PaCfg {
+        configured_power: 22,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x07,
+    }, //  22 dBm
+];
+
+/// HF (2.4 GHz) PA, requests -18..=+13 dBm (32 entries)
+const LR11XX_PA_HF_CFG_TABLE: [PaCfg; (HF_MAX - HF_MIN + 1) as usize] = [
+    PaCfg {
+        configured_power: -18,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -18 dBm
+    PaCfg {
+        configured_power: -18,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -17 dBm
+    PaCfg {
+        configured_power: -17,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -16 dBm
+    PaCfg {
+        configured_power: -16,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -15 dBm
+    PaCfg {
+        configured_power: -15,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -14 dBm
+    PaCfg {
+        configured_power: -14,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -13 dBm
+    PaCfg {
+        configured_power: -14,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -12 dBm
+    PaCfg {
+        configured_power: -12,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -11 dBm
+    PaCfg {
+        configured_power: -10,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, // -10 dBm
+    PaCfg {
+        configured_power: -9,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -9 dBm
+    PaCfg {
+        configured_power: -8,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -8 dBm
+    PaCfg {
+        configured_power: -7,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -7 dBm
+    PaCfg {
+        configured_power: -6,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -6 dBm
+    PaCfg {
+        configured_power: -5,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -5 dBm
+    PaCfg {
+        configured_power: -4,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -4 dBm
+    PaCfg {
+        configured_power: -3,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -3 dBm
+    PaCfg {
+        configured_power: -2,
+        pa_duty_cycle: 0x03,
+        pa_hp_sel: 0x00,
+    }, //  -2 dBm
+    PaCfg {
+        configured_power: -1,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  -1 dBm
+    PaCfg {
+        configured_power: 0,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   0 dBm
+    PaCfg {
+        configured_power: 1,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   1 dBm
+    PaCfg {
+        configured_power: 2,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //   2 dBm
+    PaCfg {
+        configured_power: 4,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   3 dBm
+    PaCfg {
+        configured_power: 5,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   4 dBm
+    PaCfg {
+        configured_power: 6,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   5 dBm
+    PaCfg {
+        configured_power: 7,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   6 dBm
+    PaCfg {
+        configured_power: 8,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   7 dBm
+    PaCfg {
+        configured_power: 9,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   8 dBm
+    PaCfg {
+        configured_power: 10,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //   9 dBm
+    PaCfg {
+        configured_power: 11,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  10 dBm
+    PaCfg {
+        configured_power: 12,
+        pa_duty_cycle: 0x03,
+        pa_hp_sel: 0x00,
+    }, //  11 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x04,
+        pa_hp_sel: 0x00,
+    }, //  12 dBm
+    PaCfg {
+        configured_power: 13,
+        pa_duty_cycle: 0x00,
+        pa_hp_sel: 0x00,
+    }, //  13 dBm
+];
 
 /// Configuration for LR1110-based boards
 pub struct Config {
@@ -164,33 +695,29 @@ where
         self.intf.read_with_status(write_data, read_buffer).await
     }
 
-    /// Write data to the TX buffer
-    async fn write_buffer(&mut self, offset: u8, data: &[u8]) -> Result<(), RadioError> {
+    /// Write data to the TX buffer. Unlike the SX126x command, WriteBuffer8
+    /// takes no offset — data always lands at the write pointer.
+    async fn write_buffer(&mut self, data: &[u8]) -> Result<(), RadioError> {
         let opcode = RegMemOpCode::WriteBuffer8.bytes();
-        let header = [opcode[0], opcode[1], offset];
+        let header = [opcode[0], opcode[1]];
         self.intf.write_with_payload(&header, data, false).await
     }
 
     /// Read data from the RX buffer
     async fn read_buffer(&mut self, offset: u8, length: u8, buffer: &mut [u8]) -> Result<(), RadioError> {
         let opcode = RegMemOpCode::ReadBuffer8.bytes();
-        let header = [opcode[0], opcode[1], offset, 0x00];
+        let header = [opcode[0], opcode[1], offset, length];
         self.intf.read(&header, &mut buffer[..length as usize]).await
     }
 
-    /// Set the number of symbols the radio will wait to detect a reception
+    /// Set the number of symbols the radio will wait to detect a reception.
+    /// Values up to 255 go on the wire as the raw symbol count; the SX126x
+    /// mantissa/exponent encoding only exists in an extended form of this
+    /// command for larger values, which the capped range never needs.
     async fn set_lora_symbol_num_timeout(&mut self, symbol_num: u16) -> Result<(), RadioError> {
-        let mut exp = 0u8;
-        let mut mant = ((symbol_num.min(LR1110_MAX_LORA_SYMB_NUM_TIMEOUT.into()) + 1) >> 1) as u8;
-
-        while mant > 31 {
-            mant = (mant + 3) >> 2;
-            exp += 1;
-        }
-
-        let timeout_value = exp + (mant << 3);
+        let symbol_num = symbol_num.min(LR1110_MAX_LORA_SYMB_NUM_TIMEOUT.into()) as u8;
         let opcode = RadioOpCode::SetLoRaSyncTimeout.bytes();
-        let cmd = [opcode[0], opcode[1], timeout_value];
+        let cmd = [opcode[0], opcode[1], symbol_num];
         self.write_command(&cmd).await
     }
 
@@ -647,10 +1174,10 @@ where
     /// # Arguments
     /// * `params` - GFSK modulation parameters (bitrate, pulse shape, bandwidth, frequency deviation)
     pub async fn set_gfsk_mod_params(&mut self, params: &GfskModulationParams) -> Result<(), RadioError> {
-        // Convert bitrate to chip format: (32 * 32000000) / bitrate
-        let br = ((32u64 * LR1110_XTAL_FREQ as u64) / params.bitrate_bps as u64) as u32;
-        // Convert frequency deviation to chip format: (fdev * 2^25) / 32000000
-        let fdev = ((params.freq_dev_hz as u64) << 25) / (LR1110_XTAL_FREQ as u64);
+        // Unlike the SX126x, the LR11xx takes the bitrate in raw bps and the
+        // frequency deviation in raw Hz — no chip-format conversion
+        let br = params.bitrate_bps;
+        let fdev = params.freq_dev_hz;
 
         let opcode = RadioOpCode::SetModulationParam.bytes();
         let cmd = [
@@ -707,13 +1234,16 @@ where
             ));
         }
 
+        // The command always carries 8 sync word bytes; shorter words are
+        // zero-padded (sync_word_length_bits in the packet params decides
+        // how many bits the chip matches)
         let opcode = RadioOpCode::SetGfskSyncWord.bytes();
         let mut cmd = [0u8; 10]; // 2 opcode + 8 sync word
         cmd[0] = opcode[0];
         cmd[1] = opcode[1];
         cmd[2..2 + sync_word.len()].copy_from_slice(sync_word);
 
-        self.write_command(&cmd[..2 + sync_word.len()]).await
+        self.write_command(&cmd).await
     }
 
     /// Set GFSK CRC parameters
@@ -770,11 +1300,11 @@ where
         let mut rbuffer = [0u8; 4];
         self.read_command(&cmd, &mut rbuffer).await?;
 
-        // Parse RSSI values (raw values are unsigned, convert to dBm)
-        let rssi_sync_dbm = -((rbuffer[1] as i16) / 2);
-        let rssi_avg_dbm = -((rbuffer[2] as i16) / 2);
+        // Response layout: rssi_sync, rssi_avg, rx_len, status bits
+        let rssi_sync_dbm = -((rbuffer[0] as i16) / 2);
+        let rssi_avg_dbm = -((rbuffer[1] as i16) / 2);
 
-        Ok((rbuffer[0], rssi_sync_dbm, rssi_avg_dbm))
+        Ok((rbuffer[2], rssi_sync_dbm, rssi_avg_dbm))
     }
 
     // =========================================================================
@@ -884,7 +1414,14 @@ where
     ///
     /// # Arguments
     /// * `delay_rtc` - Delay between RX and TX (or TX and RX) in RTC steps
-    pub async fn set_auto_tx_rx(&mut self, delay_rtc: u32) -> Result<(), RadioError> {
+    /// * `intermediary_mode` - Mode the chip waits in during the delay
+    /// * `timeout_rtc` - Timeout of the second activity in RTC steps
+    pub async fn set_auto_tx_rx(
+        &mut self,
+        delay_rtc: u32,
+        intermediary_mode: IntermediaryMode,
+        timeout_rtc: u32,
+    ) -> Result<(), RadioError> {
         let opcode = RadioOpCode::AutoTxRx.bytes();
         let cmd = [
             opcode[0],
@@ -892,6 +1429,10 @@ where
             ((delay_rtc >> 16) & 0xFF) as u8,
             ((delay_rtc >> 8) & 0xFF) as u8,
             (delay_rtc & 0xFF) as u8,
+            intermediary_mode.value(),
+            ((timeout_rtc >> 16) & 0xFF) as u8,
+            ((timeout_rtc >> 8) & 0xFF) as u8,
+            (timeout_rtc & 0xFF) as u8,
         ];
         self.write_command(&cmd).await
     }
@@ -1450,23 +1991,19 @@ where
         let ramp_time = RampTime::Ramp208Us;
 
         let pa_selection = self.config.pa_selection;
-        // Per LR1110 User Manual Tables 9-1 and 9-2 and the SWL2001 reference BSP
-        // (ral_lr11xx_bsp.c, lr11xx_get_tx_cfg): the LP and HF PAs run from the
-        // internal regulator (Vreg), only the HP PA draws from VBAT.
-        let pa_supply = match pa_selection {
-            PaSelection::Lp | PaSelection::Hf => PaRegSupply::Vreg,
-            PaSelection::Hp => PaRegSupply::Vbat,
-        };
 
-        let (tx_power, pa_duty_cycle, pa_hp_sel) = match pa_selection {
+        // Look up the PA config for the requested power. The tables (below)
+        // are the vendor's per-dBm calibration: each entry remaps the request
+        // to a configured chip power and its paDutyCycle / paHPSel.
+        let (tx_power, pa_duty_cycle, pa_hp_sel, pa_supply) = match pa_selection {
             PaSelection::Lp => {
-                // Low Power PA: -17 to +14 dBm
-                const LP_MIN: i32 = -17;
-                const LP_MAX: i32 = 14;
-                let txp = output_power.clamp(LP_MIN, LP_MAX);
+                let clamped = output_power.clamp(LP_MIN as i32, LP_MAX as i32);
+                let entry = &LR11XX_PA_LP_LF_CFG_TABLE[(clamped - LP_MIN as i32) as usize];
 
-                // Validate frequency constraint for max power
-                if txp == LP_MAX {
+                // Duty cycles above 0x04 are not allowed below 400 MHz per the
+                // LR1110 User Manual. With the vendor table only the +15 dBm
+                // entry (duty 0x07) trips this.
+                if entry.pa_duty_cycle > 0x04 {
                     if let Some(m_p) = mdltn_params {
                         if m_p.frequency_in_hz < 400_000_000 {
                             return Err(RadioError::InvalidOutputPowerForFrequency);
@@ -1474,40 +2011,45 @@ where
                     }
                 }
 
-                // PA configuration for LP PA
-                // Per LR1110 User Manual Table 9-1 and SWDM001 demo:
-                // LP PA uses paDutyCycle = 0x04, paHPSel = 0x00
-                let (duty_cycle, hp_sel, power) = (0x04, 0x00, txp as u8);
-                (power, duty_cycle, hp_sel)
+                // LP PA always runs from the internal regulator.
+                (
+                    entry.configured_power as u8,
+                    entry.pa_duty_cycle,
+                    entry.pa_hp_sel,
+                    PaRegSupply::Vreg,
+                )
             }
             PaSelection::Hp => {
-                // High Power PA: -9 to +22 dBm
-                const HP_MIN: i32 = -9;
-                const HP_MAX: i32 = 22;
-                let txp = output_power.clamp(HP_MIN, HP_MAX);
+                let clamped = output_power.clamp(HP_MIN as i32, HP_MAX as i32);
+                let entry = &LR11XX_PA_HP_LF_CFG_TABLE[(clamped - HP_MIN as i32) as usize];
 
-                let (duty_cycle, hp_sel, power) = match txp {
-                    22 => (0x04, 0x07, 22),
-                    18..=21 => (0x03, 0x05, txp as u8),
-                    15..=17 => (0x02, 0x03, txp as u8),
-                    HP_MIN..=14 => (0x02, 0x02, txp as u8),
-                    _ => unreachable!(),
+                // Efficiency switch from the vendor BSP (ral_lr11xx_bsp.c,
+                // LR11XX_PWR_VREG_VBAT_SWITCH = 8): at or below 8 dBm the HP PA
+                // runs from the regulator, above it from the battery.
+                let supply = if clamped <= HP_VREG_VBAT_SWITCH as i32 {
+                    PaRegSupply::Vreg
+                } else {
+                    PaRegSupply::Vbat
                 };
-                (power, duty_cycle, hp_sel)
+
+                (
+                    entry.configured_power as u8,
+                    entry.pa_duty_cycle,
+                    entry.pa_hp_sel,
+                    supply,
+                )
             }
             PaSelection::Hf => {
-                // High Frequency PA (2.4 GHz): -18 to +13 dBm
-                const HF_MIN: i32 = -18;
-                const HF_MAX: i32 = 13;
-                let txp = output_power.clamp(HF_MIN, HF_MAX);
+                let clamped = output_power.clamp(HF_MIN as i32, HF_MAX as i32);
+                let entry = &LR11XX_PA_HF_CFG_TABLE[(clamped - HF_MIN as i32) as usize];
 
-                let (duty_cycle, hp_sel, power) = match txp {
-                    13 => (0x04, 0x00, 13),
-                    10..=12 => (0x02, 0x00, txp as u8),
-                    HF_MIN..=9 => (0x01, 0x00, txp as u8),
-                    _ => unreachable!(),
-                };
-                (power, duty_cycle, hp_sel)
+                // HF PA always runs from the internal regulator.
+                (
+                    entry.configured_power as u8,
+                    entry.pa_duty_cycle,
+                    entry.pa_hp_sel,
+                    PaRegSupply::Vreg,
+                )
             }
         };
 
@@ -1607,7 +2149,7 @@ where
     }
 
     async fn set_payload(&mut self, payload: &[u8]) -> Result<(), RadioError> {
-        self.write_buffer(0x00, payload).await
+        self.write_buffer(payload).await
     }
 
     async fn do_tx(&mut self) -> Result<(), RadioError> {
@@ -1632,6 +2174,10 @@ where
             ];
             self.write_command(&tcxo_cmd).await?;
         }
+
+        // The reference driver applies the high-ACP workaround on every
+        // SetTx/SetRx/SetCad (harmless register write on unaffected firmware)
+        self.apply_high_acp_workaround().await?;
 
         // Disable timeout (0 = no timeout)
         let opcode = RadioOpCode::SetTx.bytes();
@@ -1693,6 +2239,10 @@ where
                 } else {
                     0
                 };
+
+                // Reference driver behavior; RX duty cycle notably does NOT
+                // get the workaround there
+                self.apply_high_acp_workaround().await?;
 
                 let opcode = RadioOpCode::SetRx.bytes();
                 let cmd = [
@@ -1784,7 +2334,9 @@ where
         ];
         self.write_command(&cad_cmd).await?;
 
-        // Start CAD
+        // Start CAD (reference driver applies the high-ACP workaround here
+        // too)
+        self.apply_high_acp_workaround().await?;
         let start_opcode = RadioOpCode::SetCad.bytes();
         let start_cmd = [start_opcode[0], start_opcode[1]];
         self.write_command(&start_cmd).await
