@@ -176,10 +176,31 @@ async fn test_set_lora_sync_word() {
 
     let mut radio = get_sx1276();
     // init_lora also writes the buffer base addresses and reads the version
-    radio.init_lora(0x34).await.unwrap();
+    radio.init_lora(0x3444).await.unwrap();
     reference_radio.write_register(0x0E, &[0x00]);
     reference_radio.write_register(0x0F, &[0x00]);
     assert_eq!(radio.take_spi(), *reference_radio.spi());
+}
+
+#[tokio::test]
+async fn test_runtime_sync_word() {
+    // The reference API takes the legacy single-byte form, ours the 16-bit
+    // sx126x register form; the sx127x supports the legacy-representable
+    // subset (0xY4Z4 -> 0xYZ) and rejects everything else.
+    for (sync_word, legacy) in [(0x3444u16, 0x34u8), (0x1424, 0x12)] {
+        let mut reference_radio = reference();
+        reference_radio.set_lora_sync_word(legacy);
+
+        let mut radio = get_sx1276();
+        radio.set_lora_sync_word(sync_word).await.unwrap();
+        assert_eq!(radio.take_spi(), *reference_radio.spi(), "sync word {sync_word:#x}");
+    }
+
+    let mut radio = get_sx1276();
+    assert_eq!(
+        radio.set_lora_sync_word(0xAB12).await,
+        Err(crate::mod_params::RadioError::InvalidSyncWord)
+    );
 }
 
 #[tokio::test]
@@ -441,7 +462,7 @@ async fn test_bw500_sensitivity_errata() {
 
     let mut radio = get_sx1276();
     // init_lora reads the chip version (seeded 0x12) which arms the quirk
-    radio.init_lora(0x34).await.unwrap();
+    radio.init_lora(0x3444).await.unwrap();
     let params = radio
         .create_modulation_params(SpreadingFactor::_9, Bandwidth::_500KHz, CodingRate::_4_5, 868_100_000)
         .unwrap();

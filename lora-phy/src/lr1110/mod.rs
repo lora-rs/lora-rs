@@ -1832,17 +1832,12 @@ pub fn lr_fhss_get_hop_sequence_count(params: &LrFhssParams) -> u16 {
 }
 
 // Convert u8 sync word to single byte value for LR1110
-fn convert_sync_word(sync_word: u8) -> u8 {
-    // LR1110 uses a simpler sync word format
-    sync_word
-}
-
 impl<SPI, IV> RadioKind for Lr1110<SPI, IV>
 where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
-    async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError> {
+    async fn init_lora(&mut self, sync_word: u16) -> Result<(), RadioError> {
         // Initialize system (DC-DC, TCXO, calibration)
         self.init_system().await?;
 
@@ -1856,7 +1851,7 @@ where
         self.write_command(&cmd).await?;
 
         // Set LoRa sync word
-        let word = convert_sync_word(sync_word);
+        let word = sync_word_to_legacy(sync_word)?;
         let sync_opcode = RadioOpCode::SetLoRaSyncWord.bytes();
         let sync_cmd = [sync_opcode[0], sync_opcode[1], word];
         self.write_command(&sync_cmd).await?;
@@ -1865,6 +1860,13 @@ where
         self.set_tx_rx_buffer_base_address(0, 0).await?;
 
         Ok(())
+    }
+
+    async fn set_lora_sync_word(&mut self, sync_word: u16) -> Result<(), RadioError> {
+        let word = sync_word_to_legacy(sync_word)?;
+        let sync_opcode = RadioOpCode::SetLoRaSyncWord.bytes();
+        let sync_cmd = [sync_opcode[0], sync_opcode[1], word];
+        self.write_command(&sync_cmd).await
     }
 
     fn create_modulation_params(
@@ -2468,15 +2470,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[test]
-    fn test_convert_sync_word() {
-        // LR1110 uses simple sync word format
-        assert_eq!(convert_sync_word(0x34), 0x34);
-        assert_eq!(convert_sync_word(0x12), 0x12);
-    }
-
     #[test]
     fn power_level_conversion() {
         // Test that power level conversions work correctly

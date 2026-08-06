@@ -16,6 +16,7 @@ pub enum RadioError {
     DIO1,
     InvalidConfiguration,
     InvalidRadioMode,
+    InvalidSyncWord,
     OpError(u8),
     InvalidBaseAddress(usize, usize),
     PayloadSizeUnexpected(usize),
@@ -137,4 +138,37 @@ pub struct DutyCycleParams {
     pub rx_time: u32,
     /// sleep interval
     pub sleep_time: u32,
+}
+
+// The canonical sync word form is the 16-bit value the sx126x writes to its
+// two sync word registers. The single-byte form used by the older chips
+// (sx127x register, lr11xx SetLoRaSyncWord) maps into it as 0xYZ <-> 0xY4Z4;
+// the LoRaWAN public/private words 0x34/0x12 are 0x3444/0x1424.
+pub(crate) fn sync_word_from_legacy(sync_word: u8) -> u16 {
+    u16::from_be_bytes([(sync_word & 0xF0) | 0x04, ((sync_word & 0x0F) << 4) | 0x04])
+}
+
+pub(crate) fn sync_word_to_legacy(sync_word: u16) -> Result<u8, RadioError> {
+    let [msb, lsb] = sync_word.to_be_bytes();
+    if (msb & 0x0F == 0x04) && (lsb & 0x0F == 0x04) {
+        Ok((msb & 0xF0) | (lsb >> 4))
+    } else {
+        Err(RadioError::InvalidSyncWord)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sync_word_legacy_mapping() {
+        assert_eq!(sync_word_from_legacy(0x34), 0x3444);
+        assert_eq!(sync_word_from_legacy(0x12), 0x1424);
+        assert_eq!(sync_word_to_legacy(0x3444), Ok(0x34));
+        assert_eq!(sync_word_to_legacy(0x1424), Ok(0x12));
+        // values outside the 0xY4Z4 shape have no single-byte equivalent
+        assert_eq!(sync_word_to_legacy(0x3445), Err(RadioError::InvalidSyncWord));
+        assert_eq!(sync_word_to_legacy(0x0012), Err(RadioError::InvalidSyncWord));
+    }
 }

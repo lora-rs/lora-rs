@@ -140,7 +140,8 @@ where
     IV: InterfaceVariant,
     C: Sx127xVariant,
 {
-    async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError> {
+    async fn init_lora(&mut self, sync_word: u16) -> Result<(), RadioError> {
+        let sync_word = sync_word_to_legacy(sync_word)?;
         if self.config.tcxo_used {
             self.write_register(C::reg_txco(), TCXO_FOR_OSCILLATOR).await?;
         }
@@ -152,6 +153,11 @@ where
         C::init_lora(self, sync_word).await?;
 
         Ok(())
+    }
+
+    async fn set_lora_sync_word(&mut self, sync_word: u16) -> Result<(), RadioError> {
+        let sync_word = sync_word_to_legacy(sync_word)?;
+        self.write_register(Register::RegSyncWord, sync_word).await
     }
 
     fn create_modulation_params(

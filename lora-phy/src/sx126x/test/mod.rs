@@ -139,8 +139,32 @@ async fn test_sync_word() {
         [fixtures::Ops::Write(bytes)] => assert_eq!(bytes, &[0x0D, 0x07, 0x40, 0x34, 0x44]),
         ref other => panic!("unexpected write stream {other:?}"),
     }
-    // 0x34 -> [0x34, 0x44] is asserted against our driver in
-    // sx126x::tests::test_convert_sync_word
+    // 0x34 -> [0x34, 0x44] legacy mapping is asserted in
+    // mod_params::tests::test_sync_word_legacy_mapping
+}
+
+#[tokio::test]
+async fn test_runtime_sync_word() {
+    // The runtime setter skips the reference's read-modify-write and writes
+    // both bytes directly; prime the reference with the reset values so both
+    // land on the same register write. The reference API takes the legacy
+    // single-byte form, ours the 16-bit register form.
+    let mut fixture = TestFixture::new();
+    fixture.prime_read(&[0x1D, 0x07, 0x40, 0x00], &[0x14, 0x24]);
+    let mut reference = Context::new(fixture);
+    reference.set_lora_sync_word(0x34);
+
+    let mut sx1261 = get_sx126x();
+    sx1261.set_lora_sync_word(0x3444).await.unwrap();
+    assert_eq!(sx1261.take_spi().writes(), reference.inner.writes());
+
+    // sync words with no legacy equivalent reach the registers unchanged
+    let mut sx1261 = get_sx126x();
+    sx1261.set_lora_sync_word(0xAB12).await.unwrap();
+    match sx1261.take_spi().writes()[..] {
+        [fixtures::Ops::Write(bytes)] => assert_eq!(bytes, &[0x0D, 0x07, 0x40, 0xAB, 0x12]),
+        ref other => panic!("unexpected write stream {other:?}"),
+    }
 }
 
 #[tokio::test]
@@ -560,7 +584,7 @@ async fn test_init_lora_composed() {
     let mut sx1261 = get_sx126x();
     sx1261.spi_mut().prime_read(&RETENTION_READ, &[0u8; 9]);
     sx1261.spi_mut().prime_read(&RETENTION_READ, &RETENTION_AFTER_RX_GAIN);
-    sx1261.init_lora(0x34).await.unwrap();
+    sx1261.init_lora(0x3444).await.unwrap();
 
     assert_eq!(sx1261.take_spi().writes(), reference_radio.inner.writes());
 }

@@ -152,8 +152,29 @@ async fn test_init_lora() {
     reference_radio.set_lora_sync_word(0x34);
 
     let mut radio = get_lr1110();
-    radio.init_lora(0x34).await.unwrap();
+    radio.init_lora(0x3444).await.unwrap();
     assert_eq!(radio.intf.spi, reference_radio.inner);
+}
+
+#[tokio::test]
+async fn test_runtime_sync_word() {
+    // The reference API takes the legacy single-byte form, ours the 16-bit
+    // sx126x register form; the lr1110 supports the legacy-representable
+    // subset (0xY4Z4 -> 0xYZ) and rejects everything else.
+    for (sync_word, legacy) in [(0x3444u16, 0x34u8), (0x1424, 0x12)] {
+        let mut reference_radio = reference();
+        reference_radio.set_lora_sync_word(legacy);
+
+        let mut radio = get_lr1110();
+        radio.set_lora_sync_word(sync_word).await.unwrap();
+        assert_eq!(radio.intf.spi, reference_radio.inner, "sync word {sync_word:#x}");
+    }
+
+    let mut radio = get_lr1110();
+    assert_eq!(
+        radio.set_lora_sync_word(0xAB12).await,
+        Err(crate::mod_params::RadioError::InvalidSyncWord)
+    );
 }
 
 #[tokio::test]
