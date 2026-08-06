@@ -382,9 +382,10 @@ where
 
         self.write_register(Register::RegFifoAddrPtr, 0x00u8).await?;
 
-        // Clear stale IRQ flags before entering Rx. RegIrqFlags is W1C with no
-        // auto-clear on mode change (SX1276 DS §4.1.2.4); covers the listen()
-        // path, which does not call set_irq_params.
+        // Interrupt flags stay latched until the host clears them by writing a 1
+        // (SX1276 DS §4.1.2.4); entering Rx does not reset them. Clear here so a
+        // flag left over from an earlier operation can't read as a result of this
+        // one; this also covers listen(), which never calls set_irq_params.
         self.clear_irq_status().await?;
 
         self.write_register(Register::RegOpMode, mode.value()).await
@@ -461,10 +462,12 @@ where
     // enable interrupts on DIO pins (sx127x has multiple),
     // and allow interrupts.
     async fn set_irq_params(&mut self, radio_mode: Option<RadioMode>) -> Result<(), RadioError> {
-        // Clear stale IRQ flags before remapping DIO. RegIrqFlags is W1C with no
-        // auto-clear on mode change (SX1276 DS §4.1.2.4); clearing first keeps
-        // it away from a caller's adjacent RegOpMode write.
-        self.write_register(Register::RegIrqFlags, 0xffu8).await?;
+        // Interrupt flags stay latched until the host clears them by writing a 1
+        // (SX1276 DS §4.1.2.4); mode changes do not reset them. Clear before the
+        // DIO remap so a leftover flag can't sit on a freshly mapped DIO line,
+        // where the MCU's edge-triggered interrupt would either fire on the stale
+        // flag or never see an edge for the next real one.
+        self.clear_irq_status().await?;
 
         match radio_mode {
             Some(RadioMode::Transmit) => {

@@ -540,9 +540,6 @@ async fn test_emulated_rx_end_to_end() {
 }
 
 #[tokio::test]
-#[ignore = "documents a known bug: do_rx does not clear stale IRQ flags, so a \
-            restarted receive reports the abandoned session's RxDone as a fresh \
-            packet. Un-ignore when the stale-flag clear lands."]
 async fn test_restarted_rx_ignores_stale_flags() {
     // RegIrqFlags stays latched until the host clears it by writing a 1 —
     // mode changes don't reset it — so a receive that was started but never
