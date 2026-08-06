@@ -44,11 +44,11 @@ use interface::*;
 use mod_params::*;
 use mod_traits::*;
 
-/// Sync word for public LoRaWAN networks
-const LORAWAN_PUBLIC_SYNCWORD: u8 = 0x34;
+/// Sync word for public LoRaWAN networks (0x34 in the legacy single-byte form)
+const LORAWAN_PUBLIC_SYNCWORD: u16 = 0x3444;
 
-/// Sync word for private LoRaWAN networks
-const LORAWAN_PRIVATE_SYNCWORD: u8 = 0x12;
+/// Sync word for private LoRaWAN networks (0x12 in the legacy single-byte form)
+const LORAWAN_PRIVATE_SYNCWORD: u16 = 0x1424;
 
 /// Provides the physical layer API to support LoRa chips
 pub struct LoRa<RK, DLY>
@@ -59,7 +59,7 @@ where
     radio_kind: RK,
     delay: DLY,
     radio_mode: RadioMode,
-    sync_word: u8,
+    sync_word: u16,
     cold_start: bool,
     calibrate_image: bool,
 }
@@ -69,8 +69,14 @@ where
     RK: RadioKind,
     DLY: DelayNs,
 {
-    /// Build and return a new instance of the LoRa physical layer API with a specified sync word
+    /// Build and return a new instance of the LoRa physical layer API with a specified sync word,
+    /// given in the legacy single-byte form (e.g. 0x34 for public LoRaWAN networks)
     pub async fn with_syncword(radio_kind: RK, sync_word: u8, delay: DLY) -> Result<Self, RadioError> {
+        Self::with_syncword_raw(radio_kind, sync_word_from_legacy(sync_word), delay).await
+    }
+
+    // Build with a sync word in the 16-bit form (see [`LoRa::set_lora_sync_word`])
+    async fn with_syncword_raw(radio_kind: RK, sync_word: u16, delay: DLY) -> Result<Self, RadioError> {
         let mut lora = Self {
             radio_kind,
             delay,
@@ -95,7 +101,7 @@ where
         } else {
             LORAWAN_PRIVATE_SYNCWORD
         };
-        Self::with_syncword(radio_kind, sync_word, delay).await
+        Self::with_syncword_raw(radio_kind, sync_word, delay).await
     }
 
     /// Wait for an IRQ event to occur
@@ -187,8 +193,14 @@ where
         self.radio_kind.set_standby().await
     }
 
-    /// Apply a new LoRa sync word to the chip
-    pub async fn set_lora_sync_word(&mut self, sync_word: u8) -> Result<(), RadioError> {
+    /// Apply a new LoRa sync word to the chip.
+    ///
+    /// The sync word is given in the 16-bit form the sx126x family writes to
+    /// its sync word registers; the legacy single-byte form 0xYZ used by the
+    /// older chips corresponds to 0xY4Z4 (LoRaWAN public 0x34 -> 0x3444,
+    /// private 0x12 -> 0x1424). The sx127x and lr1110 only support values of
+    /// that shape and return `RadioError::InvalidSyncWord` for others.
+    pub async fn set_lora_sync_word(&mut self, sync_word: u16) -> Result<(), RadioError> {
         self.radio_kind.ensure_ready(self.radio_mode).await?;
         if self.radio_mode != RadioMode::Standby {
             self.radio_kind.set_standby().await?;

@@ -34,9 +34,13 @@ pub enum IrqState {
 #[allow(async_fn_in_trait)]
 pub trait RadioKind {
     /// Initialize lora radio
-    async fn init_lora(&mut self, sync_word: u8) -> Result<(), RadioError>;
-    /// Apply a new LoRa sync word to the chip
-    async fn set_lora_sync_word(&mut self, sync_word: u8) -> Result<(), RadioError>;
+    ///
+    /// The sync word is given in the 16-bit sx126x register form; the legacy
+    /// single-byte form 0xYZ corresponds to 0xY4Z4.
+    async fn init_lora(&mut self, sync_word: u16) -> Result<(), RadioError>;
+    /// Apply a new LoRa sync word to the chip, in the same 16-bit form as
+    /// [`RadioKind::init_lora`]
+    async fn set_lora_sync_word(&mut self, sync_word: u16) -> Result<(), RadioError>;
     /// Create modulation parameters specific to the LoRa chip kind and type
     fn create_modulation_params(
         &self,
