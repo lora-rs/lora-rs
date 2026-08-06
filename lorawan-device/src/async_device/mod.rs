@@ -16,7 +16,6 @@ use crate::{
 };
 
 pub mod radio;
-use lorawan::default_crypto::DefaultFactory;
 
 #[cfg(feature = "embassy-time")]
 mod embassy_time;
@@ -25,6 +24,8 @@ pub use embassy_time::EmbassyTimer;
 
 #[cfg(feature = "multicast")]
 use crate::mac::multicast;
+#[cfg(feature = "multicast")]
+use lorawan::default_crypto::DefaultFactory;
 #[cfg(feature = "multicast")]
 pub use lorawan::{
     keys::{AppKey, AppSKey, GenAppKey, McAppSKey, McNetSKey, McRootKey},

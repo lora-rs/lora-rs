@@ -7,7 +7,7 @@
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
 use crate::CryptoFactory;
-use aes::cipher::{generic_array::GenericArray, KeyInit};
+use aes::cipher::KeyInit;
 use aes::Aes128;
 use criterion::{criterion_group, criterion_main, Criterion};
 use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
@@ -126,8 +126,8 @@ impl PartialEq for ConstFactory {
 impl ConstFactory {
     fn new(key: &AES128) -> Self {
         ConstFactory(
-            Aes128::new(GenericArray::from_slice(&key.0[..])),
-            Cmac::new((&key.0[..]).into()),
+            Aes128::new_from_slice(&key.0[..]).unwrap(),
+            Cmac::new_from_slice(&key.0[..]).unwrap(),
         )
     }
 }

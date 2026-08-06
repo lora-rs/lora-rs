@@ -1,8 +1,7 @@
 //! Provides a default software implementation for LoRaWAN's cryptographic functions.
 use super::keys::*;
 use aes::cipher::{
-    Array as GenericArray, BlockCipherDecrypt as BlockDecrypt, BlockCipherEncrypt as BlockEncrypt,
-    KeyInit,
+    BlockCipherDecrypt as BlockDecrypt, BlockCipherEncrypt as BlockEncrypt, KeyInit,
 };
 use aes::Aes128;
 use cmac::Cmac as RustCmac;
@@ -33,13 +32,13 @@ impl CryptoFactory for DefaultFactory {
 
 impl Encrypter for Aes128 {
     fn encrypt_block(&self, block: &mut [u8]) {
-        BlockEncrypt::encrypt_block(self, GenericArray::from_mut_slice(block));
+        BlockEncrypt::encrypt_block(self, block.try_into().unwrap());
     }
 }
 
 impl Decrypter for Aes128 {
     fn decrypt_block(&self, block: &mut [u8]) {
-        BlockDecrypt::decrypt_block(self, GenericArray::from_mut_slice(block));
+        BlockDecrypt::decrypt_block(self, block.try_into().unwrap());
     }
 }
 
