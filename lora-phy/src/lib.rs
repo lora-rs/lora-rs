@@ -303,7 +303,15 @@ where
         Ok(())
     }
 
-    /// Reconfigure radio that is presently receiving to listen to different frequency.
+    /// Reconfigure a radio that is presently receiving to listen on a different frequency,
+    /// without going through a full [`LoRa::prepare_for_rx`].
+    ///
+    /// Only the RF frequency is updated: modulation and packet parameters are kept, and
+    /// band-dependent configuration is not re-applied (image calibration, which the driver
+    /// performs once per [`LoRa::init`] at the first prepared frequency, and the sx127x
+    /// errata workarounds applied at [`LoRa::prepare_for_rx`] time). Intended for hops
+    /// between channels in the same band, like LoRaWAN channel hopping; for a band change,
+    /// use [`LoRa::prepare_for_rx`].
     pub async fn rx_switch_channel(&mut self, frequency_in_hz: u32) -> Result<(), RadioError> {
         if let RadioMode::Receive(listen_mode) = self.radio_mode {
             self.radio_kind.set_standby().await?;

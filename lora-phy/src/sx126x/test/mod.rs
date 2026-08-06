@@ -3,11 +3,12 @@
 //! state machine against an emulated chip.
 mod emulator;
 mod fixtures;
-use emulator::{get_emulated_sx1261, Chip, Mode};
+use emulator::{get_emulated_sx1261, Chip, FakeIv, FakeSpi, Mode};
 use fixtures::{get_sx1262, get_sx126x, Delayer, TestFixture};
 
 use crate::mod_params::{RadioMode, RxMode};
 use crate::mod_traits::RadioKind;
+use crate::sx126x::{Sx1261, Sx126x};
 use crate::LoRa;
 use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 use smtc_modem_cores::sx126x::{
@@ -527,6 +528,54 @@ async fn test_emulated_rx_end_to_end() {
     assert_eq!(&buf[..len as usize], b"ping");
     assert_eq!(status.rssi, -80);
     assert_eq!(status.snr, 5);
+}
+
+#[tokio::test]
+async fn test_emulated_rx_switch_channel() {
+    let chip = Chip::new();
+    let mut lora = LoRa::new(get_emulated_sx1261(&chip), true, Delayer).await.unwrap();
+
+    let mdltn_params = modulation(&mut lora);
+    let rx_pkt_params = lora
+        .create_rx_packet_params(8, false, 255, true, false, &mdltn_params)
+        .unwrap();
+    lora.prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params)
+        .await
+        .unwrap();
+    lora.start_rx().await.unwrap();
+    chip.with_model(|m| {
+        assert_eq!(m.mode, Mode::Rx);
+        assert_eq!(
+            m.frequency_raw,
+            Sx126x::<FakeSpi, FakeIv, Sx1261>::convert_freq_in_hz_to_pll_step(TEST_FREQ_HZ)
+        );
+    });
+
+    // switch while receiving: chip must end up back in RX on the new
+    // frequency, and the switched-to session must still receive (the model
+    // delivers a pending packet at SetRx time, i.e. through the switch's
+    // own re-enter into RX)
+    chip.inject_rx(b"hop", -80, 5);
+    let new_freq = TEST_FREQ_HZ + 200_000;
+    lora.rx_switch_channel(new_freq).await.unwrap();
+    chip.with_model(|m| {
+        assert_eq!(m.mode, Mode::Rx);
+        assert_eq!(
+            m.frequency_raw,
+            Sx126x::<FakeSpi, FakeIv, Sx1261>::convert_freq_in_hz_to_pll_step(new_freq)
+        );
+    });
+
+    let mut buf = [0u8; 255];
+    let (len, _) = lora.complete_rx(&rx_pkt_params, &mut buf).await.unwrap();
+    assert_eq!(&buf[..len as usize], b"hop");
+
+    // switching while not receiving is rejected
+    lora.sleep(true).await.unwrap();
+    assert_eq!(
+        lora.rx_switch_channel(TEST_FREQ_HZ).await,
+        Err(crate::mod_params::RadioError::InvalidRadioMode)
+    );
 }
 
 #[tokio::test]

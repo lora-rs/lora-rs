@@ -51,7 +51,7 @@ pub struct ChipModel {
     pub buffer: [u8; 256],
     tx_base_addr: u8,
     payload_length: u8,
-    frequency_raw: u32,
+    pub frequency_raw: u32,
     irq_status: u16,
     irq_mask: u16,
     dio1_mask: u16,
