@@ -94,17 +94,16 @@ fixed_len_struct_impl_to_string_msb! {
     EUI64[8];
 }
 
-fixed_len_struct_impl_to_string_msb! {
-    DevNonce[2];
-}
+//fixed_len_struct_impl_to_string_msb! {
+//    DevNonce[2];
+//}
+//fixed_len_struct_impl_to_string_msb! {
+//    AppNonce[3];
+//}
 
-fixed_len_struct_impl_to_string_msb! {
-    AppNonce[3];
-}
-
-fixed_len_struct_impl_to_string_msb! {
-    DevAddr[4];
-}
+//fixed_len_struct_impl_to_string_msb! {
+//    DevAddr[4];
+//}
 
 fixed_len_struct_impl_to_string_msb! {
     McAddr[4];

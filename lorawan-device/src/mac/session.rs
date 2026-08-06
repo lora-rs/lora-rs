@@ -30,7 +30,7 @@ pub struct Session {
     pub confirmed: bool,
     pub nwkskey: NwkSKey,
     pub appskey: AppSKey,
-    pub devaddr: DevAddr<[u8; 4]>,
+    pub devaddr: DevAddr,
     pub fcnt_up: u32,
     /// Frame counter of the last accepted downlink, or `None` before the first
     /// downlink of the session. Only the low 16 bits of the counter are on the
@@ -53,7 +53,7 @@ pub struct Session {
 pub struct SessionKeys {
     pub nwkskey: NwkSKey,
     pub appskey: AppSKey,
-    pub devaddr: DevAddr<[u8; 4]>,
+    pub devaddr: DevAddr,
 }
 
 impl From<Session> for SessionKeys {
@@ -71,17 +71,11 @@ impl Session {
         Self::new(
             decrypt.derive_nwkskey(&devnonce, credentials.appkey(), &DefaultFactory),
             decrypt.derive_appskey(&devnonce, credentials.appkey(), &DefaultFactory),
-            DevAddr::new([
-                decrypt.dev_addr().as_ref()[0],
-                decrypt.dev_addr().as_ref()[1],
-                decrypt.dev_addr().as_ref()[2],
-                decrypt.dev_addr().as_ref()[3],
-            ])
-            .unwrap(),
+            DevAddr::new(decrypt.dev_addr().as_array()).unwrap(),
         )
     }
 
-    pub fn new(nwkskey: NwkSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]>) -> Self {
+    pub fn new(nwkskey: NwkSKey, appskey: AppSKey, devaddr: DevAddr) -> Self {
         Self {
             nwkskey,
             appskey,
@@ -100,7 +94,7 @@ impl Session {
         }
     }
 
-    pub fn devaddr(&self) -> &DevAddr<[u8; 4]> {
+    pub fn devaddr(&self) -> &DevAddr {
         &self.devaddr
     }
     pub fn appskey(&self) -> &AppSKey {

@@ -9,7 +9,7 @@ use lorawan::{
 };
 use rand_core::RngCore;
 
-pub(crate) type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
+pub(crate) use lorawan::parser::DevNonce;
 
 pub(crate) struct Otaa {
     dev_nonce: DevNonce,

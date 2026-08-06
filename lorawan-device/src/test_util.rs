@@ -52,7 +52,7 @@ pub fn get_key() -> [u8; 16] {
     [0; 16]
 }
 
-pub fn get_dev_addr() -> DevAddr<[u8; 4]> {
+pub fn get_dev_addr() -> DevAddr {
     DevAddr::from(0)
 }
 pub fn get_otaa_credentials() -> JoinMode {
@@ -98,7 +98,7 @@ pub fn handle_join_request_with_dl_settings<const I: usize, const DL_SETTINGS: u
             let mut buffer: [u8; 17] = [0; 17];
             let mut phy = lorawan::creator::JoinAcceptCreator::new(&mut buffer[..]).unwrap();
             let app_nonce_bytes = [1; 3];
-            phy.set_app_nonce(&app_nonce_bytes);
+            phy.set_app_nonce(app_nonce_bytes);
             phy.set_net_id(&[1; 3]);
             phy.set_dev_addr(get_dev_addr());
             phy.set_dl_settings(DL_SETTINGS);
@@ -166,7 +166,7 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
             let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
             phy.set_confirmed(uplink.is_confirmed());
             phy.set_f_port(4);
-            phy.set_dev_addr(&[0; 4]);
+            phy.set_dev_addr([0; 4]);
             phy.set_uplink(false);
             phy.set_fcnt(FCNT_DOWN);
             let finished = phy
@@ -256,7 +256,7 @@ pub fn handle_data_uplink_with_link_adr_ans(
             rx_buffer.iter_mut().for_each(|x| *x = 0);
             let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
             phy.set_confirmed(uplink.is_confirmed());
-            phy.set_dev_addr(&[0; 4]);
+            phy.set_dev_addr([0; 4]);
             phy.set_uplink(false);
             //phy.set_f_port(3);
             phy.set_fcnt(1);

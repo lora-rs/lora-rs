@@ -14,7 +14,7 @@ fn build_frm_payload(buf: &mut [u8], payload_in_hex: &str, fcnt: u32) -> usize {
     let mut phy = lorawan::creator::DataPayloadCreator::new(buf).unwrap();
     phy.set_confirmed(false);
     phy.set_f_port(0);
-    phy.set_dev_addr(&[0; 4]);
+    phy.set_dev_addr([0; 4]);
     phy.set_uplink(false);
     phy.set_fcnt(fcnt);
     phy.set_fctrl(&lorawan::parser::FCtrl::new(0x20, true));
@@ -515,7 +515,7 @@ async fn maccommands_in_frmpayload() {
         let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
         phy.set_confirmed(false);
         phy.set_f_port(0);
-        phy.set_dev_addr(&[0; 4]);
+        phy.set_dev_addr([0; 4]);
         phy.set_uplink(false);
         phy.set_fcnt(5);
         phy.set_fctrl(&lorawan::parser::FCtrl::new(0x00, true));

@@ -74,5 +74,5 @@ pub trait Timings {
 /// Join the network using either OTAA or ABP.
 pub enum JoinMode {
     OTAA { deveui: DevEui, appeui: AppEui, appkey: AppKey },
-    ABP { nwkskey: NwkSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]> },
+    ABP { nwkskey: NwkSKey, appskey: AppSKey, devaddr: DevAddr },
 }
