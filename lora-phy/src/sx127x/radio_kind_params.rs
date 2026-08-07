@@ -142,7 +142,7 @@ impl IrqMask {
         self as u8
     }
 
-    pub fn is_set_in(self, mask: u8) -> bool {
+    pub fn is_set(self, mask: u8) -> bool {
         self.value() & mask == self.value()
     }
 }
