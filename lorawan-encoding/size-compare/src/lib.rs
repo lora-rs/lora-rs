@@ -16,7 +16,7 @@
 
 #![no_std]
 
-use lorawan::keys::{AppKey, CryptoFactory, Decrypter, Encrypter, Mac, AES128};
+use lorawan::keys::Crypto;
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
@@ -25,54 +25,21 @@ fn panic(_: &core::panic::PanicInfo<'_>) -> ! {
 
 // --- Dummy crypto: tiny, so the measurement is parser code, not AES ---
 
-struct DumEnc;
-impl Encrypter for DumEnc {
+struct DumCrypto;
+impl Crypto for DumCrypto {
     fn encrypt_block(&self, block: &mut [u8]) {
         for b in block {
             *b = b.wrapping_add(0x5a);
         }
     }
-}
-impl Decrypter for DumEnc {
-    fn decrypt_block(&self, block: &mut [u8]) {
-        for b in block {
-            *b = b.wrapping_sub(0x5a);
+    fn calculate_mic(&self, b0: &[u8], data: &[u8]) -> [u8; 4] {
+        let mut acc = 0u8;
+        for b in b0.iter().chain(data) {
+            acc ^= *b;
         }
+        [acc; 4]
     }
 }
-
-struct DumMac(u8);
-impl Mac for DumMac {
-    fn input(&mut self, data: &[u8]) {
-        for b in data {
-            self.0 ^= *b;
-        }
-    }
-    fn reset(&mut self) {
-        self.0 = 0;
-    }
-    fn result(self) -> [u8; 16] {
-        [self.0; 16]
-    }
-}
-
-struct DumFactory;
-impl CryptoFactory for DumFactory {
-    type E = DumEnc;
-    type D = DumEnc;
-    type M = DumMac;
-    fn new_enc(&self, _: &AES128) -> DumEnc {
-        DumEnc
-    }
-    fn new_dec(&self, _: &AES128) -> DumEnc {
-        DumEnc
-    }
-    fn new_mac(&self, _: &AES128) -> DumMac {
-        DumMac(0)
-    }
-}
-
-const KEY: AES128 = AES128([2; 16]);
 
 #[cfg(any(feature = "new1", feature = "new3"))]
 mod new {
@@ -85,18 +52,12 @@ mod new {
                 let mut acc = u32::from(p.fhdr().fcnt());
                 acc = acc.wrapping_add(p.fhdr().dev_addr().value());
                 acc = acc.wrapping_add(u32::from(p.f_port().unwrap_or(0)));
-                if p.validate_mic(&KEY, 1, &DumFactory) {
+                if p.validate_mic(&DumCrypto, 1) {
                     acc = acc.wrapping_add(1);
                 }
-                let nwk = lorawan::keys::NwkSKey::from(KEY.0);
-                let app = lorawan::keys::AppSKey::from(KEY.0);
-                if let Ok(d) = DecryptedDataPayload::decrypt_in_place(
-                    buf,
-                    Some(&nwk),
-                    Some(&app),
-                    1,
-                    &DumFactory,
-                ) {
+                if let Ok(d) =
+                    DecryptedDataPayload::decrypt_in_place(buf, Some(&DumCrypto), Some(&DumCrypto), 1)
+                {
                     if let FrmPayload::Data(pl) = d.frm_payload() {
                         for b in pl {
                             acc = acc.wrapping_add(u32::from(*b));
@@ -107,14 +68,13 @@ mod new {
             }
             Ok(PhyPayload::JoinRequest(jr)) => {
                 let mut acc = jr.dev_eui().value() as u32;
-                if jr.validate_mic(&AppKey::from(KEY.0), &DumFactory) {
+                if jr.validate_mic(&DumCrypto) {
                     acc = acc.wrapping_add(1);
                 }
                 acc
             }
             Ok(PhyPayload::JoinAccept(_)) => {
-                let key = AppKey::from(KEY.0);
-                match DecryptedJoinAcceptPayload::decrypt_in_place(buf, &key, &DumFactory) {
+                match DecryptedJoinAcceptPayload::decrypt_in_place(buf, &DumCrypto) {
                     Ok(d) => d.dev_addr().value().wrapping_add(u32::from(d.mic().0[0])),
                     Err(_) => 0,
                 }

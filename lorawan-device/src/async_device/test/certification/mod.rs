@@ -3,10 +3,9 @@
 use super::util;
 use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
-use crate::test_util::{get_dev_addr, get_key, Uplink};
+use crate::test_util::{get_crypto, get_dev_addr, Uplink};
 use core::num::NonZeroU8;
 use lorawan::creator::{DataFrame, Payload};
-use lorawan::default_crypto::DefaultFactory;
 use lorawan::parser::{self, DataFrameType, DecryptedDataPayload, PhyPayload};
 
 use std::sync::Arc;
@@ -27,19 +26,13 @@ fn decrypt_uplink(uplink: &mut Uplink) -> DecryptedDataPayload<'_> {
     let fcnt = match parser::parse(&*bytes) {
         Ok(PhyPayload::Data(data)) => {
             let fcnt = data.fhdr().fcnt() as u32;
-            assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
+            assert!(data.validate_mic(&get_crypto(), fcnt));
             fcnt
         }
         _ => panic!("expected a data frame"),
     };
-    DecryptedDataPayload::decrypt_in_place(
-        bytes,
-        Some(&get_key().into()),
-        Some(&get_key().into()),
-        fcnt,
-        &DefaultFactory,
-    )
-    .unwrap()
+    DecryptedDataPayload::decrypt_in_place(bytes, Some(&get_crypto()), Some(&get_crypto()), fcnt)
+        .unwrap()
 }
 
 fn _build(buf: &mut [u8], payload_in_hex: &str, fcnt: u16, fport: u8) -> usize {
@@ -55,8 +48,7 @@ fn _build(buf: &mut [u8], payload_in_hex: &str, fcnt: u16, fport: u8) -> usize {
         },
         ..Default::default()
     };
-    let finished =
-        frame.build_into(buf, &get_key().into(), Some(&get_key().into()), &DefaultFactory).unwrap();
+    let finished = frame.build_into(buf, &get_crypto(), Some(&get_crypto())).unwrap();
     finished.len()
 }
 
@@ -79,8 +71,7 @@ fn packet_with_mac(
         payload: Payload::Data { f_port: NonZeroU8::new(fport).unwrap(), data: &payload },
         ..Default::default()
     };
-    let finished =
-        frame.build_into(buf, &get_key().into(), Some(&get_key().into()), &DefaultFactory).unwrap();
+    let finished = frame.build_into(buf, &get_crypto(), Some(&get_crypto())).unwrap();
     finished.len()
 }
 

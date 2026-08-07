@@ -3,7 +3,7 @@ use crate::radio::RadioBuffer;
 use crate::region::Configuration;
 use crate::{AppEui, AppKey, DevEui};
 use lorawan::creator::JoinRequest;
-use lorawan::default_crypto::DefaultFactory;
+use lorawan::default_crypto::DefaultCrypto;
 use lorawan::parser::DecryptedJoinAcceptPayload;
 use rand_core::RngCore;
 
@@ -40,10 +40,8 @@ impl Otaa {
             dev_eui: self.network_credentials.deveui.into(),
             dev_nonce: self.dev_nonce,
         };
-        let len = request
-            .build_into(buf.as_mut(), &self.network_credentials.appkey, &DefaultFactory)
-            .unwrap()
-            .len();
+        let crypto = DefaultCrypto::new(self.network_credentials.appkey.inner());
+        let len = request.build_into(buf.as_mut(), &crypto).unwrap().len();
         buf.set_pos(len);
         self.dev_nonce.value()
     }
@@ -56,8 +54,7 @@ impl Otaa {
     ) -> Option<Session> {
         if let Ok(decrypt) = DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(
             rx.as_mut_for_read(),
-            &self.network_credentials.appkey,
-            &DefaultFactory,
+            &DefaultCrypto::new(self.network_credentials.appkey.inner()),
         ) {
             region.process_join_accept(decrypt.c_f_list().as_ref());
             configuration.rx1_delay = del_to_delay_ms(decrypt.rx_delay());

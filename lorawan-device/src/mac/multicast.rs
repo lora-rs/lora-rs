@@ -4,7 +4,7 @@ use crate::Downlink;
 use crate::{async_device, mac};
 use core::fmt::Debug;
 use core::ops::RangeInclusive;
-use lorawan::default_crypto::DefaultFactory;
+use lorawan::default_crypto::DefaultCrypto;
 use lorawan::keys::McKEKey;
 use lorawan::multicast::parse_downlink_multicast_commands;
 pub use lorawan::multicast::{self, Session};
@@ -73,18 +73,19 @@ impl Multicast {
         let mc_addr = encrypted_data.fhdr().mc_addr();
         if let Some((group_id, session)) = self.matching_session(mc_addr) {
             let fcnt = encrypted_data.fhdr().fcnt() as u32;
-            if encrypted_data.validate_mic(session.mc_net_s_key().inner(), fcnt, &DefaultFactory)
+            let nwk_crypto = DefaultCrypto::new(session.mc_net_s_key().inner());
+            let app_crypto = DefaultCrypto::new(session.mc_app_s_key().inner());
+            if encrypted_data.validate_mic(&nwk_crypto, fcnt)
                 && (fcnt > session.fcnt_down || fcnt == 0)
             {
                 return {
                     session.fcnt_down = fcnt;
                     // We can safely unwrap here because we already validated the MIC
-                    let decrypted = DecryptedDataPayload::decrypt_in_place_with(
+                    let decrypted = DecryptedDataPayload::decrypt_in_place(
                         bytes,
-                        Some(session.mc_net_s_key().inner()),
-                        Some(session.mc_app_s_key().inner()),
+                        Some(&nwk_crypto),
+                        Some(&app_crypto),
                         session.fcnt_down,
-                        &DefaultFactory,
                     )
                     .unwrap();
                     if session.fcnt_down == session.max_fcnt_down() {
@@ -141,9 +142,8 @@ impl Multicast {
             };
             match message {
                 DownlinkRemoteSetup::McGroupSetupReq(mc_group_setup_req) => {
-                    let crypto = DefaultFactory;
-                    let (group_id, session) =
-                        mc_group_setup_req.derive_session(&crypto, mc_k_e_key);
+                    let crypto = DefaultCrypto::new(mc_k_e_key.inner());
+                    let (group_id, session) = mc_group_setup_req.derive_session(&crypto);
                     self.sessions[group_id as usize] = Some(session);
                     let mut ans = McGroupSetupAnsCreator::new();
                     ans.mc_group_id_header(group_id);

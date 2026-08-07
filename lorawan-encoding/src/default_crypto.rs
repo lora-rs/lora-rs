@@ -7,8 +7,6 @@ use aes::{Aes128, Aes128Enc};
 use cmac::digest::InnerInit;
 use cmac::Cmac as RustCmac;
 
-pub type Cmac = RustCmac<Aes128>;
-
 /// Default software implementation of the device-side [`Crypto`] primitives.
 ///
 /// Holds the expanded AES key schedule for the key it was constructed with,
@@ -156,53 +154,5 @@ mod test {
                 [0x07, 0x0a, 0x16, 0xb4]
             );
         }
-    }
-}
-
-/// Provides a default implementation for build object for using the crypto functions.
-#[derive(Default, Debug, PartialEq, Eq)]
-pub struct DefaultFactory;
-
-impl CryptoFactory for DefaultFactory {
-    type E = Aes128;
-    type D = Aes128;
-    type M = Cmac;
-
-    fn new_enc(&self, key: &AES128) -> Self::E {
-        Self::E::new_from_slice(&key.0[..]).unwrap()
-    }
-
-    fn new_dec(&self, key: &AES128) -> Self::D {
-        Self::D::new_from_slice(&key.0[..]).unwrap()
-    }
-
-    fn new_mac(&self, key: &AES128) -> Self::M {
-        Self::M::new_from_slice(&key.0[..]).unwrap()
-    }
-}
-
-impl Encrypter for Aes128 {
-    fn encrypt_block(&self, block: &mut [u8]) {
-        BlockEncrypt::encrypt_block(self, block.try_into().unwrap());
-    }
-}
-
-impl Decrypter for Aes128 {
-    fn decrypt_block(&self, block: &mut [u8]) {
-        BlockDecrypt::decrypt_block(self, block.try_into().unwrap());
-    }
-}
-
-impl Mac for Cmac {
-    fn input(&mut self, data: &[u8]) {
-        cmac::Mac::update(self, data);
-    }
-
-    fn reset(&mut self) {
-        cmac::Mac::reset(self);
-    }
-
-    fn result(self) -> [u8; 16] {
-        cmac::Mac::finalize(self).into_bytes().into()
     }
 }

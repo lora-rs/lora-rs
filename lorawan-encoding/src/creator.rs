@@ -17,7 +17,7 @@
 
 use core::num::NonZeroU8;
 
-use crate::keys::{AppKey, AppSKey, CryptoFactory, Decrypter, NwkSKey};
+use crate::keys::{Crypto, NetworkCrypto};
 use crate::packet_length::phy::join::{
     JOIN_ACCEPT_LEN, JOIN_ACCEPT_WITH_CFLIST_LEN, JOIN_REQUEST_LEN,
 };
@@ -29,9 +29,9 @@ use crate::parser::{
     CfList, DataFrameType, DevAddr, DevEui, DevNonce, Error, JoinEui, JoinNonce, NetId,
 };
 
-fn write_mic<C: CryptoFactory>(out: &mut [u8], key: &crate::keys::AES128, crypto: &C) {
+fn write_mic(out: &mut [u8], crypto: &dyn Crypto) {
     let mic_offset = out.len() - MIC_LEN;
-    let mic = securityhelpers::calculate_mic(&out[..mic_offset], crypto.new_mac(key));
+    let mic = securityhelpers::calculate_mic(&out[..mic_offset], crypto);
     out[mic_offset..].copy_from_slice(&mic.0);
 }
 
@@ -47,10 +47,11 @@ pub struct JoinRequest {
 impl JoinRequest {
     /// Writes the frame into the front of `buf` with the MIC set, returning
     /// the built bytes.
-    pub fn build_into<'a, C: CryptoFactory>(
+    ///
+    /// `crypto` must be bound to the AppKey.
+    pub fn build_into<'a, C: Crypto>(
         &self,
         buf: &'a mut [u8],
-        key: &AppKey,
         crypto: &C,
     ) -> Result<&'a [u8], Error> {
         let out = buf.get_mut(..JOIN_REQUEST_LEN).ok_or(Error::BufferTooShort)?;
@@ -58,7 +59,7 @@ impl JoinRequest {
         out[1..9].copy_from_slice(self.join_eui.as_wire_bytes());
         out[9..17].copy_from_slice(self.dev_eui.as_wire_bytes());
         out[17..19].copy_from_slice(self.dev_nonce.as_wire_bytes());
-        write_mic(out, key.inner(), crypto);
+        write_mic(out, crypto);
         Ok(out)
     }
 }
@@ -82,10 +83,14 @@ pub struct JoinAccept {
 impl JoinAccept {
     /// Writes the encrypted frame into the front of `buf` with the MIC set,
     /// returning the built bytes.
-    pub fn build_into<'a, C: CryptoFactory>(
+    ///
+    /// `crypto` must be bound to the AppKey. This is the one creation path
+    /// that needs [`NetworkCrypto`]: the server encrypts with the AES decrypt
+    /// primitive, which device-side (encrypt-only) implementations do not
+    /// provide.
+    pub fn build_into<'a, C: NetworkCrypto>(
         &self,
         buf: &'a mut [u8],
-        key: &AppKey,
         crypto: &C,
     ) -> Result<&'a [u8], Error> {
         let len = if self.c_f_list.is_some() {
@@ -114,13 +119,12 @@ impl JoinAccept {
                 out[28] = 1; // CFList type
             }
         }
-        write_mic(out, key.inner(), crypto);
+        write_mic(out, crypto);
         // The server encrypts by running AES in *decrypt* mode so that the
         // device can decrypt with the cheaper encrypt mode. MHDR stays clear;
         // the MIC is inside the encrypted region.
-        let aes = crypto.new_dec(key.inner());
         for block in out[MHDR_LEN..].chunks_exact_mut(16) {
-            aes.decrypt_block(block);
+            crypto.decrypt_block(block);
         }
         Ok(out)
     }
@@ -210,23 +214,23 @@ impl DataFrame<'_> {
     /// Writes the encrypted frame into the front of `buf` with the MIC set,
     /// returning the built bytes.
     ///
-    /// `nwk_skey` is always required (MIC, and FPort-0 encryption);
-    /// `app_skey` only when the payload is [`Payload::Data`].
-    pub fn build_into<'a, C: CryptoFactory>(
+    /// `nwk_crypto` must be bound to the NwkSKey and is always required (MIC,
+    /// and FPort-0 encryption); `app_crypto` must be bound to the AppSKey and
+    /// only when the payload is [`Payload::Data`].
+    pub fn build_into<'a, C: Crypto>(
         &self,
         buf: &'a mut [u8],
-        nwk_skey: &NwkSKey,
-        app_skey: Option<&AppSKey>,
-        crypto: &C,
+        nwk_crypto: &C,
+        app_crypto: Option<&C>,
     ) -> Result<&'a [u8], Error> {
         if self.f_opts.len() > 15 {
             return Err(Error::FOptsTooLong);
         }
-        let (f_port, frm, enc_key) = match self.payload {
-            Payload::None => (None, &[][..], nwk_skey.inner()),
+        let (f_port, frm, enc_crypto) = match self.payload {
+            Payload::None => (None, &[][..], nwk_crypto),
             Payload::Data { f_port, data } => {
-                let key = app_skey.ok_or(Error::MissingKey)?;
-                (Some(f_port.get()), data, key.inner())
+                let crypto = app_crypto.ok_or(Error::MissingKey)?;
+                (Some(f_port.get()), data, crypto)
             }
             Payload::MacCommands(cmds) => {
                 // The spec forbids FPort 0 when FOpts is non-empty: MAC
@@ -234,7 +238,7 @@ impl DataFrame<'_> {
                 if !self.f_opts.is_empty() {
                     return Err(Error::FOptsWithFPortZero);
                 }
-                (Some(0), cmds, nwk_skey.inner())
+                (Some(0), cmds, nwk_crypto)
             }
         };
 
@@ -259,15 +263,11 @@ impl DataFrame<'_> {
                 cursor,
                 cursor + frm.len(),
                 self.fcnt,
-                &crypto.new_enc(enc_key),
+                enc_crypto,
             );
         }
         let mic_offset = total - MIC_LEN;
-        let mic = securityhelpers::calculate_data_mic(
-            &out[..mic_offset],
-            crypto.new_mac(nwk_skey.inner()),
-            self.fcnt,
-        );
+        let mic = securityhelpers::calculate_data_mic(&out[..mic_offset], nwk_crypto, self.fcnt);
         out[mic_offset..].copy_from_slice(&mic.0);
         Ok(out)
     }

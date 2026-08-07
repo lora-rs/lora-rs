@@ -25,7 +25,7 @@ pub use embassy_time::EmbassyTimer;
 #[cfg(feature = "multicast")]
 use crate::mac::multicast;
 #[cfg(feature = "multicast")]
-use lorawan::default_crypto::DefaultFactory;
+use lorawan::default_crypto::DefaultCrypto;
 #[cfg(feature = "multicast")]
 pub use lorawan::{
     keys::{AppKey, AppSKey, GenAppKey, McAppSKey, McNetSKey, McRootKey},
@@ -231,8 +231,8 @@ where
     #[cfg(feature = "multicast")]
     /// Set the McKEKey for multicast session key derivation by providing a McRootKey.
     pub fn set_multicast_ke_key(&mut self, mc_root_key: McRootKey) {
-        let crypto = DefaultFactory;
-        let key = lorawan::keys::McKEKey::derive_from(&crypto, &mc_root_key);
+        let crypto = DefaultCrypto::new(mc_root_key.inner());
+        let key = lorawan::keys::McKEKey::derive_from(&crypto);
         self.mac.multicast.mc_k_e_key = Some(key);
     }
 
@@ -241,8 +241,8 @@ where
     /// GenAppKey. The McRootKey is derived from this using `McRootKey = aes128_encrypt(GenAppKey, 0x00 | pad16) `
     /// and then the McKEKey is derived from the McRootKey.
     pub fn set_multicast_ke_key_from_gen_app_key(&mut self, key: GenAppKey) {
-        let crypto = DefaultFactory;
-        let mc_root_key = McRootKey::derive_from_gen_app_key(&crypto, &key);
+        let crypto = DefaultCrypto::new(key.inner());
+        let mc_root_key = McRootKey::derive_from_gen_app_key(&crypto);
         self.set_multicast_ke_key(mc_root_key);
     }
 
@@ -251,8 +251,8 @@ where
     /// GenAppKey. The McRootKey is derived from this using `McRootKey = aes128_encrypt(AppKey, 0x20 | pad16) `
     /// and then the McKEKey is derived from the McRootKey.
     pub fn set_multicast_ke_key_from_app_key(&mut self, key: AppKey) {
-        let crypto = DefaultFactory;
-        let mc_root_key = McRootKey::derive_from_app_key(&crypto, &key);
+        let crypto = DefaultCrypto::new(key.inner());
+        let mc_root_key = McRootKey::derive_from_app_key(&crypto);
         self.set_multicast_ke_key(mc_root_key);
     }
 

@@ -2,6 +2,7 @@ use super::*;
 use crate::async_device::McAddr;
 use core::num::NonZeroU8;
 use lorawan::creator::{DataFrame, Payload};
+use lorawan::default_crypto::DefaultNetworkCrypto;
 use lorawan::keys::{McKEKey, McKey};
 use lorawan::multicast::parse_uplink_multicast_commands;
 use lorawan::multicast::{McGroupDeleteReqCreator, McGroupSetupReqCreator, UplinkRemoteSetup};
@@ -19,7 +20,7 @@ fn handle_multicast_setup_req(
 
     req.mc_group_id_header(0x01);
     req.mc_addr(&mc_addr);
-    req.mc_key(&DefaultFactory, &mc_key, &mcke_key);
+    req.mc_key(&DefaultNetworkCrypto::new(mcke_key.inner()), &mc_key);
     req.min_mc_fcount(0x12345678);
     req.max_mc_fcount(0x87654321);
     let setup_req = req.build();
@@ -35,9 +36,7 @@ fn handle_multicast_setup_req(
         payload: Payload::Data { f_port: NonZeroU8::new(200).unwrap(), data: setup_req },
         ..Default::default()
     };
-    let finished = frame
-        .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
-        .unwrap();
+    let finished = frame.build_into(rx_buffer, &get_crypto(), Some(&get_crypto())).unwrap();
     finished.len()
 }
 
@@ -51,17 +50,16 @@ fn verify_multicast_message(
     let fcnt = match parser::parse(&*bytes) {
         Ok(parser::PhyPayload::Data(data)) => {
             let fcnt = data.fhdr().fcnt() as u32;
-            assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
+            assert!(data.validate_mic(&get_crypto(), fcnt));
             fcnt
         }
         _ => panic!("Expected encrypted data payload"),
     };
     let decrypted = DecryptedDataPayload::decrypt_in_place(
         bytes,
-        Some(&get_key().into()),
-        Some(&get_key().into()),
+        Some(&get_crypto()),
+        Some(&get_crypto()),
         fcnt,
-        &DefaultFactory,
     )
     .unwrap();
     assert_eq!(decrypted.f_port().unwrap(), expected_port);
@@ -147,9 +145,7 @@ fn handle_mc_group_delete_req<const GROUP_ID: u8>(
         payload: Payload::Data { f_port: NonZeroU8::new(200).unwrap(), data: setup_req },
         ..Default::default()
     };
-    let finished = frame
-        .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
-        .unwrap();
+    let finished = frame.build_into(rx_buffer, &get_crypto(), Some(&get_crypto())).unwrap();
     finished.len()
 }
 
@@ -185,9 +181,7 @@ fn handle_regular_downlink_msg<const FCNT: u32>(
         payload: Payload::Data { f_port: NonZeroU8::new(1).unwrap(), data: &[1, 2, 3] },
         ..Default::default()
     };
-    let finished = frame
-        .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
-        .unwrap();
+    let finished = frame.build_into(rx_buffer, &get_crypto(), Some(&get_crypto())).unwrap();
     finished.len()
 }
 

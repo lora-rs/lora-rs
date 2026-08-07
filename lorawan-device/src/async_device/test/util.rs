@@ -1,11 +1,10 @@
 use crate::radio::RfConfig;
 use lorawan::creator::DataFrame;
-use lorawan::default_crypto::DefaultFactory;
 use lorawan::parser::{self, DataFrameType, DecryptedDataPayload, PhyPayload};
 
 use super::{get_dev_addr, get_key, radio::*, region, timer::*, Device};
 use crate::mac::Session;
-pub(crate) use crate::test_util::{handle_data_uplink_with_link_adr_req, Uplink};
+pub(crate) use crate::test_util::{get_crypto, handle_data_uplink_with_link_adr_req, Uplink};
 use crate::{AppSKey, NwkSKey};
 
 fn default_session() -> Session {
@@ -54,17 +53,16 @@ pub fn handle_class_c_uplink_after_join(
         let fcnt = match parser::parse(&*bytes) {
             Ok(PhyPayload::Data(data)) => {
                 let fcnt = data.fhdr().fcnt() as u32;
-                assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
+                assert!(data.validate_mic(&get_crypto(), fcnt));
                 fcnt
             }
             _ => panic!("Did not decode PhyPayload::Data!"),
         };
         let decrypted = DecryptedDataPayload::decrypt_in_place(
             bytes,
-            Some(&get_key().into()),
-            Some(&get_key().into()),
+            Some(&get_crypto()),
+            Some(&get_crypto()),
             fcnt,
-            &DefaultFactory,
         )
         .unwrap();
         assert_eq!(decrypted.fhdr().fcnt(), 0);
@@ -75,9 +73,7 @@ pub fn handle_class_c_uplink_after_join(
             ack: true,
             ..Default::default()
         };
-        let finished = frame
-            .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
-            .unwrap();
+        let finished = frame.build_into(rx_buffer, &get_crypto(), Some(&get_crypto())).unwrap();
         finished.len()
     } else {
         panic!("No uplink passed to handle_class_c_uplink_after_join");

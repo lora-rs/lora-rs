@@ -19,7 +19,7 @@ use lorawan::parser::{
     FrmPayload,
 };
 use lorawan::{
-    default_crypto::DefaultFactory,
+    default_crypto::DefaultCrypto,
     packet_length::phy::{MHDR_LEN, MIC_LEN},
     types::DR,
 };
@@ -74,8 +74,8 @@ impl Session {
         credentials: &NetworkCredentials,
     ) -> Self {
         Self::new(
-            decrypt.derive_nwkskey(devnonce, credentials.appkey(), &DefaultFactory),
-            decrypt.derive_appskey(devnonce, credentials.appkey(), &DefaultFactory),
+            decrypt.derive_nwkskey(devnonce, &DefaultCrypto::new(credentials.appkey().inner())),
+            decrypt.derive_appskey(devnonce, &DefaultCrypto::new(credentials.appkey().inner())),
             decrypt.dev_addr(),
         )
     }
@@ -175,15 +175,16 @@ impl Session {
             let Some(fcnt) = next_fcnt_down(self.fcnt_down, encrypted_data.fhdr().fcnt()) else {
                 return Response::NoUpdate;
             };
-            if encrypted_data.validate_mic(self.nwkskey().inner(), fcnt, &DefaultFactory) {
+            let nwk_crypto = DefaultCrypto::new(self.nwkskey.inner());
+            let app_crypto = DefaultCrypto::new(self.appskey.inner());
+            if encrypted_data.validate_mic(&nwk_crypto, fcnt) {
                 self.fcnt_down = Some(fcnt);
                 // We can safely unwrap here because we already validated the MIC
                 let decrypted = DecryptedDataPayload::decrypt_in_place(
                     bytes,
-                    Some(&self.nwkskey),
-                    Some(&self.appskey),
+                    Some(&nwk_crypto),
+                    Some(&app_crypto),
                     fcnt,
-                    &DefaultFactory,
                 )
                 .unwrap();
 
@@ -341,7 +342,9 @@ impl Session {
             f_opts,
             payload,
         };
-        match frame.build_into(&mut buf, &self.nwkskey, Some(&self.appskey), &DefaultFactory) {
+        let nwk_crypto = DefaultCrypto::new(self.nwkskey.inner());
+        let app_crypto = DefaultCrypto::new(self.appskey.inner());
+        match frame.build_into(&mut buf, &nwk_crypto, Some(&app_crypto)) {
             Ok(packet) => {
                 tx_buffer.clear();
                 tx_buffer.extend_from_slice(packet).unwrap();
@@ -558,7 +561,7 @@ mod tests {
     use super::{SendData, Session};
     use crate::radio::RadioBuffer;
     use crate::{AppSKey, NwkSKey};
-    use lorawan::default_crypto::DefaultFactory;
+    use lorawan::default_crypto::DefaultCrypto;
     use lorawan::maccommandcreator::LinkADRAnsCreator;
     use lorawan::parser::{DecryptedDataPayload, DevAddr, FrmPayload};
 
@@ -579,9 +582,9 @@ mod tests {
         session.prepare_buffer::<256>(&SendData { data: &[], fport: 0, confirmed: false }, &mut tx);
 
         let bytes = tx.as_mut_for_read();
+        let nwk_crypto = DefaultCrypto::new(nwkskey.inner());
         let decrypted =
-            DecryptedDataPayload::decrypt_in_place(bytes, Some(&nwkskey), None, 0, &DefaultFactory)
-                .unwrap();
+            DecryptedDataPayload::decrypt_in_place(bytes, Some(&nwk_crypto), None, 0).unwrap();
         assert_eq!(decrypted.fhdr().f_opts(), &[] as &[u8]);
         assert_eq!(decrypted.f_port(), Some(0));
         assert_eq!(decrypted.frm_payload(), FrmPayload::MacCommands(&expected[..]));
