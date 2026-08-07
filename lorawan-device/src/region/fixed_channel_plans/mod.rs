@@ -123,17 +123,19 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
                 channel_mask.set_bank(base_index + 1, ch_mask.get_index(1));
             }
             5 => {
-                let ch_mask: u16 =
-                    ch_mask.get_index(0) as u16 | ((ch_mask.get_index(1) as u16) << 8);
-                channel_mask.set_bank(0, ((ch_mask & 0b1) * 0xFF) as u8);
-                channel_mask.set_bank(1, ((ch_mask & 0b10) * 0xFF) as u8);
-                channel_mask.set_bank(2, ((ch_mask & 0b100) * 0xFF) as u8);
-                channel_mask.set_bank(3, ((ch_mask & 0b1000) * 0xFF) as u8);
-                channel_mask.set_bank(4, ((ch_mask & 0b10000) * 0xFF) as u8);
-                channel_mask.set_bank(5, ((ch_mask & 0b100000) * 0xFF) as u8);
-                channel_mask.set_bank(6, ((ch_mask & 0b1000000) * 0xFF) as u8);
-                channel_mask.set_bank(7, ((ch_mask & 0b10000000) * 0xFF) as u8);
-                channel_mask.set_bank(8, ((ch_mask & 0b100000000) * 0xFF) as u8);
+                // Each of the 8 LSBs controls a bank of 8 125 kHz channels plus the
+                // paired 500 kHz channel: bit i -> channels [8i, 8i+7] and 64+i.
+                // The 8 MSBs are RFU. (RP002 2.5.5, Table 19)
+                let blocks = ch_mask.get_index(0);
+                for i in 0..8 {
+                    let bank = if blocks & (1 << i) != 0 {
+                        0xFF
+                    } else {
+                        0x00
+                    };
+                    channel_mask.set_bank(i, bank);
+                }
+                channel_mask.set_bank(8, blocks);
             }
             6 => {
                 self.set_125k_channels(channel_mask, true, ch_mask);
