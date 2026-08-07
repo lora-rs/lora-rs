@@ -6,19 +6,19 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 # Change stm32l072cz to your chip name, if necessary. Also change it in .cargo/config.toml
-embassy-stm32 = { version = "0.2.0", features = [
+embassy-stm32 = { version = "0.6.0", features = [
     "defmt",
     "stm32l072cz",
     "time-driver-any",
     "exti",
     "memory-x",
 ] }
-embassy-executor = { version = "0.7.0", features = [
-    "arch-cortex-m",
+embassy-executor = { version = "0.10.0", features = [
+    "platform-cortex-m",
     "executor-thread",
     "defmt",
 ] }
-embassy-time = { version = "0.4.0", features = [
+embassy-time = { version = "0.5.0", features = [
     "defmt",
     "defmt-timestamp-uptime",
 ] }

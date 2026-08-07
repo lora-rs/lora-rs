@@ -10,13 +10,13 @@ use defmt::info;
 
 use embassy_executor::Spawner;
 use embassy_futures::select::{select, Either};
-use embassy_stm32::exti::ExtiInput;
-use embassy_stm32::gpio::{Level, Output, Pin, Pull, Speed};
+use embassy_stm32::exti::{self, ExtiInput};
+use embassy_stm32::gpio::{Level, Output, Pull, Speed};
 use embassy_stm32::mode::Async;
 use embassy_stm32::rng::{self, Rng};
-use embassy_stm32::spi::Spi;
+use embassy_stm32::spi::{mode::Master, Spi};
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{bind_interrupts, peripherals};
+use embassy_stm32::{bind_interrupts, dma, peripherals};
 use embassy_sync::{
     blocking_mutex::raw::ThreadModeRawMutex,
     channel::{Channel, Receiver, Sender},
@@ -51,6 +51,9 @@ const DEFAULT_APPKEY: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 bind_interrupts!(struct Irqs{
     SUBGHZ_RADIO => InterruptHandler;
     RNG => rng::InterruptHandler<peripherals::RNG>;
+    DMA1_CHANNEL1 => dma::InterruptHandler<peripherals::DMA1_CH1>;
+    DMA1_CHANNEL2 => dma::InterruptHandler<peripherals::DMA1_CH2>;
+    EXTI0 => exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI0>;
 });
 
 static CHANNEL: Channel<ThreadModeRawMutex, ButtonState, 3> = Channel::new();
@@ -77,11 +80,11 @@ async fn main(spawner: Spawner) {
     }
     let p = embassy_stm32::init(config);
 
-    let ctrl1 = Output::new(p.PC4.degrade(), Level::Low, Speed::High);
-    let ctrl2 = Output::new(p.PC5.degrade(), Level::Low, Speed::High);
-    let ctrl3 = Output::new(p.PC3.degrade(), Level::High, Speed::High);
+    let ctrl1 = Output::new(p.PC4, Level::Low, Speed::High);
+    let ctrl2 = Output::new(p.PC5, Level::Low, Speed::High);
+    let ctrl3 = Output::new(p.PC3, Level::High, Speed::High);
 
-    let spi = Spi::new_subghz(p.SUBGHZSPI, p.DMA1_CH1, p.DMA1_CH2);
+    let spi = Spi::new_subghz(p.SUBGHZSPI, p.DMA1_CH1, p.DMA1_CH2, Irqs);
     let spi = SubghzSpiDevice(spi);
     let use_high_power_pa = true;
     let config = sx126x::Config {
@@ -93,14 +96,14 @@ async fn main(spawner: Spawner) {
     let iv = Stm32wlInterfaceVariant::new(Irqs, use_high_power_pa, Some(ctrl1), Some(ctrl2), Some(ctrl3)).unwrap();
     let lora = LoRa::new(Sx126x::new(spi, iv, config), false, Delay).await.unwrap();
 
-    let _lora_task = spawner.spawn(lora_task(lora, Rng::new(p.RNG, Irqs), CHANNEL.receiver()));
+    spawner.spawn(lora_task(lora, Rng::new(p.RNG, Irqs), CHANNEL.receiver()).unwrap());
 
-    let button = ExtiInput::new(p.PA0, p.EXTI0, Pull::Up);
-    let _button_task = spawner.spawn(button_task(button, CHANNEL.sender()));
+    let button = ExtiInput::new(p.PA0, p.EXTI0, Pull::Up, Irqs);
+    spawner.spawn(button_task(button, CHANNEL.sender()).unwrap());
 }
 
 type Stm32wlLoRa<'d> =
-    LoRa<Sx126x<iv::SubghzSpiDevice<Spi<'d, Async>>, Stm32wlInterfaceVariant<Output<'d>>, Stm32wl>, Delay>;
+    LoRa<Sx126x<iv::SubghzSpiDevice<Spi<'d, Async, Master>>, Stm32wlInterfaceVariant<Output<'d>>, Stm32wl>, Delay>;
 
 #[embassy_executor::task]
 async fn lora_task(
@@ -182,7 +185,7 @@ enum ButtonState {
 }
 
 #[embassy_executor::task]
-async fn button_task(mut button: ExtiInput<'static>, tx: Sender<'static, ThreadModeRawMutex, ButtonState, 3>) {
+async fn button_task(mut button: ExtiInput<'static, Async>, tx: Sender<'static, ThreadModeRawMutex, ButtonState, 3>) {
     info!("Press the USER button...");
     loop {
         button.wait_for_falling_edge().await;

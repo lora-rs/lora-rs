@@ -15,7 +15,7 @@ use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::mode::Async;
 use embassy_stm32::rng::{self, Rng};
 use embassy_stm32::spi::{Spi, mode::Master};
-use embassy_stm32::{bind_interrupts, peripherals};
+use embassy_stm32::{bind_interrupts, dma, peripherals};
 use embassy_sync::{
     blocking_mutex::raw::ThreadModeRawMutex,
     channel::{Channel, Receiver, Sender},
@@ -49,6 +49,8 @@ const DEFAULT_APPKEY: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 bind_interrupts!(struct Irqs{
     SUBGHZ_RADIO => InterruptHandler;
     RNG => rng::InterruptHandler<peripherals::RNG>;
+    DMA1_CHANNEL1 => dma::InterruptHandler<peripherals::DMA1_CH1>;
+    DMA1_CHANNEL2 => dma::InterruptHandler<peripherals::DMA1_CH2>;
 });
 
 static CHANNEL: Channel<ThreadModeRawMutex, ButtonState, 3> = Channel::new();
@@ -70,7 +72,7 @@ async fn main(spawner: Spawner) {
     let tx_pin = Output::new(p.PC13, Level::Low, Speed::VeryHigh);
     let rx_pin = Output::new(p.PB8, Level::Low, Speed::VeryHigh);
 
-    let spi = Spi::new_subghz(p.SUBGHZSPI, p.DMA1_CH1, p.DMA1_CH2);
+    let spi = Spi::new_subghz(p.SUBGHZSPI, p.DMA1_CH1, p.DMA1_CH2, Irqs);
     let spi = SubghzSpiDevice(spi);
     let use_high_power_pa = true;
     let config = sx126x::Config {
@@ -81,7 +83,7 @@ async fn main(spawner: Spawner) {
     };
     let iv = Stm32wlInterfaceVariant::new(Irqs, use_high_power_pa, Some(rx_pin), Some(tx_pin), None).unwrap();
     let lora = LoRa::new(Sx126x::new(spi, iv, config), true, Delay).await.unwrap();
-    let _lora_task = spawner.spawn(lora_task(lora, Rng::new(p.RNG, Irqs), CHANNEL.receiver()));
+    spawner.spawn(lora_task(lora, Rng::new(p.RNG, Irqs), CHANNEL.receiver()).unwrap());
 
     // let _button_task = spawner.spawn(button_task(button, CHANNEL.sender()));
 }
@@ -166,7 +168,7 @@ enum ButtonState {
 }
 
 #[embassy_executor::task]
-async fn button_task(mut button: ExtiInput<'static>, tx: Sender<'static, ThreadModeRawMutex, ButtonState, 3>) {
+async fn button_task(mut button: ExtiInput<'static, Async>, tx: Sender<'static, ThreadModeRawMutex, ButtonState, 3>) {
     info!("Press the USER button...");
     loop {
         button.wait_for_falling_edge().await;

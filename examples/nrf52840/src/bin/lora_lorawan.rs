@@ -6,7 +6,8 @@
 
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pin as _, Pull};
+use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
+use embassy_nrf::mode::Async;
 use embassy_nrf::rng::Rng;
 use embassy_nrf::{bind_interrupts, peripherals, rng, spim};
 use embassy_time::{Delay, Duration, Timer};
@@ -39,7 +40,7 @@ bind_interrupts!(struct Irqs {
 });
 
 // Generate "jittered" delay for retry attempts up to maximum of 1 hour
-pub fn generate_delay(rng: &mut Rng<'static, peripherals::RNG>, retries: u16) -> u16 {
+pub fn generate_delay(rng: &mut Rng<'static, Async>, retries: u16) -> u16 {
     let base = core::cmp::min(10 + (10 * retries), 3600);
     let jitter = base / 5;
     (base - jitter).saturating_add(rng.gen_range(jitter..=2 * jitter))
@@ -49,12 +50,12 @@ pub fn generate_delay(rng: &mut Rng<'static, peripherals::RNG>, retries: u16) ->
 async fn main(_spawner: Spawner) {
     let p = embassy_nrf::init(Default::default());
 
-    let nss = Output::new(p.P1_10.degrade(), Level::High, OutputDrive::Standard);
-    let reset = Output::new(p.P1_06.degrade(), Level::High, OutputDrive::Standard);
-    let dio1 = Input::new(p.P1_15.degrade(), Pull::Down);
-    let busy = Input::new(p.P1_14.degrade(), Pull::None);
-    let rf_switch_rx = Output::new(p.P1_05.degrade(), Level::Low, OutputDrive::Standard);
-    let rf_switch_tx = Output::new(p.P1_07.degrade(), Level::Low, OutputDrive::Standard);
+    let nss = Output::new(p.P1_10, Level::High, OutputDrive::Standard);
+    let reset = Output::new(p.P1_06, Level::High, OutputDrive::Standard);
+    let dio1 = Input::new(p.P1_15, Pull::Down);
+    let busy = Input::new(p.P1_14, Pull::None);
+    let rf_switch_rx = Output::new(p.P1_05, Level::Low, OutputDrive::Standard);
+    let rf_switch_tx = Output::new(p.P1_07, Level::Low, OutputDrive::Standard);
 
     let mut spi_config = spim::Config::default();
     spi_config.frequency = spim::Frequency::M16;

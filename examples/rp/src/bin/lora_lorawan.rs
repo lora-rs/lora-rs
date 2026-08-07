@@ -6,8 +6,9 @@
 
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_rp::gpio::{Input, Level, Output, Pin, Pull};
+use embassy_rp::gpio::{Input, Level, Output, Pull};
 use embassy_rp::spi::{Config, Spi};
+use embassy_rp::{bind_interrupts, dma, peripherals};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx126xInterfaceVariant;
@@ -18,6 +19,10 @@ use lorawan_device::async_device::{region, Device, EmbassyTimer, JoinMode};
 use lorawan_device::{AppEui, AppKey, DevEui};
 use {defmt_rtt as _, panic_probe as _};
 
+bind_interrupts!(struct Irqs {
+    DMA_IRQ_0 => dma::InterruptHandler<peripherals::DMA_CH0>, dma::InterruptHandler<peripherals::DMA_CH1>;
+});
+
 // warning: set these appropriately for the region
 const LORAWAN_REGION: region::Region = region::Region::EU868;
 const MAX_TX_POWER: u8 = 14;
@@ -26,10 +31,10 @@ const MAX_TX_POWER: u8 = 14;
 async fn main(_spawner: Spawner) {
     let p = embassy_rp::init(Default::default());
 
-    let nss = Output::new(p.PIN_3.degrade(), Level::High);
-    let reset = Output::new(p.PIN_15.degrade(), Level::High);
-    let dio1 = Input::new(p.PIN_20.degrade(), Pull::None);
-    let busy = Input::new(p.PIN_2.degrade(), Pull::None);
+    let nss = Output::new(p.PIN_3, Level::High);
+    let reset = Output::new(p.PIN_15, Level::High);
+    let dio1 = Input::new(p.PIN_20, Pull::None);
+    let busy = Input::new(p.PIN_2, Pull::None);
 
     let spi = Spi::new(
         p.SPI1,
@@ -38,6 +43,7 @@ async fn main(_spawner: Spawner) {
         p.PIN_12,
         p.DMA_CH0,
         p.DMA_CH1,
+        Irqs,
         Config::default(),
     );
     let spi = ExclusiveDevice::new(spi, nss, Delay).unwrap();
@@ -53,8 +59,7 @@ async fn main(_spawner: Spawner) {
 
     let radio: LorawanRadio<_, _, MAX_TX_POWER> = lora.into();
     let region: region::Configuration = region::Configuration::new(LORAWAN_REGION);
-    let mut device: Device<_, _, _> =
-        Device::new(region, radio, EmbassyTimer::new(), embassy_rp::clocks::RoscRng);
+    let mut device: Device<_, _, _> = Device::new(region, radio, EmbassyTimer::new(), embassy_rp::clocks::RoscRng);
 
     defmt::info!("Joining LoRaWAN network");
 

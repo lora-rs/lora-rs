@@ -12,7 +12,7 @@ use embassy_stm32::gpio::{Level, Output, Pin, Speed};
 use embassy_stm32::rng::{self, Rng};
 use embassy_stm32::spi::Spi;
 use embassy_stm32::time::Hertz;
-use embassy_stm32::{bind_interrupts, peripherals};
+use embassy_stm32::{bind_interrupts, dma, peripherals};
 use embassy_time::Delay;
 use lora_phy::LoRa;
 use lora_phy::lorawan_radio::LorawanRadio;
@@ -40,6 +40,8 @@ const DEFAULT_APPKEY: [u8; 16] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 bind_interrupts!(struct Irqs{
     SUBGHZ_RADIO => InterruptHandler;
     RNG => rng::InterruptHandler<peripherals::RNG>;
+    DMA1_CHANNEL1 => dma::InterruptHandler<peripherals::DMA1_CH1>;
+    DMA1_CHANNEL2 => dma::InterruptHandler<peripherals::DMA1_CH2>;
 });
 
 #[embassy_executor::main]
@@ -59,7 +61,7 @@ async fn main(_spawner: Spawner) {
     let tx_pin = Output::new(p.PC13, Level::Low, Speed::VeryHigh);
     let rx_pin = Output::new(p.PB8, Level::Low, Speed::VeryHigh);
 
-    let spi = Spi::new_subghz(p.SUBGHZSPI, p.DMA1_CH1, p.DMA1_CH2);
+    let spi = Spi::new_subghz(p.SUBGHZSPI, p.DMA1_CH1, p.DMA1_CH2, Irqs);
     let spi = SubghzSpiDevice(spi);
     let use_high_power_pa = true;
     let config = sx126x::Config {

@@ -6,10 +6,11 @@
 
 use defmt::*;
 use embassy_executor::Executor;
-use embassy_rp::gpio::{Input, Level, Output, Pin, Pull};
+use embassy_rp::gpio::{Input, Level, Output, Pull};
 use embassy_rp::multicore::{spawn_core1, Stack};
 use embassy_rp::peripherals::SPI1;
 use embassy_rp::spi::{Async, Config, Spi};
+use embassy_rp::{bind_interrupts, dma, peripherals};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_time::{Delay, Timer};
@@ -20,6 +21,10 @@ use lora_phy::LoRa;
 use lora_phy::{mod_params::*, sx126x};
 use static_cell::StaticCell;
 use {defmt_rtt as _, panic_probe as _};
+
+bind_interrupts!(struct Irqs {
+    DMA_IRQ_0 => dma::InterruptHandler<peripherals::DMA_CH0>, dma::InterruptHandler<peripherals::DMA_CH1>;
+});
 
 static mut CORE1_STACK: Stack<4096> = Stack::new();
 static EXECUTOR0: StaticCell<Executor> = StaticCell::new();
@@ -32,10 +37,10 @@ const LORA_FREQUENCY_IN_HZ: u32 = 903_900_000; // warning: set this appropriatel
 fn main() -> ! {
     let p = embassy_rp::init(Default::default());
 
-    let nss = Output::new(p.PIN_3.degrade(), Level::High);
-    let reset = Output::new(p.PIN_15.degrade(), Level::High);
-    let dio1 = Input::new(p.PIN_20.degrade(), Pull::None);
-    let busy = Input::new(p.PIN_2.degrade(), Pull::None);
+    let nss = Output::new(p.PIN_3, Level::High);
+    let reset = Output::new(p.PIN_15, Level::High);
+    let dio1 = Input::new(p.PIN_20, Pull::None);
+    let busy = Input::new(p.PIN_2, Pull::None);
 
     let spi = Spi::new(
         p.SPI1,
@@ -44,6 +49,7 @@ fn main() -> ! {
         p.PIN_12,
         p.DMA_CH0,
         p.DMA_CH1,
+        Irqs,
         Config::default(),
     );
     let spi = ExclusiveDevice::new(spi, nss, Delay).unwrap();
@@ -55,12 +61,12 @@ fn main() -> ! {
         unsafe { &mut *core::ptr::addr_of_mut!(CORE1_STACK) },
         move || {
             let executor1 = EXECUTOR1.init(Executor::new());
-            executor1.run(|spawner| unwrap!(spawner.spawn(core1_task(spi, iv))));
+            executor1.run(|spawner| spawner.spawn(unwrap!(core1_task(spi, iv))));
         },
     );
 
     let executor0 = EXECUTOR0.init(Executor::new());
-    executor0.run(|spawner| unwrap!(spawner.spawn(core0_task())));
+    executor0.run(|spawner| spawner.spawn(unwrap!(core0_task())));
 }
 
 #[embassy_executor::task]

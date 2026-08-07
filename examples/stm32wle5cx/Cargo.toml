@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 
 [dependencies]
 # Change stm32wle5cc to your chip name, if necessary. Also update .cargo/config.toml
-embassy-stm32 = { version = "0.5.0", features = [
+embassy-stm32 = { version = "0.6.0", features = [
   "defmt",
   "stm32wle5cc",
   "time-driver-any",
@@ -15,8 +15,8 @@ embassy-stm32 = { version = "0.5.0", features = [
   "exti",
   "chrono",
 ] }
-embassy-executor = { version = "0.9.1", features = [
-  "arch-cortex-m",
+embassy-executor = { version = "0.10.0", features = [
+  "platform-cortex-m",
   "executor-thread",
   "defmt",
 ] }
@@ -24,7 +24,7 @@ embassy-time = { version = "0.5.0", features = [
   "defmt",
   "defmt-timestamp-uptime",
 ] }
-embassy-sync = { version = "0.7.2", features = ["defmt"] }
+embassy-sync = { version = "0.8.0", features = ["defmt"] }
 embassy-futures = { version = "0", features = ["defmt"] }
 
 lora-phy = { path = "../../lora-phy", features = ["lorawan-radio", "defmt-03"] }
