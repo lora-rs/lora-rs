@@ -35,7 +35,7 @@ panic-probe = { version = "1", features = ["print-defmt"] }
 
 cortex-m = { version = "0.7", features = ["inline-asm"] }
 cortex-m-rt = "0.7"
-embedded-hal-bus = { version = "0.2", features = ["async"] }
+embedded-hal-bus = { version = "0.3", features = ["async"] }
 
 static_cell = { version = "2.0.0" }
 portable-atomic = { version = "1.5", features = [
