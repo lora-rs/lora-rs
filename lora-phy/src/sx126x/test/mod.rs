@@ -652,6 +652,14 @@ async fn test_emulated_cad_end_to_end() {
     chip.with_model(|m| m.cad_activity = true);
     lora.prepare_for_cad(&mdltn_params).await.unwrap();
     assert!(lora.cad(&mdltn_params).await.unwrap());
+
+    // CAD completion returns the chip to standby and the wrapper's cached
+    // mode follows, so another cad() requires a fresh prepare_for_cad
+    chip.with_model(|m| assert_eq!(m.mode, Mode::Standby));
+    assert!(matches!(
+        lora.cad(&mdltn_params).await,
+        Err(crate::mod_params::RadioError::InvalidRadioMode)
+    ));
 }
 
 #[tokio::test]
