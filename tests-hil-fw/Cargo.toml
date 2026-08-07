@@ -6,7 +6,7 @@ license = "MIT OR Apache-2.0"
 description = "On-target HIL tests for lorawan-device, run via embedded-test + probe-rs against the bench gateway"
 
 [dependencies]
-embassy-stm32 = { version = "0.2.0", features = [
+embassy-stm32 = { version = "0.6.0", features = [
     "defmt",
     "stm32wle5jc",
     "time-driver-any",
@@ -14,11 +14,11 @@ embassy-stm32 = { version = "0.2.0", features = [
     "unstable-pac",
     "exti",
 ] }
-# Must match embassy-stm32 0.2's timer-queue executor (task_from_waker is
+# Must match embassy-stm32 0.6's timer-queue executor (task_from_waker is
 # version-locked); embedded-test runs on it via external-executor.
-embassy-executor = { version = "0.7.0", features = ["arch-cortex-m", "executor-thread", "defmt"] }
-embassy-time = { version = "0.4.0", features = ["defmt"] }
-embassy-sync = { version = "0.6", features = ["defmt"] }
+embassy-executor = { version = "0.10.0", features = ["platform-cortex-m", "executor-thread", "defmt"] }
+embassy-time = { version = "0.5.0", features = ["defmt"] }
+embassy-sync = { version = "0.8", features = ["defmt"] }
 embassy-futures = { version = "0", features = ["defmt"] }
 
 lora-phy = { path = "../lora-phy", features = ["lorawan-radio", "defmt-03"] }
@@ -27,13 +27,15 @@ lorawan-device = { path = "../lorawan-device", features = [
     "defmt-03",
 ] }
 
-defmt = "0.3"
-defmt-rtt = "0.4"
+defmt = "1"
+defmt-rtt = "1"
 # NOTE: no panic-probe here; embedded-test provides the panic handler
 # (semihosting abort). defmt-rtt is still needed as the defmt sink.
-# 0.6.x is the embedded-test line that matches embassy-executor 0.7
-# (which embassy-stm32 0.2's timer queue is version-locked to).
-embedded-test = { version = "0.6.2", features = ["embassy", "defmt"] }
+# 0.7.x is the embedded-test line that matches embassy-executor 0.10
+# (which embassy-stm32 0.6's timer queue is version-locked to).
+# embassy-010 (not the bare "embassy" feature, which aliases embassy-09)
+# so embedded-test uses the same executor 0.10 the rest of the crate does.
+embedded-test = { version = "0.7.2", features = ["embassy-010", "defmt"] }
 semihosting = "0.1"
 
 cortex-m = { version = "0.7.6", features = [
@@ -43,7 +45,7 @@ cortex-m = { version = "0.7.6", features = [
 cortex-m-rt = "0.7.0"
 embedded-hal = { version = "1.0.0" }
 embedded-hal-async = { version = "1.0.0" }
-embedded-hal-bus = { version = "0.2.0", features = ["async"] }
+embedded-hal-bus = { version = "0.3", features = ["async"] }
 
 [lib]
 test = false
