@@ -1,10 +1,9 @@
 use super::util;
 use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
-use crate::test_util::{get_key, Uplink};
+use crate::test_util::{get_crypto, Uplink};
 
 use lorawan::creator::{DataFrame, Payload};
-use lorawan::default_crypto::DefaultFactory;
 use lorawan::maccommands::parse_uplink_mac_commands;
 use lorawan::parser::DataFrameType;
 use lorawan::types::ChannelMask;
@@ -22,8 +21,7 @@ fn build_frm_payload(buf: &mut [u8], payload_in_hex: &str, fcnt: u32) -> usize {
         payload: Payload::MacCommands(&cmds),
         ..Default::default()
     };
-    let finished =
-        frame.build_into(buf, &get_key().into(), Some(&get_key().into()), &DefaultFactory).unwrap();
+    let finished = frame.build_into(buf, &get_crypto(), Some(&get_crypto())).unwrap();
     finished.len()
 }
 
@@ -516,9 +514,7 @@ async fn maccommands_in_frmpayload() {
             payload: Payload::MacCommands(&[6, 5, 2, 0xd2, 0xad, 0x84, 8, 1, 3, 0x50, 0, 0, 0x61]),
             ..Default::default()
         };
-        let finished = frame
-            .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
-            .unwrap();
+        let finished = frame.build_into(rx_buffer, &get_crypto(), Some(&get_crypto())).unwrap();
         finished.len()
     }
 

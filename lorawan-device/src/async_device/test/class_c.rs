@@ -1,10 +1,9 @@
 use super::util;
 use crate::async_device::{ListenResponse, SendResponse};
 use crate::radio::RfConfig;
-use crate::test_util::{get_dev_addr, get_key, Uplink};
+use crate::test_util::{get_crypto, get_dev_addr, Uplink};
 use core::num::NonZeroU8;
 use lorawan::creator::{DataFrame, Payload};
-use lorawan::default_crypto::DefaultFactory;
 use lorawan::parser::DataFrameType;
 
 pub fn class_c_downlink<const FCNT_DOWN: u32>(
@@ -19,9 +18,7 @@ pub fn class_c_downlink<const FCNT_DOWN: u32>(
         payload: Payload::Data { f_port: NonZeroU8::new(3).unwrap(), data: &[1, 2, 3] },
         ..Default::default()
     };
-    let finished = frame
-        .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
-        .unwrap();
+    let finished = frame.build_into(rx_buffer, &get_crypto(), Some(&get_crypto())).unwrap();
     finished.len()
 }
 #[tokio::test]

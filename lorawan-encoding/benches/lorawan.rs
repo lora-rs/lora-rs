@@ -6,10 +6,8 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use crate::CryptoFactory;
-use aes::cipher::KeyInit;
-use aes::Aes128;
 use criterion::{criterion_group, criterion_main, Criterion};
+use lorawan::default_crypto::DefaultCrypto;
 use lorawan::maccommands::parse_downlink_mac_commands;
 use lorawan::maccommands::DownlinkMacCommand;
 use std::alloc::System;
@@ -71,8 +69,7 @@ fn bench_complete_data_payload_fhdr(c: &mut Criterion) {
 }
 
 fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
-    let mic_key = AES128([2; 16]);
-    let factory = ConstFactory::new(&mic_key);
+    let crypto = DefaultCrypto::new(&AES128([2; 16]));
     let cnt = AtomicUsize::new(0);
     GLOBAL.usage();
     c.bench_function("data_payload_mic_validation", |b| {
@@ -82,7 +79,7 @@ fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
             let phy = parse(&data).unwrap();
 
             if let PhyPayload::Data(data_payload) = phy {
-                assert!(data_payload.validate_mic(&mic_key, 1, &factory));
+                assert!(data_payload.validate_mic(&crypto, 1));
             } else {
                 panic!("failed to parse DataPayload");
             }
@@ -95,8 +92,7 @@ fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
 fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
     let mut payload = Vec::new();
     payload.extend_from_slice(&String::from("hello").into_bytes()[..]);
-    let key = AppSKey::from([1; 16]);
-    let factory = ConstFactory::new(key.inner());
+    let crypto = DefaultCrypto::new(AppSKey::from([1; 16]).inner());
     let cnt = AtomicUsize::new(0);
     GLOBAL.usage();
     c.bench_function("data_payload_decrypt", |b| {
@@ -104,8 +100,7 @@ fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
             cnt.fetch_add(1usize, Ordering::SeqCst);
             let mut data = data_payload();
             let dec =
-                DecryptedDataPayload::decrypt_in_place(&mut data, None, Some(&key), 1, &factory)
-                    .unwrap();
+                DecryptedDataPayload::decrypt_in_place(&mut data, None, Some(&crypto), 1).unwrap();
             assert_eq!(dec.frm_payload(), FrmPayload::Data(&payload[..]));
         })
     });
@@ -113,49 +108,39 @@ fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
     println!("Approximate memory usage per iteration: {} from {}", GLOBAL.usage() / n, n);
 }
 
-pub type Cmac = cmac::Cmac<Aes128>;
+fn bench_complete_data_payload_creation(c: &mut Criterion) {
+    use core::num::NonZeroU8;
+    use lorawan::creator::{DataFrame, Payload};
+    use lorawan::parser::{DataFrameType, DevAddr};
 
-#[derive(Debug, Clone)]
-pub struct ConstFactory(Aes128, Cmac);
-
-impl PartialEq for ConstFactory {
-    fn eq(&self, _: &Self) -> bool {
-        true
-    }
-}
-
-impl ConstFactory {
-    fn new(key: &AES128) -> Self {
-        ConstFactory(
-            Aes128::new_from_slice(&key.0[..]).unwrap(),
-            Cmac::new_from_slice(&key.0[..]).unwrap(),
-        )
-    }
-}
-
-impl CryptoFactory for ConstFactory {
-    type E = Aes128;
-    type D = Aes128;
-    type M = Cmac;
-
-    fn new_enc(&self, _: &AES128) -> Self::E {
-        self.0.clone()
-    }
-
-    fn new_dec(&self, _: &AES128) -> Self::D {
-        self.0.clone()
-    }
-
-    fn new_mac(&self, _: &AES128) -> Self::M {
-        self.1.clone()
-    }
+    let nwk_crypto = DefaultCrypto::new(&AES128([2; 16]));
+    let app_crypto = DefaultCrypto::new(&AES128([1; 16]));
+    let cnt = AtomicUsize::new(0);
+    GLOBAL.usage();
+    c.bench_function("data_payload_creation", |b| {
+        b.iter(|| {
+            cnt.fetch_add(1usize, Ordering::SeqCst);
+            let frame = DataFrame {
+                frame_type: DataFrameType::UnconfirmedUp,
+                dev_addr: DevAddr::from_value(0x01020304),
+                fcnt: 76543,
+                payload: Payload::Data { f_port: NonZeroU8::new(42).unwrap(), data: b"hello lora" },
+                ..Default::default()
+            };
+            let mut buf = [0u8; 64];
+            frame.build_into(&mut buf, &nwk_crypto, Some(&app_crypto)).unwrap();
+        })
+    });
+    let n = cnt.load(Ordering::SeqCst);
+    println!("Approximate memory usage per iteration: {} from {}", GLOBAL.usage() / n, n);
 }
 
 criterion_group!(
     benches,
     bench_complete_data_payload_fhdr,
     bench_complete_data_payload_mic_validation,
-    bench_complete_data_payload_decrypt
+    bench_complete_data_payload_decrypt,
+    bench_complete_data_payload_creation
 );
 criterion_main!(benches);
 

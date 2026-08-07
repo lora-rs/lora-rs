@@ -6,7 +6,7 @@
 //! remnants of that comparison.
 
 use lorawan::creator::{DataFrame, JoinAccept, JoinRequest, Payload};
-use lorawan::default_crypto::DefaultFactory;
+use lorawan::default_crypto::{DefaultCrypto, DefaultNetworkCrypto};
 use lorawan::keys::{AppKey, AppSKey, NwkSKey, AES128, MIC};
 use lorawan::parser::*;
 
@@ -149,13 +149,13 @@ fn f_port_present_with_empty_frm_payload() {
 fn validate_mic_matches_old_parser() {
     let buf = phy_dataup_payload();
     let phy = EncryptedDataPayload::parse(&buf).unwrap();
-    let key = AES128([2; 16]);
-    assert!(phy.validate_mic(&key, 1, &DefaultFactory));
+    let crypto = DefaultCrypto::new(&AES128([2; 16]));
+    assert!(phy.validate_mic(&crypto, 1));
 
     let mut tampered = phy_dataup_payload();
     tampered[8] = 0xee;
     let phy = EncryptedDataPayload::parse(&tampered).unwrap();
-    assert!(!phy.validate_mic(&key, 1, &DefaultFactory));
+    assert!(!phy.validate_mic(&crypto, 1));
 }
 
 // ---------------------------------------------------------------------------
@@ -165,10 +165,8 @@ fn validate_mic_matches_old_parser() {
 #[test]
 fn decrypt_in_place_app_payload() {
     let mut buf = phy_dataup_payload();
-    let app_skey = AppSKey::from([1; 16]);
-    let dec =
-        DecryptedDataPayload::decrypt_in_place(&mut buf, None, Some(&app_skey), 1, &DefaultFactory)
-            .unwrap();
+    let app_crypto = DefaultCrypto::new(&AES128([1; 16]));
+    let dec = DecryptedDataPayload::decrypt_in_place(&mut buf, None, Some(&app_crypto), 1).unwrap();
     assert_eq!(dec.frm_payload(), FrmPayload::Data(b"hello"));
     // Header accessors still work on the decrypted view.
     assert_eq!(dec.fhdr().dev_addr(), DevAddr::from_value(0x01020304));
@@ -178,31 +176,23 @@ fn decrypt_in_place_app_payload() {
 #[test]
 fn decrypt_in_place_downlink() {
     let mut buf = phy_datadown_payload();
-    let app_skey = AppSKey::from([1; 16]);
-    let dec = DecryptedDataPayload::decrypt_in_place(
-        &mut buf,
-        None,
-        Some(&app_skey),
-        76543,
-        &DefaultFactory,
-    )
-    .unwrap();
+    let app_crypto = DefaultCrypto::new(&AES128([1; 16]));
+    let dec =
+        DecryptedDataPayload::decrypt_in_place(&mut buf, None, Some(&app_crypto), 76543).unwrap();
     assert_eq!(dec.frm_payload(), FrmPayload::Data(b"hello lora"));
 }
 
 #[test]
 fn decrypt_fport_zero_uses_nwk_key_and_yields_mac_commands() {
     let mut buf = data_payload_with_fport_zero();
-    let nwk_skey = NwkSKey::from([2; 16]);
+    let nwk_crypto = DefaultCrypto::new(&AES128([2; 16]));
 
     // Missing the required key is an error, not a silent wrong decrypt.
-    let err = DecryptedDataPayload::decrypt_in_place(&mut buf, None, None, 0, &DefaultFactory)
+    let err = DecryptedDataPayload::decrypt_in_place::<DefaultCrypto>(&mut buf, None, None, 0)
         .unwrap_err();
     assert_eq!(err, Error::MissingKey);
 
-    let dec =
-        DecryptedDataPayload::decrypt_in_place(&mut buf, Some(&nwk_skey), None, 0, &DefaultFactory)
-            .unwrap();
+    let dec = DecryptedDataPayload::decrypt_in_place(&mut buf, Some(&nwk_crypto), None, 0).unwrap();
     match dec.frm_payload() {
         FrmPayload::MacCommands(cmds) => assert!(!cmds.is_empty()),
         other => panic!("expected MAC commands, got {other:?}"),
@@ -211,16 +201,15 @@ fn decrypt_fport_zero_uses_nwk_key_and_yields_mac_commands() {
 
 #[test]
 fn check_mic_and_decrypt_in_place() {
-    let nwk_skey = NwkSKey::from([2; 16]);
-    let app_skey = AppSKey::from([1; 16]);
+    let nwk_crypto = DefaultCrypto::new(&AES128([2; 16]));
+    let app_crypto = DefaultCrypto::new(&AES128([1; 16]));
 
     let mut buf = phy_dataup_payload();
     let dec = DecryptedDataPayload::check_mic_and_decrypt_in_place(
         &mut buf,
-        &nwk_skey,
-        Some(&app_skey),
+        &nwk_crypto,
+        Some(&app_crypto),
         1,
-        &DefaultFactory,
     )
     .unwrap();
     assert_eq!(dec.frm_payload(), FrmPayload::Data(b"hello"));
@@ -229,10 +218,9 @@ fn check_mic_and_decrypt_in_place() {
     tampered[9] ^= 0xff;
     let err = DecryptedDataPayload::check_mic_and_decrypt_in_place(
         &mut tampered,
-        &nwk_skey,
-        Some(&app_skey),
+        &nwk_crypto,
+        Some(&app_crypto),
         1,
-        &DefaultFactory,
     )
     .unwrap_err();
     assert_eq!(err, Error::InvalidMic);
@@ -244,7 +232,7 @@ fn check_mic_and_decrypt_in_place() {
 fn decrypt_without_frm_payload_needs_no_key() {
     // MHDR + FHDR(7) + MIC: no FPort, no FRMPayload.
     let mut no_fport = [0x40, 0x04, 0x03, 0x02, 0x01, 0x00, 0x07, 0x00, 0xde, 0xad, 0xbe, 0xef];
-    let dec = DecryptedDataPayload::decrypt_in_place(&mut no_fport, None, None, 0, &DefaultFactory)
+    let dec = DecryptedDataPayload::decrypt_in_place::<DefaultCrypto>(&mut no_fport, None, None, 0)
         .unwrap();
     assert_eq!(dec.frm_payload(), FrmPayload::None);
 
@@ -252,7 +240,7 @@ fn decrypt_without_frm_payload_needs_no_key() {
     let mut empty_frm =
         [0x40, 0x04, 0x03, 0x02, 0x01, 0x00, 0x07, 0x00, 42, 0xde, 0xad, 0xbe, 0xef];
     let dec =
-        DecryptedDataPayload::decrypt_in_place(&mut empty_frm, None, None, 0, &DefaultFactory)
+        DecryptedDataPayload::decrypt_in_place::<DefaultCrypto>(&mut empty_frm, None, None, 0)
             .unwrap();
     assert_eq!(dec.f_port(), Some(42));
     assert_eq!(dec.frm_payload(), FrmPayload::Data(&[]));
@@ -269,22 +257,18 @@ fn inspect_then_decrypt_flow() {
     let mut buf = phy_dataup_payload();
 
     // Phase 1: read-only borrow to route the frame.
-    let (nwk, app) = {
+    let (nwk_crypto, app_crypto) = {
         let phy = EncryptedDataPayload::parse(&buf).unwrap();
         let session = sessions.get(&phy.fhdr().dev_addr()).expect("unknown device");
-        assert!(phy.validate_mic(session.0.inner(), 1, &DefaultFactory));
-        (session.0, session.1) // keys are Copy
+        let nwk_crypto = DefaultCrypto::new(session.0.inner());
+        assert!(phy.validate_mic(&nwk_crypto, 1));
+        (nwk_crypto, DefaultCrypto::new(session.1.inner()))
     };
 
     // Phase 2: mutable handoff, decrypt in place.
-    let dec = DecryptedDataPayload::decrypt_in_place(
-        &mut buf,
-        Some(&nwk),
-        Some(&app),
-        1,
-        &DefaultFactory,
-    )
-    .unwrap();
+    let dec =
+        DecryptedDataPayload::decrypt_in_place(&mut buf, Some(&nwk_crypto), Some(&app_crypto), 1)
+            .unwrap();
     assert_eq!(dec.frm_payload(), FrmPayload::Data(b"hello"));
 }
 
@@ -299,20 +283,13 @@ fn decrypt_in_place_is_an_involution() {
         (phy_datadown_payload(), 76543),
         (data_payload_with_fport_zero(), 0),
     ];
-    let nwk = NwkSKey::from([2; 16]);
-    let app = AppSKey::from([1; 16]);
+    let nwk = DefaultCrypto::new(&AES128([2; 16]));
+    let app = DefaultCrypto::new(&AES128([1; 16]));
 
     for (bytes, fcnt) in vectors {
         let mut buf = bytes.clone();
         for _ in 0..2 {
-            DecryptedDataPayload::decrypt_in_place(
-                &mut buf,
-                Some(&nwk),
-                Some(&app),
-                fcnt,
-                &DefaultFactory,
-            )
-            .unwrap();
+            DecryptedDataPayload::decrypt_in_place(&mut buf, Some(&nwk), Some(&app), fcnt).unwrap();
         }
         assert_eq!(buf, bytes);
     }
@@ -390,8 +367,8 @@ fn join_request_field_extraction() {
 fn join_request_mic_validation() {
     let data = phy_join_request_payload();
     let jr = JoinRequestPayload::parse(&data).unwrap();
-    assert!(jr.validate_mic(&AppKey::from([1; 16]), &DefaultFactory));
-    assert!(!jr.validate_mic(&AppKey::from([2; 16]), &DefaultFactory));
+    assert!(jr.validate_mic(&DefaultCrypto::new(&AES128([1; 16]))));
+    assert!(!jr.validate_mic(&DefaultCrypto::new(&AES128([2; 16]))));
 }
 
 #[test]
@@ -407,19 +384,19 @@ fn join_request_parse_validates() {
 /// Round trip: build a JoinRequest, parse and validate it.
 #[test]
 fn join_request_round_trip() {
-    let key = AppKey::from([7; 16]);
+    let crypto = DefaultCrypto::new(AppKey::from([7; 16]).inner());
     let mut buf = [0u8; 23];
     let built = JoinRequest {
         join_eui: JoinEui::from_wire_bytes([1, 2, 3, 4, 5, 6, 7, 8]),
         dev_eui: DevEui::from_wire_bytes([8, 7, 6, 5, 4, 3, 2, 1]),
         dev_nonce: DevNonce::from_wire_bytes([0xcc, 0xdd]),
     }
-    .build_into(&mut buf, &key, &DefaultFactory)
+    .build_into(&mut buf, &crypto)
     .unwrap()
     .to_vec();
 
     let jr = JoinRequestPayload::parse(&built).unwrap();
-    assert!(jr.validate_mic(&key, &DefaultFactory));
+    assert!(jr.validate_mic(&crypto));
     assert_eq!(jr.join_eui(), JoinEui::from_wire_bytes([1, 2, 3, 4, 5, 6, 7, 8]));
     assert_eq!(jr.dev_eui(), DevEui::from_wire_bytes([8, 7, 6, 5, 4, 3, 2, 1]));
     assert_eq!(jr.dev_nonce(), DevNonce::from_wire_bytes([0xcc, 0xdd]));
@@ -445,10 +422,8 @@ fn join_accept_parse_validates() {
 #[test]
 fn join_accept_decrypt_and_mic() {
     let mut buf = phy_join_accept_payload_with_c_f_list();
-    let key = AppKey::from([1; 16]);
-    let ja =
-        DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(&mut buf, &key, &DefaultFactory)
-            .unwrap();
+    let crypto = DefaultCrypto::new(&AES128([1; 16]));
+    let ja = DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(&mut buf, &crypto).unwrap();
 
     assert_eq!(ja.join_nonce(), JoinNonce::from_wire_bytes([3, 2, 1]));
     assert_eq!(ja.rx_delay(), 3);
@@ -469,8 +444,7 @@ fn join_accept_wrong_key_is_invalid_mic() {
     let mut buf = phy_join_accept_payload_with_c_f_list();
     let err = DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(
         &mut buf,
-        &AppKey::from([2; 16]),
-        &DefaultFactory,
+        &DefaultCrypto::new(&AES128([2; 16])),
     )
     .unwrap_err();
     assert_eq!(err, Error::InvalidMic);
@@ -481,8 +455,7 @@ fn join_accept_without_c_f_list() {
     let mut buf = phy_join_accept_payload();
     let ja = DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(
         &mut buf,
-        &app_key(),
-        &DefaultFactory,
+        &DefaultCrypto::new(app_key().inner()),
     )
     .unwrap();
     assert_eq!(ja.c_f_list(), None);
@@ -492,11 +465,11 @@ fn join_accept_without_c_f_list() {
 /// (originally cross-checked byte-for-byte against the retired parser).
 #[test]
 fn join_accept_decryption_and_derived_keys() {
-    let key = app_key();
+    let crypto = DefaultCrypto::new(app_key().inner());
     let dev_nonce = DevNonce::from_wire_bytes([0xcc, 0xdd]);
 
     let mut buf = phy_join_accept_payload();
-    let ja = DecryptedJoinAcceptPayload::decrypt_in_place(&mut buf, &key, &DefaultFactory).unwrap();
+    let ja = DecryptedJoinAcceptPayload::decrypt_in_place(&mut buf, &crypto).unwrap();
 
     assert_eq!(
         ja.as_bytes(),
@@ -506,14 +479,14 @@ fn join_accept_decryption_and_derived_keys() {
         ]
     );
     assert_eq!(
-        ja.derive_nwkskey(dev_nonce, &key, &DefaultFactory),
+        ja.derive_nwkskey(dev_nonce, &crypto),
         NwkSKey::from([
             0x40, 0x6b, 0x13, 0x37, 0xd8, 0x07, 0x53, 0x82, 0x05, 0x40, 0xe2, 0x80, 0xf8, 0x12,
             0x99, 0xe9,
         ])
     );
     assert_eq!(
-        ja.derive_appskey(dev_nonce, &key, &DefaultFactory),
+        ja.derive_appskey(dev_nonce, &crypto),
         AppSKey::from([
             0x4f, 0x5c, 0x40, 0x97, 0x51, 0x84, 0x1b, 0x6d, 0xfe, 0xcb, 0xd3, 0x84, 0x02, 0x23,
             0x79, 0x42,
@@ -601,17 +574,17 @@ mod creators {
 
     #[test]
     fn join_request_builds_and_validates() {
-        let key = AppKey::from([7; 16]);
+        let crypto = DefaultCrypto::new(AppKey::from([7; 16]).inner());
         let jr = JoinRequest {
             join_eui: JoinEui::from_wire_bytes([1; 8]),
             dev_eui: DevEui::from_wire_bytes([2; 8]),
             dev_nonce: DevNonce::from_wire_bytes([3, 3]),
         };
         let mut buf = [0u8; 23];
-        let built = jr.build_into(&mut buf, &key, &DefaultFactory).unwrap().to_vec();
+        let built = jr.build_into(&mut buf, &crypto).unwrap().to_vec();
 
         let parsed = JoinRequestPayload::parse(&built).unwrap();
-        assert!(parsed.validate_mic(&key, &DefaultFactory));
+        assert!(parsed.validate_mic(&crypto));
         assert_eq!(parsed.join_eui(), jr.join_eui);
         assert_eq!(parsed.dev_eui(), jr.dev_eui);
         assert_eq!(parsed.dev_nonce(), jr.dev_nonce);
@@ -619,7 +592,8 @@ mod creators {
 
     #[test]
     fn join_accept_round_trips() {
-        let key = AppKey::from([1; 16]);
+        let network_crypto = DefaultNetworkCrypto::new(&AES128([1; 16]));
+        let device_crypto = DefaultCrypto::new(&AES128([1; 16]));
         let ja = JoinAccept {
             join_nonce: JoinNonce::from_wire_bytes([1, 1, 1]),
             net_id: NetId::from_wire_bytes([1, 1, 1]),
@@ -635,16 +609,13 @@ mod creators {
             ])),
         };
         let mut buf = [0u8; 33];
-        let built = ja.build_into(&mut buf, &key, &DefaultFactory).unwrap().to_vec();
+        let built = ja.build_into(&mut buf, &network_crypto).unwrap().to_vec();
 
         // Round trip through the parser.
         let mut rt = built.clone();
-        let parsed = DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(
-            &mut rt,
-            &key,
-            &DefaultFactory,
-        )
-        .unwrap();
+        let parsed =
+            DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(&mut rt, &device_crypto)
+                .unwrap();
         assert_eq!(parsed.join_nonce(), ja.join_nonce);
         assert_eq!(parsed.net_id(), ja.net_id);
         assert_eq!(parsed.dev_addr(), ja.dev_addr);
@@ -668,9 +639,8 @@ mod creators {
         let built = frame
             .build_into(
                 &mut buf,
-                &NwkSKey::from([2; 16]),
-                Some(&AppSKey::from([1; 16])),
-                &DefaultFactory,
+                &DefaultCrypto::new(&AES128([2; 16])),
+                Some(&DefaultCrypto::new(&AES128([1; 16]))),
             )
             .unwrap();
         assert_eq!(built, &phy_dataup_payload()[..]);
@@ -692,9 +662,8 @@ mod creators {
         let built = frame
             .build_into(
                 &mut buf,
-                &NwkSKey::from([2; 16]),
-                Some(&AppSKey::from([1; 16])),
-                &DefaultFactory,
+                &DefaultCrypto::new(&AES128([2; 16])),
+                Some(&DefaultCrypto::new(&AES128([1; 16]))),
             )
             .unwrap();
         assert_eq!(built, &phy_datadown_payload()[..]);
@@ -704,16 +673,9 @@ mod creators {
     fn data_frame_round_trips_mac_commands_vector() {
         // Decrypt the fport-0 vector with the old API to recover the MAC
         // command plaintext, rebuild it with the new creator, and compare.
-        let nwk = NwkSKey::from([1; 16]);
+        let nwk = DefaultCrypto::new(&AES128([1; 16]));
         let mut plain = data_payload_with_fport_zero();
-        let dec = DecryptedDataPayload::decrypt_in_place(
-            &mut plain,
-            Some(&nwk),
-            None,
-            0,
-            &DefaultFactory,
-        )
-        .unwrap();
+        let dec = DecryptedDataPayload::decrypt_in_place(&mut plain, Some(&nwk), None, 0).unwrap();
         let FrmPayload::MacCommands(cmds) = dec.frm_payload() else {
             panic!("expected MAC commands");
         };
@@ -727,7 +689,7 @@ mod creators {
             ..Default::default()
         };
         let mut buf = [0u8; 64];
-        let built = frame.build_into(&mut buf, &nwk, None, &DefaultFactory).unwrap();
+        let built = frame.build_into(&mut buf, &nwk, None).unwrap();
         assert_eq!(built, &data_payload_with_fport_zero()[..]);
     }
 
@@ -743,45 +705,36 @@ mod creators {
         };
         let mut buf = [0u8; 64];
         let built =
-            frame.build_into(&mut buf, &NwkSKey::from([1; 16]), None, &DefaultFactory).unwrap();
+            frame.build_into(&mut buf, &DefaultCrypto::new(&AES128([1; 16])), None).unwrap();
         assert_eq!(built, &data_payload_with_f_opts()[..]);
     }
 
     #[test]
     fn data_frame_build_validation() {
-        let nwk = NwkSKey::from([2; 16]);
-        let app = AppSKey::from([1; 16]);
+        let nwk = DefaultCrypto::new(&AES128([2; 16]));
+        let app = DefaultCrypto::new(&AES128([1; 16]));
         let base = DataFrame { dev_addr: DevAddr::from_value(1), ..Default::default() };
         let mut buf = [0u8; 64];
 
         // FOpts limited to 15 bytes.
         let frame = DataFrame { f_opts: &[0; 16], ..base };
-        assert_eq!(
-            frame.build_into(&mut buf, &nwk, None, &DefaultFactory).unwrap_err(),
-            Error::FOptsTooLong
-        );
+        assert_eq!(frame.build_into(&mut buf, &nwk, None).unwrap_err(), Error::FOptsTooLong);
 
         // FPort 0 with non-empty FOpts is forbidden.
         let frame = DataFrame { f_opts: &[0x02], payload: Payload::MacCommands(&[0x02]), ..base };
-        assert_eq!(
-            frame.build_into(&mut buf, &nwk, None, &DefaultFactory).unwrap_err(),
-            Error::FOptsWithFPortZero
-        );
+        assert_eq!(frame.build_into(&mut buf, &nwk, None).unwrap_err(), Error::FOptsWithFPortZero);
 
         // App data needs the AppSKey.
         let frame = DataFrame {
             payload: Payload::Data { f_port: NonZeroU8::new(1).unwrap(), data: b"x" },
             ..base
         };
-        assert_eq!(
-            frame.build_into(&mut buf, &nwk, None, &DefaultFactory).unwrap_err(),
-            Error::MissingKey
-        );
+        assert_eq!(frame.build_into(&mut buf, &nwk, None).unwrap_err(), Error::MissingKey);
 
         // Output buffer too small.
         let mut small = [0u8; 12];
         assert_eq!(
-            frame.build_into(&mut small, &nwk, Some(&app), &DefaultFactory).unwrap_err(),
+            frame.build_into(&mut small, &nwk, Some(&app)).unwrap_err(),
             Error::BufferTooShort
         );
     }
@@ -789,8 +742,8 @@ mod creators {
     /// Full new-API round trip: build, parse, MIC-check, decrypt, compare.
     #[test]
     fn build_parse_decrypt_round_trip() {
-        let nwk = NwkSKey::from([3; 16]);
-        let app = AppSKey::from([4; 16]);
+        let nwk = DefaultCrypto::new(&AES128([3; 16]));
+        let app = DefaultCrypto::new(&AES128([4; 16]));
         let frame = DataFrame {
             frame_type: DataFrameType::ConfirmedUp,
             dev_addr: DevAddr::from_value(0xdeadbeef),
@@ -802,8 +755,7 @@ mod creators {
             ..Default::default()
         };
         let mut buf = [0u8; 64];
-        let built_len =
-            frame.build_into(&mut buf, &nwk, Some(&app), &DefaultFactory).unwrap().len();
+        let built_len = frame.build_into(&mut buf, &nwk, Some(&app)).unwrap().len();
 
         let mut rt = buf[..built_len].to_vec();
         let dec = DecryptedDataPayload::check_mic_and_decrypt_in_place(
@@ -811,7 +763,6 @@ mod creators {
             &nwk,
             Some(&app),
             0x0004_0007,
-            &DefaultFactory,
         )
         .unwrap();
         assert_eq!(dec.frame_type(), DataFrameType::ConfirmedUp);
@@ -941,7 +892,7 @@ mod certification {
 // ---------------------------------------------------------------------------
 
 mod multicast {
-    use lorawan::default_crypto::DefaultFactory;
+    use lorawan::default_crypto::{DefaultCrypto, DefaultNetworkCrypto};
     use lorawan::keys::{McKEKey, McKey};
     use lorawan::maccommands::ParseError as MacError;
     use lorawan::multicast::{
@@ -980,7 +931,7 @@ mod multicast {
         let mut creator = McGroupSetupReqCreator::new();
         creator.mc_group_id_header(0x01);
         creator.mc_addr(&mc_addr);
-        creator.mc_key(&DefaultFactory, &mc_key, &mcke_key);
+        creator.mc_key(&DefaultNetworkCrypto::new(mcke_key.inner()), &mc_key);
         creator.min_mc_fcount(7);
         creator.max_mc_fcount(1000);
         let bytes = creator.build().to_vec();
@@ -990,14 +941,15 @@ mod multicast {
         let [DownlinkRemoteSetup::McGroupSetupReq(req)] = &cmds[..] else {
             panic!("expected McGroupSetupReq");
         };
-        let (group_id, session) = req.derive_session(&DefaultFactory, &mcke_key);
+        let (group_id, session) = req.derive_session(&DefaultCrypto::new(mcke_key.inner()));
         assert_eq!(group_id, 1);
         assert_eq!(session.multicast_addr(), mc_addr);
         assert_eq!(session.fcnt_down, 7);
         assert_eq!(session.max_fcnt_down(), 1000);
         // Keys must match direct derivation from McKey.
-        assert_eq!(session.mc_app_s_key(), mc_key.derive_mc_app_s_key(&DefaultFactory, &mc_addr));
-        assert_eq!(session.mc_net_s_key(), mc_key.derive_mc_net_s_key(&DefaultFactory, &mc_addr));
+        let mc_key_crypto = DefaultCrypto::new(mc_key.inner());
+        assert_eq!(session.mc_app_s_key(), McKey::derive_mc_app_s_key(&mc_key_crypto, &mc_addr));
+        assert_eq!(session.mc_net_s_key(), McKey::derive_mc_net_s_key(&mc_key_crypto, &mc_addr));
     }
 
     /// McGroupStatusAns is variable length, driven by a bitmask in its first

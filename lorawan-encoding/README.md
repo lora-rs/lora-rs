@@ -26,7 +26,7 @@ lorawan = "0.9"
 ### Packet generation
 
 ```rust
-use lorawan::default_crypto::DefaultFactory;
+use lorawan::default_crypto::DefaultNetworkCrypto;
 use lorawan::keys::AppKey;
 use lorawan::types::DLSettings;
 use lorawan::creator::JoinAccept;
@@ -48,13 +48,15 @@ let accept = JoinAccept {
 };
 let mut data = [0; 33];
 let key = AppKey::from([1; 16]);
-let payload = accept.build_into(&mut data, &key, &DefaultFactory).unwrap();
+let crypto = DefaultNetworkCrypto::new(key.inner());
+let payload = accept.build_into(&mut data, &crypto).unwrap();
 println!("Payload: {:x?}", payload);
 ```
 
 ### Packet parsing
 
 ```rust
+use lorawan::default_crypto::DefaultCrypto;
 use lorawan::keys::AppSKey;
 use lorawan::parser::{parse, DecryptedDataPayload, FrmPayload, PhyPayload};
 
@@ -65,8 +67,9 @@ let Ok(PhyPayload::Data(phy)) = parse(&data) else {
     panic!("failed to parse data payload");
 };
 let key = AppSKey::from([1; 16]);
-let decrypted = DecryptedDataPayload::decrypt_in_place(
-    &mut data, None, Some(&key), 1, &lorawan::default_crypto::DefaultFactory).unwrap();
+let crypto = DefaultCrypto::new(key.inner());
+let decrypted =
+    DecryptedDataPayload::decrypt_in_place(&mut data, None, Some(&crypto), 1).unwrap();
 if let FrmPayload::Data(data_payload) = decrypted.frm_payload() {
     println!("{}", String::from_utf8_lossy(data_payload));
 }

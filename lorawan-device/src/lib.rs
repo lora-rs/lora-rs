@@ -29,7 +29,7 @@ pub mod nb_device;
 use nb_device::state::State;
 
 pub use lorawan::{
-    keys::{AppEui, AppKey, AppSKey, CryptoFactory, DevEui, NwkSKey},
+    keys::{AppEui, AppKey, AppSKey, Crypto, DevEui, NwkSKey},
     parser::DevAddr,
 };
 

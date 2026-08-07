@@ -4,7 +4,6 @@ use crate::{
     region,
     test_util::*,
 };
-use lorawan::default_crypto::DefaultFactory;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -343,9 +342,7 @@ async fn invalid_maccommands_in_frmpayload() {
             payload: lorawan::creator::Payload::MacCommands(&[3, 192, 0, 0, 0]),
             ..Default::default()
         };
-        let finished = frame
-            .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
-            .unwrap();
+        let finished = frame.build_into(rx_buffer, &get_crypto(), Some(&get_crypto())).unwrap();
         finished.len()
     }
 

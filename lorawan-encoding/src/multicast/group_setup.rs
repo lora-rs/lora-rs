@@ -1,7 +1,6 @@
-use crate::keys::{CryptoFactory, McAppSKey, McKEKey, McKey, McNetSKey};
+use crate::keys::{Crypto, McAppSKey, McKey, McNetSKey, NetworkCrypto, AES128};
 use crate::multicast::McGroupSetupReqCreator;
 use crate::{
-    keys::{Decrypter, Encrypter},
     multicast::{McGroupSetupAnsCreator, McGroupSetupAnsPayload, McGroupSetupReqPayload},
     parser::McAddr,
 };
@@ -61,26 +60,39 @@ impl McGroupSetupReqPayload<'_> {
         &self.0[OFFSET..END]
     }
 
-    fn mc_key_decrypted<F: CryptoFactory>(&self, crypto: &F, key: &McKEKey) -> McKey {
-        let aes_enc = crypto.new_enc(&key.0);
+    /// Decrypts the McKey carried in the request.
+    ///
+    /// `crypto` must be bound to the McKEKey.
+    pub fn mc_key_decrypted<C: Crypto>(&self, crypto: &C) -> McKey {
         let mut bytes: [u8; 16] = self.mc_key_encrypted().try_into().unwrap();
-        aes_enc.encrypt_block(&mut bytes);
+        crypto.encrypt_block(&mut bytes);
         McKey::from(bytes)
     }
 
-    pub fn derive_session_keys<F: CryptoFactory>(
+    /// Derives the multicast session keys.
+    ///
+    /// `crypto` must be bound to the McKEKey. The `From<AES128>` bound is used to construct
+    /// the crypto for the McKey decrypted from the request; implementations that cannot be
+    /// built from a bare key can use [`Self::mc_key_decrypted`] and derive the session keys
+    /// through [`McKey::derive_mc_app_s_key`] and [`McKey::derive_mc_net_s_key`] directly.
+    pub fn derive_session_keys<C: Crypto + From<AES128>>(
         &self,
-        crypto: &F,
-        key: &McKEKey,
+        crypto: &C,
     ) -> (McAppSKey, McNetSKey) {
-        let mc_key = self.mc_key_decrypted(crypto, key);
+        let mc_key = self.mc_key_decrypted(crypto);
+        let mc_key_crypto = C::from(*mc_key.inner());
         let mc_addr = self.mc_addr();
-        (mc_key.derive_mc_app_s_key(crypto, &mc_addr), mc_key.derive_mc_net_s_key(crypto, &mc_addr))
+        (
+            McKey::derive_mc_app_s_key(&mc_key_crypto, &mc_addr),
+            McKey::derive_mc_net_s_key(&mc_key_crypto, &mc_addr),
+        )
     }
 
     /// Derives the multicast session and returns the assigned group ID.
-    pub fn derive_session<F: CryptoFactory>(&self, crypto: &F, key: &McKEKey) -> (u8, Session) {
-        let (mc_app_s_key, mc_net_s_key) = self.derive_session_keys(crypto, key);
+    ///
+    /// `crypto` must be bound to the McKEKey.
+    pub fn derive_session<C: Crypto + From<AES128>>(&self, crypto: &C) -> (u8, Session) {
+        let (mc_app_s_key, mc_net_s_key) = self.derive_session_keys(crypto);
         (
             self.mc_group_id_header(),
             Session {
@@ -145,19 +157,15 @@ impl McGroupSetupReqCreator {
         self
     }
 
-    pub fn mc_key<F: CryptoFactory>(
-        &mut self,
-        crypto: &F,
-        mc_key: &McKey,
-        mcke_key: &McKEKey,
-    ) -> &mut Self {
+    /// Encrypts the McKey into the request.
+    ///
+    /// `crypto` must be bound to the McKEKey.
+    pub fn mc_key<C: NetworkCrypto>(&mut self, crypto: &C, mc_key: &McKey) -> &mut Self {
         const OFFSET: usize = 2 + McAddr::BYTE_LEN;
         const END: usize = OFFSET + McKey::byte_len();
-        let aes_enc = crypto.new_dec(&mcke_key.0);
         let block = &mut self.data[OFFSET..END];
         block.copy_from_slice(mc_key.as_ref());
-        //println!("block: {block:?}");
-        aes_enc.decrypt_block(block);
+        crypto.decrypt_block(block);
         self
     }
 
@@ -179,7 +187,8 @@ impl McGroupSetupReqCreator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::default_crypto::DefaultFactory;
+    use crate::default_crypto::{DefaultCrypto, DefaultNetworkCrypto};
+    use crate::keys::McKEKey;
     use crate::multicast::parse_downlink_multicast_commands;
     use crate::multicast::DownlinkRemoteSetup;
 
@@ -193,7 +202,7 @@ mod tests {
 
         req.mc_group_id_header(0x01);
         req.mc_addr(&mc_addr);
-        req.mc_key(&DefaultFactory, &mc_key, &mcke_key);
+        req.mc_key(&DefaultNetworkCrypto::new(mcke_key.inner()), &mc_key);
         req.min_mc_fcount(0x12345678);
         req.max_mc_fcount(0x87654321);
         let messages = req.build();
@@ -205,7 +214,8 @@ mod tests {
         };
         assert_eq!(mc_group_setup_req.mc_group_id_header(), 1);
         assert_eq!(mc_group_setup_req.mc_addr(), mc_addr);
-        let decrypt_key = mc_group_setup_req.mc_key_decrypted(&DefaultFactory, &mcke_key);
+        let decrypt_key =
+            mc_group_setup_req.mc_key_decrypted(&DefaultCrypto::new(mcke_key.inner()));
         assert_eq!(decrypt_key.as_ref(), mc_key.as_ref());
         assert_eq!(mc_group_setup_req.min_mc_fcount(), 0x12345678);
         assert_eq!(mc_group_setup_req.max_mc_fcount(), 0x87654321);

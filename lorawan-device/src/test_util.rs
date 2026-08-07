@@ -1,7 +1,7 @@
 use super::*;
 use core::num::NonZeroU8;
 use lorawan::creator::{DataFrame, JoinAccept, Payload};
-use lorawan::default_crypto::DefaultFactory;
+use lorawan::default_crypto::{DefaultCrypto, DefaultNetworkCrypto};
 use lorawan::maccommandcreator::LinkADRReqCreator;
 use lorawan::maccommands::parse_uplink_mac_commands;
 use lorawan::maccommands::UplinkMacCommand;
@@ -50,6 +50,16 @@ pub fn get_key() -> [u8; 16] {
     [0; 16]
 }
 
+/// Device-side crypto bound to the test key.
+pub fn get_crypto() -> DefaultCrypto {
+    DefaultCrypto::new(&get_key().into())
+}
+
+/// Network-side crypto bound to the test key, for JoinAccept creation.
+pub fn get_network_crypto() -> DefaultNetworkCrypto {
+    DefaultNetworkCrypto::new(&get_key().into())
+}
+
 pub fn get_dev_addr() -> DevAddr {
     DevAddr::from_value(0)
 }
@@ -92,7 +102,7 @@ pub fn handle_join_request_with_dl_settings<const I: usize, const DL_SETTINGS: u
     if let Some(mut uplink) = uplink {
         if let Ok(PhyPayload::JoinRequest(join_request)) = parser::parse(uplink.data_mut()) {
             let devnonce = join_request.dev_nonce();
-            assert!(join_request.validate_mic(&get_key().into(), &DefaultFactory));
+            assert!(join_request.validate_mic(&get_crypto()));
             let accept = JoinAccept {
                 join_nonce: JoinNonce::from_wire_bytes([1; 3]),
                 net_id: NetId::from_wire_bytes([1; 3]),
@@ -101,15 +111,13 @@ pub fn handle_join_request_with_dl_settings<const I: usize, const DL_SETTINGS: u
                 rx_delay: 0,
                 c_f_list: None,
             };
-            let finished =
-                accept.build_into(rx_buffer, &get_key().into(), &DefaultFactory).unwrap();
+            let finished = accept.build_into(rx_buffer, &get_network_crypto()).unwrap();
             let len = finished.len();
 
             let mut copy = finished.to_vec();
             let decrypt = DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(
                 copy.as_mut_slice(),
-                &get_key().into(),
-                &DefaultFactory,
+                &get_crypto(),
             )
             .expect("Somehow unable to parse my own join accept?");
             let session = Session::derive_new(
@@ -145,17 +153,16 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
         let (fcnt, confirmed) = match parser::parse(&*bytes) {
             Ok(PhyPayload::Data(data)) => {
                 let fcnt = data.fhdr().fcnt() as u32;
-                assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
+                assert!(data.validate_mic(&get_crypto(), fcnt));
                 (fcnt, data.is_confirmed())
             }
             _ => panic!("Did not decode PhyPayload::Data!"),
         };
         let decrypted = DecryptedDataPayload::decrypt_in_place(
             bytes,
-            Some(&get_key().into()),
-            Some(&get_key().into()),
+            Some(&get_crypto()),
+            Some(&get_crypto()),
             fcnt,
-            &DefaultFactory,
         )
         .unwrap();
         assert_eq!(decrypted.fhdr().fcnt(), FCNT_UP);
@@ -176,9 +183,7 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
             payload: Payload::Data { f_port: NonZeroU8::new(4).unwrap(), data: &[3, 2, 1] },
             ..Default::default()
         };
-        let finished = frame
-            .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
-            .unwrap();
+        let finished = frame.build_into(rx_buffer, &get_crypto(), Some(&get_crypto())).unwrap();
         finished.len()
     } else {
         panic!("No uplink passed to handle_data_uplink_with_link_adr_req");
@@ -194,7 +199,7 @@ pub fn handle_join_request_bad_mic(
 ) -> usize {
     if let Some(mut uplink) = uplink {
         if let Ok(PhyPayload::JoinRequest(join_request)) = parser::parse(uplink.data_mut()) {
-            assert!(join_request.validate_mic(&get_key().into(), &DefaultFactory));
+            assert!(join_request.validate_mic(&get_crypto()));
             let accept = JoinAccept {
                 join_nonce: JoinNonce::from_wire_bytes([1; 3]),
                 net_id: NetId::from_wire_bytes([1; 3]),
@@ -204,8 +209,9 @@ pub fn handle_join_request_bad_mic(
                 c_f_list: None,
             };
             let wrong_key = [1; 16];
-            let finished =
-                accept.build_into(rx_buffer, &wrong_key.into(), &DefaultFactory).unwrap();
+            let finished = accept
+                .build_into(rx_buffer, &DefaultNetworkCrypto::new(&wrong_key.into()))
+                .unwrap();
             finished.len()
         } else {
             panic!("Did not parse join request from uplink");
@@ -240,7 +246,7 @@ pub fn handle_data_uplink_with_link_adr_ans(
         let (fcnt, confirmed) = match parser::parse(&*bytes) {
             Ok(PhyPayload::Data(data)) => {
                 let fcnt = data.fhdr().fcnt() as u32;
-                assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
+                assert!(data.validate_mic(&get_crypto(), fcnt));
                 (fcnt, data.is_confirmed())
             }
             _ => panic!(
@@ -249,10 +255,9 @@ pub fn handle_data_uplink_with_link_adr_ans(
         };
         let decrypted = DecryptedDataPayload::decrypt_in_place(
             bytes,
-            Some(&get_key().into()),
-            Some(&get_key().into()),
+            Some(&get_crypto()),
+            Some(&get_crypto()),
             fcnt,
-            &DefaultFactory,
         )
         .unwrap();
         let fhdr = decrypted.fhdr();
@@ -274,9 +279,7 @@ pub fn handle_data_uplink_with_link_adr_ans(
             fcnt: 1,
             ..Default::default()
         };
-        let finished = frame
-            .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
-            .unwrap();
+        let finished = frame.build_into(rx_buffer, &get_crypto(), Some(&get_crypto())).unwrap();
         finished.len()
     } else {
         panic!("No uplink passed to handle_data_uplink_with_link_adr_ans")

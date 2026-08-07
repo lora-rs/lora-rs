@@ -1,14 +1,14 @@
-use super::keys;
+use super::keys::{Crypto, MIC};
 
 /// calculate_data_mic computes the MIC of a correct data packet.
-pub fn calculate_data_mic<M: keys::Mac>(data: &[u8], key: M, fcnt: u32) -> keys::MIC {
-    let mut header = [0; 16];
+pub fn calculate_data_mic(data: &[u8], crypto: &dyn Crypto, fcnt: u32) -> MIC {
+    let mut b0 = [0; 16];
 
     // compute b0 from the spec
-    generate_helper_block(data, 0x49, fcnt, &mut header[..16]);
-    header[15] = data.len() as u8;
+    generate_helper_block(data, 0x49, fcnt, &mut b0[..16]);
+    b0[15] = data.len() as u8;
 
-    calculate_mic_with_header(&header[..], data, key)
+    MIC(crypto.calculate_mic(&b0[..], data))
 }
 
 fn generate_helper_block(data: &[u8], first: u8, fcnt: u32, res: &mut [u8]) {
@@ -25,21 +25,9 @@ fn generate_helper_block(data: &[u8], first: u8, fcnt: u32, res: &mut [u8]) {
     // res[15] is to be set later
 }
 
-fn calculate_mic_with_header<M: keys::Mac>(header: &[u8], data: &[u8], mic: M) -> keys::MIC {
-    let mut cipher = mic;
-    cipher.input(header);
-    cipher.input(data);
-    let result = cipher.result();
-
-    let mut mic = [0u8; 4];
-    mic.copy_from_slice(&result[0..4]);
-
-    keys::MIC(mic)
-}
-
 /// calculate_mic computes the MIC of a correct data packet.
-pub fn calculate_mic<M: keys::Mac>(data: &[u8], key: M) -> keys::MIC {
-    calculate_mic_with_header(&[], data, key)
+pub fn calculate_mic(data: &[u8], crypto: &dyn Crypto) -> MIC {
+    MIC(crypto.calculate_mic(&[], data))
 }
 
 /// encrypt_frm_data_payload encrypts bytes
@@ -48,7 +36,7 @@ pub fn encrypt_frm_data_payload(
     start: usize,
     end: usize,
     fcnt: u32,
-    aes_enc: &dyn keys::Encrypter,
+    crypto: &dyn Crypto,
 ) {
     let len = end - start;
 
@@ -64,7 +52,7 @@ pub fn encrypt_frm_data_payload(
             a[15] = ctr;
             ctr += 1;
             s = a;
-            aes_enc.encrypt_block(&mut s);
+            crypto.encrypt_block(&mut s);
         }
         phy_payload[start + i] ^= s[j]
     }

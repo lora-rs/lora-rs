@@ -1,9 +1,23 @@
 # Benchmarks
 
-The code is in `benches/lorawan.rs`; run with `cargo bench -p lorawan`. All
-three benchmarks work on the same 18-byte unconfirmed data uplink: parse it,
-read the header fields, validate the MIC, or decrypt the FRMPayload. A
-tracking allocator reports heap usage per iteration (zero for all three).
+The code is in `benches/lorawan.rs`; run with `cargo bench -p lorawan`. The
+benchmarks work on the same 18-byte unconfirmed data uplink: parse it, read
+the header fields, validate the MIC, decrypt the FRMPayload, or build the
+frame from scratch. A tracking allocator reports heap usage per iteration
+(zero for all of them).
+
+## Reference numbers
+
+Measured on an AMD EPYC 7302 (AES-NI) with `rustc 1.97.1`, crypto bound to
+the session keys outside the loop (`DefaultCrypto` caches the AES key
+schedule per key):
+
+| benchmark                    |     time |
+|------------------------------|---------:|
+| data_payload_headers_parsing |  6.46 ns |
+| data_payload_mic_validation  | 116.8 ns |
+| data_payload_decrypt         |  41.1 ns |
+| data_payload_creation        | 173.6 ns |
 
 ## Comparison against ChirpStack's lrwn crate
 

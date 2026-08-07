@@ -44,7 +44,7 @@
 //! by [`DevAddr`], verify the MIC, then decrypt in place.
 //!
 //! ```
-//! use lorawan::default_crypto::DefaultFactory;
+//! use lorawan::default_crypto::DefaultCrypto;
 //! use lorawan::keys::{AppSKey, NwkSKey};
 //! use lorawan::parser::{DecryptedDataPayload, DevAddr, EncryptedDataPayload, FrmPayload};
 //!
@@ -52,21 +52,16 @@
 //!     0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01, 0xa6, 0x94, 0x64, 0x26, 0x15,
 //!     0xd6, 0xc3, 0xb5, 0x82,
 //! ];
-//! let nwk_skey = NwkSKey::from([2; 16]);
-//! let app_skey = AppSKey::from([1; 16]);
+//! let nwk_crypto = DefaultCrypto::new(NwkSKey::from([2; 16]).inner());
+//! let app_crypto = DefaultCrypto::new(AppSKey::from([1; 16]).inner());
 //!
 //! let phy = EncryptedDataPayload::parse(&buf).unwrap();
 //! assert_eq!(phy.fhdr().dev_addr(), DevAddr::from_value(0x01020304));
-//! assert!(phy.validate_mic(nwk_skey.inner(), 1, &DefaultFactory));
+//! assert!(phy.validate_mic(&nwk_crypto, 1));
 //!
-//! let decrypted = DecryptedDataPayload::decrypt_in_place(
-//!     &mut buf,
-//!     Some(&nwk_skey),
-//!     Some(&app_skey),
-//!     1,
-//!     &DefaultFactory,
-//! )
-//! .unwrap();
+//! let decrypted =
+//!     DecryptedDataPayload::decrypt_in_place(&mut buf, Some(&nwk_crypto), Some(&app_crypto), 1)
+//!         .unwrap();
 //! assert_eq!(decrypted.frm_payload(), FrmPayload::Data(b"hello"));
 //! ```
 //!
@@ -75,7 +70,7 @@
 //!
 //! ```
 //! use core::num::NonZeroU8;
-//! use lorawan::default_crypto::DefaultFactory;
+//! use lorawan::default_crypto::DefaultCrypto;
 //! use lorawan::keys::{AppSKey, NwkSKey};
 //! use lorawan::creator::{DataFrame, Payload};
 //! use lorawan::parser::{DataFrameType, DevAddr};
@@ -89,13 +84,13 @@
 //!     ..Default::default()
 //! };
 //! let mut buf = [0u8; 64];
-//! let bytes = frame
-//!     .build_into(&mut buf, &NwkSKey::from([2; 16]), Some(&AppSKey::from([1; 16])), &DefaultFactory)
-//!     .unwrap();
+//! let nwk_crypto = DefaultCrypto::new(NwkSKey::from([2; 16]).inner());
+//! let app_crypto = DefaultCrypto::new(AppSKey::from([1; 16]).inner());
+//! let bytes = frame.build_into(&mut buf, &nwk_crypto, Some(&app_crypto)).unwrap();
 //! assert_eq!(bytes.len(), 18);
 //! ```
 
-use crate::keys::{AppKey, AppSKey, CryptoFactory, Encrypter, NwkSKey, AES128, MIC};
+use crate::keys::{AppSKey, Crypto, NwkSKey, AES128, MIC};
 use crate::packet_length::phy::join::{
     JOIN_ACCEPT_LEN, JOIN_ACCEPT_WITH_CFLIST_LEN, JOIN_REQUEST_LEN,
 };
@@ -372,11 +367,13 @@ impl<'a> EncryptedDataPayload<'a> {
 
     data_view_accessors!();
 
-    /// Whether the MIC matches under `key` and the given 32-bit frame counter.
+    /// Whether the MIC matches under the given 32-bit frame counter.
+    ///
+    /// `crypto` must be bound to the NwkSKey (or McNetSKey for multicast).
     #[inline]
-    pub fn validate_mic<C: CryptoFactory>(&self, key: &AES128, fcnt: u32, crypto: &C) -> bool {
+    pub fn validate_mic<C: Crypto>(&self, crypto: &C, fcnt: u32) -> bool {
         let without_mic = &self.bytes[..self.bytes.len() - MIC_LEN];
-        self.mic() == securityhelpers::calculate_data_mic(without_mic, crypto.new_mac(key), fcnt)
+        self.mic() == securityhelpers::calculate_data_mic(without_mic, crypto, fcnt)
     }
 }
 
@@ -409,47 +406,27 @@ impl<'a> DecryptedDataPayload<'a> {
     /// unless the MIC was already checked via
     /// [`EncryptedDataPayload::validate_mic`].
     ///
-    /// Key selection follows the spec: `app_skey` decrypts FPort > 0,
-    /// `nwk_skey` decrypts FPort 0 (MAC commands). Only the key the frame
-    /// actually needs must be present. `fcnt` supplies the upper 16 bits of
-    /// the frame counter; the lower 16 come from the wire.
+    /// Key selection follows the spec: `app_crypto` (bound to the AppSKey, or
+    /// McAppSKey for multicast) decrypts FPort > 0, `nwk_crypto` (bound to
+    /// the NwkSKey or McNetSKey) decrypts FPort 0 (MAC commands). Only the
+    /// crypto the frame actually needs must be present. `fcnt` supplies the
+    /// upper 16 bits of the frame counter; the lower 16 come from the wire.
     #[inline]
-    pub fn decrypt_in_place<C: CryptoFactory>(
+    pub fn decrypt_in_place<C: Crypto>(
         buf: &'a mut [u8],
-        nwk_skey: Option<&NwkSKey>,
-        app_skey: Option<&AppSKey>,
+        nwk_crypto: Option<&C>,
+        app_crypto: Option<&C>,
         fcnt: u32,
-        crypto: &C,
-    ) -> Result<Self, Error> {
-        Self::decrypt_in_place_with(
-            buf,
-            nwk_skey.map(|k| k.inner()),
-            app_skey.map(|k| k.inner()),
-            fcnt,
-            crypto,
-        )
-    }
-
-    /// Like [`Self::decrypt_in_place`], but takes raw AES keys. For sessions
-    /// whose keys are not the unicast [`NwkSKey`]/[`AppSKey`] pair, such as
-    /// multicast sessions (`McNetSKey`/`McAppSKey`).
-    #[inline]
-    pub fn decrypt_in_place_with<C: CryptoFactory>(
-        buf: &'a mut [u8],
-        nwk_key: Option<&AES128>,
-        app_key: Option<&AES128>,
-        fcnt: u32,
-        crypto: &C,
     ) -> Result<Self, Error> {
         let layout = Layout::validate(buf)?;
         if layout.frm_start < layout.frm_end {
             let uses_app_key = matches!(layout.f_port_offset, Some(off) if buf[off] != 0);
-            let key = if uses_app_key {
-                app_key
+            let crypto = if uses_app_key {
+                app_crypto
             } else {
-                nwk_key
+                nwk_crypto
             };
-            let key = key.ok_or(Error::MissingKey)?;
+            let crypto = crypto.ok_or(Error::MissingKey)?;
             let wire_fcnt = u16::from_le_bytes([buf[6], buf[7]]);
             let full_fcnt = ((fcnt >> 16) << 16) | u32::from(wire_fcnt);
             securityhelpers::encrypt_frm_data_payload(
@@ -457,7 +434,7 @@ impl<'a> DecryptedDataPayload<'a> {
                 layout.frm_start,
                 layout.frm_end,
                 full_fcnt,
-                &crypto.new_enc(key),
+                crypto,
             );
         }
         Ok(Self { bytes: buf, layout })
@@ -468,17 +445,16 @@ impl<'a> DecryptedDataPayload<'a> {
     /// The MIC is checked before anything is written, so on `InvalidMic` the
     /// buffer still holds the received bytes unchanged.
     #[inline]
-    pub fn check_mic_and_decrypt_in_place<C: CryptoFactory>(
+    pub fn check_mic_and_decrypt_in_place<C: Crypto>(
         buf: &'a mut [u8],
-        nwk_skey: &NwkSKey,
-        app_skey: Option<&AppSKey>,
+        nwk_crypto: &C,
+        app_crypto: Option<&C>,
         fcnt: u32,
-        crypto: &C,
     ) -> Result<Self, Error> {
-        if !EncryptedDataPayload::parse(buf)?.validate_mic(nwk_skey.inner(), fcnt, crypto) {
+        if !EncryptedDataPayload::parse(buf)?.validate_mic(nwk_crypto, fcnt) {
             return Err(Error::InvalidMic);
         }
-        Self::decrypt_in_place(buf, Some(nwk_skey), app_skey, fcnt, crypto)
+        Self::decrypt_in_place(buf, Some(nwk_crypto), app_crypto, fcnt)
     }
 
     data_view_accessors!();
@@ -556,10 +532,12 @@ impl<'a> JoinRequestPayload<'a> {
     }
 
     /// Whether the MIC matches under the device's root key.
+    ///
+    /// `crypto` must be bound to the AppKey.
     #[inline]
-    pub fn validate_mic<C: CryptoFactory>(&self, key: &AppKey, crypto: &C) -> bool {
+    pub fn validate_mic<C: Crypto>(&self, crypto: &C) -> bool {
         let without_mic = &self.bytes[..JOIN_REQUEST_LEN - MIC_LEN];
-        self.mic() == securityhelpers::calculate_mic(without_mic, crypto.new_mac(key.inner()))
+        self.mic() == securityhelpers::calculate_mic(without_mic, crypto)
     }
 
     /// The raw frame bytes.
@@ -624,17 +602,12 @@ impl<'a> DecryptedJoinAcceptPayload<'a> {
     /// Does NOT verify the MIC (it only becomes readable after decryption);
     /// prefer [`Self::check_mic_and_decrypt_in_place`].
     #[inline]
-    pub fn decrypt_in_place<C: CryptoFactory>(
-        buf: &'a mut [u8],
-        key: &AppKey,
-        crypto: &C,
-    ) -> Result<Self, Error> {
+    pub fn decrypt_in_place<C: Crypto>(buf: &'a mut [u8], crypto: &C) -> Result<Self, Error> {
         validate_join_accept_structure(buf)?;
         // The device side runs AES *encryption* to invert the server's
         // decrypt-mode transformation, per the spec.
-        let aes = crypto.new_enc(key.inner());
         for block in buf[1..].chunks_exact_mut(16) {
-            aes.encrypt_block(block);
+            crypto.encrypt_block(block);
         }
         Ok(Self { bytes: buf })
     }
@@ -648,23 +621,24 @@ impl<'a> DecryptedJoinAcceptPayload<'a> {
     /// untouched. Callers that want to retry with another key or log the
     /// original frame must keep a copy.
     #[inline]
-    pub fn check_mic_and_decrypt_in_place<C: CryptoFactory>(
+    pub fn check_mic_and_decrypt_in_place<C: Crypto>(
         buf: &'a mut [u8],
-        key: &AppKey,
         crypto: &C,
     ) -> Result<Self, Error> {
-        let decrypted = Self::decrypt_in_place(buf, key, crypto)?;
-        if !decrypted.validate_mic(key, crypto) {
+        let decrypted = Self::decrypt_in_place(buf, crypto)?;
+        if !decrypted.validate_mic(crypto) {
             return Err(Error::InvalidMic);
         }
         Ok(decrypted)
     }
 
     /// Whether the MIC matches under the device's root key.
+    ///
+    /// `crypto` must be bound to the AppKey.
     #[inline]
-    pub fn validate_mic<C: CryptoFactory>(&self, key: &AppKey, crypto: &C) -> bool {
+    pub fn validate_mic<C: Crypto>(&self, crypto: &C) -> bool {
         let without_mic = &self.bytes[..self.bytes.len() - MIC_LEN];
-        self.mic() == securityhelpers::calculate_mic(without_mic, crypto.new_mac(key.inner()))
+        self.mic() == securityhelpers::calculate_mic(without_mic, crypto)
     }
 
     /// The server nonce (called AppNonce before LoRaWAN 1.0.4).
@@ -729,41 +703,33 @@ impl<'a> DecryptedJoinAcceptPayload<'a> {
     }
 
     /// Derives the network session key for this join.
+    ///
+    /// `crypto` must be bound to the AppKey.
     #[inline]
-    pub fn derive_nwkskey<C: CryptoFactory>(
-        &self,
-        dev_nonce: DevNonce,
-        key: &AppKey,
-        crypto: &C,
-    ) -> NwkSKey {
-        NwkSKey(self.derive_session_key(0x01, dev_nonce, key, crypto))
+    pub fn derive_nwkskey<C: Crypto>(&self, dev_nonce: DevNonce, crypto: &C) -> NwkSKey {
+        NwkSKey(self.derive_session_key(0x01, dev_nonce, crypto))
     }
 
     /// Derives the application session key for this join.
+    ///
+    /// `crypto` must be bound to the AppKey.
     #[inline]
-    pub fn derive_appskey<C: CryptoFactory>(
-        &self,
-        dev_nonce: DevNonce,
-        key: &AppKey,
-        crypto: &C,
-    ) -> AppSKey {
-        AppSKey(self.derive_session_key(0x02, dev_nonce, key, crypto))
+    pub fn derive_appskey<C: Crypto>(&self, dev_nonce: DevNonce, crypto: &C) -> AppSKey {
+        AppSKey(self.derive_session_key(0x02, dev_nonce, crypto))
     }
 
-    fn derive_session_key<C: CryptoFactory>(
+    fn derive_session_key<C: Crypto>(
         &self,
         first_byte: u8,
         dev_nonce: DevNonce,
-        key: &AppKey,
         crypto: &C,
     ) -> AES128 {
-        let cipher = crypto.new_enc(key.inner());
         let mut block = [0u8; 16];
         block[0] = first_byte;
         block[1..4].copy_from_slice(self.join_nonce().as_wire_bytes());
         block[4..7].copy_from_slice(self.net_id().as_wire_bytes());
         block[7..9].copy_from_slice(dev_nonce.as_wire_bytes());
-        cipher.encrypt_block(&mut block);
+        crypto.encrypt_block(&mut block);
         AES128(block)
     }
 }
