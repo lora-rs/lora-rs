@@ -3,10 +3,10 @@
 //! tests can assert on the RF/crypto path.
 
 use lora_modulation::{Bandwidth, SpreadingFactor};
-use lorawan::default_crypto::DefaultFactory;
-use lorawan::keys::{AES128, AppKey, AppSKey, CryptoFactory, Decrypter, Mac, NwkSKey};
+use lorawan::default_crypto::{DefaultCrypto, DefaultNetworkCrypto};
+use lorawan::keys::{AES128, AppSKey, Crypto, NetworkCrypto, NwkSKey};
 use lorawan::parser::{
-    DataHeader, DataPayload, EncryptedJoinAcceptPayload, FRMPayload, PhyPayload,
+    DecryptedDataPayload, DecryptedJoinAcceptPayload, FrmPayload, PhyPayload,
     parse as parse_lorawan,
 };
 use semtech_udp::pull_resp::{self, PhyData, Time};
@@ -209,29 +209,27 @@ pub fn build_join_accept(
     buf[13..22].copy_from_slice(&[0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02]);
     buf[28] = 0x01; // CFList type
 
-    let mut mac = DefaultFactory.new_mac(&APP_KEY);
-    mac.input(&buf[..29]);
-    let mic = mac.result();
-    buf[29..33].copy_from_slice(&mic[..4]);
+    let crypto = DefaultNetworkCrypto::new(&APP_KEY);
+    let mic = crypto.calculate_mic(&[], &buf[..29]);
+    buf[29..33].copy_from_slice(&mic);
     if tamper_mic {
         buf[29] ^= 0xFF;
     }
 
     // JoinAccept "encryption" is aes128_decrypt so the device can encrypt.
-    let dec = DefaultFactory.new_dec(&APP_KEY);
-    dec.decrypt_block(&mut buf[1..17]);
-    dec.decrypt_block(&mut buf[17..33]);
+    crypto.decrypt_block(&mut buf[1..17]);
+    crypto.decrypt_block(&mut buf[17..33]);
     let phy = buf.to_vec();
 
     // Round-trip our own payload to derive the session keys the device will compute.
-    let app_key = AppKey::from(APP_KEY.0);
-    let decrypted = EncryptedJoinAcceptPayload::new(phy.clone())
-        .map_err(|e| format!("{e:?}"))?
-        .decrypt(&app_key, &DefaultFactory);
-    let dev_nonce =
-        lorawan::parser::DevNonce::new(dev_nonce).ok_or_else(|| "bad DevNonce".to_string())?;
-    let nwk_skey = decrypted.derive_nwkskey(&dev_nonce, &app_key, &DefaultFactory);
-    let app_skey = decrypted.derive_appskey(&dev_nonce, &app_key, &DefaultFactory);
+    let device_crypto = DefaultCrypto::new(&APP_KEY);
+    let mut round_trip = phy.clone();
+    let decrypted = DecryptedJoinAcceptPayload::decrypt_in_place(&mut round_trip, &device_crypto)
+        .map_err(|e| format!("{e:?}"))?;
+    let dev_nonce: [u8; 2] = dev_nonce.try_into().map_err(|_| "bad DevNonce".to_string())?;
+    let dev_nonce = lorawan::parser::DevNonce::from_wire_bytes(dev_nonce);
+    let nwk_skey = decrypted.derive_nwkskey(dev_nonce, &device_crypto);
+    let app_skey = decrypted.derive_appskey(dev_nonce, &device_crypto);
     Ok((phy, nwk_skey, app_skey))
 }
 
@@ -315,12 +313,11 @@ impl Harness {
 
         match parsed {
             PhyPayload::JoinRequest(join_request) => {
-                if !join_request.validate_mic(&APP_KEY, &DefaultFactory) {
+                if !join_request.validate_mic(&DefaultCrypto::new(&APP_KEY)) {
                     self.emit(HarnessEvent::JoinRequestBadMic);
                     return;
                 }
-                let mut dev_nonce = [0u8; 2];
-                dev_nonce.copy_from_slice(join_request.dev_nonce().as_ref());
+                let dev_nonce = *join_request.dev_nonce().as_wire_bytes();
                 self.emit(HarnessEvent::JoinRequestReceived {
                     dev_nonce,
                     freq_hz,
@@ -373,31 +370,33 @@ impl Harness {
 
                 self.dispatch_downlink(phy, rx1_freq, tmst, datr, mac);
             }
-            PhyPayload::Data(DataPayload::Encrypted(data)) => {
+            PhyPayload::Data(data) => {
                 let Some(sess) = self.session.as_ref() else {
                     self.emit(HarnessEvent::ForeignTraffic);
                     return;
                 };
                 let fhdr = data.fhdr();
-                if fhdr.dev_addr().as_ref() != sess.dev_addr {
+                if fhdr.dev_addr().as_wire_bytes() != &sess.dev_addr {
                     self.emit(HarnessEvent::ForeignTraffic);
                     return;
                 }
                 let fcnt = fhdr.fcnt() as u32;
-                if !data.validate_mic(sess.nwk_skey.inner(), fcnt, &DefaultFactory) {
+                let nwk_crypto = DefaultCrypto::new(sess.nwk_skey.inner());
+                let app_crypto = DefaultCrypto::new(sess.app_skey.inner());
+                if !data.validate_mic(&nwk_crypto, fcnt) {
                     self.emit(HarnessEvent::DataBadMic { fcnt });
                     return;
                 }
                 let fport = data.f_port().unwrap_or(0);
-                match data.decrypt(
-                    Some(sess.nwk_skey.inner()),
-                    Some(sess.app_skey.inner()),
+                match DecryptedDataPayload::decrypt_in_place(
+                    payload.as_mut_slice(),
+                    Some(&nwk_crypto),
+                    Some(&app_crypto),
                     fcnt,
-                    &DefaultFactory,
                 ) {
                     Ok(decrypted) => {
                         let payload = match decrypted.frm_payload() {
-                            FRMPayload::Data(bytes) => bytes.to_vec(),
+                            FrmPayload::Data(bytes) => bytes.to_vec(),
                             _ => Vec::new(),
                         };
                         self.emit(HarnessEvent::HeartbeatDecrypted { fcnt, fport, payload });
@@ -422,26 +421,21 @@ impl Harness {
         let Some(sess) = self.session.as_mut() else { return };
         let fcnt_down = sess.fcnt_down;
 
-        let mut buf = [0u8; 64];
-        let mut creator = match lorawan::creator::DataPayloadCreator::new(&mut buf[..]) {
-            Ok(c) => c,
-            Err(e) => {
-                println!("  DataPayloadCreator failed: {e:?}");
-                return;
-            }
+        let payload = match core::num::NonZeroU8::new(resp.fport) {
+            Some(f_port) => lorawan::creator::Payload::Data { f_port, data: &resp.payload },
+            None => lorawan::creator::Payload::MacCommands(&resp.payload),
         };
-        creator
-            .set_uplink(false)
-            .set_dev_addr(lorawan::parser::DevAddr::from(DEV_ADDR))
-            .set_fcnt(fcnt_down)
-            .set_f_port(resp.fport);
-        let phy = match creator.build(
-            &resp.payload,
-            [],
-            &sess.nwk_skey,
-            &sess.app_skey,
-            &DefaultFactory,
-        ) {
+        let frame = lorawan::creator::DataFrame {
+            frame_type: lorawan::parser::DataFrameType::UnconfirmedDown,
+            dev_addr: lorawan::parser::DevAddr::from_wire_bytes(DEV_ADDR),
+            fcnt: fcnt_down,
+            payload,
+            ..Default::default()
+        };
+        let mut buf = [0u8; 64];
+        let nwk_crypto = DefaultCrypto::new(sess.nwk_skey.inner());
+        let app_crypto = DefaultCrypto::new(sess.app_skey.inner());
+        let phy = match frame.build_into(&mut buf, &nwk_crypto, Some(&app_crypto)) {
             Ok(p) => p.to_vec(),
             Err(e) => {
                 println!("  data downlink build failed: {e:?}");
@@ -482,7 +476,14 @@ impl Harness {
 
     /// Hand a PHYPayload to the gateway as a PULL_RESP and report the TX_ACK
     /// outcome as an event.
-    fn dispatch_downlink(&mut self, phy: Vec<u8>, freq: f64, tmst: u32, datr: DataRate, mac: MacAddress) {
+    fn dispatch_downlink(
+        &mut self,
+        phy: Vec<u8>,
+        freq: f64,
+        tmst: u32,
+        datr: DataRate,
+        mac: MacAddress,
+    ) {
         let txpk = pull_resp::TxPk {
             time: Time::by_tmst(tmst),
             freq,
@@ -519,8 +520,8 @@ impl Harness {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lorawan::maccommands::ChannelMask;
     use lorawan::parser::CfList;
+    use lorawan::types::ChannelMask;
 
     #[test]
     fn join_accept_round_trips() {
@@ -528,11 +529,11 @@ mod tests {
         let (phy, _, _) =
             build_join_accept([1, 0, 0], &dev_nonce, JoinAcceptParams::default(), false).unwrap();
         assert_eq!(phy.len(), 33);
-        let app_key = AppKey::from(APP_KEY.0);
+        let crypto = DefaultCrypto::new(&APP_KEY);
+        let mut buf = phy.clone();
         let decrypted =
-            EncryptedJoinAcceptPayload::new(phy).unwrap().decrypt(&app_key, &DefaultFactory);
-        assert!(decrypted.validate_mic(&app_key, &DefaultFactory));
-        assert_eq!(decrypted.dev_addr().as_ref(), &DEV_ADDR);
+            DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(&mut buf, &crypto).unwrap();
+        assert_eq!(decrypted.dev_addr().as_wire_bytes(), &DEV_ADDR);
         let Some(CfList::FixedChannel(mask)) = decrypted.c_f_list() else {
             panic!("expected type-1 CFList, got {:?}", decrypted.c_f_list());
         };
@@ -548,22 +549,22 @@ mod tests {
 
     #[test]
     fn tampered_mic_fails_validation() {
-        let (phy, _, _) =
+        let (mut phy, _, _) =
             build_join_accept([1, 0, 0], &[0, 1], JoinAcceptParams::default(), true).unwrap();
-        let app_key = AppKey::from(APP_KEY.0);
+        let crypto = DefaultCrypto::new(&APP_KEY);
         let decrypted =
-            EncryptedJoinAcceptPayload::new(phy).unwrap().decrypt(&app_key, &DefaultFactory);
-        assert!(!decrypted.validate_mic(&app_key, &DefaultFactory));
+            DecryptedJoinAcceptPayload::decrypt_in_place(phy.as_mut_slice(), &crypto).unwrap();
+        assert!(!decrypted.validate_mic(&crypto));
     }
 
     #[test]
     fn join_accept_carries_params() {
         let params = JoinAcceptParams { dl_settings: 0x2A, rx_delay: 3 };
-        let (phy, _, _) = build_join_accept([1, 0, 0], &[0x3D, 0xA8], params, false).unwrap();
-        let app_key = AppKey::from(APP_KEY.0);
+        let (mut phy, _, _) = build_join_accept([1, 0, 0], &[0x3D, 0xA8], params, false).unwrap();
+        let crypto = DefaultCrypto::new(&APP_KEY);
         let decrypted =
-            EncryptedJoinAcceptPayload::new(phy).unwrap().decrypt(&app_key, &DefaultFactory);
-        assert!(decrypted.validate_mic(&app_key, &DefaultFactory));
+            DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(phy.as_mut_slice(), &crypto)
+                .unwrap();
         let dl = decrypted.dl_settings();
         assert_eq!(dl.rx1_dr_offset(), 2);
         assert_eq!(dl.rx2_data_rate() as u8, 10);
