@@ -58,6 +58,13 @@ fn test_duty_cycle_req_creator() {
 }
 
 #[test]
+fn test_duty_cycle_req_creator_bad_max_duty_cycle() {
+    // MaxDutyCycle is a 4 bit field; bits 7:4 are RFU
+    let mut creator = DutyCycleReqCreator::new();
+    assert!(creator.set_max_duty_cycle(0x10).is_err());
+}
+
+#[test]
 fn test_duty_cycle_ans_creator() {
     let creator = DutyCycleAnsCreator::new();
     let res = creator.build();
@@ -148,11 +155,34 @@ fn test_rx_timing_setup_req_creator_bad_delay() {
 #[test]
 fn test_tx_param_setup_req_creator() {
     let mut creator = TXParamSetupReqCreator::new();
-    creator.set_downlink_dwell_time();
-    creator.set_uplink_dwell_time().set_uplink_dwell_time();
+    creator.set_downlink_dwell_time(true);
+    creator.set_uplink_dwell_time(true).set_uplink_dwell_time(true);
     creator.set_max_eirp(3).unwrap();
     let res = creator.build();
     assert_eq!(res, [TXParamSetupReqPayload::cid(), 0b110011]);
+}
+
+#[test]
+fn test_tx_param_setup_req_creator_dwell_time_preserves_max_eirp() {
+    // setting the dwell time bits must not touch the MaxEIRP field, in any call order
+    let mut creator = TXParamSetupReqCreator::new();
+    creator.set_max_eirp(3).unwrap();
+    creator.set_downlink_dwell_time(true);
+    creator.set_uplink_dwell_time(true);
+    let res = creator.build();
+    assert_eq!(res, [TXParamSetupReqPayload::cid(), 0b110011]);
+}
+
+#[test]
+fn test_tx_param_setup_req_creator_clear_dwell_time() {
+    let mut creator = TXParamSetupReqCreator::new();
+    creator.set_downlink_dwell_time(true);
+    creator.set_uplink_dwell_time(true);
+    creator.set_max_eirp(5).unwrap();
+    creator.set_downlink_dwell_time(false);
+    creator.set_uplink_dwell_time(false);
+    let res = creator.build();
+    assert_eq!(res, [TXParamSetupReqPayload::cid(), 0b000101]);
 }
 
 #[test]
