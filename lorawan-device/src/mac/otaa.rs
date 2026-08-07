@@ -2,14 +2,12 @@ use super::{del_to_delay_ms, session::Session, Response};
 use crate::radio::RadioBuffer;
 use crate::region::Configuration;
 use crate::{AppEui, AppKey, DevEui};
+use lorawan::creator::JoinRequest;
 use lorawan::default_crypto::DefaultFactory;
-use lorawan::{
-    creator::JoinRequestCreator,
-    parser::{parse as lorawan_parse, *},
-};
+use lorawan::parser::DecryptedJoinAcceptPayload;
 use rand_core::RngCore;
 
-pub(crate) type DevNonce = lorawan::parser::DevNonce<[u8; 2]>;
+pub(crate) type DevNonce = lorawan::parser::DevNonce;
 
 pub(crate) struct Otaa {
     dev_nonce: DevNonce,
@@ -25,7 +23,7 @@ pub struct NetworkCredentials {
 
 impl Otaa {
     pub fn new(network_credentials: NetworkCredentials) -> Self {
-        Self { dev_nonce: DevNonce::from([0, 0]), network_credentials }
+        Self { dev_nonce: DevNonce::from_value(0), network_credentials }
     }
 
     /// Prepare a join request to be sent. This populates the radio buffer with the request to be
@@ -35,16 +33,19 @@ impl Otaa {
         rng: &mut G,
         buf: &mut RadioBuffer<N>,
     ) -> u16 {
-        self.dev_nonce = DevNonce::from(rng.next_u32() as u16);
+        self.dev_nonce = DevNonce::from_value(rng.next_u32() as u16);
         buf.clear();
-        let mut phy = JoinRequestCreator::new(buf.as_mut()).unwrap();
-        phy.set_app_eui(self.network_credentials.appeui)
-            .set_dev_eui(self.network_credentials.deveui)
-            .set_dev_nonce(self.dev_nonce);
-        let crypto_factory = DefaultFactory;
-        let len = phy.build(&self.network_credentials.appkey, &crypto_factory).len();
+        let request = JoinRequest {
+            join_eui: self.network_credentials.appeui.into(),
+            dev_eui: self.network_credentials.deveui.into(),
+            dev_nonce: self.dev_nonce,
+        };
+        let len = request
+            .build_into(buf.as_mut(), &self.network_credentials.appkey, &DefaultFactory)
+            .unwrap()
+            .len();
         buf.set_pos(len);
-        u16::from(self.dev_nonce)
+        self.dev_nonce.value()
     }
 
     pub(crate) fn handle_rx<const N: usize>(
@@ -53,14 +54,12 @@ impl Otaa {
         configuration: &mut super::Configuration,
         rx: &mut RadioBuffer<N>,
     ) -> Option<Session> {
-        if let Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(encrypted))) =
-            lorawan_parse(rx.as_mut_for_read())
-        {
-            let decrypt = encrypted.decrypt(&self.network_credentials.appkey, &DefaultFactory);
-            if !decrypt.validate_mic(&self.network_credentials.appkey, &DefaultFactory) {
-                return None;
-            }
-            region.process_join_accept(&decrypt);
+        if let Ok(decrypt) = DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(
+            rx.as_mut_for_read(),
+            &self.network_credentials.appkey,
+            &DefaultFactory,
+        ) {
+            region.process_join_accept(decrypt.c_f_list().as_ref());
             configuration.rx1_delay = del_to_delay_ms(decrypt.rx_delay());
             let dl_settings = decrypt.dl_settings();
             if let Some(rx1_dr_offset) = region.rx1_dr_offset_validate(dl_settings.rx1_dr_offset())

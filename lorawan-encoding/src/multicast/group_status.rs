@@ -23,8 +23,8 @@ impl<'a> McGroupStatusItem<'a> {
     pub fn mc_group_id(&self) -> u8 {
         self.0[0]
     }
-    pub fn mc_addr(&self) -> McAddr<&'a [u8]> {
-        McAddr::new_from_raw(&self.0[1..5])
+    pub fn mc_addr(&self) -> McAddr {
+        McAddr::from_wire_bytes(self.0[1..5].try_into().unwrap())
     }
 }
 impl<'a> McGroupStatusAnsPayload<'a> {
@@ -122,17 +122,14 @@ impl McGroupStatusAnsCreator {
         self
     }
 
-    pub fn push<T: AsRef<[u8]>>(
-        &mut self,
-        group_id: u8,
-        mc_addr: McAddr<T>,
-    ) -> Result<&mut Self, Error> {
+    pub fn push(&mut self, group_id: u8, mc_addr: McAddr) -> Result<&mut Self, Error> {
         // update bitmask in status byte
         let bm = 1 << group_id;
         self.data[1] |= bm;
         let offset = 2 + self.items * McGroupStatusItem::len();
         self.data[offset] = group_id;
-        self.data[offset + 1..offset + McGroupStatusItem::len()].copy_from_slice(mc_addr.as_ref());
+        self.data[offset + 1..offset + McGroupStatusItem::len()]
+            .copy_from_slice(mc_addr.as_wire_bytes());
         self.items += 1;
         Ok(self)
     }
@@ -164,26 +161,25 @@ impl McGroupStatusReqPayload<'_> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::multicast::{
-        parse_downlink_multicast_messages, parse_uplink_multicast_messages, DownlinkRemoteSetup,
-        UplinkRemoteSetup,
-    };
+    use crate::multicast::{parse_downlink_multicast_commands, parse_uplink_multicast_commands};
+    use crate::multicast::{DownlinkRemoteSetup, UplinkRemoteSetup};
     #[test]
     fn roundtrip_one_group() {
         let mut creator = McGroupStatusAnsCreator::new();
         creator.nb_total_groups(2);
-        let mc_addr = McAddr::new_from_raw(&[1, 2, 3, 4]);
+        let mc_addr = McAddr::from_wire_bytes([1, 2, 3, 4]);
         creator.push(0, mc_addr).unwrap();
         let payload = creator.build();
         assert_eq!(payload.len(), 7);
-        let message = parse_uplink_multicast_messages(payload).next().unwrap();
+        let message =
+            parse_uplink_multicast_commands(payload).filter_map(Result::ok).next().unwrap();
         if let UplinkRemoteSetup::McGroupStatusAns(payload) = message {
             assert_eq!(payload.nb_total_groups(), 2);
             assert_eq!(payload.ans_group_mask(), 1);
             let mut iter = payload.item_iterator();
             let item = iter.next().unwrap();
             assert_eq!(item.mc_group_id(), 0);
-            assert_eq!(item.mc_addr().as_ref(), &[1, 2, 3, 4]);
+            assert_eq!(item.mc_addr(), McAddr::from_wire_bytes([1, 2, 3, 4]));
             assert!(iter.next().is_none());
         } else {
             panic!("Expected McGroupStatusAns");
@@ -194,33 +190,34 @@ mod test {
     fn roundtrip_all_groups() {
         let mut creator = McGroupStatusAnsCreator::new();
         creator.nb_total_groups(4);
-        let mc_addr = McAddr::new_from_raw(&[1, 1, 1, 1]);
+        let mc_addr = McAddr::from_wire_bytes([1, 1, 1, 1]);
         creator.push(0, mc_addr).unwrap();
-        let mc_addr = McAddr::new_from_raw(&[2, 2, 2, 2]);
+        let mc_addr = McAddr::from_wire_bytes([2, 2, 2, 2]);
         creator.push(1, mc_addr).unwrap();
-        let mc_addr = McAddr::new_from_raw(&[3, 3, 3, 3]);
+        let mc_addr = McAddr::from_wire_bytes([3, 3, 3, 3]);
         creator.push(2, mc_addr).unwrap();
-        let mc_addr = McAddr::new_from_raw(&[4, 4, 4, 4]);
+        let mc_addr = McAddr::from_wire_bytes([4, 4, 4, 4]);
         creator.push(3, mc_addr).unwrap();
         let payload = creator.build();
         //assert_eq!(payload.len(), 22);
-        let message = parse_uplink_multicast_messages(payload).next().unwrap();
+        let message =
+            parse_uplink_multicast_commands(payload).filter_map(Result::ok).next().unwrap();
         if let UplinkRemoteSetup::McGroupStatusAns(payload) = message {
             assert_eq!(payload.nb_total_groups(), 4);
             assert_eq!(payload.ans_group_mask(), 0b1111);
             let mut iter = payload.item_iterator();
             let item = iter.next().unwrap();
             assert_eq!(item.mc_group_id(), 0);
-            assert_eq!(item.mc_addr().as_ref(), &[1, 1, 1, 1]);
+            assert_eq!(item.mc_addr(), McAddr::from_wire_bytes([1, 1, 1, 1]));
             let item = iter.next().unwrap();
             assert_eq!(item.mc_group_id(), 1);
-            assert_eq!(item.mc_addr().as_ref(), &[2, 2, 2, 2]);
+            assert_eq!(item.mc_addr(), McAddr::from_wire_bytes([2, 2, 2, 2]));
             let item = iter.next().unwrap();
             assert_eq!(item.mc_group_id(), 2);
-            assert_eq!(item.mc_addr().as_ref(), &[3, 3, 3, 3]);
+            assert_eq!(item.mc_addr(), McAddr::from_wire_bytes([3, 3, 3, 3]));
             let item = iter.next().unwrap();
             assert_eq!(item.mc_group_id(), 3);
-            assert_eq!(item.mc_addr().as_ref(), &[4, 4, 4, 4]);
+            assert_eq!(item.mc_addr(), McAddr::from_wire_bytes([4, 4, 4, 4]));
             assert!(iter.next().is_none());
         } else {
             panic!("Expected McGroupStatusAns");
@@ -234,7 +231,7 @@ mod test {
         creator.req_group(2);
 
         let payload = creator.build();
-        let message = parse_downlink_multicast_messages(payload).next().unwrap();
+        let message = parse_downlink_multicast_commands(payload).next().unwrap().unwrap();
         if let DownlinkRemoteSetup::McGroupStatusReq(payload) = message {
             assert_eq!(payload.req_group_mask(), 0b101);
         } else {

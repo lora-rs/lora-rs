@@ -22,12 +22,12 @@ use crate::radio::RfConfig;
 use crate::test_util::Uplink;
 
 use lorawan::maccommands::parse_uplink_mac_commands;
-use lorawan::parser::{DataHeader, DataPayload, FRMPayload, PhyPayload};
+use lorawan::parser::FrmPayload;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-use super::{build_mac, build_packet, decrypt};
+use super::{build_mac, build_packet, decrypt_uplink};
 
 #[tokio::test]
 /// 2.5.1. DevStatusReq test
@@ -82,12 +82,7 @@ async fn eu868_devstatusreq_test() {
 
     // Check whether sent uplink contained required DevStatusAns data
     let mut uplink = radio.get_last_uplink().await;
-    match uplink.get_payload() {
-        PhyPayload::Data(DataPayload::Encrypted(data)) => {
-            assert_eq!(data.fhdr().data(), &expected_ans)
-        }
-        _ => panic!(),
-    }
+    assert_eq!(decrypt_uplink(&mut uplink).fhdr().f_opts(), &expected_ans);
 }
 
 #[tokio::test]
@@ -148,12 +143,7 @@ async fn rxtimingsetup_eu868() {
 
     // Check whether sent uplink contained required DevStatusAns data
     let mut uplink = radio.get_last_uplink().await;
-    match uplink.get_payload() {
-        PhyPayload::Data(DataPayload::Encrypted(data)) => {
-            assert_eq!(data.fhdr().data(), [0x08])
-        }
-        _ => panic!(),
-    }
+    assert_eq!(decrypt_uplink(&mut uplink).fhdr().f_opts(), [0x08]);
 
     match response {
         Ok(SendResponse::RxComplete) => (),
@@ -257,12 +247,7 @@ async fn eu868_linkcheckreq_test() {
 
     // Check whether previous uplink contains required LinkCheckReq command
     let mut uplink = radio.get_last_uplink().await;
-    match uplink.get_payload() {
-        PhyPayload::Data(DataPayload::Encrypted(data)) => {
-            assert_eq!(data.fhdr().data(), [0x2]);
-        }
-        _ => panic!(),
-    }
+    assert_eq!(decrypt_uplink(&mut uplink).fhdr().f_opts(), [0x2]);
 
     // Step 3: Trigger empty uplink, TCL responds with FP:EchoPayloadReq
     let complete = send_await_complete.clone();
@@ -289,12 +274,7 @@ async fn eu868_linkcheckreq_test() {
     let _complete = send_await_complete.clone();
 
     let mut uplink = radio.get_last_uplink().await;
-    match uplink.get_payload() {
-        PhyPayload::Data(DataPayload::Encrypted(data)) => {
-            assert_eq!(data.f_port(), Some(224));
-            let dl = decrypt(data, 3);
-            assert_eq!(dl.frm_payload(), FRMPayload::Data(&[0x08, 0x02, 0x03, 0x04]));
-        }
-        _ => panic!(),
-    }
+    let dl = decrypt_uplink(&mut uplink);
+    assert_eq!(dl.f_port(), Some(224));
+    assert_eq!(dl.frm_payload(), FrmPayload::Data(&[0x08, 0x02, 0x03, 0x04]));
 }

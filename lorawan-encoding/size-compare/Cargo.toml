@@ -1,0 +1,23 @@
+[package]
+name = "size-compare"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+lorawan = { path = "..", default-features = false }
+
+[features]
+new1 = []
+new3 = []
+
+[profile.release]
+opt-level = "s"
+codegen-units = 1
+panic = "abort"
+lto = "fat"
+
+[workspace]

@@ -1,8 +1,6 @@
 //! LoRaWAN Certification Protocol (TS009) command and payload handling
 use lorawan_macros::CommandHandler;
 
-use crate::creator::UnimplementedCreator;
-use crate::maccommands::MacCommandIterator;
 use crate::maccommands::SerializableMacCommand;
 
 use crate::maccommands::Error;
@@ -63,10 +61,44 @@ pub enum UplinkDUTCommand<'a> {
     DutVersionsAns(DutVersionsAnsPayload<'a>),
 }
 
-pub fn parse_downlink_certification_messages(
+/// Parses a stream of downlink (server-transmitted) DUT commands.
+///
+/// Yields `Result` per command and fuses after the first error; a lone CID
+/// for a variable-length command is `Truncated` instead of a bogus empty
+/// command.
+#[inline]
+pub fn parse_downlink_dut_commands(
     data: &[u8],
-) -> MacCommandIterator<'_, DownlinkDUTCommand<'_>> {
-    MacCommandIterator::new(data)
+) -> crate::maccommands::MacCommands<'_, DownlinkDUTCommand<'_>> {
+    crate::maccommands::MacCommands::new(data)
+}
+
+/// Parses a stream of uplink (device-transmitted) DUT commands.
+#[inline]
+pub fn parse_uplink_dut_commands(
+    data: &[u8],
+) -> crate::maccommands::MacCommands<'_, UplinkDUTCommand<'_>> {
+    crate::maccommands::MacCommands::new(data)
+}
+
+/// Helper trait to provide dummy Creator implementation for
+/// variable length commands.
+#[allow(clippy::len_without_is_empty)]
+pub trait UnimplementedCreator {
+    fn new() -> Self
+    where
+        Self: Sized,
+    {
+        unimplemented!()
+    }
+
+    fn build(&self) -> &[u8] {
+        unimplemented!()
+    }
+
+    fn len(&self) -> usize {
+        unimplemented!()
+    }
 }
 
 impl AdrBitChangeReqPayload<'_> {
@@ -236,8 +268,11 @@ impl<'a> TxFramesCtrlReqPayload<'a> {
         Ok(TxFramesCtrlReqPayload(data))
     }
 
+    /// Minimum length of the payload not including CID (one FrameType octet).
+    /// The retired iterator compared this against the data including the CID
+    /// byte, which is why it used to be 2.
     const fn min_len() -> usize {
-        2
+        1
     }
 
     /// Actual length of the payload

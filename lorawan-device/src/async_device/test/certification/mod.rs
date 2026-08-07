@@ -3,10 +3,11 @@
 use super::util;
 use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
-use crate::test_util::{get_key, Uplink};
-use lorawan::creator::DataPayloadCreator;
+use crate::test_util::{get_dev_addr, get_key, Uplink};
+use core::num::NonZeroU8;
+use lorawan::creator::{DataFrame, Payload};
 use lorawan::default_crypto::DefaultFactory;
-use lorawan::parser::{DecryptedDataPayload, EncryptedDataPayload};
+use lorawan::parser::{self, DataFrameType, DecryptedDataPayload, PhyPayload};
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -14,47 +15,72 @@ use tokio::sync::Mutex;
 mod mac_common;
 
 mod dlchannelreq_eu868;
+mod mac_priority;
 mod newchannelreq_eu868;
 mod oversized_payload_eu868;
 mod rxparamsetup_eu868;
 
-/// Decrypts the payload allowing access to payload contents
-fn decrypt<T>(data: EncryptedDataPayload<T>, fcnt: u32) -> DecryptedDataPayload<T>
-where
-    T: AsMut<[u8]>,
-    T: AsRef<[u8]>,
-{
-    data.decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt, &DefaultFactory).unwrap()
+/// Parses the uplink, checks the MIC, and decrypts it in place, allowing
+/// access to payload contents
+fn decrypt_uplink(uplink: &mut Uplink) -> DecryptedDataPayload<'_> {
+    let bytes = uplink.data_mut();
+    let fcnt = match parser::parse(&*bytes) {
+        Ok(PhyPayload::Data(data)) => {
+            let fcnt = data.fhdr().fcnt() as u32;
+            assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
+            fcnt
+        }
+        _ => panic!("expected a data frame"),
+    };
+    DecryptedDataPayload::decrypt_in_place(
+        bytes,
+        Some(&get_key().into()),
+        Some(&get_key().into()),
+        fcnt,
+        &DefaultFactory,
+    )
+    .unwrap()
 }
 
 fn _build(buf: &mut [u8], payload_in_hex: &str, fcnt: u16, fport: u8) -> usize {
-    let mut phy = DataPayloadCreator::new(buf).unwrap();
-    phy.set_confirmed(false);
-    phy.set_f_port(fport);
-    phy.set_dev_addr(&[0; 4]);
-    phy.set_uplink(false);
-    phy.set_fcnt(fcnt.into());
-    phy.set_fctrl(&lorawan::parser::FCtrl::new(0x20, true));
-    let finished = match fport {
-        0 => phy
-            .build(
-                &[],
-                hex::decode(payload_in_hex).unwrap(),
-                &get_key().into(),
-                &get_key().into(),
-                &DefaultFactory,
-            )
-            .unwrap(),
-        _ => phy
-            .build(
-                &hex::decode(payload_in_hex).unwrap(),
-                [],
-                &get_key().into(),
-                &get_key().into(),
-                &DefaultFactory,
-            )
-            .unwrap(),
+    let payload = hex::decode(payload_in_hex).unwrap();
+    let frame = DataFrame {
+        frame_type: DataFrameType::UnconfirmedDown,
+        dev_addr: get_dev_addr(),
+        ack: true,
+        fcnt: fcnt.into(),
+        payload: match fport {
+            0 => Payload::MacCommands(&payload),
+            p => Payload::Data { f_port: NonZeroU8::new(p).unwrap(), data: &payload },
+        },
+        ..Default::default()
     };
+    let finished =
+        frame.build_into(buf, &get_key().into(), Some(&get_key().into()), &DefaultFactory).unwrap();
+    finished.len()
+}
+
+/// Build a packet on the given fport with MAC commands piggybacked in FOpts
+fn packet_with_mac(
+    buf: &mut [u8],
+    fport: u8,
+    payload_in_hex: &str,
+    mac_in_hex: &str,
+    fcnt: u16,
+) -> usize {
+    let payload = hex::decode(payload_in_hex).unwrap();
+    let cmds = hex::decode(mac_in_hex).unwrap();
+    let frame = DataFrame {
+        frame_type: DataFrameType::UnconfirmedDown,
+        dev_addr: get_dev_addr(),
+        ack: true,
+        fcnt: fcnt.into(),
+        f_opts: &cmds,
+        payload: Payload::Data { f_port: NonZeroU8::new(fport).unwrap(), data: &payload },
+        ..Default::default()
+    };
+    let finished =
+        frame.build_into(buf, &get_key().into(), Some(&get_key().into()), &DefaultFactory).unwrap();
     finished.len()
 }
 

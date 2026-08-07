@@ -4,10 +4,9 @@ use crate::test_util::Uplink;
 
 use lora_modulation::{Bandwidth, SpreadingFactor};
 use lorawan::maccommands::parse_uplink_mac_commands;
-use lorawan::parser::{DataHeader, DataPayload, PhyPayload};
 use lorawan::types::DR;
 
-use super::{build_mac, util};
+use super::{build_mac, decrypt_uplink, util};
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -81,12 +80,7 @@ async fn rxparamsetup_eu868() {
     let (mut device, response) = task.await.unwrap();
 
     let mut uplink = radio.get_last_uplink().await;
-    match uplink.get_payload() {
-        PhyPayload::Data(DataPayload::Encrypted(data)) => {
-            assert_eq!(data.fhdr().data(), [5, 7]);
-        }
-        _ => panic!(),
-    }
+    assert_eq!(decrypt_uplink(&mut uplink).fhdr().f_opts(), [5, 7]);
 
     match response {
         Ok(SendResponse::RxComplete) => (),
@@ -119,12 +113,7 @@ async fn rxparamsetup_eu868() {
 
     // Check that our uplink still contains required packets
     let mut uplink = radio.get_last_uplink().await;
-    match uplink.get_payload() {
-        PhyPayload::Data(DataPayload::Encrypted(data)) => {
-            assert_eq!(data.fhdr().data(), [5, 7]);
-        }
-        _ => panic!(),
-    }
+    assert_eq!(decrypt_uplink(&mut uplink).fhdr().f_opts(), [5, 7]);
 
     // Trigger uplink
     let complete = send_await_complete.clone();

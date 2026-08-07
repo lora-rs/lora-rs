@@ -95,9 +95,9 @@ pub(crate) trait FixedChannelRegion: ChannelRegion {
 }
 
 impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
-    fn process_join_accept<T: AsRef<[u8]>>(&mut self, join_accept: &DecryptedJoinAcceptPayload<T>) {
-        if let Some(CfList::FixedChannel(channel_mask)) = join_accept.c_f_list() {
-            self.channel_mask_set(channel_mask);
+    fn process_join_accept(&mut self, c_f_list: Option<&CfList>) {
+        if let Some(CfList::FixedChannel(channel_mask)) = c_f_list {
+            self.channel_mask_set(channel_mask.clone());
         }
     }
 

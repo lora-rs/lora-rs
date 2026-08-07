@@ -1,12 +1,11 @@
 use super::*;
 use crate::async_device::McAddr;
-use lorawan::creator::DataPayloadCreator;
+use core::num::NonZeroU8;
+use lorawan::creator::{DataFrame, Payload};
 use lorawan::keys::{McKEKey, McKey};
-use lorawan::multicast::{
-    parse_uplink_multicast_messages, McGroupDeleteReqCreator, McGroupSetupReqCreator,
-    UplinkRemoteSetup,
-};
-use lorawan::parser::{DataHeader, DataPayload, FRMPayload, PhyPayload};
+use lorawan::multicast::parse_uplink_multicast_commands;
+use lorawan::multicast::{McGroupDeleteReqCreator, McGroupSetupReqCreator, UplinkRemoteSetup};
+use lorawan::parser::{self, DataFrameType, DecryptedDataPayload, FrmPayload};
 
 fn handle_multicast_setup_req(
     _uplink: Option<Uplink>,
@@ -14,7 +13,7 @@ fn handle_multicast_setup_req(
     rx_buffer: &mut [u8],
 ) -> usize {
     let mut req = McGroupSetupReqCreator::new();
-    let mc_addr = McAddr::from([52, 110, 29, 60]);
+    let mc_addr = McAddr::from_wire_bytes([52, 110, 29, 60]);
     let mc_key = McKey::from([0x44; 16]);
     let mcke_key = McKEKey::from([0x66; 16]);
 
@@ -25,17 +24,20 @@ fn handle_multicast_setup_req(
     req.max_mc_fcount(0x87654321);
     let setup_req = req.build();
 
-    // Create a downlink frame containing the McGroupSetupReq
-    let mut phy = DataPayloadCreator::new(rx_buffer).unwrap();
-    phy.set_f_port(200); // Remote multicast setup port
-    phy.set_dev_addr(&[0; 4]);
-    phy.set_uplink(false);
+    // Create a downlink frame containing the McGroupSetupReq.
     // The class C setup already delivered a downlink at counter 0, so this one
     // advances the downlink counter.
-    phy.set_fcnt(1);
-
-    let finished =
-        phy.build(setup_req, [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
+    let frame = DataFrame {
+        frame_type: DataFrameType::UnconfirmedDown,
+        dev_addr: get_dev_addr(),
+        fcnt: 1,
+        // Remote multicast setup port
+        payload: Payload::Data { f_port: NonZeroU8::new(200).unwrap(), data: setup_req },
+        ..Default::default()
+    };
+    let finished = frame
+        .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
+        .unwrap();
     finished.len()
 }
 
@@ -45,24 +47,31 @@ fn verify_multicast_message(
     verify_payload: impl FnOnce(&[u8]) -> bool,
 ) -> usize {
     let mut uplink = uplink.unwrap();
-    let payload = uplink.get_payload();
-    if let PhyPayload::Data(DataPayload::Encrypted(data)) = payload {
-        let fcnt = data.fhdr().fcnt() as u32;
-        assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
-        let uplink = data
-            .decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt, &DefaultFactory)
-            .unwrap();
-        assert_eq!(uplink.f_port().unwrap(), expected_port);
-
-        if let FRMPayload::Data(ans_data) = uplink.frm_payload() {
-            assert!(verify_payload(ans_data));
-        } else {
-            panic!("Expected data payload");
+    let bytes = uplink.data_mut();
+    let fcnt = match parser::parse(&*bytes) {
+        Ok(parser::PhyPayload::Data(data)) => {
+            let fcnt = data.fhdr().fcnt() as u32;
+            assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
+            fcnt
         }
-        0
+        _ => panic!("Expected encrypted data payload"),
+    };
+    let decrypted = DecryptedDataPayload::decrypt_in_place(
+        bytes,
+        Some(&get_key().into()),
+        Some(&get_key().into()),
+        fcnt,
+        &DefaultFactory,
+    )
+    .unwrap();
+    assert_eq!(decrypted.f_port().unwrap(), expected_port);
+
+    if let FrmPayload::Data(ans_data) = decrypted.frm_payload() {
+        assert!(verify_payload(ans_data));
     } else {
-        panic!("Expected encrypted data payload");
+        panic!("Expected data payload");
     }
+    0
 }
 
 fn verify_multicast_setup_ans(
@@ -71,8 +80,8 @@ fn verify_multicast_setup_ans(
     _rx_buffer: &mut [u8],
 ) -> usize {
     verify_multicast_message(uplink, 200, |ans_data| {
-        let mut msgs = parse_uplink_multicast_messages(ans_data);
-        let msg = msgs.next().unwrap();
+        let mut msgs = parse_uplink_multicast_commands(ans_data);
+        let msg = msgs.next().unwrap().unwrap();
         if let UplinkRemoteSetup::McGroupSetupAns(ans) = msg {
             assert_eq!(ans.mc_group_id_header(), 0x01);
         } else {
@@ -108,12 +117,9 @@ async fn test_multicast_remote_setup() {
         Ok(ListenResponse::Multicast(MulticastResponse::NewSession { group_id })) => {
             assert_eq!(group_id, 1); // Group ID from the setup request
                                      // Verify the session was created correctly
-            let mc_addr = McAddr::from([52, 110, 29, 60]);
-            let (fetched_group_id, stored_session) = device
-                .mac
-                .multicast
-                .matching_session(McAddr::new(mc_addr.as_ref()).unwrap())
-                .unwrap();
+            let mc_addr = McAddr::from_wire_bytes([52, 110, 29, 60]);
+            let (fetched_group_id, stored_session) =
+                device.mac.multicast.matching_session(mc_addr).unwrap();
             assert_eq!(stored_session.multicast_addr(), mc_addr);
             assert_eq!(stored_session.fcnt_down, 0x12345678);
             assert_eq!(stored_session.max_fcnt_down(), 0x87654321);
@@ -133,14 +139,17 @@ fn handle_mc_group_delete_req<const GROUP_ID: u8>(
     let setup_req = req.build();
 
     // Create a downlink frame containing the McGroupDeleteReq
-    let mut phy = DataPayloadCreator::new(rx_buffer).unwrap();
-    phy.set_f_port(200); // Remote multicast setup port
-    phy.set_dev_addr(&[0; 4]);
-    phy.set_uplink(false);
-    phy.set_fcnt(2);
-
-    let finished =
-        phy.build(setup_req, [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
+    let frame = DataFrame {
+        frame_type: DataFrameType::UnconfirmedDown,
+        dev_addr: get_dev_addr(),
+        fcnt: 2,
+        // Remote multicast setup port
+        payload: Payload::Data { f_port: NonZeroU8::new(200).unwrap(), data: setup_req },
+        ..Default::default()
+    };
+    let finished = frame
+        .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
+        .unwrap();
     finished.len()
 }
 
@@ -150,8 +159,8 @@ fn verify_mc_group_delete_ans(
     _rx_buffer: &mut [u8],
 ) -> usize {
     verify_multicast_message(uplink, 200, |ans_data| {
-        let mut msgs = parse_uplink_multicast_messages(ans_data);
-        let msg = msgs.next().unwrap();
+        let mut msgs = parse_uplink_multicast_commands(ans_data);
+        let msg = msgs.next().unwrap().unwrap();
         if let UplinkRemoteSetup::McGroupDeleteAns(ans) = msg {
             assert_eq!(ans.mc_group_id_header(), 0x01);
             assert!(!ans.mc_group_undefined());
@@ -168,14 +177,17 @@ fn handle_regular_downlink_msg<const FCNT: u32>(
     _config: RfConfig,
     rx_buffer: &mut [u8],
 ) -> usize {
-    let mut phy = DataPayloadCreator::new(rx_buffer).unwrap();
-    phy.set_f_port(1); // a random fport that's not the multicast port
-    phy.set_dev_addr(&[0; 4]);
-    phy.set_uplink(false);
-    phy.set_fcnt(FCNT);
-
-    let finished =
-        phy.build(&[1, 2, 3], [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
+    let frame = DataFrame {
+        frame_type: DataFrameType::UnconfirmedDown,
+        dev_addr: get_dev_addr(),
+        fcnt: FCNT,
+        // a random fport that's not the multicast port
+        payload: Payload::Data { f_port: NonZeroU8::new(1).unwrap(), data: &[1, 2, 3] },
+        ..Default::default()
+    };
+    let finished = frame
+        .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
+        .unwrap();
     finished.len()
 }
 
@@ -214,8 +226,8 @@ fn verify_mc_group_delete_ans_undefined(
     _rx_buffer: &mut [u8],
 ) -> usize {
     verify_multicast_message(uplink, 200, |ans_data| {
-        let mut msgs = parse_uplink_multicast_messages(ans_data);
-        let msg = msgs.next().unwrap();
+        let mut msgs = parse_uplink_multicast_commands(ans_data);
+        let msg = msgs.next().unwrap().unwrap();
         if let UplinkRemoteSetup::McGroupDeleteAns(ans) = msg {
             assert_eq!(ans.mc_group_id_header(), 0x00);
             assert!(ans.mc_group_undefined());

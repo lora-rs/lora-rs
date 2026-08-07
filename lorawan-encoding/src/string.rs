@@ -1,5 +1,4 @@
 use crate::keys::*;
-use crate::parser::*;
 
 #[cfg(feature = "with-to-string")]
 pub extern crate std;
@@ -25,33 +24,6 @@ macro_rules! fixed_len_struct_impl_to_string_msb {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                 let mut res = std::string::String::with_capacity($size * 2);
                 res.extend(std::iter::repeat('-').take($size * 2));
-                let slice = unsafe { &mut res.as_bytes_mut() };
-                hex::encode_to_slice(self.as_ref(), slice).unwrap();
-                write!(f, "{}", res)
-            }
-        }
-    };
-    (
-        $type:ident[$size:expr];
-    ) => {
-        impl core::str::FromStr for $type<[u8; $size]> {
-            type Err = FromHexError;
-
-            fn from_str(s: &str) -> Result<Self, Self::Err> {
-                let mut res = [0; $size];
-                hex::decode_to_slice(s.as_bytes(), &mut res)?;
-                Ok(Self::from(res))
-            }
-        }
-
-        #[cfg(feature = "with-to-string")]
-        impl<T: AsRef<[u8]>> core::fmt::Display for $type<T> {
-            fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                // initialize the return string with the correct size and fill it with '-'
-                let mut res = std::string::String::with_capacity($size * 2);
-                res.extend(std::iter::repeat('-').take($size * 2));
-
-                // get the string as bytes so that we can call hex::encode_to_slice directly
                 let slice = unsafe { &mut res.as_bytes_mut() };
                 hex::encode_to_slice(self.as_ref(), slice).unwrap();
                 write!(f, "{}", res)
@@ -88,30 +60,6 @@ macro_rules! fixed_len_struct_impl_string_lsb {
             }
         }
     };
-}
-
-fixed_len_struct_impl_to_string_msb! {
-    EUI64[8];
-}
-
-fixed_len_struct_impl_to_string_msb! {
-    DevNonce[2];
-}
-
-fixed_len_struct_impl_to_string_msb! {
-    AppNonce[3];
-}
-
-fixed_len_struct_impl_to_string_msb! {
-    DevAddr[4];
-}
-
-fixed_len_struct_impl_to_string_msb! {
-    McAddr[4];
-}
-
-fixed_len_struct_impl_to_string_msb! {
-    NwkAddr[3];
 }
 
 fixed_len_struct_impl_to_string_msb! {

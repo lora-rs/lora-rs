@@ -1,892 +1,1050 @@
-use lorawan::creator::*;
+//! Tests for the borrowed-view parser and creator.
+//!
+//! The commit that introduced this API ran the same vectors through the
+//! retired generic-over-storage parser side by side for byte-identical
+//! results; the equivalence assertions here are the self-contained
+//! remnants of that comparison.
+
+use lorawan::creator::{DataFrame, JoinAccept, JoinRequest, Payload};
 use lorawan::default_crypto::DefaultFactory;
-use lorawan::keys::*;
-use lorawan::maccommandcreator::*;
-use lorawan::maccommands::*;
+use lorawan::keys::{AppKey, AppSKey, NwkSKey, AES128, MIC};
 use lorawan::parser::*;
-use lorawan::types::{DLSettings, Frequency, DR};
 
-fn phy_join_request_payload() -> Vec<u8> {
-    let mut res = Vec::new();
-    res.extend_from_slice(&[
-        0x00, 0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01, 0x05, 0x04, 0x03, 0x02, 0x05, 0x04,
-        0x03, 0x02, 0x2d, 0x10, 0x6a, 0x99, 0x0e, 0x12,
-    ]);
-    res
-}
-
-fn phy_join_accept_payload() -> Vec<u8> {
-    let mut res = Vec::new();
-    res.extend_from_slice(&[
-        0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37, 0x42, 0x97,
-        0x51, 0x42,
-    ]);
-    res
-}
-
-fn phy_join_accept_payload_with_c_f_list() -> Vec<u8> {
-    let mut res = Vec::new();
-    res.extend_from_slice(&[
-        0x20, 0xe4, 0x56, 0x73, 0xb6, 0x3c, 0xb4, 0xb9, 0xce, 0xcb, 0x2a, 0xa8, 0x3f, 0x03, 0x33,
-        0xe6, 0x15, 0xd2, 0xac, 0x89, 0xee, 0xa1, 0x65, 0x98, 0x37, 0xc3, 0xaa, 0x6d, 0xf9, 0x68,
-        0x98, 0x89, 0xcf,
-    ]);
-    res
-    //867100000, 867300000, 867500000, 867700000, 867900000
-}
+use core::str::FromStr;
+use std::collections::HashMap;
 
 fn phy_dataup_payload() -> Vec<u8> {
-    let mut res = Vec::new();
-    res.extend_from_slice(&[
+    vec![
         0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01, 0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6,
         0xc3, 0xb5, 0x82,
-    ]);
-    res
-}
-
-fn phy_long_dataup_payload() -> Vec<u8> {
-    let mut res = Vec::new();
-    res.extend_from_slice(&[
-        0x40, 0x04, 0x03, 0x02, 0x01, 0x00, 0x00, 0x00, 0x01, 0x27, 0x5a, 0xe9, 0x94, 0x2a, 0x58,
-        0x32, 0x21, 0x48, 0xba, 0xd6, 0xca, 0x7d, 0x74, 0x6e, 0x77, 0x4a, 0xf8, 0x66, 0x7a, 0x7b,
-        0x72, 0x36, 0x4b, 0xe4, 0xe1, 0x9d, 0x2f, 0x5c, 0x23, 0x98, 0x4f, 0xe2, 0x5e, 0x8e, 0x2d,
-        0xdb, 0xd5, 0x15, 0xb5, 0x4e, 0xbe, 0x80, 0xce, 0xc2, 0x1c, 0xd6, 0x5a, 0x88, 0x13, 0x0f,
-        0xbe, 0x6d, 0x04, 0xaa, 0xb2, 0xbc, 0x39, 0xab, 0xbe, 0xd9, 0xe8, 0x73, 0xef, 0xc7, 0x85,
-        0xe5, 0x65, 0x5d, 0x62, 0x72, 0xf8, 0x79, 0x6b, 0x1e, 0x83, 0x9f, 0x2b, 0x1b, 0xde, 0xab,
-        0xa2, 0x01, 0x6c, 0x7e, 0xf9, 0x16, 0x9d, 0x51, 0xf4, 0xea, 0x26, 0x1b, 0xc6, 0x08, 0x9c,
-        0x83, 0xb3, 0x3c, 0x6f, 0x30, 0xa7, 0x3c, 0xe1, 0x3c, 0x52, 0x55, 0x7c, 0x46, 0xd7, 0x91,
-        0xe7, 0xe0, 0x1b, 0x39, 0xe0, 0xb8, 0x9c, 0x1d, 0x2e, 0x35, 0x08, 0x84, 0x1b, 0x67, 0xe3,
-        0xec, 0x88, 0x6f, 0x96, 0xeb, 0x0e, 0x11, 0x16, 0x40, 0xd3, 0xc1, 0x94, 0xf1, 0x21, 0x49,
-        0xab, 0x58, 0x4b, 0xd9, 0x31, 0xdc, 0x15, 0xfc, 0x11, 0x94, 0x97, 0xdc, 0xcb, 0xf2, 0xb5,
-        0xb9, 0x16, 0xb8, 0x52, 0x42, 0x96, 0x33, 0x41, 0xa5, 0x8b, 0xb5, 0x87, 0x7b, 0xd5, 0xaf,
-        0x9e, 0xe4, 0x2d, 0x8b, 0x6f, 0x48, 0x45, 0x85, 0xa6, 0xf9, 0xcb, 0xaf, 0xf7, 0x2e, 0xe1,
-        0x09, 0x42, 0xe1, 0x23, 0x8c, 0x98, 0xd7, 0xbf, 0xe7, 0xca, 0x0b, 0x2d, 0xb2, 0x24, 0x8d,
-        0xb9, 0x1c, 0xd2, 0x3a, 0x71, 0xc6, 0xdb, 0x9b, 0x76, 0x8c, 0xf7, 0xef, 0x17, 0xf0, 0x51,
-        0xcf, 0x42, 0x3e, 0x73, 0x47, 0x7a, 0xbc, 0x9b, 0x0f, 0xf0, 0x62, 0xde, 0x1e, 0x85, 0x20,
-        0x29, 0x92, 0xdd, 0xca, 0x58, 0x37, 0x44, 0x19, 0x0c, 0x4f, 0xf7, 0xe1, 0xb4, 0x2e, 0xa3,
-        0xcc,
-    ]);
-    res
-}
-
-fn long_data_payload() -> String {
-    // some text from loremipsum.de with a typo at the end
-    String::from(
-        "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor \
-            invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et \
-            accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, not",
-    )
+    ]
 }
 
 fn phy_datadown_payload() -> Vec<u8> {
-    let mut res = Vec::new();
-    res.extend_from_slice(&[
+    vec![
         0xa0, 0x04, 0x03, 0x02, 0x01, 0x80, 0xff, 0x2a, 0x2a, 0x0a, 0xf1, 0xa3, 0x6a, 0x05, 0xd0,
         0x12, 0x5f, 0x88, 0x5d, 0x88, 0x1d, 0x49, 0xe1,
-    ]);
-    res
+    ]
 }
 
 fn data_payload_with_fport_zero() -> Vec<u8> {
-    let mut res = Vec::new();
-    res.extend_from_slice(&[
+    vec![
         0x40, 0x04, 0x03, 0x02, 0x01, 0x00, 0x00, 0x00, 0x00, 0x69, 0x36, 0x9e, 0xee, 0x6a, 0xa5,
         0x08,
-    ]);
-    res
+    ]
 }
 
 fn data_payload_with_f_opts() -> Vec<u8> {
-    let mut res = Vec::new();
-    res.extend_from_slice(&[
-        0x40, 0x04, 0x03, 0x02, 0x01, 0x03, 0x00, 0x00, 0x02, 0x03, 0x05, 0xd7, 0xfa, 0x0c, 0x6c,
-    ]);
-    res
+    vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x03, 0x00, 0x00, 0x02, 0x03, 0x05, 0xd7, 0xfa, 0x0c, 0x6c]
 }
 
-fn app_key() -> [u8; 16] {
-    [0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff]
+// ---------------------------------------------------------------------------
+// DevAddr: owned newtype ergonomics
+// ---------------------------------------------------------------------------
+
+#[test]
+fn dev_addr_byte_order_is_explicit() {
+    let addr = DevAddr::from_value(0x01020304);
+    assert_eq!(addr.as_wire_bytes(), &[0x04, 0x03, 0x02, 0x01]);
+    assert_eq!(addr.value(), 0x01020304);
+    assert_eq!(addr, DevAddr::from_wire_bytes([0x04, 0x03, 0x02, 0x01]));
+    assert_eq!(u32::from(addr), 0x01020304);
 }
 
 #[test]
-fn test_mhdr_mtype() {
-    let examples = [
-        (0x00, MType::JoinRequest),
-        (0x20, MType::JoinAccept),
-        (0x40, MType::UnconfirmedDataUp),
-        (0x60, MType::UnconfirmedDataDown),
-        (0x80, MType::ConfirmedDataUp),
-        (0xa0, MType::ConfirmedDataDown),
-        (0xc0, MType::RFU),
-        (0xe0, MType::Proprietary),
-    ];
-    for (v, expected) in &examples {
-        let mhdr = MHDR::new(*v);
-        assert_eq!(mhdr.mtype(), *expected);
-    }
+fn dev_addr_display_and_from_str_round_trip() {
+    let addr = DevAddr::from_value(0x01020304);
+    assert_eq!(addr.to_string(), "01020304");
+    assert_eq!(DevAddr::from_str("01020304").unwrap(), addr);
+    assert!(DevAddr::from_str("0102030").is_err());
+    assert!(DevAddr::from_str("010203045").is_err());
+    assert!(DevAddr::from_str("0102030g").is_err());
 }
 
 #[test]
-fn test_mhdr_major() {
-    let examples = [(0, Major::LoRaWANR1), (1, Major::RFU)];
-    for (v, expected) in &examples {
-        let mhdr = MHDR::new(*v);
-        assert_eq!(mhdr.major(), *expected);
-    }
+fn dev_addr_nwk_id() {
+    // NwkID is the top 7 bits of the address value (MSB is wire byte 3).
+    let addr = DevAddr::from_value(0xFE00_0000);
+    assert_eq!(addr.nwk_id(), 0x7F);
 }
 
 #[test]
-fn test_parse_phy_payload_with_too_few_bytes_is_err() {
+fn dev_addr_is_a_map_key() {
+    // Copy + Eq + Hash: usable directly for session lookup, no to_owned().
+    let mut sessions: HashMap<DevAddr, &str> = HashMap::new();
+    sessions.insert(DevAddr::from_value(0x01020304), "device-a");
+
+    let buf = phy_dataup_payload();
+    let phy = EncryptedDataPayload::parse(&buf).unwrap();
+    let addr = phy.fhdr().dev_addr(); // by value, no lifetime attached
+    assert_eq!(sessions.get(&addr), Some(&"device-a"));
+}
+
+// ---------------------------------------------------------------------------
+// Parsing and inspection (read-only view)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn parse_validates_structure() {
+    // Too short
+    assert_eq!(EncryptedDataPayload::parse(&[0x40; 11]).unwrap_err(), Error::TooShort);
+    // Not a data frame (JoinRequest MHDR)
+    let mut join = phy_dataup_payload();
+    join[0] = 0x00;
+    assert_eq!(EncryptedDataPayload::parse(&join).unwrap_err(), Error::NotADataFrame);
+    // Bad major version
+    let mut bad_major = phy_dataup_payload();
+    bad_major[0] = 0x41;
+    assert_eq!(
+        EncryptedDataPayload::parse(&bad_major).unwrap_err(),
+        Error::UnsupportedMajorVersion
+    );
+    // FOptsLen overruns the buffer (same vectors as the old test)
     let bytes = [0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04];
-    let phy = parse(bytes);
-    assert!(phy.is_err());
+    assert!(EncryptedDataPayload::parse(&bytes).is_err());
+    let bytes = [0x80, 0x04, 0x03, 0x02, 0x01, 0x0f, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04];
+    assert_eq!(EncryptedDataPayload::parse(&bytes).unwrap_err(), Error::TruncatedFhdr);
 }
 
 #[test]
-fn test_parse_phy_payload_with_unsupported_major_versoin() {
-    let bytes = [0x81, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04, 0x05];
-    let phy = parse(bytes);
+fn header_accessors_match_old_parser() {
+    let buf = phy_dataup_payload();
+    let phy = EncryptedDataPayload::parse(&buf).unwrap();
 
-    // this is now part of the API.
-    assert_eq!(phy.err(), Some(lorawan::parser::Error::UnsupportedMajorVersion));
+    assert_eq!(phy.frame_type(), DataFrameType::UnconfirmedUp);
+    assert!(phy.is_uplink());
+    assert!(!phy.is_confirmed());
+    assert_eq!(phy.f_port(), Some(1));
+    assert_eq!(phy.mic(), MIC([0xd6, 0xc3, 0xb5, 0x82]));
+
+    let fhdr = phy.fhdr();
+    assert_eq!(fhdr.dev_addr(), DevAddr::from_value(0x01020304));
+    assert_eq!(fhdr.fcnt(), 1);
+    assert_eq!(fhdr.f_opts(), &[] as &[u8]);
+    assert!(fhdr.fctrl().adr());
+    assert!(!fhdr.fctrl().ack());
+    assert!(!fhdr.fctrl().f_pending());
+    assert_eq!(fhdr.fctrl().f_opts_len(), 0);
 }
 
 #[test]
-fn test_parse_join_request_payload() {
-    let phy = parse(phy_join_request_payload());
-    assert_eq!(
-        phy,
-        Ok(PhyPayload::JoinRequest(JoinRequestPayload::new(phy_join_request_payload()).unwrap()))
-    );
+fn f_opts_are_bounds_checked_at_parse_time() {
+    let buf = data_payload_with_f_opts();
+    let phy = EncryptedDataPayload::parse(&buf).unwrap();
+    assert_eq!(phy.fhdr().fctrl().f_opts_len(), 3);
+    assert_eq!(phy.fhdr().f_opts(), &[0x02, 0x03, 0x05]);
+    assert_eq!(phy.f_port(), None);
 }
 
 #[test]
-fn test_parse_join_accept_payload() {
-    let phy = parse(phy_join_accept_payload());
-    assert_eq!(
-        phy,
-        Ok(PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(
-            EncryptedJoinAcceptPayload::new(phy_join_accept_payload()).unwrap()
-        )))
-    );
+fn f_port_present_with_empty_frm_payload() {
+    // MHDR + FHDR(7) + FPort + MIC: FPort 42, no FRMPayload.
+    // The old parser reports f_port() == None for this frame.
+    let bytes = [0x40, 0x04, 0x03, 0x02, 0x01, 0x00, 0x07, 0x00, 42, 0xde, 0xad, 0xbe, 0xef];
+    let phy = EncryptedDataPayload::parse(&bytes).unwrap();
+    assert_eq!(phy.f_port(), Some(42));
 }
 
 #[test]
-fn test_parse_data_payload() {
-    let phy = parse(phy_dataup_payload());
-    assert_eq!(
-        phy,
-        Ok(PhyPayload::Data(DataPayload::Encrypted(
-            EncryptedDataPayload::new(phy_dataup_payload()).unwrap()
-        )))
-    );
-}
-
-#[test]
-fn test_parse_data_payload_no_panic_when_bad_packet() {
-    // This reproduces a panic from https://github.com/ivajloip/rust-lorawan/issues/94.
-    let data = [0x40, 0x04, 0x03, 0x02, 0x01, 0x85, 0x01, 0x00, 0xd6, 0xc3, 0xb5, 0x82];
-    let phy = parse(data);
-    assert_eq!(phy.err(), Some(lorawan::parser::Error::InvalidData));
-}
-
-#[test]
-fn test_parse_data_payload_no_panic_when_too_short_packet() {
-    let data = [0x40, 0x04, 0x03, 0x02, 0x01];
-    let phy = EncryptedDataPayload::new(data);
-    assert_eq!(phy.err(), Some(lorawan::parser::Error::InvalidData));
-}
-
-#[test]
-fn test_new_join_accept_payload_too_short() {
-    let mut bytes = phy_join_accept_payload();
-    let len = bytes.len();
-    assert!(EncryptedJoinAcceptPayload::new(&mut bytes[..(len - 1)]).is_err());
-}
-
-#[test]
-fn test_new_join_accept_payload_mic_validation() {
-    let decrypted_phy = new_decrypted_join_accept();
-    assert!(decrypted_phy.validate_mic(&[1; 16].into(), &DefaultFactory));
-}
-
-fn new_decrypted_join_accept() -> DecryptedJoinAcceptPayload<Vec<u8>> {
-    let data = phy_join_accept_payload_with_c_f_list();
-    let encrypted = EncryptedJoinAcceptPayload::new(data).unwrap();
-    let key = [1; 16].into();
-    encrypted.decrypt(&key, &DefaultFactory)
-}
-
-#[test]
-fn test_new_join_accept_c_f_list_empty() {
-    let data = phy_join_accept_payload();
-    let key = app_key().into();
-    let decrypted_phy =
-        EncryptedJoinAcceptPayload::new(data).unwrap().decrypt(&key, &DefaultFactory);
-    assert_eq!(decrypted_phy.c_f_list(), None);
-}
-
-#[test]
-fn test_join_accept_app_nonce_extraction() {
-    let decrypted_phy = new_decrypted_join_accept();
-    let expected = [3, 2, 1];
-    assert_eq!(decrypted_phy.app_nonce(), AppNonce::new(&expected[..]).unwrap());
-}
-
-#[test]
-fn test_join_accept_rx_delay_extraction() {
-    let decrypted_phy = new_decrypted_join_accept();
-    assert_eq!(decrypted_phy.rx_delay(), 3);
-}
-
-#[test]
-fn test_join_accept_dl_settings_extraction() {
-    let decrypted_phy = new_decrypted_join_accept();
-    assert_eq!(decrypted_phy.dl_settings(), DLSettings::new(0x12));
-}
-
-#[test]
-fn test_dl_settings() {
-    let dl_settings = DLSettings::new(0xcb);
-    assert_eq!(dl_settings.rx1_dr_offset(), 4);
-    assert_eq!(dl_settings.rx2_data_rate(), DR::_11);
-}
-
-#[test]
-fn test_new_join_accept_payload_with_c_f_list() {
-    let data = phy_join_accept_payload_with_c_f_list();
-    let key = [1; 16].into();
-    let decrypted_phy =
-        EncryptedJoinAcceptPayload::new(data).unwrap().decrypt(&key, &DefaultFactory);
-
-    let expected_c_f_list = CfList::DynamicChannel([
-        Frequency::new_from_raw(&[0x18, 0x4F, 0x84]),
-        Frequency::new_from_raw(&[0xE8, 0x56, 0x84]),
-        Frequency::new_from_raw(&[0xB8, 0x5E, 0x84]),
-        Frequency::new_from_raw(&[0x88, 0x66, 0x84]),
-        Frequency::new_from_raw(&[0x58, 0x6E, 0x84]),
-    ]);
-    assert_eq!(decrypted_phy.c_f_list(), Some(expected_c_f_list));
-}
-
-#[test]
-fn test_mic_extraction() {
-    let bytes = &phy_dataup_payload()[..];
-    let phy = EncryptedDataPayload::new(bytes);
-
-    assert_eq!(phy.unwrap().mic(), MIC([0xd6, 0xc3, 0xb5, 0x82]));
-}
-
-#[test]
-fn test_validate_data_mic_when_ok() {
-    let phy = EncryptedDataPayload::new(phy_dataup_payload()).unwrap();
+fn validate_mic_matches_old_parser() {
+    let buf = phy_dataup_payload();
+    let phy = EncryptedDataPayload::parse(&buf).unwrap();
     let key = AES128([2; 16]);
-
     assert!(phy.validate_mic(&key, 1, &DefaultFactory));
-}
 
-#[test]
-fn test_validate_data_mic_when_not_ok() {
-    let mut bytes = phy_dataup_payload();
-    bytes[8] = 0xee;
-    let phy = EncryptedDataPayload::new(bytes).unwrap();
-    let key = AES128([2; 16]);
-
+    let mut tampered = phy_dataup_payload();
+    tampered[8] = 0xee;
+    let phy = EncryptedDataPayload::parse(&tampered).unwrap();
     assert!(!phy.validate_mic(&key, 1, &DefaultFactory));
 }
 
-#[test]
-fn test_new_data_payload_is_none_if_bytes_too_short() {
-    let bytes = &[0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04];
-    let bytes_with_fopts =
-        &[0x00, 0x04, 0x03, 0x02, 0x01, 0x01, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04];
+// ---------------------------------------------------------------------------
+// Decryption (typestate through explicit buffer handoff)
+// ---------------------------------------------------------------------------
 
-    assert!(EncryptedDataPayload::new(bytes).is_err());
-    assert!(EncryptedDataPayload::new(bytes_with_fopts).is_err());
+#[test]
+fn decrypt_in_place_app_payload() {
+    let mut buf = phy_dataup_payload();
+    let app_skey = AppSKey::from([1; 16]);
+    let dec =
+        DecryptedDataPayload::decrypt_in_place(&mut buf, None, Some(&app_skey), 1, &DefaultFactory)
+            .unwrap();
+    assert_eq!(dec.frm_payload(), FrmPayload::Data(b"hello"));
+    // Header accessors still work on the decrypted view.
+    assert_eq!(dec.fhdr().dev_addr(), DevAddr::from_value(0x01020304));
+    assert_eq!(dec.f_port(), Some(1));
 }
 
 #[test]
-fn test_f_port_could_be_absent_in_data_payload() {
-    let bytes = &[0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04];
-    let data_payload = EncryptedDataPayload::new(bytes).unwrap();
-    assert!(data_payload.f_port().is_none());
+fn decrypt_in_place_downlink() {
+    let mut buf = phy_datadown_payload();
+    let app_skey = AppSKey::from([1; 16]);
+    let dec = DecryptedDataPayload::decrypt_in_place(
+        &mut buf,
+        None,
+        Some(&app_skey),
+        76543,
+        &DefaultFactory,
+    )
+    .unwrap();
+    assert_eq!(dec.frm_payload(), FrmPayload::Data(b"hello lora"));
 }
 
 #[test]
-fn test_complete_data_payload_fhdr() {
-    let app_skey = AES128([1; 16]);
-    let nwk_skey = AES128([2; 16]);
-    let phys: [Box<dyn DataHeader>; 2] = [
-        Box::new(EncryptedDataPayload::new(phy_dataup_payload()).unwrap()),
-        Box::new(
-            EncryptedDataPayload::new(phy_dataup_payload())
-                .unwrap()
-                .decrypt(Some(&nwk_skey), Some(&app_skey), 1, &DefaultFactory)
-                .unwrap(),
-        ),
-    ];
-    for phy in phys {
-        assert_eq!(phy.f_port(), Some(1));
+fn decrypt_fport_zero_uses_nwk_key_and_yields_mac_commands() {
+    let mut buf = data_payload_with_fport_zero();
+    let nwk_skey = NwkSKey::from([2; 16]);
 
-        let fhdr = phy.fhdr();
+    // Missing the required key is an error, not a silent wrong decrypt.
+    let err = DecryptedDataPayload::decrypt_in_place(&mut buf, None, None, 0, &DefaultFactory)
+        .unwrap_err();
+    assert_eq!(err, Error::MissingKey);
 
-        assert_eq!(fhdr.dev_addr(), DevAddr::new([4, 3, 2, 1]).unwrap());
-
-        assert_eq!(fhdr.fcnt(), 1u16);
-
-        let fctrl = fhdr.fctrl();
-
-        assert_eq!(fctrl.f_opts_len(), 0);
-
-        assert!(!fctrl.f_pending(), "no f_pending");
-
-        assert!(!fctrl.ack(), "no ack");
-
-        assert!(fctrl.adr(), "ADR");
+    let dec =
+        DecryptedDataPayload::decrypt_in_place(&mut buf, Some(&nwk_skey), None, 0, &DefaultFactory)
+            .unwrap();
+    match dec.frm_payload() {
+        FrmPayload::MacCommands(cmds) => assert!(!cmds.is_empty()),
+        other => panic!("expected MAC commands, got {other:?}"),
     }
 }
 
 #[test]
-fn test_complete_dataup_payload_frm_payload() {
-    let phy = EncryptedDataPayload::new(phy_dataup_payload()).unwrap();
-    let key = AES128([1; 16]);
-    let decrypted = phy.decrypt(None, Some(&key), 1, &DefaultFactory).unwrap();
-    let mut payload = Vec::new();
-    payload.extend_from_slice(&String::from("hello").into_bytes()[..]);
+fn check_mic_and_decrypt_in_place() {
+    let nwk_skey = NwkSKey::from([2; 16]);
+    let app_skey = AppSKey::from([1; 16]);
 
-    assert_eq!(decrypted.frm_payload(), FRMPayload::Data(&payload));
+    let mut buf = phy_dataup_payload();
+    let dec = DecryptedDataPayload::check_mic_and_decrypt_in_place(
+        &mut buf,
+        &nwk_skey,
+        Some(&app_skey),
+        1,
+        &DefaultFactory,
+    )
+    .unwrap();
+    assert_eq!(dec.frm_payload(), FrmPayload::Data(b"hello"));
+
+    let mut tampered = phy_dataup_payload();
+    tampered[9] ^= 0xff;
+    let err = DecryptedDataPayload::check_mic_and_decrypt_in_place(
+        &mut tampered,
+        &nwk_skey,
+        Some(&app_skey),
+        1,
+        &DefaultFactory,
+    )
+    .unwrap_err();
+    assert_eq!(err, Error::InvalidMic);
 }
 
+/// A frame with nothing to decrypt needs no key: neither a missing FPort
+/// nor a present FPort with an empty FRMPayload should demand one.
 #[test]
-fn test_complete_long_dataup_payload_frm_payload() {
-    let phy = EncryptedDataPayload::new(phy_long_dataup_payload()).unwrap();
-    let nwk_skey = AES128([2; 16]);
-    let app_skey = AES128([1; 16]);
-    let decrypted = phy.decrypt_if_mic_ok(&nwk_skey, &app_skey, 0, &DefaultFactory).unwrap();
-    let mut payload = Vec::new();
-    payload.extend_from_slice(&long_data_payload().into_bytes()[..]);
+fn decrypt_without_frm_payload_needs_no_key() {
+    // MHDR + FHDR(7) + MIC: no FPort, no FRMPayload.
+    let mut no_fport = [0x40, 0x04, 0x03, 0x02, 0x01, 0x00, 0x07, 0x00, 0xde, 0xad, 0xbe, 0xef];
+    let dec = DecryptedDataPayload::decrypt_in_place(&mut no_fport, None, None, 0, &DefaultFactory)
+        .unwrap();
+    assert_eq!(dec.frm_payload(), FrmPayload::None);
 
-    assert_eq!(decrypted.frm_payload(), FRMPayload::Data(&payload));
+    // MHDR + FHDR(7) + FPort + MIC: FPort present, empty FRMPayload.
+    let mut empty_frm =
+        [0x40, 0x04, 0x03, 0x02, 0x01, 0x00, 0x07, 0x00, 42, 0xde, 0xad, 0xbe, 0xef];
+    let dec =
+        DecryptedDataPayload::decrypt_in_place(&mut empty_frm, None, None, 0, &DefaultFactory)
+            .unwrap();
+    assert_eq!(dec.f_port(), Some(42));
+    assert_eq!(dec.frm_payload(), FrmPayload::Data(&[]));
 }
 
+/// The intended call sequence on a device: inspect the frame read-only to find
+/// the session, then hand the buffer over for in-place decryption.
 #[test]
-fn test_complete_datadown_payload_frm_payload() {
-    let phy = EncryptedDataPayload::new(phy_datadown_payload()).unwrap();
-    let key = AES128([1; 16]);
-    let decrypted = phy.decrypt(None, Some(&key), 76543, &DefaultFactory).unwrap();
-    let mut payload = Vec::new();
-    payload.extend_from_slice(&String::from("hello lora").into_bytes()[..]);
+fn inspect_then_decrypt_flow() {
+    let mut sessions: HashMap<DevAddr, (NwkSKey, AppSKey)> = HashMap::new();
+    sessions
+        .insert(DevAddr::from_value(0x01020304), (NwkSKey::from([2; 16]), AppSKey::from([1; 16])));
 
-    assert_eq!(decrypted.frm_payload(), FRMPayload::Data(&payload));
-}
+    let mut buf = phy_dataup_payload();
 
-#[test]
-fn mac_command_in_fopts() {
-    let data = [
-        0x60, 0x5f, 0x3b, 0xd7, 0x4e, 0x0a, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x70, 0x03, 0x00,
-        0xff, 0x00, 0x30, 0xcd, 0xdb, 0x22, 0xee,
-    ];
-    let packet = EncryptedDataPayload::new(data).unwrap();
-
-    assert_eq!(packet.mhdr().mtype(), MType::UnconfirmedDataDown);
-
-    let fhdr = packet.fhdr();
-    let fopts: Vec<_> = MacCommandIterator::<DownlinkMacCommand>::new(fhdr.data()).collect();
-    assert_eq!(fopts.len(), 2);
-    for cmd in fopts.iter() {
-        match cmd {
-            DownlinkMacCommand::LinkADRReq(_) => (),
-            _ => panic!("incorrect payload type: {:?}", cmd),
-        }
-    }
-}
-
-#[test]
-fn mac_command_in_frmpayload() {
-    // Our raw packet with "fixed" MIC
-    let packet = [96, 0, 0, 0, 0, 0, 16, 0, 0, 3, 192, 0, 0, 0, 100, 126, 233, 79];
-
-    // Encrypt packet
-    let mut phy = lorawan::creator::DataPayloadCreator::new(packet).unwrap();
-    phy.set_confirmed(false);
-    phy.set_f_port(0);
-    phy.set_dev_addr(&[0; 4]);
-    phy.set_uplink(false);
-    phy.set_fcnt(16);
-    phy.set_fctrl(&lorawan::parser::FCtrl::new(0x00, true));
-
-    let nwk_skey = [0; 16];
-    let app_skey = [0; 16];
-    let encrypted = {
-        phy.build(&[], [3, 192, 0, 0, 0], &nwk_skey.into(), &app_skey.into(), &DefaultFactory)
-            .unwrap()
+    // Phase 1: read-only borrow to route the frame.
+    let (nwk, app) = {
+        let phy = EncryptedDataPayload::parse(&buf).unwrap();
+        let session = sessions.get(&phy.fhdr().dev_addr()).expect("unknown device");
+        assert!(phy.validate_mic(session.0.inner(), 1, &DefaultFactory));
+        (session.0, session.1) // keys are Copy
     };
 
-    let encrypted_payload = EncryptedDataPayload::new(encrypted).unwrap();
+    // Phase 2: mutable handoff, decrypt in place.
+    let dec = DecryptedDataPayload::decrypt_in_place(
+        &mut buf,
+        Some(&nwk),
+        Some(&app),
+        1,
+        &DefaultFactory,
+    )
+    .unwrap();
+    assert_eq!(dec.frm_payload(), FrmPayload::Data(b"hello"));
+}
 
-    let mut encrypted = Vec::new();
-    encrypted.extend_from_slice(encrypted_payload.as_bytes());
+/// The FRMPayload cipher is an XOR keystream, so decrypting twice restores
+/// the original frame. This pins decrypt_in_place to exactly one keystream
+/// application over exactly the FRMPayload range (byte-for-byte equivalence
+/// with the retired parser was asserted by the commit that introduced this API).
+#[test]
+fn decrypt_in_place_is_an_involution() {
+    let vectors: [(Vec<u8>, u32); 3] = [
+        (phy_dataup_payload(), 1),
+        (phy_datadown_payload(), 76543),
+        (data_payload_with_fport_zero(), 0),
+    ];
+    let nwk = NwkSKey::from([2; 16]);
+    let app = AppSKey::from([1; 16]);
 
-    if let Ok(PhyPayload::Data(DataPayload::Encrypted(phy))) = parse(&mut encrypted) {
-        let decrypted = phy.decrypt(Some(&AES128(nwk_skey)), None, 16, &DefaultFactory).unwrap();
-
-        // Check that data round-trip actually works (together with MIC)
-        assert_eq!(packet, decrypted.as_bytes());
-
-        if let FRMPayload::MACCommands(mac_cmds) = decrypted.frm_payload() {
-            let cmds = MacCommandIterator::<DownlinkMacCommand<'_>>::new(mac_cmds.data());
-            assert_eq!(cmds.count(), 1);
-        } else {
-            panic!("Expecting FRMPayload parsed as MACCommands!");
+    for (bytes, fcnt) in vectors {
+        let mut buf = bytes.clone();
+        for _ in 0..2 {
+            DecryptedDataPayload::decrypt_in_place(
+                &mut buf,
+                Some(&nwk),
+                Some(&app),
+                fcnt,
+                &DefaultFactory,
+            )
+            .unwrap();
         }
-    } else {
-        panic!("Unable to parse packet!");
+        assert_eq!(buf, bytes);
     }
 }
 
-#[test]
-fn test_decrypt_downlink_missing_f_port_bug() {
-    let encrypted_payload = EncryptedDataPayload::new([
-        0x60, 0x0, 0x0, 0x0, 0x48, 0xa, 0x0, 0x0, 0x3, 0x0, 0x0, 0x0, 0x70, 0x3, 0x0, 0x0, 0xff,
-        0x0, 0xfc, 0x68, 0xf4, 0x5e,
+// ---------------------------------------------------------------------------
+// Top-level parse
+// ---------------------------------------------------------------------------
+
+fn phy_join_request_payload() -> Vec<u8> {
+    vec![
+        0x00, 0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01, 0x05, 0x04, 0x03, 0x02, 0x05, 0x04,
+        0x03, 0x02, 0x2d, 0x10, 0x6a, 0x99, 0x0e, 0x12,
+    ]
+}
+
+fn phy_join_accept_payload() -> Vec<u8> {
+    vec![
+        0x20, 0x49, 0x3e, 0xeb, 0x51, 0xfb, 0xa2, 0x11, 0x6f, 0x81, 0x0e, 0xdb, 0x37, 0x42, 0x97,
+        0x51, 0x42,
+    ]
+}
+
+fn phy_join_accept_payload_with_c_f_list() -> Vec<u8> {
+    vec![
+        0x20, 0xe4, 0x56, 0x73, 0xb6, 0x3c, 0xb4, 0xb9, 0xce, 0xcb, 0x2a, 0xa8, 0x3f, 0x03, 0x33,
+        0xe6, 0x15, 0xd2, 0xac, 0x89, 0xee, 0xa1, 0x65, 0x98, 0x37, 0xc3, 0xaa, 0x6d, 0xf9, 0x68,
+        0x98, 0x89, 0xcf,
+    ]
+}
+
+fn app_key() -> AppKey {
+    AppKey::from([
+        0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee,
+        0xff,
     ])
+}
+
+#[test]
+fn parse_classifies_by_mhdr() {
+    assert!(matches!(parse(&phy_join_request_payload()), Ok(PhyPayload::JoinRequest(_))));
+    assert!(matches!(parse(&phy_join_accept_payload()), Ok(PhyPayload::JoinAccept(_))));
+    assert!(matches!(parse(&phy_dataup_payload()), Ok(PhyPayload::Data(_))));
+    assert_eq!(parse(&[]).unwrap_err(), Error::TooShort);
+    // RFU and Proprietary message types
+    assert_eq!(parse(&[0xc0, 0, 0, 0]).unwrap_err(), Error::UnsupportedMessageType);
+    assert_eq!(parse(&[0xe0, 0, 0, 0]).unwrap_err(), Error::UnsupportedMessageType);
+    // Bad major version
+    assert_eq!(parse(&[0x01]).unwrap_err(), Error::UnsupportedMajorVersion);
+}
+
+// ---------------------------------------------------------------------------
+// JoinRequest
+// ---------------------------------------------------------------------------
+
+#[test]
+fn join_request_field_extraction() {
+    let data = phy_join_request_payload();
+    let jr = JoinRequestPayload::parse(&data).unwrap();
+
+    assert_eq!(
+        jr.join_eui(),
+        JoinEui::from_wire_bytes([0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01])
+    );
+    assert_eq!(
+        jr.dev_eui(),
+        DevEui::from_wire_bytes([0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
+    );
+    assert_eq!(jr.dev_nonce(), DevNonce::from_wire_bytes([0x2d, 0x10]));
+    assert_eq!(jr.dev_nonce().value(), 0x102d);
+    assert_eq!(jr.mic(), MIC([0x6a, 0x99, 0x0e, 0x12]));
+}
+
+#[test]
+fn join_request_mic_validation() {
+    let data = phy_join_request_payload();
+    let jr = JoinRequestPayload::parse(&data).unwrap();
+    assert!(jr.validate_mic(&AppKey::from([1; 16]), &DefaultFactory));
+    assert!(!jr.validate_mic(&AppKey::from([2; 16]), &DefaultFactory));
+}
+
+#[test]
+fn join_request_parse_validates() {
+    assert_eq!(JoinRequestPayload::parse(&[]).unwrap_err(), Error::TooShort);
+    let short = &phy_join_request_payload()[..22];
+    assert_eq!(JoinRequestPayload::parse(short).unwrap_err(), Error::InvalidLength);
+    let mut wrong_type = phy_join_request_payload();
+    wrong_type[0] = 0x40;
+    assert_eq!(JoinRequestPayload::parse(&wrong_type).unwrap_err(), Error::UnexpectedMessageType);
+}
+
+/// Round trip: build a JoinRequest, parse and validate it.
+#[test]
+fn join_request_round_trip() {
+    let key = AppKey::from([7; 16]);
+    let mut buf = [0u8; 23];
+    let built = JoinRequest {
+        join_eui: JoinEui::from_wire_bytes([1, 2, 3, 4, 5, 6, 7, 8]),
+        dev_eui: DevEui::from_wire_bytes([8, 7, 6, 5, 4, 3, 2, 1]),
+        dev_nonce: DevNonce::from_wire_bytes([0xcc, 0xdd]),
+    }
+    .build_into(&mut buf, &key, &DefaultFactory)
+    .unwrap()
+    .to_vec();
+
+    let jr = JoinRequestPayload::parse(&built).unwrap();
+    assert!(jr.validate_mic(&key, &DefaultFactory));
+    assert_eq!(jr.join_eui(), JoinEui::from_wire_bytes([1, 2, 3, 4, 5, 6, 7, 8]));
+    assert_eq!(jr.dev_eui(), DevEui::from_wire_bytes([8, 7, 6, 5, 4, 3, 2, 1]));
+    assert_eq!(jr.dev_nonce(), DevNonce::from_wire_bytes([0xcc, 0xdd]));
+}
+
+// ---------------------------------------------------------------------------
+// JoinAccept
+// ---------------------------------------------------------------------------
+
+#[test]
+fn join_accept_parse_validates() {
+    let data = phy_join_accept_payload();
+    assert!(EncryptedJoinAcceptPayload::parse(&data).is_ok());
+    assert_eq!(EncryptedJoinAcceptPayload::parse(&data[..16]).unwrap_err(), Error::InvalidLength);
+    let mut wrong_type = phy_join_accept_payload();
+    wrong_type[0] = 0x00;
+    assert_eq!(
+        EncryptedJoinAcceptPayload::parse(&wrong_type).unwrap_err(),
+        Error::UnexpectedMessageType
+    );
+}
+
+#[test]
+fn join_accept_decrypt_and_mic() {
+    let mut buf = phy_join_accept_payload_with_c_f_list();
+    let key = AppKey::from([1; 16]);
+    let ja =
+        DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(&mut buf, &key, &DefaultFactory)
+            .unwrap();
+
+    assert_eq!(ja.join_nonce(), JoinNonce::from_wire_bytes([3, 2, 1]));
+    assert_eq!(ja.rx_delay(), 3);
+    assert_eq!(ja.dl_settings().raw_value(), 0x12);
+
+    let expected = CfList::DynamicChannel([
+        Frequency::from_hz(867_100_000),
+        Frequency::from_hz(867_300_000),
+        Frequency::from_hz(867_500_000),
+        Frequency::from_hz(867_700_000),
+        Frequency::from_hz(867_900_000),
+    ]);
+    assert_eq!(ja.c_f_list(), Some(expected));
+}
+
+#[test]
+fn join_accept_wrong_key_is_invalid_mic() {
+    let mut buf = phy_join_accept_payload_with_c_f_list();
+    let err = DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(
+        &mut buf,
+        &AppKey::from([2; 16]),
+        &DefaultFactory,
+    )
+    .unwrap_err();
+    assert_eq!(err, Error::InvalidMic);
+}
+
+#[test]
+fn join_accept_without_c_f_list() {
+    let mut buf = phy_join_accept_payload();
+    let ja = DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(
+        &mut buf,
+        &app_key(),
+        &DefaultFactory,
+    )
     .unwrap();
-    let key = AES128([1; 16]);
-    let fcnt = 0;
-    assert!(encrypted_payload.decrypt(Some(&key), None, fcnt as u32, &DefaultFactory).is_ok());
+    assert_eq!(ja.c_f_list(), None);
 }
 
+/// Decryption output and derived session keys, pinned to captured values
+/// (originally cross-checked byte-for-byte against the retired parser).
 #[test]
-fn test_new_frequency() {
-    let freq = Frequency::new(&[0x18, 0x4F, 0x84]);
+fn join_accept_decryption_and_derived_keys() {
+    let key = app_key();
+    let dev_nonce = DevNonce::from_wire_bytes([0xcc, 0xdd]);
 
-    assert!(freq.is_some());
-    assert_eq!(freq.unwrap().value(), 867_100_000);
-}
-
-#[test]
-fn test_fctrl_uplink_complete() {
-    let byte = 0xff;
-    let uplink_fctrl = FCtrl::new(byte, true);
-    assert!(uplink_fctrl.ack());
-    assert!(uplink_fctrl.adr());
-    assert!(uplink_fctrl.adr_ack_req());
-    assert_eq!(uplink_fctrl.f_opts_len(), 15);
-    assert_eq!(uplink_fctrl.raw_value(), byte);
-}
-
-#[test]
-fn test_fctrl_downlink_complete() {
-    let downlink_fctrl = FCtrl::new(0xff, false);
-    assert!(downlink_fctrl.f_pending());
-}
-
-#[test]
-fn test_data_payload_uplink_creator() {
-    let mut buf = [0u8; 256];
-    let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
-    let nwk_skey = [2; 16].into();
-    let app_skey = [1; 16].into();
-    let fctrl = FCtrl::new(0x80, true);
-    phy.set_confirmed(false)
-        .set_uplink(true)
-        .set_f_port(1)
-        .set_dev_addr(&[4, 3, 2, 1])
-        .set_fctrl(&fctrl) // ADR: true, all others: false
-        .set_fcnt(1);
+    let mut buf = phy_join_accept_payload();
+    let ja = DecryptedJoinAcceptPayload::decrypt_in_place(&mut buf, &key, &DefaultFactory).unwrap();
 
     assert_eq!(
-        phy.build(b"hello", [], &nwk_skey, &app_skey, &DefaultFactory).unwrap(),
-        &phy_dataup_payload()[..]
+        ja.as_bytes(),
+        [
+            0x20, 0xc7, 0x0b, 0x57, 0x01, 0x11, 0x22, 0x80, 0x19, 0x03, 0x02, 0x00, 0x00, 0x43,
+            0x48, 0x5b, 0xbc
+        ]
+    );
+    assert_eq!(
+        ja.derive_nwkskey(dev_nonce, &key, &DefaultFactory),
+        NwkSKey::from([
+            0x40, 0x6b, 0x13, 0x37, 0xd8, 0x07, 0x53, 0x82, 0x05, 0x40, 0xe2, 0x80, 0xf8, 0x12,
+            0x99, 0xe9,
+        ])
+    );
+    assert_eq!(
+        ja.derive_appskey(dev_nonce, &key, &DefaultFactory),
+        AppSKey::from([
+            0x4f, 0x5c, 0x40, 0x97, 0x51, 0x84, 0x1b, 0x6d, 0xfe, 0xcb, 0xd3, 0x84, 0x02, 0x23,
+            0x79, 0x42,
+        ])
     );
 }
 
-#[test]
-fn test_data_payload_creator_does_not_depend_on_buffer_contents() {
-    let mut clean_buf = [0u8; 12];
-    let mut dirty_buf = [0xa5; 12];
-    let nwk_skey = [2; 16].into();
-    let app_skey = [1; 16].into();
+// ---------------------------------------------------------------------------
+// MAC commands: Result-yielding iterator
+// ---------------------------------------------------------------------------
 
-    let clean = DataPayloadCreator::new(&mut clean_buf)
-        .unwrap()
-        .build(b"", [], &nwk_skey, &app_skey, &DefaultFactory)
-        .unwrap()
-        .to_owned();
-    let dirty = DataPayloadCreator::new(&mut dirty_buf)
-        .unwrap()
-        .build(b"", [], &nwk_skey, &app_skey, &DefaultFactory)
-        .unwrap()
-        .to_owned();
+mod mac_commands {
+    use lorawan::maccommands::{
+        parse_downlink_mac_commands, parse_uplink_mac_commands, ParseError as MacError,
+    };
+    use lorawan::maccommands::{DownlinkMacCommand, UplinkMacCommand};
 
-    assert_eq!(dirty, clean);
+    #[test]
+    fn parses_valid_uplink_stream() {
+        // LinkCheckReq (0 bytes) + LinkADRAns (1 byte)
+        let data = [0x02, 0x03, 0x05];
+        let cmds: Vec<_> = parse_uplink_mac_commands(&data).collect::<Result<_, _>>().unwrap();
+        assert_eq!(cmds.len(), 2);
+        assert!(matches!(cmds[0], UplinkMacCommand::LinkCheckReq(_)));
+        match &cmds[1] {
+            UplinkMacCommand::LinkADRAns(ans) => {
+                assert!(ans.channel_mask_ack());
+                assert!(!ans.data_rate_ack());
+                assert!(ans.powert_ack());
+            }
+            other => panic!("expected LinkADRAns, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn parses_valid_downlink_stream() {
+        // Two LinkADRReq commands (fopts from the old mac_command_in_fopts test)
+        let data = [0x03, 0x00, 0x00, 0x00, 0x70, 0x03, 0x00, 0xff, 0x00, 0x30];
+        let cmds: Vec<_> = parse_downlink_mac_commands(&data).collect::<Result<_, _>>().unwrap();
+        assert_eq!(cmds.len(), 2);
+        assert!(cmds.iter().all(|c| matches!(c, DownlinkMacCommand::LinkADRReq(_))));
+    }
+
+    #[test]
+    fn unknown_cid_yields_error_then_fuses() {
+        let data = [0x02, 0xff, 0x03, 0x05];
+        let mut iter = parse_uplink_mac_commands(&data);
+        assert!(matches!(iter.next(), Some(Ok(UplinkMacCommand::LinkCheckReq(_)))));
+        assert_eq!(iter.next(), Some(Err(MacError::UnknownCid(0xff))));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn truncated_payload_yields_error() {
+        // LinkADRReq needs 4 payload bytes, only 1 present
+        let data = [0x03, 0x00];
+        let mut iter = parse_downlink_mac_commands(&data);
+        assert_eq!(iter.next(), Some(Err(MacError::Truncated { cid: 0x03 })));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn parses_mixed_uplink_stream() {
+        // DevStatusAns (2) + NewChannelAns (1) + RXTimingSetupAns (0) +
+        // TXParamSetupAns (0)
+        let data = [0x06, 0x02, 0x0a, 0x07, 0x01, 0x08, 0x09];
+        let cmds: Vec<_> = parse_uplink_mac_commands(&data).collect::<Result<_, _>>().unwrap();
+        assert_eq!(cmds.len(), 4);
+        assert!(matches!(cmds[0], UplinkMacCommand::DevStatusAns(_)));
+        assert!(matches!(cmds[1], UplinkMacCommand::NewChannelAns(_)));
+        assert!(matches!(cmds[2], UplinkMacCommand::RXTimingSetupAns(_)));
+        assert!(matches!(cmds[3], UplinkMacCommand::TXParamSetupAns(_)));
+
+        assert_eq!(parse_uplink_mac_commands(&[]).count(), 0);
+    }
 }
 
-#[test]
-fn test_data_payload_creator_clears_previous_fopts_len() {
-    let mut buf = [0u8; 32];
-    let nwk_skey = [2; 16].into();
-    let app_skey = [1; 16].into();
-    let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
+// ---------------------------------------------------------------------------
+// Creators: struct-literal frame description, build_into a caller buffer
+// ---------------------------------------------------------------------------
 
-    phy.build(b"", [0x02, 0x03], &nwk_skey, &app_skey, &DefaultFactory).unwrap();
-    let rebuilt = phy.build(b"", [], &nwk_skey, &app_skey, &DefaultFactory).unwrap();
+mod creators {
+    use super::*;
+    use core::num::NonZeroU8;
 
-    assert_eq!(rebuilt[5] & 0x0f, 0);
-}
+    #[test]
+    fn join_request_builds_and_validates() {
+        let key = AppKey::from([7; 16]);
+        let jr = JoinRequest {
+            join_eui: JoinEui::from_wire_bytes([1; 8]),
+            dev_eui: DevEui::from_wire_bytes([2; 8]),
+            dev_nonce: DevNonce::from_wire_bytes([3, 3]),
+        };
+        let mut buf = [0u8; 23];
+        let built = jr.build_into(&mut buf, &key, &DefaultFactory).unwrap().to_vec();
 
-#[test]
-fn test_long_data_payload_uplink_creator() {
-    let mut buf = [0u8; 256];
-    let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
-    let nwk_skey = [2; 16].into();
-    let app_skey = [1; 16].into();
-    let fctrl = FCtrl::new(0x00, true);
-    phy.set_confirmed(false)
-        .set_uplink(true)
-        .set_f_port(1)
-        .set_dev_addr(&[4, 3, 2, 1])
-        .set_fctrl(&fctrl) // all flags set to false
-        .set_fcnt(0);
+        let parsed = JoinRequestPayload::parse(&built).unwrap();
+        assert!(parsed.validate_mic(&key, &DefaultFactory));
+        assert_eq!(parsed.join_eui(), jr.join_eui);
+        assert_eq!(parsed.dev_eui(), jr.dev_eui);
+        assert_eq!(parsed.dev_nonce(), jr.dev_nonce);
+    }
 
-    assert_eq!(
-        phy.build(&long_data_payload().into_bytes()[..], [], &nwk_skey, &app_skey, &DefaultFactory)
-            .unwrap(),
-        &phy_long_dataup_payload()[..]
-    );
-}
+    #[test]
+    fn join_accept_round_trips() {
+        let key = AppKey::from([1; 16]);
+        let ja = JoinAccept {
+            join_nonce: JoinNonce::from_wire_bytes([1, 1, 1]),
+            net_id: NetId::from_wire_bytes([1, 1, 1]),
+            dev_addr: DevAddr::from_wire_bytes([1, 1, 1, 1]),
+            dl_settings: lorawan::types::DLSettings::new(2),
+            rx_delay: 1,
+            c_f_list: Some(CfList::DynamicChannel([
+                Frequency::from_hz(867_100_000),
+                Frequency::from_hz(867_300_000),
+                Frequency::from_hz(867_500_000),
+                Frequency::from_hz(867_700_000),
+                Frequency::from_hz(867_900_000),
+            ])),
+        };
+        let mut buf = [0u8; 33];
+        let built = ja.build_into(&mut buf, &key, &DefaultFactory).unwrap().to_vec();
 
-#[test]
-fn test_data_payload_downlink_creator() {
-    let mut buf = [0u8; 256];
-    let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
-    let nwk_skey = [2; 16].into();
-    let app_skey = [1; 16].into();
-    let fctrl = FCtrl::new(0x80, false);
-    phy.set_confirmed(true)
-        .set_uplink(false)
-        .set_f_port(42)
-        .set_dev_addr(&[4, 3, 2, 1])
-        .set_fctrl(&fctrl) // ADR: true, all others: false
-        .set_fcnt(76543);
-
-    assert_eq!(
-        phy.build(b"hello lora", [], &nwk_skey, &app_skey, &DefaultFactory).unwrap(),
-        &phy_datadown_payload()[..]
-    );
-}
-
-#[test]
-fn test_data_payload_creator_when_payload_and_fport_0() {
-    let mut buf = [0u8; 256];
-    let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
-    let nwk_skey = [2; 16].into();
-    let app_skey = [1; 16].into();
-    phy.set_f_port(0);
-    assert!(phy.build(b"hello", [], &nwk_skey, &app_skey, &DefaultFactory).is_err());
-}
-
-#[test]
-fn test_data_payload_creator_when_encrypt_but_not_fport_0() {
-    let mut buf = [0u8; 256];
-    let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
-    let nwk_skey = [2; 16].into();
-    let app_skey = [1; 16].into();
-    let new_channel_req =
-        DownlinkMacCommand::NewChannelReq(NewChannelReqPayload::new_from_raw(&[0x00; 5]));
-
-    let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
-    cmds.extend_from_slice(&[&new_channel_req, &new_channel_req, &new_channel_req]);
-    let mut cmds_buf = [0u8; 256];
-    let cmds_buf_len = build_mac_commands(&cmds, &mut cmds_buf).unwrap();
-    phy.set_f_port(1);
-    assert!(phy
-        .build(b"", &cmds_buf[..cmds_buf_len], &nwk_skey, &app_skey, &DefaultFactory)
-        .is_err());
-}
-
-#[test]
-fn test_data_payload_creator_when_payload_no_fport() {
-    let mut buf = [0u8; 256];
-    let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
-    let nwk_skey = [2; 16].into();
-    let app_skey = [1; 16].into();
-    assert!(phy.build(b"hello", [], &nwk_skey, &app_skey, &DefaultFactory).is_err());
-}
-
-#[test]
-fn test_data_payload_creator_when_mac_commands_in_payload() {
-    let mut buf = [0u8; 256];
-    let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
-    let nwk_skey = [1; 16].into();
-    let app_skey = [0; 16].into();
-    let mac_cmd1 = UplinkMacCommand::LinkCheckReq(LinkCheckReqPayload());
-    let mut mac_cmd2 = LinkADRAnsCreator::new();
-    mac_cmd2.set_channel_mask_ack(true).set_data_rate_ack(false).set_tx_power_ack(true);
-    let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
-    cmds.extend_from_slice(&[&mac_cmd1, &mac_cmd2]);
-    let mut cmds_buf = [0u8; 256];
-    let cmds_buf_len = build_mac_commands(&cmds, &mut cmds_buf).unwrap();
-    phy.set_confirmed(false).set_uplink(true).set_f_port(0).set_dev_addr(&[4, 3, 2, 1]).set_fcnt(0);
-    assert_eq!(
-        phy.build(b"", &cmds_buf[..cmds_buf_len], &nwk_skey, &app_skey, &DefaultFactory).unwrap(),
-        &data_payload_with_fport_zero()[..]
-    );
-}
-
-#[test]
-fn test_data_payload_creator_when_mac_commands_in_f_opts() {
-    let mut buf = [0u8; 256];
-    let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
-    let nwk_skey = [1; 16].into();
-    let app_skey = [0; 16].into();
-    let mac_cmd1 = UplinkMacCommand::LinkCheckReq(LinkCheckReqPayload());
-    let mut mac_cmd2 = LinkADRAnsCreator::new();
-    mac_cmd2.set_channel_mask_ack(true).set_data_rate_ack(false).set_tx_power_ack(true);
-    let mut cmds: Vec<&dyn SerializableMacCommand> = Vec::new();
-    cmds.extend_from_slice(&[&mac_cmd1, &mac_cmd2]);
-    let mut cmds_buf = [0u8; 256];
-    let cmds_buf_len = build_mac_commands(&cmds, &mut cmds_buf).unwrap();
-
-    phy.set_confirmed(false).set_uplink(true).set_dev_addr(&[4, 3, 2, 1]).set_fcnt(0);
-
-    assert_eq!(
-        phy.build(b"", &cmds_buf[..cmds_buf_len], &nwk_skey, &app_skey, &DefaultFactory).unwrap(),
-        &data_payload_with_f_opts()[..]
-    );
-}
-// TODO: test data payload create with piggy_backed mac commands
-
-#[test]
-fn test_join_request_dev_eui_extraction() {
-    let data = phy_join_request_payload();
-    let join_request = JoinRequestPayload::new(&data[..]).unwrap();
-    assert_eq!(join_request.dev_eui(), EUI64::new(&data[9..17]).unwrap());
-}
-
-#[test]
-fn test_join_request_app_eui_extraction() {
-    let data = phy_join_request_payload();
-    let join_request = JoinRequestPayload::new(&data[..]).unwrap();
-    assert_eq!(join_request.app_eui(), EUI64::new(&data[1..9]).unwrap());
-}
-
-#[test]
-fn test_join_request_dev_nonce_extraction() {
-    let data = phy_join_request_payload();
-    let join_request = JoinRequestPayload::new(&data[..]).unwrap();
-    assert_eq!(join_request.dev_nonce(), DevNonce::new(&data[17..19]).unwrap());
-}
-
-#[test]
-fn test_validate_join_request_mic_when_ok() {
-    let data = phy_join_request_payload();
-    let join_request = JoinRequestPayload::new(&data[..]).unwrap();
-    let key = AES128([1; 16]);
-    assert!(join_request.validate_mic(&key, &DefaultFactory));
-}
-
-#[test]
-fn test_validate_join_request_mic_when_not_ok() {
-    let data = phy_join_request_payload();
-    let join_request = JoinRequestPayload::new(&data[..]).unwrap();
-    let key = AES128([2; 16]);
-    assert!(!join_request.validate_mic(&key, &DefaultFactory));
-}
-
-#[test]
-fn test_join_accept_creator() {
-    let mut buf = [0u8; 17];
-    let mut phy = JoinAcceptCreator::new(&mut buf[..]).unwrap();
-    let key = AES128(app_key());
-    let app_nonce_bytes = [0xc7, 0x0b, 0x57];
-    phy.set_app_nonce(&app_nonce_bytes)
-        .set_net_id(&[0x01, 0x11, 0x22])
-        .set_dev_addr(&[0x80, 0x19, 0x03, 0x02])
-        .set_dl_settings(0)
-        .set_rx_delay(0);
-
-    assert_eq!(phy.build(&key, &DefaultFactory), Ok(&phy_join_accept_payload()[..]));
-}
-
-#[test]
-fn test_join_accept_creator_does_not_depend_on_buffer_contents() {
-    let mut clean_buf = [0u8; 17];
-    let mut dirty_buf = [0xa5; 17];
-    let key = AES128(app_key());
-
-    let clean = JoinAcceptCreator::new(&mut clean_buf)
-        .unwrap()
-        .build(&key, &DefaultFactory)
-        .unwrap()
-        .to_owned();
-    let dirty = JoinAcceptCreator::new(&mut dirty_buf)
-        .unwrap()
-        .build(&key, &DefaultFactory)
-        .unwrap()
-        .to_owned();
-
-    assert_eq!(dirty, clean);
-}
-
-#[test]
-fn test_join_accept_creator_clears_unused_cflist_entries() {
-    let mut clean_buf = [0u8; 33];
-    let mut dirty_buf = [0xa5; 33];
-    let key = AES128(app_key());
-    let freqs = [Frequency::new_from_raw(&[0x18, 0x4f, 0x84])];
-
-    let clean = JoinAcceptCreator::new(&mut clean_buf)
-        .unwrap()
-        .set_c_f_list(&freqs)
-        .unwrap()
-        .build(&key, &DefaultFactory)
-        .unwrap()
-        .to_owned();
-    let dirty = JoinAcceptCreator::new(&mut dirty_buf)
-        .unwrap()
-        .set_c_f_list(&freqs)
-        .unwrap()
-        .build(&key, &DefaultFactory)
-        .unwrap()
-        .to_owned();
-
-    assert_eq!(dirty, clean);
-}
-
-#[test]
-fn test_join_accept_creator_long_buffer() {
-    let mut buf = [0u8; 255];
-    let mut phy = JoinAcceptCreator::new(&mut buf[..]).unwrap();
-    let key = AES128(app_key());
-    let app_nonce_bytes = [0xc7, 0x0b, 0x57];
-    phy.set_app_nonce(&app_nonce_bytes)
-        .set_net_id(&[0x01, 0x11, 0x22])
-        .set_dev_addr(&[0x80, 0x19, 0x03, 0x02])
-        .set_dl_settings(0)
-        .set_rx_delay(0);
-
-    assert_eq!(phy.build(&key, &DefaultFactory), Ok(&phy_join_accept_payload()[..]));
-}
-#[test]
-fn test_join_accept_creator_short_buffer() {
-    let mut buf = [0u8; 16];
-    let phy_res = JoinAcceptCreator::new(&mut buf[..]);
-    assert!(phy_res.is_err(), "JoinAccept should not fit in 16 bytes");
-}
-#[test]
-fn test_join_accept_creator_with_cflist() {
-    let mut buf = [0u8; 17 + 16];
-    let mut phy = JoinAcceptCreator::new(&mut buf[..]).unwrap();
-    let key: AppKey = AppKey::from(app_key());
-    let app_nonce_bytes = [0xc7, 0x0b, 0x57];
-    let freqs = [
-        Frequency::new_from_raw(&[0x18, 0x4F, 0x84]),
-        Frequency::new_from_raw(&[0xE8, 0x56, 0x84]),
-        Frequency::new_from_raw(&[0xB8, 0x5E, 0x84]),
-        Frequency::new_from_raw(&[0x88, 0x66, 0x84]),
-        Frequency::new_from_raw(&[0x58, 0x6E, 0x84]),
-    ];
-    phy.set_app_nonce(&app_nonce_bytes)
-        .set_net_id(&[0x01, 0x11, 0x22])
-        .set_dev_addr(&[0x80, 0x19, 0x03, 0x02])
-        .set_dl_settings(0)
-        .set_rx_delay(0)
-        .set_c_f_list(&freqs)
+        // Round trip through the parser.
+        let mut rt = built.clone();
+        let parsed = DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(
+            &mut rt,
+            &key,
+            &DefaultFactory,
+        )
         .unwrap();
-    phy.build(key.inner(), &DefaultFactory).unwrap();
-    let encrypted = EncryptedJoinAcceptPayload::new(buf).unwrap();
-    let decrypted = encrypted.decrypt(&key, &DefaultFactory);
-    assert!(decrypted.validate_mic(&key, &DefaultFactory));
-    assert_eq!(decrypted.c_f_list(), Some(CfList::DynamicChannel(freqs)))
+        assert_eq!(parsed.join_nonce(), ja.join_nonce);
+        assert_eq!(parsed.net_id(), ja.net_id);
+        assert_eq!(parsed.dev_addr(), ja.dev_addr);
+        assert_eq!(parsed.rx_delay(), 1);
+        assert_eq!(parsed.c_f_list(), ja.c_f_list);
+    }
+
+    /// Building the uplink test vector from scratch reproduces it exactly,
+    /// MIC included.
+    #[test]
+    fn data_frame_reproduces_uplink_vector() {
+        let frame = DataFrame {
+            frame_type: DataFrameType::UnconfirmedUp,
+            dev_addr: DevAddr::from_value(0x01020304),
+            adr: true,
+            fcnt: 1,
+            payload: Payload::Data { f_port: NonZeroU8::new(1).unwrap(), data: b"hello" },
+            ..Default::default()
+        };
+        let mut buf = [0u8; 64];
+        let built = frame
+            .build_into(
+                &mut buf,
+                &NwkSKey::from([2; 16]),
+                Some(&AppSKey::from([1; 16])),
+                &DefaultFactory,
+            )
+            .unwrap();
+        assert_eq!(built, &phy_dataup_payload()[..]);
+    }
+
+    /// Same for the confirmed downlink vector (32-bit fcnt: only the low 16
+    /// bits are on the wire).
+    #[test]
+    fn data_frame_reproduces_downlink_vector() {
+        let frame = DataFrame {
+            frame_type: DataFrameType::ConfirmedDown,
+            dev_addr: DevAddr::from_value(0x01020304),
+            adr: true,
+            fcnt: 76543,
+            payload: Payload::Data { f_port: NonZeroU8::new(42).unwrap(), data: b"hello lora" },
+            ..Default::default()
+        };
+        let mut buf = [0u8; 64];
+        let built = frame
+            .build_into(
+                &mut buf,
+                &NwkSKey::from([2; 16]),
+                Some(&AppSKey::from([1; 16])),
+                &DefaultFactory,
+            )
+            .unwrap();
+        assert_eq!(built, &phy_datadown_payload()[..]);
+    }
+
+    #[test]
+    fn data_frame_round_trips_mac_commands_vector() {
+        // Decrypt the fport-0 vector with the old API to recover the MAC
+        // command plaintext, rebuild it with the new creator, and compare.
+        let nwk = NwkSKey::from([1; 16]);
+        let mut plain = data_payload_with_fport_zero();
+        let dec = DecryptedDataPayload::decrypt_in_place(
+            &mut plain,
+            Some(&nwk),
+            None,
+            0,
+            &DefaultFactory,
+        )
+        .unwrap();
+        let FrmPayload::MacCommands(cmds) = dec.frm_payload() else {
+            panic!("expected MAC commands");
+        };
+        let cmds = cmds.to_vec();
+
+        let frame = DataFrame {
+            frame_type: DataFrameType::UnconfirmedUp,
+            dev_addr: DevAddr::from_value(0x01020304),
+            fcnt: 0,
+            payload: Payload::MacCommands(&cmds),
+            ..Default::default()
+        };
+        let mut buf = [0u8; 64];
+        let built = frame.build_into(&mut buf, &nwk, None, &DefaultFactory).unwrap();
+        assert_eq!(built, &data_payload_with_fport_zero()[..]);
+    }
+
+    #[test]
+    fn data_frame_reproduces_f_opts_vector() {
+        let frame = DataFrame {
+            frame_type: DataFrameType::UnconfirmedUp,
+            dev_addr: DevAddr::from_value(0x01020304),
+            fcnt: 0,
+            f_opts: &[0x02, 0x03, 0x05],
+            payload: Payload::None,
+            ..Default::default()
+        };
+        let mut buf = [0u8; 64];
+        let built =
+            frame.build_into(&mut buf, &NwkSKey::from([1; 16]), None, &DefaultFactory).unwrap();
+        assert_eq!(built, &data_payload_with_f_opts()[..]);
+    }
+
+    #[test]
+    fn data_frame_build_validation() {
+        let nwk = NwkSKey::from([2; 16]);
+        let app = AppSKey::from([1; 16]);
+        let base = DataFrame { dev_addr: DevAddr::from_value(1), ..Default::default() };
+        let mut buf = [0u8; 64];
+
+        // FOpts limited to 15 bytes.
+        let frame = DataFrame { f_opts: &[0; 16], ..base };
+        assert_eq!(
+            frame.build_into(&mut buf, &nwk, None, &DefaultFactory).unwrap_err(),
+            Error::FOptsTooLong
+        );
+
+        // FPort 0 with non-empty FOpts is forbidden.
+        let frame = DataFrame { f_opts: &[0x02], payload: Payload::MacCommands(&[0x02]), ..base };
+        assert_eq!(
+            frame.build_into(&mut buf, &nwk, None, &DefaultFactory).unwrap_err(),
+            Error::FOptsWithFPortZero
+        );
+
+        // App data needs the AppSKey.
+        let frame = DataFrame {
+            payload: Payload::Data { f_port: NonZeroU8::new(1).unwrap(), data: b"x" },
+            ..base
+        };
+        assert_eq!(
+            frame.build_into(&mut buf, &nwk, None, &DefaultFactory).unwrap_err(),
+            Error::MissingKey
+        );
+
+        // Output buffer too small.
+        let mut small = [0u8; 12];
+        assert_eq!(
+            frame.build_into(&mut small, &nwk, Some(&app), &DefaultFactory).unwrap_err(),
+            Error::BufferTooShort
+        );
+    }
+
+    /// Full new-API round trip: build, parse, MIC-check, decrypt, compare.
+    #[test]
+    fn build_parse_decrypt_round_trip() {
+        let nwk = NwkSKey::from([3; 16]);
+        let app = AppSKey::from([4; 16]);
+        let frame = DataFrame {
+            frame_type: DataFrameType::ConfirmedUp,
+            dev_addr: DevAddr::from_value(0xdeadbeef),
+            adr: true,
+            ack: true,
+            fcnt: 0x0004_0007,
+            f_opts: &[0x02], // LinkCheckReq
+            payload: Payload::Data { f_port: NonZeroU8::new(7).unwrap(), data: b"payload" },
+            ..Default::default()
+        };
+        let mut buf = [0u8; 64];
+        let built_len =
+            frame.build_into(&mut buf, &nwk, Some(&app), &DefaultFactory).unwrap().len();
+
+        let mut rt = buf[..built_len].to_vec();
+        let dec = DecryptedDataPayload::check_mic_and_decrypt_in_place(
+            &mut rt,
+            &nwk,
+            Some(&app),
+            0x0004_0007,
+            &DefaultFactory,
+        )
+        .unwrap();
+        assert_eq!(dec.frame_type(), DataFrameType::ConfirmedUp);
+        assert_eq!(dec.fhdr().dev_addr(), DevAddr::from_value(0xdeadbeef));
+        assert_eq!(dec.fhdr().fcnt(), 0x0007);
+        assert_eq!(dec.fhdr().f_opts(), &[0x02]);
+        assert!(dec.fhdr().fctrl().adr());
+        assert!(dec.fhdr().fctrl().ack());
+        assert_eq!(dec.f_port(), Some(7));
+        assert_eq!(dec.frm_payload(), FrmPayload::Data(b"payload"));
+    }
 }
 
-#[test]
-fn test_join_request_creator() {
-    let buf = [0u8; 23];
-    let mut phy = JoinRequestCreator::new(buf).unwrap();
-    let key = [1; 16].into();
-    phy.set_app_eui(&[0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01])
-        .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
-        .set_dev_nonce(&[0x2du8, 0x10]);
+// ---------------------------------------------------------------------------
+// DevEui / JoinEui distinct newtypes
+// ---------------------------------------------------------------------------
 
-    assert_eq!(phy.build(&key, &DefaultFactory), &phy_join_request_payload());
+mod euis {
+    use super::*;
+
+    /// Same LSB-wire / MSB-display conventions as keys::DevEui.
+    #[test]
+    fn dev_eui_conventions_match_old_type() {
+        let wire = [0xf0, 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12];
+        let new = DevEui::from_wire_bytes(wire);
+        let old = lorawan::keys::DevEui::from(wire);
+        assert_eq!(new.to_string(), old.to_string());
+        assert_eq!(new.to_string(), "123456789abcdef0");
+        assert_eq!(
+            DevEui::from_str("123456789abcdef0").unwrap(),
+            lorawan::keys::DevEui::from_str("123456789abcdef0").unwrap().into(),
+        );
+        assert_eq!(new.value(), 0x123456789abcdef0);
+        // Round trip through the old type.
+        assert_eq!(DevEui::from(lorawan::keys::DevEui::from(new)), new);
+    }
+
+    /// join_eui and dev_eui are now different types; mixing them up is a
+    /// compile error rather than a swapped-EUI bug on air.
+    #[test]
+    fn join_request_uses_distinct_types() {
+        let jr = JoinRequest {
+            join_eui: JoinEui::from_value(0x0101010101010101),
+            dev_eui: DevEui::from_value(0x0202020202020202),
+            dev_nonce: DevNonce::from_value(1),
+        };
+        // jr.join_eui = jr.dev_eui; // does not compile
+        assert_eq!(jr.join_eui.value(), 0x0101010101010101);
+    }
 }
 
-#[test]
-fn test_join_request_creator_does_not_depend_on_buffer_contents() {
-    let clean_buf = [0u8; 23];
-    let dirty_buf = [0xa5; 23];
-    let key = [1; 16].into();
+// ---------------------------------------------------------------------------
+// Certification (TS009) through wire framing
+// ---------------------------------------------------------------------------
 
-    let clean = JoinRequestCreator::new(clean_buf).unwrap().build(&key, &DefaultFactory).to_owned();
-    let dirty = JoinRequestCreator::new(dirty_buf).unwrap().build(&key, &DefaultFactory).to_owned();
+mod certification {
+    use lorawan::certification::*;
+    use lorawan::certification::{
+        parse_downlink_dut_commands, parse_uplink_dut_commands, DownlinkDUTCommand,
+        UplinkDUTCommand,
+    };
+    use lorawan::maccommands::ParseError as MacError;
 
-    assert_eq!(dirty, clean);
+    #[test]
+    fn parses_fixed_and_variable_commands() {
+        // DutResetReq (0) + TxPeriodicityChangeReq (1 byte) + EchoIncPayloadReq
+        // (variable: consumes the rest).
+        let data = [0x01, 0x06, 0x03, 0x08, 0xaa, 0xbb];
+        let cmds: Vec<_> = parse_downlink_dut_commands(&data).collect::<Result<_, _>>().unwrap();
+        assert_eq!(cmds.len(), 3);
+        assert!(matches!(cmds[0], DownlinkDUTCommand::DutResetReq(_)));
+        match &cmds[1] {
+            DownlinkDUTCommand::TxPeriodicityChangeReq(p) => {
+                assert_eq!(p.periodicity(), Ok(Some(20)));
+            }
+            other => panic!("expected TxPeriodicityChangeReq, got {other:?}"),
+        }
+        match &cmds[2] {
+            DownlinkDUTCommand::EchoIncPayloadReq(p) => assert_eq!(p.payload(), &[0xaa, 0xbb]),
+            other => panic!("expected EchoIncPayloadReq, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn echo_round_trip_through_creator() {
+        let mut creator = EchoIncPayloadAnsCreator::new();
+        creator.payload(&[1, 2, 3]);
+        let bytes = creator.build().to_vec();
+
+        let cmds: Vec<_> = parse_uplink_dut_commands(&bytes).collect::<Result<_, _>>().unwrap();
+        match &cmds[..] {
+            [UplinkDUTCommand::EchoIncPayloadAns(p)] => assert_eq!(p.payload(), &[2, 3, 4]),
+            other => panic!("expected EchoIncPayloadAns, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dut_versions_ans_round_trip() {
+        let mut creator = DutVersionsAnsCreator::new();
+        creator.set_versions_raw([1, 0, 0, 0, 1, 0, 4, 0, 1, 0, 0, 1]);
+        let bytes = creator.build().to_vec();
+        let cmds: Vec<_> = parse_uplink_dut_commands(&bytes).collect::<Result<_, _>>().unwrap();
+        assert!(matches!(cmds[..], [UplinkDUTCommand::DutVersionsAns(_)]));
+    }
+
+    /// A lone variable-length CID is Truncated, not an empty command.
+    #[test]
+    fn lone_variable_cid_is_truncated() {
+        let data = [0x08];
+        let mut iter = parse_uplink_dut_commands(&data);
+        assert_eq!(iter.next(), Some(Err(MacError::Truncated { cid: 0x08 })));
+        assert_eq!(iter.next(), None);
+    }
+
+    #[test]
+    fn unknown_cid_is_reported() {
+        let data = [0x01, 0x55];
+        let mut iter = parse_downlink_dut_commands(&data);
+        assert!(matches!(iter.next(), Some(Ok(DownlinkDUTCommand::DutResetReq(_)))));
+        assert_eq!(iter.next(), Some(Err(MacError::UnknownCid(0x55))));
+        assert_eq!(iter.next(), None);
+    }
 }
 
-#[test]
-fn test_join_request_creator_long_buffer() {
-    let buf = [0u8; 255];
-    let mut phy = JoinRequestCreator::new(buf).unwrap();
-    let key = [1; 16].into();
-    phy.set_app_eui(&[0x04, 0x03, 0x02, 0x01, 0x04, 0x03, 0x02, 0x01])
-        .set_dev_eui(&[0x05, 0x04, 0x03, 0x02, 0x05, 0x04, 0x03, 0x02])
-        .set_dev_nonce(&[0x2du8, 0x10]);
+// ---------------------------------------------------------------------------
+// Multicast (TS005) through wire framing
+// ---------------------------------------------------------------------------
 
-    assert_eq!(phy.build(&key, &DefaultFactory), &phy_join_request_payload()[..]);
-}
-#[test]
-fn test_join_request_creator_short_buffer() {
-    let buf = [0u8; 0];
-    let phy_res = JoinRequestCreator::new(buf);
-    assert!(phy_res.is_err(), "JoinRequest should fail with short buffer")
-}
+mod multicast {
+    use lorawan::default_crypto::DefaultFactory;
+    use lorawan::keys::{McKEKey, McKey};
+    use lorawan::maccommands::ParseError as MacError;
+    use lorawan::multicast::{
+        parse_downlink_multicast_commands, parse_uplink_multicast_commands, DownlinkRemoteSetup,
+        UplinkRemoteSetup,
+    };
+    use lorawan::multicast::{McGroupSetupReqCreator, McGroupStatusAnsCreator};
+    use lorawan::parser::McAddr;
 
-#[test]
-fn test_derive_nwkskey() {
-    let key = AppKey::from(app_key());
-    let join_request = JoinRequestPayload::new(phy_join_request_payload()).unwrap();
-    let join_accept = EncryptedJoinAcceptPayload::new(phy_join_accept_payload())
-        .unwrap()
-        .decrypt(&key, &DefaultFactory);
+    #[test]
+    fn parses_group_setup_req() {
+        // Vector from the old deserialize_commands test.
+        let bytes = [
+            2, 0, 52, 110, 29, 60, 205, 66, 22, 52, 69, 234, 32, 24, 25, 71, 17, 87, 212, 165, 74,
+            142, 0, 0, 0, 0, 255, 255, 255, 255,
+        ];
+        let cmds: Vec<_> =
+            parse_downlink_multicast_commands(&bytes).collect::<Result<_, _>>().unwrap();
+        match &cmds[..] {
+            [DownlinkRemoteSetup::McGroupSetupReq(req)] => {
+                assert_eq!(req.mc_group_id_header(), 0);
+                assert_eq!(req.mc_addr(), McAddr::from_wire_bytes([52, 110, 29, 60]));
+                assert_eq!(req.min_mc_fcount(), 0);
+                assert_eq!(req.max_mc_fcount(), 0xFFFFFFFF);
+            }
+            other => panic!("expected McGroupSetupReq, got {other:?}"),
+        }
+    }
 
-    let nwkskey = join_accept.derive_nwkskey(&join_request.dev_nonce(), &key, &DefaultFactory);
-    //AppNonce([49, 3e, eb]), NwkAddr([51, fb, a2]), DevNonce([2d, 10])
-    let expect = NwkSKey::from([
-        0x7b, 0xb2, 0x5f, 0x89, 0xe0, 0xd1, 0x37, 0x1e, 0x1f, 0xbf, 0x4d, 0x99, 0x7e, 0x14, 0x68,
-        0xa3,
-    ]);
-    assert_eq!(nwkskey, expect);
-}
+    /// Session derivation works through wire framing (payload types shared).
+    #[test]
+    fn derive_session_through_v2_framing() {
+        let mc_addr = McAddr::from_wire_bytes([52, 110, 29, 60]);
+        let mc_key = McKey::from([0x44; 16]);
+        let mcke_key = McKEKey::from([0x66; 16]);
+        let mut creator = McGroupSetupReqCreator::new();
+        creator.mc_group_id_header(0x01);
+        creator.mc_addr(&mc_addr);
+        creator.mc_key(&DefaultFactory, &mc_key, &mcke_key);
+        creator.min_mc_fcount(7);
+        creator.max_mc_fcount(1000);
+        let bytes = creator.build().to_vec();
 
-#[test]
-fn test_derive_appskey() {
-    let key = app_key().into();
-    let join_request = JoinRequestPayload::new(phy_join_request_payload()).unwrap();
-    let join_accept = EncryptedJoinAcceptPayload::new(phy_join_accept_payload())
-        .unwrap()
-        .decrypt(&key, &DefaultFactory);
+        let cmds: Vec<_> =
+            parse_downlink_multicast_commands(&bytes).collect::<Result<_, _>>().unwrap();
+        let [DownlinkRemoteSetup::McGroupSetupReq(req)] = &cmds[..] else {
+            panic!("expected McGroupSetupReq");
+        };
+        let (group_id, session) = req.derive_session(&DefaultFactory, &mcke_key);
+        assert_eq!(group_id, 1);
+        assert_eq!(session.multicast_addr(), mc_addr);
+        assert_eq!(session.fcnt_down, 7);
+        assert_eq!(session.max_fcnt_down(), 1000);
+        // Keys must match direct derivation from McKey.
+        assert_eq!(session.mc_app_s_key(), mc_key.derive_mc_app_s_key(&DefaultFactory, &mc_addr));
+        assert_eq!(session.mc_net_s_key(), mc_key.derive_mc_net_s_key(&DefaultFactory, &mc_addr));
+    }
 
-    let appskey = join_accept.derive_appskey(&join_request.dev_nonce(), &key, &DefaultFactory);
-    //AppNonce([49, 3e, eb]), NwkAddr([51, fb, a2]), DevNonce([2d, 10])
-    let expect = AppSKey::from([
-        0x14, 0x88, 0x20, 0xdf, 0xb1, 0xe0, 0xc9, 0xd6, 0x28, 0x9c, 0xde, 0x16, 0xc1, 0xaf, 0x24,
-        0x9f,
-    ]);
+    /// McGroupStatusAns is variable length, driven by a bitmask in its first
+    /// byte; wire framing consumes exactly the right number of bytes.
+    #[test]
+    fn group_status_ans_variable_length() {
+        let mut creator = McGroupStatusAnsCreator::new();
+        creator.nb_total_groups(2);
+        creator.push(0, McAddr::from_wire_bytes([1, 2, 3, 4])).unwrap();
+        creator.push(2, McAddr::from_wire_bytes([5, 6, 7, 8])).unwrap();
+        let mut bytes = creator.build().to_vec();
+        // Append a second command to prove framing consumes exactly one.
+        bytes.push(0x00); // PackageVersionReq? (downlink) -- uplink 0x00 is PackageVersionAns len 2
+        bytes.extend_from_slice(&[0x07, 0x01]);
 
-    assert_eq!(appskey, expect);
-}
+        let cmds: Vec<_> =
+            parse_uplink_multicast_commands(&bytes).collect::<Result<_, _>>().unwrap();
+        assert_eq!(cmds.len(), 2);
+        match &cmds[0] {
+            UplinkRemoteSetup::McGroupStatusAns(ans) => {
+                assert_eq!(ans.nb_total_groups(), 2);
+                assert_eq!(ans.ans_group_mask(), 0b101);
+                let items: Vec<_> = ans.item_iterator().collect();
+                assert_eq!(items.len(), 2);
+                assert_eq!(items[0].mc_group_id(), 0);
+                assert_eq!(items[1].mc_addr(), McAddr::from_wire_bytes([5, 6, 7, 8]));
+            }
+            other => panic!("expected McGroupStatusAns, got {other:?}"),
+        }
+        assert!(matches!(cmds[1], UplinkRemoteSetup::PackageVersionAns(_)));
+    }
 
-#[test]
-fn incorrect_frmpayload_with_maccommands() {
-    let cmds: Vec<_> = MacCommandIterator::<DownlinkMacCommand>::new(&[3, 0xc0, 0, 0]).collect();
-    assert_eq!(cmds.len(), 0);
-}
+    /// A lone McGroupStatusAns CID byte is Truncated (the retired iterator
+    /// panicked on this remotely-reachable input).
+    #[test]
+    fn lone_group_status_cid_is_truncated() {
+        let data = [0x01];
+        let mut iter = parse_uplink_multicast_commands(&data);
+        assert_eq!(iter.next(), Some(Err(MacError::Truncated { cid: 0x01 })));
+    }
 
-#[test]
-#[cfg(feature = "with-to-string")]
-fn test_eui64_to_string() {
-    let eui = EUI64::new(&[0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xff]).unwrap();
-    assert_eq!(eui.to_string(), "123456789abcdeff".to_owned());
+    /// Truncated McGroupStatusAns items (mask promises more than present).
+    #[test]
+    fn group_status_ans_truncated_items() {
+        // status: mask 0b11 (2 groups) but only one 5-byte item present
+        let data = [0x01, 0x23, 0, 1, 2, 3, 4];
+        let mut iter = parse_uplink_multicast_commands(&data);
+        assert_eq!(iter.next(), Some(Err(MacError::Truncated { cid: 0x01 })));
+    }
 }

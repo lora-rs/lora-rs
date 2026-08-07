@@ -1,6 +1,6 @@
 //! Implement types for dealing with LoRaWAN keys and required
 //! cryptography entities.
-use super::parser::{McAddr, EUI64};
+use super::parser::McAddr;
 
 macro_rules! lorawan_key {
     (
@@ -91,29 +91,21 @@ lorawan_key!(
 /// It is NOT REQUIRED for ABP-only end-devices.
 impl McKey {
     /// McAppSKey = aes128_encrypt(McKey, 0x01 | McAddr | pad16)
-    pub fn derive_mc_app_s_key<F: CryptoFactory, T: AsRef<[u8]>>(
-        &self,
-        crypto: &F,
-        mc_addr: &McAddr<T>,
-    ) -> McAppSKey {
+    pub fn derive_mc_app_s_key<F: CryptoFactory>(&self, crypto: &F, mc_addr: &McAddr) -> McAppSKey {
         let aes_enc = crypto.new_enc(&self.0);
         let mut bytes: [u8; 16] = [0; 16];
         bytes[0] = 0x01;
-        bytes[1..5].copy_from_slice(mc_addr.as_ref());
+        bytes[1..5].copy_from_slice(mc_addr.as_wire_bytes());
         aes_enc.encrypt_block(&mut bytes);
         McAppSKey::from(bytes)
     }
 
     /// McNetSKey = aes128_encrypt(McKey, 0x02 | McAddr | pad16)
-    pub fn derive_mc_net_s_key<F: CryptoFactory, T: AsRef<[u8]>>(
-        &self,
-        crypto: &F,
-        mc_addr: &McAddr<T>,
-    ) -> McNetSKey {
+    pub fn derive_mc_net_s_key<F: CryptoFactory>(&self, crypto: &F, mc_addr: &McAddr) -> McNetSKey {
         let aes_enc = crypto.new_enc(&self.0);
         let mut bytes: [u8; 16] = [0; 16];
         bytes[0] = 0x02;
-        bytes[1..5].copy_from_slice(mc_addr.as_ref());
+        bytes[1..5].copy_from_slice(mc_addr.as_wire_bytes());
         aes_enc.encrypt_block(&mut bytes);
         McNetSKey::from(bytes)
     }
@@ -195,7 +187,7 @@ impl McRootKey {
 macro_rules! lorawan_eui {
     (
         $(#[$outer:meta])*
-        pub struct $type:ident(EUI64<[u8; 8]>);
+        pub struct $type:ident([u8; 8]);
     ) => {
         $(#[$outer])*
         #[doc = concat!(
@@ -217,7 +209,7 @@ macro_rules! lorawan_eui {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
         #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-        pub struct $type(EUI64<[u8; 8]>);
+        pub struct $type([u8; 8]);
 
         impl $type {
             pub const fn byte_len() -> usize {
@@ -227,11 +219,11 @@ macro_rules! lorawan_eui {
 
         impl From<[u8;8]> for $type {
             fn from(key: [u8; 8]) -> Self {
-                $type(EUI64::from(key))
+                $type(key)
             }
         }
 
-        impl From<$type> for EUI64<[u8; 8]> {
+        impl From<$type> for [u8; 8] {
             fn from(key: $type) -> Self {
                 key.0
             }
@@ -239,7 +231,7 @@ macro_rules! lorawan_eui {
 
         impl AsRef<[u8]> for $type {
             fn as_ref(&self) -> &[u8] {
-                &self.0.as_ref()
+                &self.0
             }
         }
     };
@@ -255,7 +247,7 @@ lorawan_eui!(
     /// It is a recommended practice that `DevEui` should also be available on
     /// an end-device label for the purpose of end-device administration.
     ///
-    pub struct DevEui(EUI64<[u8; 8]>);
+    pub struct DevEui([u8; 8]);
 );
 lorawan_eui!(
     /// The [`AppEui`] is a global application ID in IEEE EUI64 address space
@@ -268,7 +260,7 @@ lorawan_eui!(
     ///
     /// As of LoRaWAN 1.0.4, `AppEui` is called `JoinEui`.
     ///
-    pub struct AppEui(EUI64<[u8; 8]>);
+    pub struct AppEui([u8; 8]);
 );
 
 /// [`AES128`] represents 128-bit AES key.
@@ -353,7 +345,8 @@ mod test {
     #[test]
     fn mc_key_to_mc_app_s_key() {
         let mc_key = McKey::from(TEST_KEY);
-        let mc_app_s_key = mc_key.derive_mc_app_s_key(&DefaultFactory, &McAddr::from(ADDR));
+        let mc_app_s_key =
+            mc_key.derive_mc_app_s_key(&DefaultFactory, &McAddr::from_wire_bytes(ADDR));
         assert_eq!(
             McAppSKey(AES128([
                 0x50, 0xDF, 0x70, 0x27, 0xEF, 0xC6, 0xB4, 0x7D, 0xA8, 0x10, 0xEE, 0x3C, 0xCA, 0x0D,
@@ -366,7 +359,8 @@ mod test {
     #[test]
     fn mc_key_to_mc_net_s_key() {
         let mc_key = McKey::from(TEST_KEY);
-        let mc_net_s_key = mc_key.derive_mc_net_s_key(&DefaultFactory, &McAddr::from(ADDR));
+        let mc_net_s_key =
+            mc_key.derive_mc_net_s_key(&DefaultFactory, &McAddr::from_wire_bytes(ADDR));
         assert_eq!(
             McNetSKey(AES128([
                 0x8D, 0xF7, 0x07, 0x27, 0x36, 0x47, 0xE2, 0x2E, 0x4E, 0x27, 0xFE, 0x00, 0x4B, 0x99,

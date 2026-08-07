@@ -7,12 +7,12 @@
 //! 1. MAC answers (highest priority)
 //! 2. New MAC commands
 //! 3. Application payload (lowest priority)
-use super::{build_mac, decrypt, packet_with_mac, util};
+use super::{build_mac, decrypt_uplink, packet_with_mac, util};
 use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
 use crate::test_util::Uplink;
 use lorawan::maccommands::parse_uplink_mac_commands;
-use lorawan::parser::{DataHeader, DataPayload, FRMPayload, PhyPayload};
+use lorawan::parser::FrmPayload;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -163,13 +163,8 @@ async fn eu868_mac_truncation() {
     timer.fire_most_recent().await;
 
     let mut uplink = radio.get_last_uplink().await;
-    match uplink.get_payload() {
-        PhyPayload::Data(DataPayload::Encrypted(data)) => {
-            let dl = decrypt(data, 2);
-            assert_eq!(dl.frm_payload(), FRMPayload::Data(&[0x02, 0x02, 0x03]));
-        }
-        _ => panic!(),
-    }
+    let dl = decrypt_uplink(&mut uplink);
+    assert_eq!(dl.frm_payload(), FrmPayload::Data(&[0x02, 0x02, 0x03]));
 }
 
 // TODO: Step 7... (non-truncated payload)

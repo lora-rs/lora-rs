@@ -23,22 +23,18 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
     let input = parse_macro_input!(input as DeriveInput);
     let handler = &input.ident;
     let (handler_lt, _ty, _where) = input.generics.split_for_impl();
-    // Collect lifetime requirements for MacCommandIterator<'_, T<..>>
     let handler_lifetimes =
         input.generics.lifetimes().map(|lt| lt.lifetime.clone()).collect::<Vec<_>>();
-    let anon_lifetime = syn::Lifetime::new("'_", Span::call_site());
-    let iter_lifetime = match handler_lifetimes.len() {
-        1 => handler_lifetimes.first(),
-        0 => Some(&anon_lifetime),
-        _ => panic!("Multiple lifetimes for this enum are unsupported!"),
-    };
+    if handler_lifetimes.len() > 1 {
+        panic!("Multiple lifetimes for this enum are unsupported!");
+    }
 
     // Parse enum members into list of (Command, Payload, Attributes) tuples
     let members = parse_enum_members(&input);
     let mut impl_len = Vec::new();
     let mut impl_bytes = Vec::new();
     let mut impl_cid = Vec::new();
-    let mut impl_iter_next = Vec::new();
+    let mut impl_parse_one = Vec::new();
     let mut payload_struct_impls = Vec::new();
     let mut payload_struct_creator_impls = Vec::new();
 
@@ -70,30 +66,36 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
             Self::#n(_) => #t::cid()
         });
 
-        // SerializableMacCommand::next()
-        // Different iterator implementation for fixed and variable length
-        if let Some((_, ref len_opt)) = attributes.attrs {
+        // crate::maccommands::MacCommandSet::parse_one(): fallible framing.
+        // Truncation and unknown CIDs are reported instead of silently
+        // ending the stream, and payload len() helpers are never invoked on
+        // an empty slice.
+        if let Some((ref cid, ref len_opt)) = attributes.attrs {
             match len_opt {
                 Some(_) => {
-                    impl_iter_next.push(quote! {
-                        if data[0] == #t::cid() && data.len() > #t::max_len() {
-                            self.index = self.index + #t::max_len() + 1;
-                            Some(#handler::#n(#t::new_from_raw(&data[1..1 + #t::max_len()])))
-                        } else
+                    impl_parse_one.push(quote! {
+                        #cid => {
+                            let len = #t::max_len();
+                            if data.len() < 1 + len {
+                                return Err(crate::maccommands::ParseError::Truncated { cid });
+                            }
+                            Ok((Self::#n(#t::new_from_raw(&data[1..1 + len])), 1 + len))
+                        }
                     });
                 }
                 None => {
-                    impl_iter_next.push(quote! {
-                        if data[0] == #t::cid() {
-                            let payload = #t::new_from_raw(&data[1..]);
-                            let len = payload.len();
-                            if data.len() >= len {
-                                self.index = self.index + len + 1;
-                                Some(#handler::#n(payload))
-                            } else {
-                                None
+                    impl_parse_one.push(quote! {
+                        #cid => {
+                            let rest = &data[1..];
+                            if rest.is_empty() {
+                                return Err(crate::maccommands::ParseError::Truncated { cid });
                             }
-                        } else
+                            let len = #t::new_from_raw(rest).len();
+                            if rest.len() < len {
+                                return Err(crate::maccommands::ParseError::Truncated { cid });
+                            }
+                            Ok((Self::#n(#t::new_from_raw(&rest[..len])), 1 + len))
+                        }
                     });
                 }
             }
@@ -274,8 +276,37 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
         }
     }
 
+    // The fallible-framing impl. All current command sets carry exactly
+    // one lifetime; support lifetime-less enums for completeness.
+    let parse_one_body = quote! {
+        let cid = data[0];
+        match cid {
+            #( #impl_parse_one )*
+            _ => Err(crate::maccommands::ParseError::UnknownCid(cid)),
+        }
+    };
+    let impl_command_set = if let Some(lt) = handler_lifetimes.first() {
+        quote! {
+            impl<#lt> crate::maccommands::MacCommandSet<#lt> for #handler<#lt> {
+                fn parse_one(data: &#lt [u8]) -> Result<(Self, usize), crate::maccommands::ParseError> {
+                    #parse_one_body
+                }
+            }
+        }
+    } else {
+        quote! {
+            impl<'a> crate::maccommands::MacCommandSet<'a> for #handler {
+                fn parse_one(data: &'a [u8]) -> Result<(Self, usize), crate::maccommands::ParseError> {
+                    #parse_one_body
+                }
+            }
+        }
+    };
+
     // Generate the final implementations
     quote! {
+        #impl_command_set
+
         impl #handler_lt #handler #handler_lt {
             /// Get the length.
             #[allow(clippy::len_without_is_empty)]
@@ -303,22 +334,6 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
             }
             fn payload_len(&self) -> usize {
                 self.len()
-            }
-        }
-
-        impl #handler_lt Iterator for MacCommandIterator<#iter_lifetime, #handler #handler_lt > {
-            type Item = #handler #handler_lt;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                if self.index < self.data.len() {
-                    let data = &self.data[self.index..];
-                    #( #impl_iter_next )*
-                    {
-                        None
-                    }
-                } else {
-                    None
-                }
             }
         }
 

@@ -1,6 +1,6 @@
 use crate::mac;
 use crate::radio::RadioBuffer;
-use lorawan::certification::parse_downlink_certification_messages;
+use lorawan::certification::parse_downlink_dut_commands;
 
 /// Certification protocol uses `fport = 224`
 pub(crate) const CERTIFICATION_PORT: u8 = 224;
@@ -28,8 +28,11 @@ impl Certification {
     }
     pub(crate) fn handle_message(&mut self, data: &[u8], rx_app_cnt: u16) -> Response {
         use lorawan::certification::DownlinkDUTCommand::*;
-        let messages = parse_downlink_certification_messages(data);
+        let messages = parse_downlink_dut_commands(data);
         for message in messages {
+            let Ok(message) = message else {
+                break;
+            };
             match message {
                 // Device layer
                 DutJoinReq(..) => return Response::DutJoinReq,

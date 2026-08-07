@@ -2,12 +2,10 @@
 //! Based on LoRaWAN 1.0.4 End Device Certification Test Specification v1.6.1
 //!
 //! DlChannelReq for EU868 region
-use super::{build_mac, util};
+use super::{build_mac, decrypt_uplink, util};
 use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
 use crate::test_util::Uplink;
-
-use lorawan::parser::{DataHeader, DataPayload, PhyPayload};
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -67,12 +65,7 @@ async fn eu868_dlchannelreq() {
     assert!(*send_await_complete.lock().await);
     // Check that our mac response was present
     let mut uplink = radio.get_last_uplink().await;
-    match uplink.get_payload() {
-        PhyPayload::Data(DataPayload::Encrypted(data)) => {
-            assert_eq!(data.fhdr().data(), [0x0a, 0x03]);
-        }
-        _ => panic!(),
-    }
+    assert_eq!(decrypt_uplink(&mut uplink).fhdr().f_opts(), [0x0a, 0x03]);
 
     // Step 3: send uplink, TCL ignores it..
     let complete = send_await_complete.clone();
@@ -99,10 +92,5 @@ async fn eu868_dlchannelreq() {
     assert!(*send_await_complete.lock().await);
     // Check that our mac response was present
     let mut uplink = radio.get_last_uplink().await;
-    match uplink.get_payload() {
-        PhyPayload::Data(DataPayload::Encrypted(data)) => {
-            assert_eq!(data.fhdr().data(), [0x0a, 0x03]);
-        }
-        _ => panic!(),
-    }
+    assert_eq!(decrypt_uplink(&mut uplink).fhdr().f_opts(), [0x0a, 0x03]);
 }

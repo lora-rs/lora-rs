@@ -10,14 +10,15 @@ use crate::CryptoFactory;
 use aes::cipher::KeyInit;
 use aes::Aes128;
 use criterion::{criterion_group, criterion_main, Criterion};
-use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
+use lorawan::maccommands::parse_downlink_mac_commands;
+use lorawan::maccommands::DownlinkMacCommand;
 use std::alloc::System;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 extern crate std;
 
 use lorawan::keys::*;
-use lorawan::parser::*;
+use lorawan::parser::{parse, DecryptedDataPayload, FrmPayload, PhyPayload};
 
 #[global_allocator]
 static GLOBAL: trallocator::Trallocator<System> = trallocator::Trallocator::new(System);
@@ -28,24 +29,28 @@ fn bench_complete_data_payload_fhdr(c: &mut Criterion) {
     c.bench_function("data_payload_headers_parsing", |b| {
         b.iter(|| {
             cnt.fetch_add(1usize, Ordering::SeqCst);
-            let mut data = data_payload();
-            let phy = parse(&mut data).unwrap();
+            let data = data_payload();
+            let phy = parse(&data).unwrap();
 
-            if let PhyPayload::Data(DataPayload::Encrypted(data_payload)) = phy {
-                let mhdr = data_payload.mhdr();
-                assert_eq!(mhdr.mtype(), MType::UnconfirmedDataUp);
-                assert_eq!(mhdr.major(), Major::LoRaWANR1);
+            if let PhyPayload::Data(data_payload) = phy {
+                assert!(data_payload.is_uplink());
+                assert!(!data_payload.is_confirmed());
                 if data_payload.mic().0[0] < 1 {
                     panic!("no way");
                 }
 
                 let fhdr = data_payload.fhdr();
 
-                if fhdr.dev_addr().as_ref()[0] < 1 {
+                if fhdr.dev_addr().value() < 1 {
                     panic!("no way");
                 }
                 assert_eq!(fhdr.fcnt(), 1u16);
-                assert_eq!(MacCommandIterator::<DownlinkMacCommand>::new(fhdr.data()).count(), 0);
+                assert_eq!(
+                    parse_downlink_mac_commands(fhdr.f_opts())
+                        .filter_map(|c: Result<DownlinkMacCommand<'_>, _>| c.ok())
+                        .count(),
+                    0
+                );
 
                 let fctrl = fhdr.fctrl();
 
@@ -73,10 +78,10 @@ fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
     c.bench_function("data_payload_mic_validation", |b| {
         b.iter(|| {
             cnt.fetch_add(1usize, Ordering::SeqCst);
-            let mut data = data_payload();
-            let phy = parse(&mut data).unwrap();
+            let data = data_payload();
+            let phy = parse(&data).unwrap();
 
-            if let PhyPayload::Data(DataPayload::Encrypted(data_payload)) = phy {
+            if let PhyPayload::Data(data_payload) = phy {
                 assert!(data_payload.validate_mic(&mic_key, 1, &factory));
             } else {
                 panic!("failed to parse DataPayload");
@@ -90,22 +95,18 @@ fn bench_complete_data_payload_mic_validation(c: &mut Criterion) {
 fn bench_complete_data_payload_decrypt(c: &mut Criterion) {
     let mut payload = Vec::new();
     payload.extend_from_slice(&String::from("hello").into_bytes()[..]);
-    let key = AES128([1; 16]);
-    let factory = ConstFactory::new(&key);
+    let key = AppSKey::from([1; 16]);
+    let factory = ConstFactory::new(key.inner());
     let cnt = AtomicUsize::new(0);
     GLOBAL.usage();
     c.bench_function("data_payload_decrypt", |b| {
         b.iter(|| {
             cnt.fetch_add(1usize, Ordering::SeqCst);
             let mut data = data_payload();
-            let phy = parse(&mut data).unwrap();
-
-            if let PhyPayload::Data(DataPayload::Encrypted(data_payload)) = phy {
-                assert_eq!(
-                    data_payload.decrypt(None, Some(&key), 1, &factory).unwrap().frm_payload(),
-                    FRMPayload::Data(&payload[..])
-                );
-            }
+            let dec =
+                DecryptedDataPayload::decrypt_in_place(&mut data, None, Some(&key), 1, &factory)
+                    .unwrap();
+            assert_eq!(dec.frm_payload(), FrmPayload::Data(&payload[..]));
         })
     });
     let n = cnt.load(Ordering::SeqCst);
