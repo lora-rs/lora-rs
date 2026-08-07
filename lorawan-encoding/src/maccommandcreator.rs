@@ -8,6 +8,7 @@ pub enum Error {
     InvalidTxPower,
     MarginOutOfRange,
     DelayOutOfRange,
+    MaxDutyCycleOutOfRange,
     MaxEirpOutOfRange,
     NanoSecondsOutOfRange,
     BufferTooShort,
@@ -207,7 +208,11 @@ impl DutyCycleReqCreator {
     /// * max_duty_cycle - the value used to determine the aggregated duty cycle
     ///   using the formula `1 / (2 ** max_duty_cycle)`.
     pub fn set_max_duty_cycle(&mut self, max_duty_cycle: u8) -> Result<&mut Self, Error> {
-        self.data[1] = max_duty_cycle;
+        if max_duty_cycle > 0x0f {
+            return Err(Error::MaxDutyCycleOutOfRange);
+        }
+        self.data[1] &= 0xf0;
+        self.data[1] |= max_duty_cycle;
 
         Ok(self)
     }
@@ -501,14 +506,27 @@ pub use crate::maccommands::RXTimingSetupAnsCreator;
 pub use crate::maccommands::TXParamSetupReqCreator;
 
 impl TXParamSetupReqCreator {
-    pub fn set_downlink_dwell_time(&mut self) -> &mut Self {
-        self.data[1] &= 0xfe;
-        self.data[1] |= (1 << 5) as u8;
+    /// Sets the DownlinkDwellTime bit of the TXParamSetupReq to the provided value.
+    ///
+    /// # Argument
+    ///
+    /// * dwell_time - true when the downlink dwell time limit is 400 ms, false when
+    ///   there is no limit.
+    pub fn set_downlink_dwell_time(&mut self, dwell_time: bool) -> &mut Self {
+        self.data[1] &= !(1 << 5);
+        self.data[1] |= (dwell_time as u8) << 5;
         self
     }
-    pub fn set_uplink_dwell_time(&mut self) -> &mut Self {
-        self.data[1] &= 0xfe;
-        self.data[1] |= (1 << 4) as u8;
+
+    /// Sets the UplinkDwellTime bit of the TXParamSetupReq to the provided value.
+    ///
+    /// # Argument
+    ///
+    /// * dwell_time - true when the uplink dwell time limit is 400 ms, false when
+    ///   there is no limit.
+    pub fn set_uplink_dwell_time(&mut self, dwell_time: bool) -> &mut Self {
+        self.data[1] &= !(1 << 4);
+        self.data[1] |= (dwell_time as u8) << 4;
         self
     }
     pub fn set_max_eirp(&mut self, max_eirp: u8) -> Result<&mut Self, Error> {
