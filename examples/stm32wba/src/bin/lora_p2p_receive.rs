@@ -27,16 +27,18 @@ use embassy_stm32::time::Hertz;
 use embassy_stm32::{Config, bind_interrupts};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
+use lora_phy::LoRa;
 use lora_phy::iv::GenericLr1110InterfaceVariant;
 use lora_phy::lr1110::{self as lr1110_module, PaSelection, TcxoCtrlVoltage};
 use lora_phy::mod_params::{Bandwidth, CodingRate, RxMode, SpreadingFactor};
-use lora_phy::LoRa;
 use {defmt_rtt as _, panic_probe as _};
 
 // Bind EXTI interrupts for PB13 (BUSY) and PB14 (DIO1)
 bind_interrupts!(struct Irqs {
     EXTI13 => embassy_stm32::exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI13>;
     EXTI14 => embassy_stm32::exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI14>;
+    GPDMA1_CHANNEL0 => embassy_stm32::dma::InterruptHandler<embassy_stm32::peripherals::GPDMA1_CH0>;
+    GPDMA1_CHANNEL1 => embassy_stm32::dma::InterruptHandler<embassy_stm32::peripherals::GPDMA1_CH1>;
 });
 
 const RF_FREQUENCY: u32 = 915_000_000;
@@ -80,6 +82,7 @@ async fn main(_spawner: Spawner) {
         p.PA9,  // MISO
         p.GPDMA1_CH0,
         p.GPDMA1_CH1,
+        Irqs,
         spi_config,
     );
 

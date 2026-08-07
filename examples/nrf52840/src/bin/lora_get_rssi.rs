@@ -6,7 +6,7 @@
 
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pin as _, Pull};
+use embassy_nrf::gpio::{Input, Level, Output, OutputDrive, Pull};
 use embassy_nrf::{bind_interrupts, peripherals, spim};
 use embassy_time::{Delay, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
@@ -27,12 +27,12 @@ bind_interrupts!(struct Irqs {
 async fn main(_spawner: Spawner) {
     let p = embassy_nrf::init(Default::default());
 
-    let nss = Output::new(p.P1_10.degrade(), Level::High, OutputDrive::Standard);
-    let reset = Output::new(p.P1_06.degrade(), Level::High, OutputDrive::Standard);
-    let dio1 = Input::new(p.P1_15.degrade(), Pull::Down);
-    let busy = Input::new(p.P1_14.degrade(), Pull::None);
-    let _rf_switch_rx = Output::new(p.P1_05.degrade(), Level::Low, OutputDrive::Standard);
-    let _rf_switch_tx = Output::new(p.P1_07.degrade(), Level::Low, OutputDrive::Standard);
+    let nss = Output::new(p.P1_10, Level::High, OutputDrive::Standard);
+    let reset = Output::new(p.P1_06, Level::High, OutputDrive::Standard);
+    let dio1 = Input::new(p.P1_15, Pull::Down);
+    let busy = Input::new(p.P1_14, Pull::None);
+    let _rf_switch_rx = Output::new(p.P1_05, Level::Low, OutputDrive::Standard);
+    let _rf_switch_tx = Output::new(p.P1_07, Level::Low, OutputDrive::Standard);
 
     let mut spi_config = spim::Config::default();
     spi_config.frequency = spim::Frequency::M16;

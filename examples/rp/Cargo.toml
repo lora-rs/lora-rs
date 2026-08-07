@@ -5,17 +5,17 @@ version = "0.1.0"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-embassy-executor = { version = "0.7", features = [
-    "arch-cortex-m",
+embassy-executor = { version = "0.10", features = [
+    "platform-cortex-m",
     "executor-thread",
     "defmt",
 ] }
-embassy-time = { version = "0.4", features = [
+embassy-time = { version = "0.5", features = [
     "defmt",
     "defmt-timestamp-uptime",
 ] }
-embassy-sync = { version = "0.6", features = ["defmt"] }
-embassy-rp = { version = "0.3", features = [
+embassy-sync = { version = "0.8", features = ["defmt"] }
+embassy-rp = { version = "0.10", features = [
     "defmt",
     "unstable-pac",
     "time-driver",

@@ -8,10 +8,10 @@ mod iv;
 
 use defmt::info;
 use embassy_executor::Spawner;
-use embassy_stm32::bind_interrupts;
-use embassy_stm32::gpio::{Level, Output, Pin, Speed};
+use embassy_stm32::gpio::{Level, Output, Speed};
 use embassy_stm32::spi::Spi;
 use embassy_stm32::time::Hertz;
+use embassy_stm32::{bind_interrupts, dma, peripherals};
 use embassy_time::Delay;
 use lora_phy::sx126x::{Stm32wl, Sx126x, TcxoCtrlVoltage};
 use lora_phy::LoRa;
@@ -24,6 +24,8 @@ const LORA_FREQUENCY_IN_HZ: u32 = 903_900_000; // warning: set this appropriatel
 
 bind_interrupts!(struct Irqs{
     SUBGHZ_RADIO => InterruptHandler;
+    DMA1_CHANNEL1 => dma::InterruptHandler<peripherals::DMA1_CH1>;
+    DMA1_CHANNEL2 => dma::InterruptHandler<peripherals::DMA1_CH2>;
 });
 
 #[embassy_executor::main]
@@ -48,11 +50,11 @@ async fn main(_spawner: Spawner) {
     }
     let p = embassy_stm32::init(config);
 
-    let ctrl1 = Output::new(p.PC4.degrade(), Level::Low, Speed::High);
-    let ctrl2 = Output::new(p.PC5.degrade(), Level::Low, Speed::High);
-    let ctrl3 = Output::new(p.PC3.degrade(), Level::High, Speed::High);
+    let ctrl1 = Output::new(p.PC4, Level::Low, Speed::High);
+    let ctrl2 = Output::new(p.PC5, Level::Low, Speed::High);
+    let ctrl3 = Output::new(p.PC3, Level::High, Speed::High);
 
-    let spi = Spi::new_subghz(p.SUBGHZSPI, p.DMA1_CH1, p.DMA1_CH2);
+    let spi = Spi::new_subghz(p.SUBGHZSPI, p.DMA1_CH1, p.DMA1_CH2, Irqs);
     let spi = SubghzSpiDevice(spi);
     let use_high_power_pa = true;
     let config = sx126x::Config {

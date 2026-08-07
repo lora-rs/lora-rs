@@ -5,11 +5,11 @@
 
 use defmt::*;
 use embassy_executor::Spawner;
-use embassy_stm32::exti::ExtiInput;
-use embassy_stm32::gpio::{Level, Output, Pin, Pull, Speed};
+use embassy_stm32::exti::{self, ExtiInput};
+use embassy_stm32::gpio::{Level, Output, Pull, Speed};
 use embassy_stm32::rng::Rng;
 use embassy_stm32::time::khz;
-use embassy_stm32::{bind_interrupts, peripherals, rng, spi};
+use embassy_stm32::{bind_interrupts, dma, peripherals, rng, spi};
 use embassy_time::Delay;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use lora_phy::iv::GenericSx127xInterfaceVariant;
@@ -22,6 +22,8 @@ use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     RNG_LPUART1 => rng::InterruptHandler<peripherals::RNG>;
+    EXTI4_15 => exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI4_15>;
+    DMA1_CHANNEL2_3 => dma::InterruptHandler<peripherals::DMA1_CH2>, dma::InterruptHandler<peripherals::DMA1_CH3>;
 });
 
 // warning: set these appropriately for the region
@@ -35,13 +37,13 @@ async fn main(_spawner: Spawner) {
     config.rcc.sys = embassy_stm32::rcc::Sysclk::HSI;
     let p = embassy_stm32::init(config);
 
-    let nss = Output::new(p.PA15.degrade(), Level::High, Speed::Low);
-    let reset = Output::new(p.PC0.degrade(), Level::High, Speed::Low);
-    let irq = ExtiInput::new(p.PB4, p.EXTI4, Pull::Up);
+    let nss = Output::new(p.PA15, Level::High, Speed::Low);
+    let reset = Output::new(p.PC0, Level::High, Speed::Low);
+    let irq = ExtiInput::new(p.PB4, p.EXTI4, Pull::Up, Irqs);
 
     let mut spi_config = spi::Config::default();
     spi_config.frequency = khz(200);
-    let spi = spi::Spi::new(p.SPI1, p.PB3, p.PA7, p.PA6, p.DMA1_CH3, p.DMA1_CH2, spi_config);
+    let spi = spi::Spi::new(p.SPI1, p.PB3, p.PA7, p.PA6, p.DMA1_CH3, p.DMA1_CH2, Irqs, spi_config);
     let spi = ExclusiveDevice::new(spi, nss, Delay).unwrap();
 
     let config = sx127x::Config {
