@@ -1,4 +1,5 @@
-use lorawan::maccommands::{parse_uplink_mac_commands, SerializableMacCommand, UplinkMacCommand};
+use lorawan::maccommands::parse_uplink_mac_commands;
+use lorawan::maccommands::{SerializableMacCommand, UplinkMacCommand};
 use lorawan::packet_length::phy::mac::fhdr::FOPTS_MAX_LEN;
 
 #[cfg(feature = "serde")]
@@ -33,6 +34,7 @@ impl Uplink {
             use UplinkMacCommand::*;
             let mut data: heapless::Vec<u8, FOPTS_MAX_LEN> = heapless::Vec::new();
             let _: heapless::Vec<_, FOPTS_MAX_LEN> = parse_uplink_mac_commands(&self.pending)
+                .filter_map(Result::ok)
                 .filter(|cmd| {
                     matches!(cmd, DlChannelAns(_) | RXParamSetupAns(_) | RXTimingSetupAns(_))
                 })
@@ -66,15 +68,16 @@ impl defmt::Format for Uplink {
 #[cfg(test)]
 mod test {
     use super::*;
-    use lorawan::maccommands::{parse_uplink_mac_commands, LinkADRAnsCreator, UplinkMacCommand};
+    use lorawan::maccommands::parse_uplink_mac_commands;
+    use lorawan::maccommands::LinkADRAnsCreator;
     #[test]
     fn two_link_adr_ans() {
         let mut uplink = Uplink::default();
         uplink.add_mac_command(LinkADRAnsCreator::new());
         uplink.add_mac_command(LinkADRAnsCreator::new());
         let mut mac_commands = parse_uplink_mac_commands(uplink.mac_commands());
-        assert!(matches!(mac_commands.next().unwrap(), UplinkMacCommand::LinkADRAns(_)));
-        assert!(matches!(mac_commands.next().unwrap(), UplinkMacCommand::LinkADRAns(_)));
+        assert!(matches!(mac_commands.next().unwrap().unwrap(), UplinkMacCommand::LinkADRAns(_)));
+        assert!(matches!(mac_commands.next().unwrap().unwrap(), UplinkMacCommand::LinkADRAns(_)));
         assert!(mac_commands.next().is_none());
     }
 }

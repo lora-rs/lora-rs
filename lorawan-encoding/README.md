@@ -26,44 +26,49 @@ lorawan = "0.9"
 ### Packet generation
 
 ```rust
-use lorawan::{creator::JoinAcceptCreator, keys};
 use lorawan::default_crypto::DefaultFactory;
-use lorawan::types::Frequency;
+use lorawan::keys::AppKey;
+use lorawan::types::DLSettings;
+use lorawan::creator::JoinAccept;
+use lorawan::parser::{CfList, DevAddr, Frequency, JoinNonce, NetId};
 
+let accept = JoinAccept {
+    join_nonce: JoinNonce::from_wire_bytes([1; 3]),
+    net_id: NetId::from_wire_bytes([1; 3]),
+    dev_addr: DevAddr::from_wire_bytes([1; 4]),
+    dl_settings: DLSettings::new(2),
+    rx_delay: 1,
+    c_f_list: Some(CfList::DynamicChannel([
+        Frequency::from_hz(867_100_000),
+        Frequency::from_hz(867_300_000),
+        Frequency::from_hz(867_500_000),
+        Frequency::from_hz(867_700_000),
+        Frequency::from_hz(867_900_000),
+    ])),
+};
 let mut data = [0; 33];
-let mut phy = JoinAcceptCreator::new(&mut data).unwrap();
-let key = keys::AES128([1; 16]);
-let app_nonce_bytes = [1; 3];
-phy.set_app_nonce(&app_nonce_bytes);
-phy.set_net_id(&[1; 3]);
-phy.set_dev_addr(&[1; 4]);
-phy.set_dl_settings(2);
-phy.set_rx_delay(1);
-let mut freqs = [
-    Frequency::new(&[0x58, 0x6e, 0x84,]).unwrap(),
-    Frequency::new(&[0x88, 0x66, 0x84,]).unwrap()
-];
-phy.set_c_f_list(freqs).unwrap();
-let payload = phy.build(&key,&DefaultFactory).unwrap();
+let key = AppKey::from([1; 16]);
+let payload = accept.build_into(&mut data, &key, &DefaultFactory).unwrap();
 println!("Payload: {:x?}", payload);
 ```
 
 ### Packet parsing
 
 ```rust
-use lorawan::parser::*;
-use lorawan::keys::*;
+use lorawan::keys::AppSKey;
+use lorawan::parser::{parse, DecryptedDataPayload, FrmPayload, PhyPayload};
 
-let data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
+let mut data = vec![0x40, 0x04, 0x03, 0x02, 0x01, 0x80, 0x01, 0x00, 0x01,
 0xa6, 0x94, 0x64, 0x26, 0x15, 0xd6, 0xc3, 0xb5, 0x82];
-if let Ok(PhyPayload::Data(DataPayload::Encrypted(phy))) = parse(data) {
-    let key = AES128([1; 16]);
-    let decrypted = phy.decrypt(None, Some(&key), 1, &lorawan::default_crypto::DefaultFactory).unwrap();
-    if let FRMPayload::Data(data_payload) = decrypted.frm_payload() {
-            println!("{}", String::from_utf8_lossy(data_payload));
-    }
-} else {
+// Inspect the frame read-only, then decrypt it in place.
+let Ok(PhyPayload::Data(phy)) = parse(&data) else {
     panic!("failed to parse data payload");
+};
+let key = AppSKey::from([1; 16]);
+let decrypted = DecryptedDataPayload::decrypt_in_place(
+    &mut data, None, Some(&key), 1, &lorawan::default_crypto::DefaultFactory).unwrap();
+if let FrmPayload::Data(data_payload) = decrypted.frm_payload() {
+    println!("{}", String::from_utf8_lossy(data_payload));
 }
 ```
 

@@ -106,15 +106,15 @@ pub(crate) trait DynamicChannelRegion: ChannelRegion {
 }
 
 impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
-    fn process_join_accept<T: AsRef<[u8]>>(&mut self, join_accept: &DecryptedJoinAcceptPayload<T>) {
-        match join_accept.c_f_list() {
+    fn process_join_accept(&mut self, c_f_list: Option<&CfList>) {
+        match c_f_list {
             // Type 0
             Some(CfList::DynamicChannel(cf_list)) => {
                 // CfList of Type 0 may contain up to 5 frequencies, which define
                 // channels J to (J+4). Data rates for these channels is DR0..=DR5
                 for (n, freq) in cf_list.iter().enumerate() {
                     let index = R::NUM_JOIN_CHANNELS as usize + n;
-                    let value = freq.value();
+                    let value = freq.hz();
                     // unused channels are set to 0
                     if value == 0 {
                         self.channels[index] = None;

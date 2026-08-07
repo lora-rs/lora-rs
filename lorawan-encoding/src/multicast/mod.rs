@@ -2,7 +2,7 @@ mod group_setup;
 mod group_status;
 pub use group_status::McGroupStatusAnsCreator;
 
-use crate::maccommands::{Error, MacCommandIterator, SerializableMacCommand};
+use crate::maccommands::{Error, SerializableMacCommand};
 pub use group_setup::Session;
 use lorawan_macros::CommandHandler;
 
@@ -107,21 +107,30 @@ impl McGroupDeleteAnsCreator {
     }
 }
 
-pub fn parse_downlink_multicast_messages(
+/// Parses a stream of downlink (server-transmitted) multicast setup commands.
+///
+/// Yields `Result` per command and fuses after the first error. Notably, a
+/// lone `McGroupStatusAns` CID byte is reported as `Truncated` (the retired
+/// iterator panicked on that remotely-reachable input).
+#[inline]
+pub fn parse_downlink_multicast_commands(
     data: &[u8],
-) -> MacCommandIterator<'_, DownlinkRemoteSetup<'_>> {
-    MacCommandIterator::new(data)
+) -> crate::maccommands::MacCommands<'_, DownlinkRemoteSetup<'_>> {
+    crate::maccommands::MacCommands::new(data)
 }
 
-pub fn parse_uplink_multicast_messages(
+/// Parses a stream of uplink (device-transmitted) multicast setup commands.
+#[inline]
+pub fn parse_uplink_multicast_commands(
     data: &[u8],
-) -> MacCommandIterator<'_, UplinkRemoteSetup<'_>> {
-    MacCommandIterator::new(data)
+) -> crate::maccommands::MacCommands<'_, UplinkRemoteSetup<'_>> {
+    crate::maccommands::MacCommands::new(data)
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::multicast::{parse_downlink_multicast_commands, parse_uplink_multicast_commands};
     use crate::parser::McAddr;
 
     #[test]
@@ -130,11 +139,11 @@ mod test {
             2, 0, 52, 110, 29, 60, 205, 66, 22, 52, 69, 234, 32, 24, 25, 71, 17, 87, 212, 165, 74,
             142, 0, 0, 0, 0, 255, 255, 255, 255,
         ];
-        let mut messages = parse_downlink_multicast_messages(&bytes);
+        let mut messages = parse_downlink_multicast_commands(&bytes).filter_map(Result::ok);
         let first_msg = messages.next().unwrap();
         if let DownlinkRemoteSetup::McGroupSetupReq(mc_group_setup_req) = first_msg {
             assert_eq!(mc_group_setup_req.mc_group_id_header(), 0);
-            assert_eq!(mc_group_setup_req.mc_addr(), McAddr::from([52, 110, 29, 60]));
+            assert_eq!(mc_group_setup_req.mc_addr(), McAddr::from_wire_bytes([52, 110, 29, 60]));
             assert_eq!(
                 mc_group_setup_req.mc_key_encrypted(),
                 &[205, 66, 22, 52, 69, 234, 32, 24, 25, 71, 17, 87, 212, 165, 74, 142]
@@ -152,7 +161,7 @@ mod test {
         creator.package_identifier(0x01).package_version(0x02);
         let bytes = creator.build();
 
-        let mut messages = parse_uplink_multicast_messages(bytes);
+        let mut messages = parse_uplink_multicast_commands(bytes).filter_map(Result::ok);
         let msg = messages.next().unwrap();
         if let UplinkRemoteSetup::PackageVersionAns(ans) = msg {
             assert_eq!(ans.package_identifier(), 0x01);
@@ -168,7 +177,7 @@ mod test {
         creator.mc_group_id_header(3);
         let bytes = creator.build();
 
-        let mut messages = parse_downlink_multicast_messages(bytes);
+        let mut messages = parse_downlink_multicast_commands(bytes).filter_map(Result::ok);
         let msg = messages.next().unwrap();
         if let DownlinkRemoteSetup::McGroupDeleteReq(req) = msg {
             assert_eq!(req.mc_group_id_header(), 3);
@@ -183,7 +192,7 @@ mod test {
         creator.mc_group_id_header(3).mc_group_undefined(false);
         let bytes = creator.build();
 
-        let mut messages = parse_uplink_multicast_messages(bytes);
+        let mut messages = parse_uplink_multicast_commands(bytes).filter_map(Result::ok);
         let msg = messages.next().unwrap();
         if let UplinkRemoteSetup::McGroupDeleteAns(ans) = msg {
             assert_eq!(ans.mc_group_id_header(), 3);
@@ -199,7 +208,7 @@ mod test {
         creator.mc_group_id_header(2).mc_group_undefined(true);
         let bytes = creator.build();
 
-        let mut messages = parse_uplink_multicast_messages(bytes);
+        let mut messages = parse_uplink_multicast_commands(bytes).filter_map(Result::ok);
         let msg = messages.next().unwrap();
         if let UplinkRemoteSetup::McGroupDeleteAns(ans) = msg {
             assert_eq!(ans.mc_group_id_header(), 2);

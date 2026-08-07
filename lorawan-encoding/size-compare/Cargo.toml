@@ -11,8 +11,6 @@ crate-type = ["staticlib"]
 lorawan = { path = "..", default-features = false }
 
 [features]
-old1 = []
-old3 = []
 new1 = []
 new3 = []
 

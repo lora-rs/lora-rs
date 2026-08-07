@@ -1,15 +1,15 @@
 use super::*;
-use lorawan::maccommandcreator::build_mac_commands;
-use lorawan::maccommands::{
-    ChannelMask, DownlinkMacCommand, MacCommandIterator, SerializableMacCommand, UplinkMacCommand,
+use core::num::NonZeroU8;
+use lorawan::creator::{DataFrame, JoinAccept, Payload};
+use lorawan::default_crypto::DefaultFactory;
+use lorawan::maccommandcreator::LinkADRReqCreator;
+use lorawan::maccommands::parse_uplink_mac_commands;
+use lorawan::maccommands::UplinkMacCommand;
+use lorawan::parser::{
+    self, DataFrameType, DecryptedDataPayload, DecryptedJoinAcceptPayload, DevAddr, JoinNonce,
+    NetId, PhyPayload,
 };
-use lorawan::parser::{self, DataHeader};
-use lorawan::{
-    default_crypto::DefaultFactory,
-    maccommandcreator::LinkADRReqCreator,
-    maccommands::LinkADRReqPayload,
-    parser::{parse, DataPayload, JoinAcceptPayload, PhyPayload},
-};
+use lorawan::types::{ChannelMask, DLSettings};
 use mac::Session;
 
 use radio::{RfConfig, TxConfig};
@@ -35,15 +35,13 @@ impl Uplink {
     pub fn new(data_in: &[u8], tx_config: TxConfig) -> Result<Self, parser::Error> {
         let mut data: Vec<u8> = Vec::new();
         data.extend_from_slice(data_in);
-        let _parse = parse(data.as_mut_slice())?;
+        let _parse = parser::parse(&data)?;
         Ok(Self { data, tx_config })
     }
 
-    pub fn get_payload(&mut self) -> PhyPayload<&mut [u8]> {
-        match parse(self.data.as_mut_slice()) {
-            Ok(p) => p,
-            Err(e) => panic!("Failed to parse payload: {:?}", e),
-        }
+    /// The raw frame bytes; mutable so handlers can decrypt in place.
+    pub fn data_mut(&mut self) -> &mut [u8] {
+        &mut self.data
     }
 }
 
@@ -52,8 +50,8 @@ pub fn get_key() -> [u8; 16] {
     [0; 16]
 }
 
-pub fn get_dev_addr() -> DevAddr<[u8; 4]> {
-    DevAddr::from(0)
+pub fn get_dev_addr() -> DevAddr {
+    DevAddr::from_value(0)
 }
 pub fn get_otaa_credentials() -> JoinMode {
     JoinMode::OTAA {
@@ -92,41 +90,42 @@ pub fn handle_join_request_with_dl_settings<const I: usize, const DL_SETTINGS: u
     rx_buffer: &mut [u8],
 ) -> usize {
     if let Some(mut uplink) = uplink {
-        if let PhyPayload::JoinRequest(join_request) = uplink.get_payload() {
-            let devnonce = join_request.dev_nonce().to_owned();
+        if let Ok(PhyPayload::JoinRequest(join_request)) = parser::parse(uplink.data_mut()) {
+            let devnonce = join_request.dev_nonce();
             assert!(join_request.validate_mic(&get_key().into(), &DefaultFactory));
-            let mut buffer: [u8; 17] = [0; 17];
-            let mut phy = lorawan::creator::JoinAcceptCreator::new(&mut buffer[..]).unwrap();
-            let app_nonce_bytes = [1; 3];
-            phy.set_app_nonce(&app_nonce_bytes);
-            phy.set_net_id(&[1; 3]);
-            phy.set_dev_addr(get_dev_addr());
-            phy.set_dl_settings(DL_SETTINGS);
-            let finished = phy.build(&get_key().into(), &DefaultFactory).unwrap();
-            rx_buffer[..finished.len()].copy_from_slice(finished);
+            let accept = JoinAccept {
+                join_nonce: JoinNonce::from_wire_bytes([1; 3]),
+                net_id: NetId::from_wire_bytes([1; 3]),
+                dev_addr: get_dev_addr(),
+                dl_settings: DLSettings::new(DL_SETTINGS),
+                rx_delay: 0,
+                c_f_list: None,
+            };
+            let finished =
+                accept.build_into(rx_buffer, &get_key().into(), &DefaultFactory).unwrap();
+            let len = finished.len();
 
-            let mut copy = rx_buffer[..finished.len()].to_vec();
-            if let PhyPayload::JoinAccept(JoinAcceptPayload::Encrypted(encrypted)) =
-                parse(copy.as_mut_slice()).unwrap()
+            let mut copy = finished.to_vec();
+            let decrypt = DecryptedJoinAcceptPayload::check_mic_and_decrypt_in_place(
+                copy.as_mut_slice(),
+                &get_key().into(),
+                &DefaultFactory,
+            )
+            .expect("Somehow unable to parse my own join accept?");
+            let session = Session::derive_new(
+                &decrypt,
+                devnonce,
+                &NetworkCredentials::new(
+                    AppEui::from([0; 8]),
+                    DevEui::from([0; 8]),
+                    AppKey::from(get_key()),
+                ),
+            );
             {
-                let decrypt = encrypted.decrypt(&get_key().into(), &DefaultFactory);
-                let session = Session::derive_new(
-                    &decrypt,
-                    devnonce,
-                    &NetworkCredentials::new(
-                        AppEui::from([0; 8]),
-                        DevEui::from([0; 8]),
-                        AppKey::from(get_key()),
-                    ),
-                );
-                {
-                    let mut session_map = SESSION.lock().unwrap();
-                    session_map.insert(I, session);
-                }
-            } else {
-                panic!("Somehow unable to parse my own join accept?")
+                let mut session_map = SESSION.lock().unwrap();
+                session_map.insert(I, session);
             }
-            finished.len()
+            len
         } else {
             panic!("Did not parse join request from uplink");
         }
@@ -142,46 +141,45 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
     rx_buffer: &mut [u8],
 ) -> usize {
     if let Some(mut uplink) = uplink {
-        if let PhyPayload::Data(DataPayload::Encrypted(data)) = uplink.get_payload() {
-            let fcnt = data.fhdr().fcnt() as u32;
-            assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
-            let uplink = data
-                .decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt, &DefaultFactory)
-                .unwrap();
-            assert_eq!(uplink.fhdr().fcnt(), FCNT_UP);
-            let mac_cmds = [link_adr_req_with_bank_ctrl(0b10), link_adr_req_with_bank_ctrl(0b100)];
-            let mac_cmds = [
-                // drop the CID byte when building the MAC Command (ie: [1..])
-                DownlinkMacCommand::LinkADRReq(
-                    LinkADRReqPayload::new(&mac_cmds[0].build()[1..]).unwrap(),
-                ),
-                DownlinkMacCommand::LinkADRReq(
-                    LinkADRReqPayload::new(&mac_cmds[1].build()[1..]).unwrap(),
-                ),
-            ];
-            let cmds: Vec<&dyn SerializableMacCommand> = vec![&mac_cmds[0], &mac_cmds[1]];
-            let mut cmds_buf = [0u8; 256];
-            let cmds_buf_len = build_mac_commands(&cmds, &mut cmds_buf).unwrap();
+        let bytes = uplink.data_mut();
+        let (fcnt, confirmed) = match parser::parse(&*bytes) {
+            Ok(PhyPayload::Data(data)) => {
+                let fcnt = data.fhdr().fcnt() as u32;
+                assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
+                (fcnt, data.is_confirmed())
+            }
+            _ => panic!("Did not decode PhyPayload::Data!"),
+        };
+        let decrypted = DecryptedDataPayload::decrypt_in_place(
+            bytes,
+            Some(&get_key().into()),
+            Some(&get_key().into()),
+            fcnt,
+            &DefaultFactory,
+        )
+        .unwrap();
+        assert_eq!(decrypted.fhdr().fcnt(), FCNT_UP);
 
-            let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
-            phy.set_confirmed(uplink.is_confirmed());
-            phy.set_f_port(4);
-            phy.set_dev_addr(&[0; 4]);
-            phy.set_uplink(false);
-            phy.set_fcnt(FCNT_DOWN);
-            let finished = phy
-                .build(
-                    &[3, 2, 1],
-                    &cmds_buf[..cmds_buf_len],
-                    &get_key().into(),
-                    &get_key().into(),
-                    &DefaultFactory,
-                )
-                .unwrap();
-            finished.len()
-        } else {
-            panic!("Did not decode PhyPayload::Data!");
-        }
+        let mut cmds: Vec<u8> = Vec::new();
+        cmds.extend_from_slice(link_adr_req_with_bank_ctrl(0b10).build());
+        cmds.extend_from_slice(link_adr_req_with_bank_ctrl(0b100).build());
+
+        let frame = DataFrame {
+            frame_type: if confirmed {
+                DataFrameType::ConfirmedDown
+            } else {
+                DataFrameType::UnconfirmedDown
+            },
+            dev_addr: get_dev_addr(),
+            fcnt: FCNT_DOWN,
+            f_opts: &cmds,
+            payload: Payload::Data { f_port: NonZeroU8::new(4).unwrap(), data: &[3, 2, 1] },
+            ..Default::default()
+        };
+        let finished = frame
+            .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
+            .unwrap();
+        finished.len()
     } else {
         panic!("No uplink passed to handle_data_uplink_with_link_adr_req");
     }
@@ -195,19 +193,19 @@ pub fn handle_join_request_bad_mic(
     rx_buffer: &mut [u8],
 ) -> usize {
     if let Some(mut uplink) = uplink {
-        if let PhyPayload::JoinRequest(join_request) = uplink.get_payload() {
+        if let Ok(PhyPayload::JoinRequest(join_request)) = parser::parse(uplink.data_mut()) {
             assert!(join_request.validate_mic(&get_key().into(), &DefaultFactory));
-            let mut buffer: [u8; 17] = [0; 17];
-            let mut phy = lorawan::creator::JoinAcceptCreator::new(&mut buffer[..]).unwrap();
-            let app_nonce_bytes = [1; 3];
-            phy.set_app_nonce(&app_nonce_bytes);
-            phy.set_net_id(&[1; 3]);
-            phy.set_dev_addr(get_dev_addr());
-            phy.set_dl_settings(0x2A);
-            phy.set_rx_delay(3);
+            let accept = JoinAccept {
+                join_nonce: JoinNonce::from_wire_bytes([1; 3]),
+                net_id: NetId::from_wire_bytes([1; 3]),
+                dev_addr: get_dev_addr(),
+                dl_settings: DLSettings::new(0x2A),
+                rx_delay: 3,
+                c_f_list: None,
+            };
             let wrong_key = [1; 16];
-            let finished = phy.build(&wrong_key.into(), &DefaultFactory).unwrap();
-            rx_buffer[..finished.len()].copy_from_slice(finished);
+            let finished =
+                accept.build_into(rx_buffer, &wrong_key.into(), &DefaultFactory).unwrap();
             finished.len()
         } else {
             panic!("Did not parse join request from uplink");
@@ -238,35 +236,48 @@ pub fn handle_data_uplink_with_link_adr_ans(
     rx_buffer: &mut [u8],
 ) -> usize {
     if let Some(mut uplink) = uplink {
-        if let PhyPayload::Data(DataPayload::Encrypted(data)) = uplink.get_payload() {
-            let fcnt = data.fhdr().fcnt() as u32;
-            assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
-            let uplink = data
-                .decrypt(Some(&get_key().into()), Some(&get_key().into()), fcnt, &DefaultFactory)
-                .unwrap();
-            let fhdr = uplink.fhdr();
-            let mac_cmds: Vec<UplinkMacCommand<'_>> =
-                MacCommandIterator::<UplinkMacCommand<'_>>::new(fhdr.data()).collect();
+        let bytes = uplink.data_mut();
+        let (fcnt, confirmed) = match parser::parse(&*bytes) {
+            Ok(PhyPayload::Data(data)) => {
+                let fcnt = data.fhdr().fcnt() as u32;
+                assert!(data.validate_mic(&get_key().into(), fcnt, &DefaultFactory));
+                (fcnt, data.is_confirmed())
+            }
+            _ => panic!(
+                "Unable to parse PhyPayload::Data from uplink in handle_data_uplink_with_link_adr_ans"
+            ),
+        };
+        let decrypted = DecryptedDataPayload::decrypt_in_place(
+            bytes,
+            Some(&get_key().into()),
+            Some(&get_key().into()),
+            fcnt,
+            &DefaultFactory,
+        )
+        .unwrap();
+        let fhdr = decrypted.fhdr();
+        let mac_cmds: Vec<UplinkMacCommand<'_>> =
+            parse_uplink_mac_commands(fhdr.f_opts()).collect::<Result<_, _>>().unwrap();
 
-            assert_eq!(mac_cmds.len(), 2);
-            assert!(matches!(mac_cmds[0], UplinkMacCommand::LinkADRAns(_)));
-            assert!(matches!(mac_cmds[1], UplinkMacCommand::LinkADRAns(_)));
+        assert_eq!(mac_cmds.len(), 2);
+        assert!(matches!(mac_cmds[0], UplinkMacCommand::LinkADRAns(_)));
+        assert!(matches!(mac_cmds[1], UplinkMacCommand::LinkADRAns(_)));
 
-            // Build the actual data payload with FPort 0 which allows MAC Commands in payload
-            rx_buffer.iter_mut().for_each(|x| *x = 0);
-            let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
-            phy.set_confirmed(uplink.is_confirmed());
-            phy.set_dev_addr(&[0; 4]);
-            phy.set_uplink(false);
-            //phy.set_f_port(3);
-            phy.set_fcnt(1);
-            // zero out rx_buffer
-            let finished =
-                phy.build(&[], [], &get_key().into(), &get_key().into(), &DefaultFactory).unwrap();
-            finished.len()
-        } else {
-            panic!("Unable to parse PhyPayload::Data from uplink in handle_data_uplink_with_link_adr_ans")
-        }
+        // Respond with an empty downlink frame (no FPort, no payload).
+        let frame = DataFrame {
+            frame_type: if confirmed {
+                DataFrameType::ConfirmedDown
+            } else {
+                DataFrameType::UnconfirmedDown
+            },
+            dev_addr: get_dev_addr(),
+            fcnt: 1,
+            ..Default::default()
+        };
+        let finished = frame
+            .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
+            .unwrap();
+        finished.len()
     } else {
         panic!("No uplink passed to handle_data_uplink_with_link_adr_ans")
     }

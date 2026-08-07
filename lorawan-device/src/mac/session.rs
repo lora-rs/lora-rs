@@ -5,17 +5,22 @@ use super::{
 use crate::radio::RadioBuffer;
 use crate::region::constants::MAX_FCNT_GAP;
 use crate::{region, AppSKey, Downlink, NwkSKey};
+use core::num::NonZeroU8;
 use heapless::Vec;
+use lorawan::creator::{DataFrame, Payload};
 use lorawan::maccommandcreator::{
     DevStatusAnsCreator, DlChannelAnsCreator, LinkADRAnsCreator, NewChannelAnsCreator,
     RXParamSetupAnsCreator, RXTimingSetupAnsCreator,
 };
-use lorawan::maccommands::{DownlinkMacCommand, MacCommandIterator};
+use lorawan::maccommands::DownlinkMacCommand;
+use lorawan::maccommands::{parse_downlink_mac_commands, MacCommands};
+use lorawan::parser::{
+    DataFrameType, DecryptedDataPayload, DecryptedJoinAcceptPayload, DevAddr, EncryptedDataPayload,
+    FrmPayload,
+};
 use lorawan::{
-    creator::DataPayloadCreator,
     default_crypto::DefaultFactory,
     packet_length::phy::{MHDR_LEN, MIC_LEN},
-    parser::{parse as lorawan_parse, *},
     types::DR,
 };
 
@@ -30,7 +35,7 @@ pub struct Session {
     pub confirmed: bool,
     pub nwkskey: NwkSKey,
     pub appskey: AppSKey,
-    pub devaddr: DevAddr<[u8; 4]>,
+    pub devaddr: DevAddr,
     pub fcnt_up: u32,
     /// Frame counter of the last accepted downlink, or `None` before the first
     /// downlink of the session. Only the low 16 bits of the counter are on the
@@ -53,7 +58,7 @@ pub struct Session {
 pub struct SessionKeys {
     pub nwkskey: NwkSKey,
     pub appskey: AppSKey,
-    pub devaddr: DevAddr<[u8; 4]>,
+    pub devaddr: DevAddr,
 }
 
 impl From<Session> for SessionKeys {
@@ -63,25 +68,19 @@ impl From<Session> for SessionKeys {
 }
 
 impl Session {
-    pub fn derive_new<T: AsRef<[u8]>>(
-        decrypt: &DecryptedJoinAcceptPayload<T>,
+    pub fn derive_new(
+        decrypt: &DecryptedJoinAcceptPayload<'_>,
         devnonce: DevNonce,
         credentials: &NetworkCredentials,
     ) -> Self {
         Self::new(
-            decrypt.derive_nwkskey(&devnonce, credentials.appkey(), &DefaultFactory),
-            decrypt.derive_appskey(&devnonce, credentials.appkey(), &DefaultFactory),
-            DevAddr::new([
-                decrypt.dev_addr().as_ref()[0],
-                decrypt.dev_addr().as_ref()[1],
-                decrypt.dev_addr().as_ref()[2],
-                decrypt.dev_addr().as_ref()[3],
-            ])
-            .unwrap(),
+            decrypt.derive_nwkskey(devnonce, credentials.appkey(), &DefaultFactory),
+            decrypt.derive_appskey(devnonce, credentials.appkey(), &DefaultFactory),
+            decrypt.dev_addr(),
         )
     }
 
-    pub fn new(nwkskey: NwkSKey, appskey: AppSKey, devaddr: DevAddr<[u8; 4]>) -> Self {
+    pub fn new(nwkskey: NwkSKey, appskey: AppSKey, devaddr: DevAddr) -> Self {
         Self {
             nwkskey,
             appskey,
@@ -100,7 +99,7 @@ impl Session {
         }
     }
 
-    pub fn devaddr(&self) -> &DevAddr<[u8; 4]> {
+    pub fn devaddr(&self) -> &DevAddr {
         &self.devaddr
     }
     pub fn appskey(&self) -> &AppSKey {
@@ -140,9 +139,8 @@ impl Session {
         snr: i8,
         ignore_mac: bool,
     ) -> Response {
-        if let Ok(PhyPayload::Data(DataPayload::Encrypted(encrypted_data))) =
-            lorawan_parse(rx.as_mut_for_read())
-        {
+        let bytes = rx.as_mut_for_read();
+        if let Ok(encrypted_data) = EncryptedDataPayload::parse(bytes) {
             {
                 // Drop oversized packets which exceed the maximum allowed
                 // transmission time defined by PHY layer.
@@ -170,7 +168,7 @@ impl Session {
             #[cfg(feature = "multicast")]
             if let Some(port) = encrypted_data.f_port() {
                 if multicast.is_in_range(port) {
-                    return multicast.handle_rx(dl, encrypted_data).into();
+                    return multicast.handle_rx(dl, bytes).into();
                 }
             }
             let confirmed = encrypted_data.is_confirmed();
@@ -180,28 +178,28 @@ impl Session {
             if encrypted_data.validate_mic(self.nwkskey().inner(), fcnt, &DefaultFactory) {
                 self.fcnt_down = Some(fcnt);
                 // We can safely unwrap here because we already validated the MIC
-                let decrypted = encrypted_data
-                    .decrypt(
-                        Some(self.nwkskey().inner()),
-                        Some(self.appskey().inner()),
-                        fcnt,
-                        &DefaultFactory,
-                    )
-                    .unwrap();
+                let decrypted = DecryptedDataPayload::decrypt_in_place(
+                    bytes,
+                    Some(&self.nwkskey),
+                    Some(&self.appskey),
+                    fcnt,
+                    &DefaultFactory,
+                )
+                .unwrap();
 
                 if !ignore_mac {
                     // MAC commands may be in the FHDR or the FRMPayload
                     self.handle_downlink_macs(
                         configuration,
                         region,
-                        MacCommandIterator::<DownlinkMacCommand<'_>>::new(decrypted.fhdr().data()),
+                        parse_downlink_mac_commands(decrypted.fhdr().f_opts()),
                         snr,
                     );
-                    if let FRMPayload::MACCommands(mac_cmds) = decrypted.frm_payload() {
+                    if let FrmPayload::MacCommands(mac_cmds) = decrypted.frm_payload() {
                         self.handle_downlink_macs(
                             configuration,
                             region,
-                            MacCommandIterator::<DownlinkMacCommand<'_>>::new(mac_cmds.data()),
+                            parse_downlink_mac_commands(mac_cmds),
                             snr,
                         );
                     }
@@ -217,7 +215,7 @@ impl Session {
                 } else {
                     // we can always increment fcnt_up when we receive a downlink
                     self.fcnt_up += 1;
-                    if let (Some(fport), FRMPayload::Data(data)) =
+                    if let (Some(fport), FrmPayload::Data(data)) =
                         (decrypted.f_port(), decrypted.frm_payload())
                     {
                         #[cfg(feature = "certification")]
@@ -292,18 +290,22 @@ impl Session {
         tx_buffer.clear();
         let fcnt = self.fcnt_up;
         let mut buf = [0u8; 256];
-        let mut phy = DataPayloadCreator::new(&mut buf).unwrap();
 
-        let mut fctrl = FCtrl(0x0, true);
-        if self.uplink.confirms_downlink() {
-            fctrl.set_ack();
+        let ack = self.uplink.confirms_downlink();
+        if ack {
             self.uplink.clear_downlink_confirmation();
         }
 
-        #[cfg(feature = "certification")]
-        if self.override_adr {
-            fctrl.set_adr()
-        }
+        let adr = {
+            #[cfg(feature = "certification")]
+            {
+                self.override_adr
+            }
+            #[cfg(not(feature = "certification"))]
+            {
+                false
+            }
+        };
 
         self.confirmed = data.confirmed;
         #[cfg(feature = "certification")]
@@ -311,27 +313,42 @@ impl Session {
             self.confirmed = v;
         }
 
-        phy.set_confirmed(self.confirmed)
-            .set_fctrl(&fctrl)
-            .set_f_port(data.fport)
-            .set_dev_addr(self.devaddr)
-            .set_fcnt(fcnt);
-
-        let crypto_factory = DefaultFactory;
-        match phy.build(
-            data.data,
-            self.uplink.mac_commands(),
-            &self.nwkskey,
-            &self.appskey,
-            &crypto_factory,
-        ) {
+        // FPort 0 sends the queued MAC commands as the FRMPayload (encrypted
+        // with the NwkSKey) with FOpts left empty; the spec forbids
+        // application data on port 0. Any other port piggybacks the queued
+        // commands in FOpts.
+        let (f_opts, payload) = match NonZeroU8::new(data.fport) {
+            Some(f_port) => (self.uplink.mac_commands(), Payload::Data { f_port, data: data.data }),
+            None => {
+                if !data.data.is_empty() {
+                    panic!("Error assembling packet! Data payload with fport 0 not allowed");
+                }
+                (&[][..], Payload::MacCommands(self.uplink.mac_commands()))
+            }
+        };
+        let frame = DataFrame {
+            frame_type: if self.confirmed {
+                DataFrameType::ConfirmedUp
+            } else {
+                DataFrameType::UnconfirmedUp
+            },
+            dev_addr: self.devaddr,
+            adr,
+            adr_ack_req: false,
+            ack,
+            f_pending: false,
+            fcnt,
+            f_opts,
+            payload,
+        };
+        match frame.build_into(&mut buf, &self.nwkskey, Some(&self.appskey), &DefaultFactory) {
             Ok(packet) => {
-                self.uplink.clear_mac_commands(true);
                 tx_buffer.clear();
                 tx_buffer.extend_from_slice(packet).unwrap();
             }
             Err(e) => panic!("Error assembling packet! {:?} ", e),
         }
+        self.uplink.clear_mac_commands(true);
         fcnt
     }
 
@@ -339,12 +356,14 @@ impl Session {
         &mut self,
         configuration: &mut super::Configuration,
         region: &mut region::Configuration,
-        cmds: MacCommandIterator<'_, DownlinkMacCommand<'_>>,
+        cmds: MacCommands<'_, DownlinkMacCommand<'_>>,
         snr: i8,
     ) {
         use DownlinkMacCommand::*;
         let mut channel_mask = region.channel_mask_get();
-        let mut cmd_iter = cmds.into_iter().peekable();
+        // The iterator is fused after the first malformed command, so this
+        // processes the leading well-formed prefix of the stream.
+        let mut cmd_iter = cmds.filter_map(Result::ok).peekable();
         let mut num_adrreq = 0;
         while let Some(cmd) = cmd_iter.next() {
             match cmd {
@@ -536,6 +555,37 @@ fn next_fcnt_down(last: Option<u32>, wire: u16) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::next_fcnt_down;
+    use super::{SendData, Session};
+    use crate::radio::RadioBuffer;
+    use crate::{AppSKey, NwkSKey};
+    use lorawan::default_crypto::DefaultFactory;
+    use lorawan::maccommandcreator::LinkADRAnsCreator;
+    use lorawan::parser::{DecryptedDataPayload, DevAddr, FrmPayload};
+
+    /// FPort 0 sends the queued MAC commands as the FRMPayload (encrypted
+    /// with the NwkSKey), with FOpts left empty, as the retired creator did.
+    #[test]
+    fn fport_zero_sends_queued_mac_commands_in_frm_payload() {
+        let nwkskey = NwkSKey::from([2; 16]);
+        let appskey = AppSKey::from([1; 16]);
+        let mut session = Session::new(nwkskey, appskey, DevAddr::from_value(1));
+
+        let mut cmd = LinkADRAnsCreator::new();
+        cmd.set_channel_mask_ack(true).set_data_rate_ack(true).set_tx_power_ack(true);
+        let expected = cmd.build().to_vec();
+        session.uplink.add_mac_command(cmd);
+
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        session.prepare_buffer::<256>(&SendData { data: &[], fport: 0, confirmed: false }, &mut tx);
+
+        let bytes = tx.as_mut_for_read();
+        let decrypted =
+            DecryptedDataPayload::decrypt_in_place(bytes, Some(&nwkskey), None, 0, &DefaultFactory)
+                .unwrap();
+        assert_eq!(decrypted.fhdr().f_opts(), &[] as &[u8]);
+        assert_eq!(decrypted.f_port(), Some(0));
+        assert_eq!(decrypted.frm_payload(), FrmPayload::MacCommands(&expected[..]));
+    }
 
     #[test]
     fn first_downlink_taken_at_face_value() {

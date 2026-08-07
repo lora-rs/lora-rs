@@ -8,7 +8,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Session {
-    multicast_addr: McAddr<[u8; 4]>,
+    multicast_addr: McAddr,
     mc_net_s_key: McNetSKey,
     mc_app_s_key: McAppSKey,
     pub fcnt_down: u32,
@@ -17,7 +17,7 @@ pub struct Session {
 
 impl Session {
     pub fn new(
-        multicast_addr: McAddr<[u8; 4]>,
+        multicast_addr: McAddr,
         mc_net_s_key: McNetSKey,
         mc_app_s_key: McAppSKey,
         fcnt_down: u32,
@@ -25,7 +25,7 @@ impl Session {
     ) -> Self {
         Self { multicast_addr, mc_net_s_key, mc_app_s_key, fcnt_down, max_fcnt_down }
     }
-    pub fn multicast_addr(&self) -> McAddr<[u8; 4]> {
+    pub fn multicast_addr(&self) -> McAddr {
         self.multicast_addr
     }
     pub fn mc_net_s_key(&self) -> McNetSKey {
@@ -49,14 +49,14 @@ impl McGroupSetupReqPayload<'_> {
         self.0[0] & 0b11
     }
 
-    pub fn mc_addr(&self) -> McAddr<&[u8]> {
+    pub fn mc_addr(&self) -> McAddr {
         const OFFSET: usize = 1;
-        const END: usize = OFFSET + McAddr::<&[u8]>::byte_len();
-        McAddr::new_from_raw(&self.0[OFFSET..END])
+        const END: usize = OFFSET + McAddr::BYTE_LEN;
+        McAddr::from_wire_bytes(self.0[OFFSET..END].try_into().unwrap())
     }
 
     pub(crate) fn mc_key_encrypted(&self) -> &[u8] {
-        const OFFSET: usize = 1 + McAddr::<&[u8]>::byte_len();
+        const OFFSET: usize = 1 + McAddr::BYTE_LEN;
         const END: usize = OFFSET + McKey::byte_len();
         &self.0[OFFSET..END]
     }
@@ -84,7 +84,7 @@ impl McGroupSetupReqPayload<'_> {
         (
             self.mc_group_id_header(),
             Session {
-                multicast_addr: self.mc_addr().to_owned(),
+                multicast_addr: self.mc_addr(),
                 mc_net_s_key,
                 mc_app_s_key,
                 fcnt_down: self.min_mc_fcount(),
@@ -96,7 +96,7 @@ impl McGroupSetupReqPayload<'_> {
     /// `minMcFCount` is the next frame counter value of the multicast downlink to be sent by the
     /// server for this group
     pub fn min_mc_fcount(&self) -> u32 {
-        const OFFSET: usize = 1 + McAddr::<&[u8]>::byte_len() + McKey::byte_len();
+        const OFFSET: usize = 1 + McAddr::BYTE_LEN + McKey::byte_len();
         let bytes = &self.0[OFFSET..OFFSET + size_of::<u32>()];
         // tolerate unwrap here because we know the length is 4
         u32::from_le_bytes(bytes.try_into().unwrap())
@@ -106,8 +106,7 @@ impl McGroupSetupReqPayload<'_> {
     /// of frames. The end-device will only accept a multicast downlink frame if the 32-bits frame
     /// counter value `minMcFCount ≤ McFCount < maxMcFCount`.
     pub fn max_mc_fcount(&self) -> u32 {
-        const OFFSET: usize =
-            1 + McAddr::<&[u8]>::byte_len() + McKey::byte_len() + size_of::<u32>();
+        const OFFSET: usize = 1 + McAddr::BYTE_LEN + McKey::byte_len() + size_of::<u32>();
         let bytes = &self.0[OFFSET..OFFSET + size_of::<u32>()];
         // tolerate unwrap here because we know the length is 4
         u32::from_le_bytes(bytes.try_into().unwrap())
@@ -139,10 +138,10 @@ impl McGroupSetupReqCreator {
         self
     }
 
-    pub fn mc_addr(&mut self, addr: &McAddr<[u8; 4]>) -> &mut Self {
+    pub fn mc_addr(&mut self, addr: &McAddr) -> &mut Self {
         const OFFSET: usize = 2;
         const END: usize = OFFSET + 4;
-        self.data[OFFSET..END].copy_from_slice(addr.as_ref());
+        self.data[OFFSET..END].copy_from_slice(addr.as_wire_bytes());
         self
     }
 
@@ -152,7 +151,7 @@ impl McGroupSetupReqCreator {
         mc_key: &McKey,
         mcke_key: &McKEKey,
     ) -> &mut Self {
-        const OFFSET: usize = 2 + McAddr::<&[u8]>::byte_len();
+        const OFFSET: usize = 2 + McAddr::BYTE_LEN;
         const END: usize = OFFSET + McKey::byte_len();
         let aes_enc = crypto.new_dec(&mcke_key.0);
         let block = &mut self.data[OFFSET..END];
@@ -163,7 +162,7 @@ impl McGroupSetupReqCreator {
     }
 
     pub fn min_mc_fcount(&mut self, fcount: u32) -> &mut Self {
-        const OFFSET: usize = 2 + McAddr::<&[u8]>::byte_len() + McKey::byte_len();
+        const OFFSET: usize = 2 + McAddr::BYTE_LEN + McKey::byte_len();
 
         const END: usize = OFFSET + 4;
         self.data[OFFSET..END].copy_from_slice(&fcount.to_le_bytes());
@@ -171,8 +170,7 @@ impl McGroupSetupReqCreator {
     }
 
     pub fn max_mc_fcount(&mut self, fcount: u32) -> &mut Self {
-        const OFFSET: usize =
-            2 + McAddr::<&[u8]>::byte_len() + McKey::byte_len() + size_of::<u32>();
+        const OFFSET: usize = 2 + McAddr::BYTE_LEN + McKey::byte_len() + size_of::<u32>();
         self.data[OFFSET..OFFSET + size_of::<u32>()].copy_from_slice(&fcount.to_le_bytes());
         self
     }
@@ -182,13 +180,14 @@ impl McGroupSetupReqCreator {
 mod tests {
     use super::*;
     use crate::default_crypto::DefaultFactory;
-    use crate::multicast::{parse_downlink_multicast_messages, DownlinkRemoteSetup};
+    use crate::multicast::parse_downlink_multicast_commands;
+    use crate::multicast::DownlinkRemoteSetup;
 
     #[test]
     fn roundtrip() {
         // Create a request with the encrypted key
         let mut req = McGroupSetupReqCreator::new();
-        let mc_addr = McAddr::from([52, 110, 29, 60]);
+        let mc_addr = McAddr::from_wire_bytes([52, 110, 29, 60]);
         let mc_key = McKey::from([0x44; 16]);
         let mcke_key = McKEKey::from([0x66; 16]);
 
@@ -198,7 +197,7 @@ mod tests {
         req.min_mc_fcount(0x12345678);
         req.max_mc_fcount(0x87654321);
         let messages = req.build();
-        let mut messages = parse_downlink_multicast_messages(messages);
+        let mut messages = parse_downlink_multicast_commands(messages).filter_map(Result::ok);
         let downlink_remote_setup = messages.next().unwrap();
         let mc_group_setup_req = match downlink_remote_setup {
             DownlinkRemoteSetup::McGroupSetupReq(mc_group_setup_req) => mc_group_setup_req,

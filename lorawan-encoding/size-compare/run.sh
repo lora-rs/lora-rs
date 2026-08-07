@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds each configuration for thumbv7em-none-eabi, links it with
-# --gc-sections, and reports the text size: the flash cost of doing the same
-# parse/decrypt work through each API.
+# --gc-sections, and reports the text size: the flash cost of the
+# parse/decrypt workload through the borrowed-view API.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -23,10 +23,8 @@ measure() {
 }
 
 printf "%-6s %-10s %s\n" cfg "lto=fat" "lto=off"
-for cfg in old1 old3 new1 new3; do
+for cfg in new1 new3; do
     case $cfg in
-        old1) syms=(work_slice) ;;
-        old3) syms=(work_slice work_array work_wrapper) ;;
         new1) syms=(work_slice_new) ;;
         new3) syms=(work_slice_new work_array_new work_wrapper_new) ;;
     esac

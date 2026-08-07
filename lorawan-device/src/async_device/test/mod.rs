@@ -336,15 +336,15 @@ async fn invalid_maccommands_in_frmpayload() {
         _config: RfConfig,
         rx_buffer: &mut [u8],
     ) -> usize {
-        let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
-        phy.set_confirmed(false);
-        phy.set_f_port(0);
-        phy.set_dev_addr(&[0; 4]);
-        phy.set_uplink(false);
-        phy.set_fcnt(16);
-        phy.set_fctrl(&lorawan::parser::FCtrl::new(0x00, true));
-        let finished = phy
-            .build(&[], [3, 192, 0, 0, 0], &get_key().into(), &get_key().into(), &DefaultFactory)
+        let frame = lorawan::creator::DataFrame {
+            frame_type: lorawan::parser::DataFrameType::UnconfirmedDown,
+            dev_addr: get_dev_addr(),
+            fcnt: 16,
+            payload: lorawan::creator::Payload::MacCommands(&[3, 192, 0, 0, 0]),
+            ..Default::default()
+        };
+        let finished = frame
+            .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
             .unwrap();
         finished.len()
     }

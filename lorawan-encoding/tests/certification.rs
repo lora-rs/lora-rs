@@ -1,25 +1,37 @@
-use lorawan::certification::parse_downlink_certification_messages;
+use lorawan::certification::parse_downlink_dut_commands;
 use lorawan::certification::DownlinkDUTCommand::*;
 use lorawan::certification::*;
+use lorawan::maccommands::ParseError as Error;
 
 #[test]
 fn test_parse_empty_downlink() {
-    assert_eq!(parse_downlink_certification_messages(&[]).count(), 0);
+    assert_eq!(parse_downlink_dut_commands(&[]).count(), 0);
 }
 
 #[test]
 fn test_parse_variable_txframectrlreq() {
-    assert_eq!(parse_downlink_certification_messages(&[0x07]).count(), 0);
-    assert_eq!(parse_downlink_certification_messages(&[0x07, 0x02]).count(), 1);
-    assert_eq!(parse_downlink_certification_messages(&[0x07, 0x02, 0x02, 0x04]).count(), 1);
+    // A lone CID for a variable-length command is a truncation error.
+    let mut c = parse_downlink_dut_commands(&[0x07]);
+    assert_eq!(c.next(), Some(Err(Error::Truncated { cid: 0x07 })));
+    assert_eq!(c.next(), None);
 
-    let mut c = parse_downlink_certification_messages(&[0x07, 0x02, 0x03]);
-    assert_eq!(c.next(), Some(TxFramesCtrlReq(TxFramesCtrlReqPayload::new(&[2, 3]).unwrap())));
+    // A single FrameType octet is a complete TxFramesCtrlReq.
+    assert_eq!(parse_downlink_dut_commands(&[0x07, 0x02]).map(Result::unwrap).count(), 1);
+    assert_eq!(
+        parse_downlink_dut_commands(&[0x07, 0x02, 0x02, 0x04]).map(Result::unwrap).count(),
+        1
+    );
+
+    let mut c = parse_downlink_dut_commands(&[0x07, 0x02, 0x03]);
+    assert_eq!(c.next(), Some(Ok(TxFramesCtrlReq(TxFramesCtrlReqPayload::new(&[2, 3]).unwrap()))));
 
     let data = [0x07, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07];
-    let mut c = parse_downlink_certification_messages(&data);
+    let mut c = parse_downlink_dut_commands(&data);
     // Make sure whole buffer is consumed as single payload...
-    assert_eq!(c.next(), Some(TxFramesCtrlReq(TxFramesCtrlReqPayload::new(&data[1..]).unwrap())));
+    assert_eq!(
+        c.next(),
+        Some(Ok(TxFramesCtrlReq(TxFramesCtrlReqPayload::new(&data[1..]).unwrap())))
+    );
     // ..end there's nothing left
     assert_eq!(c.next(), None);
 }
@@ -40,9 +52,9 @@ fn test_dutversionsans() {
 #[test]
 fn test_echopayload() {
     let data = [EchoIncPayloadReqPayload::cid(), 1, 5, 255];
-    let mut c = parse_downlink_certification_messages(&data);
+    let mut c = parse_downlink_dut_commands(&data);
 
-    let Some(cmd) = c.next() else { panic!() };
+    let Some(Ok(cmd)) = c.next() else { panic!() };
     // Check that whole frame was consumed
     assert_eq!(c.next(), None);
 
@@ -72,9 +84,9 @@ fn test_echopayload() {
 #[test]
 fn test_echopayloadreq() {
     let data = [EchoIncPayloadReqPayload::cid(), 1];
-    let mut c = parse_downlink_certification_messages(&data);
+    let mut c = parse_downlink_dut_commands(&data);
 
-    if let Some(EchoIncPayloadReq(payload)) = c.next() {
+    if let Some(Ok(EchoIncPayloadReq(payload))) = c.next() {
         assert_eq!(payload.payload(), [1]);
     } else {
         panic!()

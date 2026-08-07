@@ -3,30 +3,27 @@ use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
 use crate::test_util::{get_key, Uplink};
 
+use lorawan::creator::{DataFrame, Payload};
 use lorawan::default_crypto::DefaultFactory;
 use lorawan::maccommands::parse_uplink_mac_commands;
+use lorawan::parser::DataFrameType;
 use lorawan::types::ChannelMask;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 fn build_frm_payload(buf: &mut [u8], payload_in_hex: &str, fcnt: u32) -> usize {
-    let mut phy = lorawan::creator::DataPayloadCreator::new(buf).unwrap();
-    phy.set_confirmed(false);
-    phy.set_f_port(0);
-    phy.set_dev_addr(&[0; 4]);
-    phy.set_uplink(false);
-    phy.set_fcnt(fcnt);
-    phy.set_fctrl(&lorawan::parser::FCtrl::new(0x20, true));
-    let finished = phy
-        .build(
-            &[],
-            hex::decode(payload_in_hex).unwrap(),
-            &get_key().into(),
-            &get_key().into(),
-            &DefaultFactory,
-        )
-        .unwrap();
+    let cmds = hex::decode(payload_in_hex).unwrap();
+    let frame = DataFrame {
+        frame_type: DataFrameType::UnconfirmedDown,
+        dev_addr: crate::test_util::get_dev_addr(),
+        ack: true,
+        fcnt,
+        payload: Payload::MacCommands(&cmds),
+        ..Default::default()
+    };
+    let finished =
+        frame.build_into(buf, &get_key().into(), Some(&get_key().into()), &DefaultFactory).unwrap();
     finished.len()
 }
 
@@ -512,21 +509,15 @@ async fn maccommands_in_frmpayload() {
         // - RXParamSetupReq(RXParamSetupReqPayload([2, 210, 173, 132])) - freq: 869525000
         // - RXTimingSetupReq(RXTimingSetupReqPayload([1]))
         // - LinkADRReq(LinkADRReqPayload([80, 0, 0, 97]))
-        let mut phy = lorawan::creator::DataPayloadCreator::new(rx_buffer).unwrap();
-        phy.set_confirmed(false);
-        phy.set_f_port(0);
-        phy.set_dev_addr(&[0; 4]);
-        phy.set_uplink(false);
-        phy.set_fcnt(5);
-        phy.set_fctrl(&lorawan::parser::FCtrl::new(0x00, true));
-        let finished = phy
-            .build(
-                &[],
-                [6, 5, 2, 0xd2, 0xad, 0x84, 8, 1, 3, 0x50, 0, 0, 0x61],
-                &get_key().into(),
-                &get_key().into(),
-                &DefaultFactory,
-            )
+        let frame = DataFrame {
+            frame_type: DataFrameType::UnconfirmedDown,
+            dev_addr: crate::test_util::get_dev_addr(),
+            fcnt: 5,
+            payload: Payload::MacCommands(&[6, 5, 2, 0xd2, 0xad, 0x84, 8, 1, 3, 0x50, 0, 0, 0x61]),
+            ..Default::default()
+        };
+        let finished = frame
+            .build_into(rx_buffer, &get_key().into(), Some(&get_key().into()), &DefaultFactory)
             .unwrap();
         finished.len()
     }
