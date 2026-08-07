@@ -286,6 +286,46 @@ impl From<[u8; 4]> for MIC {
     }
 }
 
+/// AES-128 crypto primitives bound to a single key.
+///
+/// The key is provided when the implementation is constructed. Whether the
+/// implementation caches the expanded AES key schedule (trading RAM for less
+/// work per operation) or recomputes it per call is the implementation's
+/// choice; [`crate::default_crypto::DefaultCrypto`] caches it.
+///
+/// A LoRaWAN device only ever needs the AES encrypt primitive: FRMPayload
+/// "decryption" is AES-CTR keystream generation using encrypt, and JoinAccept
+/// decryption is specified as an encrypt operation on the device side.
+/// Implementations backed by encrypt-only hardware can therefore implement
+/// this trait fully. The AES decrypt primitive is only needed by network-side
+/// payload creation; see [`NetworkCrypto`].
+pub trait Crypto {
+    /// Encrypts a single 16-byte block in place (AES-128 ECB).
+    ///
+    /// `block` must be exactly 16 bytes.
+    fn encrypt_block(&self, block: &mut [u8]);
+
+    /// Computes the AES-CMAC (RFC 4493) over `b0` followed by `data` and
+    /// returns the first four bytes, which form the LoRaWAN MIC.
+    ///
+    /// `b0` is the block B0 prepended for data payloads; it is empty for join
+    /// messages.
+    fn calculate_mic(&self, b0: &[u8], data: &[u8]) -> [u8; 4];
+}
+
+/// Network-side AES-128 crypto: everything a device needs plus the AES
+/// decrypt primitive.
+///
+/// Only payload creation performed by a network needs decrypt: JoinAccept
+/// creation and multicast McGroupSetupReq creation. Device-side code never
+/// requires this trait.
+pub trait NetworkCrypto: Crypto {
+    /// Decrypts a single 16-byte block in place (AES-128 ECB).
+    ///
+    /// `block` must be exactly 16 bytes.
+    fn decrypt_block(&self, block: &mut [u8]);
+}
+
 /// Trait for implementations of AES128 encryption.
 pub trait Encrypter {
     fn encrypt_block(&self, block: &mut [u8]);
