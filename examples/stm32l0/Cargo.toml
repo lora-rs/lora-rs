@@ -41,7 +41,7 @@ cortex-m-rt = "0.7.0"
 portable-atomic = { version = "1.10.0", features = [
     "unsafe-assume-single-core",
 ] }
-embedded-hal-bus = { version = "0.2.0", features = ["async"] }
+embedded-hal-bus = { version = "0.3", features = ["async"] }
 
 [profile.release]
 debug = 2
