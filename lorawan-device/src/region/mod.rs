@@ -699,6 +699,51 @@ mod tests {
 
     #[test]
     #[cfg(feature = "region-us915")]
+    fn test_us915_chmaskcntl5_single_block() {
+        // ChMaskCntl=5: each of the 8 LSBs controls a bank of 8 125 kHz channels
+        // plus the paired 500 kHz channel: bit i -> channels [8i, 8i+7] and 64+i
+        // (RP002 2.5.5, Table 19)
+        let r = Configuration::new(Region::US915);
+        let mut mask = ChannelMask::<9>::default();
+        r.channel_mask_update(&mut mask, 5, ChannelMask::<2>::new(&[0b0000_0010, 0x00]).unwrap())
+            .unwrap();
+        for ch in 0..72 {
+            let expected = (8..=15).contains(&ch) || ch == 65;
+            assert_eq!(mask.is_enabled(ch).unwrap(), expected, "channel {ch}");
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "region-us915")]
+    fn test_us915_chmaskcntl5_multiple_blocks() {
+        let r = Configuration::new(Region::US915);
+        let mut mask = ChannelMask::<9>::default();
+        r.channel_mask_update(&mut mask, 5, ChannelMask::<2>::new(&[0b1000_0001, 0x00]).unwrap())
+            .unwrap();
+        for ch in 0..72 {
+            let expected = (0..=7).contains(&ch) || (56..=63).contains(&ch) || ch == 64 || ch == 71;
+            assert_eq!(mask.is_enabled(ch).unwrap(), expected, "channel {ch}");
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "region-us915")]
+    fn test_us915_chmaskcntl5_rfu_msbs_ignored() {
+        // the 8 MSBs of the ChMask are RFU and must not affect the result
+        let r = Configuration::new(Region::US915);
+        let mut with_rfu = ChannelMask::<9>::default();
+        let mut without_rfu = ChannelMask::<9>::default();
+        r.channel_mask_update(&mut with_rfu, 5, ChannelMask::<2>::new(&[0x05, 0xFF]).unwrap())
+            .unwrap();
+        r.channel_mask_update(&mut without_rfu, 5, ChannelMask::<2>::new(&[0x05, 0x00]).unwrap())
+            .unwrap();
+        for ch in 0..72 {
+            assert_eq!(with_rfu.is_enabled(ch).unwrap(), without_rfu.is_enabled(ch).unwrap());
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "region-us915")]
     fn test_fixed_us915_frequency_range() {
         let r = Configuration::new(Region::US915);
         assert!(r.frequency_valid(902_000_000));
