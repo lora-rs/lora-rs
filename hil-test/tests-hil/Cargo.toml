@@ -1,0 +1,32 @@
+# Host-side HIL suite: the network fixture (Semtech-UDP "network server")
+# and the paired scenarios that drive tests-hil-fw on the bench DUT.
+# Workspace-excluded like tests-hil-fw: it only builds/runs meaningfully on
+# a banc rig, and its semtech-udp git dep must not leak into the library
+# workspace. On machines without a rig the suite self-skips (all ignored).
+
+[package]
+name = "lora-tests-hil"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "lora_hil_harness"
+
+[dependencies]
+semtech-udp = { git = "https://github.com/lthiery/semtech-udp", branch = "fix/dep-bounds", version = "0.12.0", features = ["server"] }
+tokio = { version = "1.53.1", features = ["full"] }
+lorawan = { path = "../../lorawan-encoding" }
+# From the registry, NOT ../lora-modulation: semtech-udp's DataRate is built
+# from the crates.io lora-modulation's types, and a path dep would be a
+# second, incompatible instance of the crate.
+lora-modulation = "0.1.5"
+
+[dev-dependencies]
+banc-host = "0.0.3"
+
+# banc runner: runtime self-skip off-rig, cross-process rig lock, evidence
+# attached to failures.
+[[test]]
+name = "scenarios"
+harness = false
