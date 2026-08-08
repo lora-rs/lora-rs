@@ -1,9 +1,4 @@
 //! Tests for the borrowed-view parser and creator.
-//!
-//! The commit that introduced this API ran the same vectors through the
-//! retired generic-over-storage parser side by side for byte-identical
-//! results; the equivalence assertions here are the self-contained
-//! remnants of that comparison.
 
 use lorawan::creator::{DataFrame, JoinAccept, JoinRequest, Payload};
 use lorawan::default_crypto::{DefaultCrypto, DefaultNetworkCrypto};
@@ -99,7 +94,7 @@ fn parse_validates_structure() {
         EncryptedDataPayload::parse(&bad_major).unwrap_err(),
         Error::UnsupportedMajorVersion
     );
-    // FOptsLen overruns the buffer (same vectors as the old test)
+    // FOptsLen overruns the buffer
     let bytes = [0x80, 0x04, 0x03, 0x02, 0x01, 0x00, 0xff, 0x01, 0x02, 0x03, 0x04];
     assert!(EncryptedDataPayload::parse(&bytes).is_err());
     let bytes = [0x80, 0x04, 0x03, 0x02, 0x01, 0x0f, 0xff, 0x04, 0x01, 0x02, 0x03, 0x04];
@@ -107,7 +102,7 @@ fn parse_validates_structure() {
 }
 
 #[test]
-fn header_accessors_match_old_parser() {
+fn header_accessors() {
     let buf = phy_dataup_payload();
     let phy = EncryptedDataPayload::parse(&buf).unwrap();
 
@@ -139,14 +134,13 @@ fn f_opts_are_bounds_checked_at_parse_time() {
 #[test]
 fn f_port_present_with_empty_frm_payload() {
     // MHDR + FHDR(7) + FPort + MIC: FPort 42, no FRMPayload.
-    // The old parser reports f_port() == None for this frame.
     let bytes = [0x40, 0x04, 0x03, 0x02, 0x01, 0x00, 0x07, 0x00, 42, 0xde, 0xad, 0xbe, 0xef];
     let phy = EncryptedDataPayload::parse(&bytes).unwrap();
     assert_eq!(phy.f_port(), Some(42));
 }
 
 #[test]
-fn validate_mic_matches_old_parser() {
+fn validate_mic() {
     let buf = phy_dataup_payload();
     let phy = EncryptedDataPayload::parse(&buf).unwrap();
     let crypto = DefaultCrypto::new(&AES128([2; 16]));
@@ -274,8 +268,7 @@ fn inspect_then_decrypt_flow() {
 
 /// The FRMPayload cipher is an XOR keystream, so decrypting twice restores
 /// the original frame. This pins decrypt_in_place to exactly one keystream
-/// application over exactly the FRMPayload range (byte-for-byte equivalence
-/// with the retired parser was asserted by the commit that introduced this API).
+/// application over exactly the FRMPayload range.
 #[test]
 fn decrypt_in_place_is_an_involution() {
     let vectors: [(Vec<u8>, u32); 3] = [
@@ -461,8 +454,7 @@ fn join_accept_without_c_f_list() {
     assert_eq!(ja.c_f_list(), None);
 }
 
-/// Decryption output and derived session keys, pinned to captured values
-/// (originally cross-checked byte-for-byte against the retired parser).
+/// Decryption output and derived session keys, pinned to captured values.
 #[test]
 fn join_accept_decryption_and_derived_keys() {
     let crypto = DefaultCrypto::new(app_key().inner());
@@ -523,7 +515,7 @@ mod mac_commands {
 
     #[test]
     fn parses_valid_downlink_stream() {
-        // Two LinkADRReq commands (fopts from the old mac_command_in_fopts test)
+        // Two LinkADRReq commands
         let data = [0x03, 0x00, 0x00, 0x00, 0x70, 0x03, 0x00, 0xff, 0x00, 0x30];
         let cmds: Vec<_> = parse_downlink_mac_commands(&data).collect::<Result<_, _>>().unwrap();
         assert_eq!(cmds.len(), 2);
@@ -671,8 +663,8 @@ mod creators {
 
     #[test]
     fn data_frame_round_trips_mac_commands_vector() {
-        // Decrypt the fport-0 vector with the old API to recover the MAC
-        // command plaintext, rebuild it with the new creator, and compare.
+        // Decrypt the fport-0 vector to recover the MAC command plaintext,
+        // rebuild it with the creator, and compare.
         let nwk = DefaultCrypto::new(&AES128([1; 16]));
         let mut plain = data_payload_with_fport_zero();
         let dec = DecryptedDataPayload::decrypt_in_place(&mut plain, Some(&nwk), None, 0).unwrap();
@@ -739,7 +731,7 @@ mod creators {
         );
     }
 
-    /// Full new-API round trip: build, parse, MIC-check, decrypt, compare.
+    /// Full round trip: build, parse, MIC-check, decrypt, compare.
     #[test]
     fn build_parse_decrypt_round_trip() {
         let nwk = DefaultCrypto::new(&AES128([3; 16]));
@@ -785,22 +777,22 @@ mod euis {
 
     /// Same LSB-wire / MSB-display conventions as keys::DevEui.
     #[test]
-    fn dev_eui_conventions_match_old_type() {
+    fn dev_eui_conventions_match_keys_dev_eui() {
         let wire = [0xf0, 0xde, 0xbc, 0x9a, 0x78, 0x56, 0x34, 0x12];
-        let new = DevEui::from_wire_bytes(wire);
-        let old = lorawan::keys::DevEui::from(wire);
-        assert_eq!(new.to_string(), old.to_string());
-        assert_eq!(new.to_string(), "123456789abcdef0");
+        let parser_eui = DevEui::from_wire_bytes(wire);
+        let keys_eui = lorawan::keys::DevEui::from(wire);
+        assert_eq!(parser_eui.to_string(), keys_eui.to_string());
+        assert_eq!(parser_eui.to_string(), "123456789abcdef0");
         assert_eq!(
             DevEui::from_str("123456789abcdef0").unwrap(),
             lorawan::keys::DevEui::from_str("123456789abcdef0").unwrap().into(),
         );
-        assert_eq!(new.value(), 0x123456789abcdef0);
-        // Round trip through the old type.
-        assert_eq!(DevEui::from(lorawan::keys::DevEui::from(new)), new);
+        assert_eq!(parser_eui.value(), 0x123456789abcdef0);
+        // Round trip through keys::DevEui.
+        assert_eq!(DevEui::from(lorawan::keys::DevEui::from(parser_eui)), parser_eui);
     }
 
-    /// join_eui and dev_eui are now different types; mixing them up is a
+    /// join_eui and dev_eui are different types; mixing them up is a
     /// compile error rather than a swapped-EUI bug on air.
     #[test]
     fn join_request_uses_distinct_types() {
@@ -904,7 +896,6 @@ mod multicast {
 
     #[test]
     fn parses_group_setup_req() {
-        // Vector from the old deserialize_commands test.
         let bytes = [
             2, 0, 52, 110, 29, 60, 205, 66, 22, 52, 69, 234, 32, 24, 25, 71, 17, 87, 212, 165, 74,
             142, 0, 0, 0, 0, 255, 255, 255, 255,
@@ -922,9 +913,9 @@ mod multicast {
         }
     }
 
-    /// Session derivation works through wire framing (payload types shared).
+    /// Session derivation works through wire framing.
     #[test]
-    fn derive_session_through_v2_framing() {
+    fn derive_session_through_wire_framing() {
         let mc_addr = McAddr::from_wire_bytes([52, 110, 29, 60]);
         let mc_key = McKey::from([0x44; 16]);
         let mcke_key = McKEKey::from([0x66; 16]);
@@ -962,7 +953,7 @@ mod multicast {
         creator.push(2, McAddr::from_wire_bytes([5, 6, 7, 8])).unwrap();
         let mut bytes = creator.build().to_vec();
         // Append a second command to prove framing consumes exactly one.
-        bytes.push(0x00); // PackageVersionReq? (downlink) -- uplink 0x00 is PackageVersionAns len 2
+        bytes.push(0x00); // uplink CID 0x00 is PackageVersionAns (2 payload bytes)
         bytes.extend_from_slice(&[0x07, 0x01]);
 
         let cmds: Vec<_> =
@@ -982,8 +973,7 @@ mod multicast {
         assert!(matches!(cmds[1], UplinkRemoteSetup::PackageVersionAns(_)));
     }
 
-    /// A lone McGroupStatusAns CID byte is Truncated (the retired iterator
-    /// panicked on this remotely-reachable input).
+    /// A lone McGroupStatusAns CID byte is Truncated.
     #[test]
     fn lone_group_status_cid_is_truncated() {
         let data = [0x01];

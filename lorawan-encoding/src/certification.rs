@@ -269,8 +269,6 @@ impl<'a> TxFramesCtrlReqPayload<'a> {
     }
 
     /// Minimum length of the payload not including CID (one FrameType octet).
-    /// The retired iterator compared this against the data including the CID
-    /// byte, which is why it used to be 2.
     const fn min_len() -> usize {
         1
     }
