@@ -54,7 +54,10 @@ impl Default for MockRadio {
 }
 
 impl RadioKind for MockRadio {
-    async fn init_lora(&mut self, _sync_word: u8) -> Result<(), crate::mod_params::RadioError> {
+    async fn init_lora(&mut self, _sync_word: u16) -> Result<(), crate::mod_params::RadioError> {
+        Ok(())
+    }
+    async fn set_lora_sync_word(&mut self, _sync_word: u16) -> Result<(), RadioError> {
         Ok(())
     }
 
