@@ -36,4 +36,4 @@ Takeaways:
 * The `#[inline]` annotations on the parser's small accessors are load-bearing for
   the no-LTO column: without them the non-generic functions stay
   out-of-line across the crate boundary and new1 measures ~560 bytes WORSE
-  than old1. Keep them if this ships.
+  than old1. Keep them.

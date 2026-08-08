@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## Unreleased
 
+- Rewrite parser and creator as borrowed views, replacing the `T: AsRef<[u8]>`
+  generic-over-storage design ([#465](https://github.com/lora-rs/lora-rs/pull/465)).
+  Behavior changes from the previous API:
+  - `f_port()` returns `Some` when an FPort byte is present with an empty
+    FRMPayload; previously it returned `None`, conflating "FPort absent" with
+    "FPort present, payload empty".
+  - Fixed-size wire fields (`DevAddr`, `DevNonce`, etc.) convert to and from
+    values little-endian, matching the wire; the previous `From<u32> for DevAddr`
+    and `From<u16> for DevNonce` used big-endian array order, which round-tripped
+    through the wire with flipped endianness.
+  - All parse entry points reject frames with a non-R1 major version; the
+    previous `EncryptedDataPayload::new` accepted them.
+  - A MAC command stream with a malformed tail yields `Err` per command; the
+    previous iterator ended silently. A lone `McGroupStatusAns` CID byte is
+    reported as `Truncated`; the previous iterator panicked on that
+    remotely-reachable input.
 - Remove defmt feature from defaults, rename to defmt-03
 - Mark `NewSKey` deprecated in favor of `NwkSkey` which is used in most LoRaWAN documentation.
 

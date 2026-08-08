@@ -566,7 +566,7 @@ mod tests {
     use lorawan::parser::{DecryptedDataPayload, DevAddr, FrmPayload};
 
     /// FPort 0 sends the queued MAC commands as the FRMPayload (encrypted
-    /// with the NwkSKey), with FOpts left empty, as the retired creator did.
+    /// with the NwkSKey), with FOpts left empty.
     #[test]
     fn fport_zero_sends_queued_mac_commands_in_frm_payload() {
         let nwkskey = NwkSKey::from([2; 16]);
@@ -621,8 +621,8 @@ mod tests {
         assert_eq!(next_fcnt_down(Some(6), 6), None);
         // An older counter from the same epoch.
         assert_eq!(next_fcnt_down(Some(6), 5), None);
-        // A wire value of zero no longer resets the counter or bypasses the
-        // freshness check once a downlink has been seen.
+        // Once a downlink has been seen, a wire value of zero is stale like
+        // any other: it neither resets the counter nor bypasses the check.
         assert_eq!(next_fcnt_down(Some(6), 0), None);
     }
 

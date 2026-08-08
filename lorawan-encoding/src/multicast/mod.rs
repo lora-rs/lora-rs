@@ -109,9 +109,8 @@ impl McGroupDeleteAnsCreator {
 
 /// Parses a stream of downlink (server-transmitted) multicast setup commands.
 ///
-/// Yields `Result` per command and fuses after the first error. Notably, a
-/// lone `McGroupStatusAns` CID byte is reported as `Truncated` (the retired
-/// iterator panicked on that remotely-reachable input).
+/// Yields `Result` per command and fuses after the first error. A lone
+/// `McGroupStatusAns` CID byte is reported as `Truncated`.
 #[inline]
 pub fn parse_downlink_multicast_commands(
     data: &[u8],
