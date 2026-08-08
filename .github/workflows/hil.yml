@@ -27,5 +27,5 @@ jobs:
           # its presence is what marks this runner as rig-attached. The suite
           # itself now comes from the checkout, like tests-hil-fw always has.
           export BANC_RIG=/bench/lora-hil-harness/banc-rig.toml
-          cd "$GITHUB_WORKSPACE/tests-hil"
+          cd "$GITHUB_WORKSPACE/hil-test/tests-hil"
           cargo test --locked --test scenarios -- --test-threads 1

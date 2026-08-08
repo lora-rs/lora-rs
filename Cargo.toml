@@ -14,8 +14,8 @@ exclude = [
     "examples/stm32wba",
     "examples/stm32wl",
     "examples/stm32wle5cx",
-    "tests-hil",
-    "tests-hil-fw",
+    "hil-test/tests-hil",
+    "hil-test/tests-hil-fw",
 ]
 resolver = "2"
 
