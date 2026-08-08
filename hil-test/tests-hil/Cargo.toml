@@ -16,7 +16,7 @@ name = "lora_hil_harness"
 [dependencies]
 semtech-udp = { git = "https://github.com/lthiery/semtech-udp", branch = "fix/dep-bounds", version = "0.12.0", features = ["server"] }
 tokio = { version = "1.53.1", features = ["full"] }
-lorawan = { path = "../lorawan-encoding" }
+lorawan = { path = "../../lorawan-encoding" }
 # From the registry, NOT ../lora-modulation: semtech-udp's DataRate is built
 # from the crates.io lora-modulation's types, and a path dep would be a
 # second, incompatible instance of the crate.
