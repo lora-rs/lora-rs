@@ -10,6 +10,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Deprecate NewSKey in favor of more commonly used NwkSKey
 - Rename the defmt feature to defmt-03
 - Add `class-c` feature flag
+- Enable Adaptive Data Rate (ADR) by default: uplink FCtrl ADR bit, ADRACKReq
+  after `ADR_ACK_LIMIT` missed downlinks, and data-rate backoff after
+  `ADR_ACK_DELAY`. Controllable via `Device::set_adr` / `get_adr`.
 
 ## [v0.12.1]
 

@@ -4,8 +4,8 @@ use super::{
     uplink,
 };
 use crate::radio::RadioBuffer;
-use crate::region::constants::MAX_FCNT_GAP;
-use crate::{AppSKey, Downlink, NwkSKey, region};
+use crate::region::constants::{ADR_ACK_DELAY, ADR_ACK_LIMIT, MAX_FCNT_GAP};
+use crate::{region, AppSKey, Downlink, NwkSKey};
 use core::num::NonZeroU8;
 use heapless::Vec;
 use lorawan::creator::{DataFrame, Payload};
@@ -42,10 +42,8 @@ pub struct Session {
     /// downlink of the session. Only the low 16 bits of the counter are on the
     /// wire; the high 16 bits kept here are used to rebuild the full value.
     fcnt_down: Option<u32>,
-    // TODO: ADR handling
-    #[cfg(feature = "certification")]
-    /// Whether to force ADR bit for subsequent frames
-    pub override_adr: bool,
+    /// Uplinks since the last accepted downlink; used for ADRACKReq / ADR backoff.
+    pub(crate) adr_ack_cnt: u32,
     #[cfg(feature = "certification")]
     /// Whether to override confirmation bit for sent frames
     pub override_confirmed: Option<bool>,
@@ -89,10 +87,9 @@ impl Session {
             confirmed: false,
             fcnt_down: None,
             fcnt_up: 0,
+            adr_ack_cnt: 0,
             uplink: uplink::Uplink::default(),
 
-            #[cfg(feature = "certification")]
-            override_adr: false,
             #[cfg(feature = "certification")]
             override_confirmed: None,
             #[cfg(feature = "certification")]
@@ -150,7 +147,7 @@ impl Session {
                 let payload_len = encrypted_data.as_bytes().len();
                 if payload_len > max_payload_len as usize + MHDR_LEN + MIC_LEN {
                     info!("Dropping oversized payload.");
-                    return self.rx2_complete();
+                    return self.rx2_complete(configuration, region);
                 }
             }
 
@@ -180,6 +177,8 @@ impl Session {
             let app_crypto = DefaultCrypto::new(self.appskey.inner());
             if encrypted_data.validate_mic(&nwk_crypto, fcnt) {
                 self.fcnt_down = Some(fcnt);
+                // Any accepted downlink confirms connectivity for ADR.
+                self.adr_ack_cnt = 0;
                 // We can safely unwrap here because we already validated the MIC
                 let decrypted = DecryptedDataPayload::decrypt_in_place(
                     bytes,
@@ -225,7 +224,7 @@ impl Session {
                             use crate::mac::certification::Response::*;
                             match certification.handle_message(data, fcnt as u16) {
                                 AdrBitChange(adr) => {
-                                    self.override_adr = adr;
+                                    configuration.adr_enabled = adr;
                                 }
                                 DutJoinReq => {
                                     return Response::DeviceHandler(DeviceEvent::ResetMac);
@@ -269,7 +268,11 @@ impl Session {
         Response::NoUpdate
     }
 
-    pub(crate) fn rx2_complete(&mut self) -> Response {
+    pub(crate) fn rx2_complete(
+        &mut self,
+        configuration: &mut super::Configuration,
+        region: &region::Configuration,
+    ) -> Response {
         // Until we handle NbTrans, there is no case where we should not increment FCntUp.
         if self.fcnt_up == 0xFFFF_FFFF {
             // if the FCnt is used up, the session has expired
@@ -277,6 +280,21 @@ impl Session {
         } else {
             self.fcnt_up += 1;
         }
+
+        if configuration.adr_enabled {
+            self.adr_ack_cnt = self.adr_ack_cnt.saturating_add(1);
+            // After ADR_ACK_LIMIT + N*ADR_ACK_DELAY uplinks without a downlink,
+            // step down the data rate to try to regain connectivity.
+            if self.adr_ack_cnt >= (ADR_ACK_LIMIT + ADR_ACK_DELAY) as u32 {
+                let past_limit = self.adr_ack_cnt - ADR_ACK_LIMIT as u32;
+                if past_limit.is_multiple_of(ADR_ACK_DELAY as u32) {
+                    if let Some(dr) = next_lower_datarate(region, configuration.data_rate) {
+                        configuration.data_rate = dr;
+                    }
+                }
+            }
+        }
+
         if self.confirmed {
             Response::NoAck
         } else {
@@ -288,6 +306,8 @@ impl Session {
         &mut self,
         data: &SendData<'_>,
         tx_buffer: &mut RadioBuffer<N>,
+        configuration: &super::Configuration,
+        region: &region::Configuration,
     ) -> FcntUp {
         tx_buffer.clear();
         let fcnt = self.fcnt_up;
@@ -298,16 +318,12 @@ impl Session {
             self.uplink.clear_downlink_confirmation();
         }
 
-        let adr = {
-            #[cfg(feature = "certification")]
-            {
-                self.override_adr
-            }
-            #[cfg(not(feature = "certification"))]
-            {
-                false
-            }
-        };
+        let adr = configuration.adr_enabled;
+        // ADRACKReq asks the network for a downlink so ADR can keep working.
+        // It is not set when already at the lowest usable data rate.
+        let adr_ack_req = adr
+            && self.adr_ack_cnt >= ADR_ACK_LIMIT as u32
+            && next_lower_datarate(region, configuration.data_rate).is_some();
 
         self.confirmed = data.confirmed;
         #[cfg(feature = "certification")]
@@ -336,7 +352,7 @@ impl Session {
             },
             dev_addr: self.devaddr,
             adr,
-            adr_ack_req: false,
+            adr_ack_req,
             ack,
             f_pending: false,
             fcnt,
@@ -521,6 +537,20 @@ impl Session {
     }
 }
 
+/// Next lower region-supported data rate, if any.
+fn next_lower_datarate(region: &region::Configuration, current: DR) -> Option<DR> {
+    let current = current as u8;
+    if current == 0 {
+        return None;
+    }
+    for candidate in (0..current).rev() {
+        if region.get_datarate(candidate).is_some() {
+            return Some(DR::from(candidate));
+        }
+    }
+    None
+}
+
 /// Rebuild the full 32-bit downlink frame counter from the 16-bit value carried
 /// on the wire and decide whether the frame is fresh.
 ///
@@ -577,7 +607,13 @@ mod tests {
         session.uplink.add_mac_command(cmd);
 
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
-        session.prepare_buffer::<256>(&SendData { data: &[], fport: 0, confirmed: false }, &mut tx);
+        let mac = super::Mac::new(region::Configuration::new(region::Region::EU868), 14, 0);
+        session.prepare_buffer::<256>(
+            &SendData { data: &[], fport: 0, confirmed: false },
+            &mut tx,
+            &mac.configuration,
+            &mac.region,
+        );
 
         let bytes = tx.as_mut_for_read();
         let nwk_crypto = DefaultCrypto::new(nwkskey.inner());

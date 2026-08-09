@@ -98,6 +98,8 @@ impl Certification {
         &mut self,
         mut state: &mut mac::State,
         buf: &mut RadioBuffer<N>,
+        configuration: &mac::Configuration,
+        region: &crate::region::Configuration,
     ) -> mac::Result<mac::FcntUp> {
         let send_data = mac::SendData {
             fport: CERTIFICATION_PORT,
@@ -105,7 +107,9 @@ impl Certification {
             confirmed: false,
         };
         match &mut state {
-            mac::State::Joined(session) => Ok(session.prepare_buffer::<N>(&send_data, buf)),
+            mac::State::Joined(session) => {
+                Ok(session.prepare_buffer::<N>(&send_data, buf, configuration, region))
+            }
             mac::State::Otaa(_) => Err(mac::Error::NotJoined),
             mac::State::Unjoined => Err(mac::Error::NotJoined),
         }
