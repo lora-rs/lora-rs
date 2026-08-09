@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## Unreleased
 
+- `delay_in_symbols` now rounds up so a millisecond budget is never converted to too few symbols
 - Rename defmt feature to defmt-03
 
 ## [v0.1.5]

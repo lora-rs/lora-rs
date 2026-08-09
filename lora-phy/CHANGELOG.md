@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- lorawan-radio: Keep a minimum late-arrival margin on single-RX symbol timeouts so higher datarates (SF10/SF9/…) still catch Class A downlinks when the gateway schedules slightly late (SF12’s long symbols previously masked this).
 - Bump MSRV to 1.75
 - Add documentation for crate features
 - Various documentation fixes (link rot, update docstrings to reflect reality)

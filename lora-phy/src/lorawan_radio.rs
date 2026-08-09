@@ -169,7 +169,13 @@ impl RxMode {
                 // Since both sx126x and sx127x have a preamble-based timeout, we translate
                 // the additional millisecond delay into symbols and add it to the amount of preamble symbols.
                 const PREAMBLE_SYMBOLS: u16 = 13; // 12.25
-                let num_symbols = PREAMBLE_SYMBOLS + bb.delay_in_symbols(ms);
+
+                // add a fixed margin to the timeout to account for the late arrival of the packet in fast modulation modes
+                const MIN_LATE_MARGIN_MS: u32 = 250;
+                let timeout_ms = ms
+                    .saturating_add(bb.symbols_to_ms(PREAMBLE_SYMBOLS as u32))
+                    .saturating_add(MIN_LATE_MARGIN_MS);
+                let num_symbols = bb.delay_in_symbols(timeout_ms).max(PREAMBLE_SYMBOLS);
                 RxMode::Single(num_symbols)
             }
         }

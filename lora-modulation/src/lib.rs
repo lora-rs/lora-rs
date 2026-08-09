@@ -130,7 +130,9 @@ impl BaseBandModulationParams {
     }
 
     pub const fn delay_in_symbols(&self, delay_in_ms: u32) -> u16 {
-        (delay_in_ms * 1000 / self.t_sym_us) as u16
+        // Round up so callers never underestimate the symbol count for a time budget.
+        let delay_us = delay_in_ms.saturating_mul(1000);
+        ((delay_us + self.t_sym_us - 1) / self.t_sym_us) as u16
     }
 
     pub const fn symbols_to_ms(&self, symbols: u32) -> u32 {
