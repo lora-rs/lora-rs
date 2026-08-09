@@ -21,7 +21,6 @@ embassy-stm32 = { version = "0.6.0", features = [
 embassy-executor = { version = "0.10.0", features = ["platform-cortex-m", "executor-thread", "defmt"] }
 embassy-time = { version = "0.5.0", features = ["defmt"] }
 embassy-embedded-hal = { version = "0.6.0", default-features = false }
-embassy-futures = { version = "0", features = ["defmt"] }
 static_cell = "2"
 
 lora-phy = { path = "../../lora-phy", features = ["lorawan-radio", "defmt-03"] }
