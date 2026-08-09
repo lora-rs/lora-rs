@@ -20,7 +20,6 @@ embassy-stm32 = { version = "0.6.0", features = [
 # version-locked); embedded-test runs on it via external-executor.
 embassy-executor = { version = "0.10.0", features = ["platform-cortex-m", "executor-thread", "defmt"] }
 embassy-time = { version = "0.5.0", features = ["defmt"] }
-embassy-embedded-hal = { version = "0.6.0", default-features = false }
 static_cell = "2"
 
 lora-phy = { path = "../../lora-phy", features = ["lorawan-radio", "defmt-03"] }
