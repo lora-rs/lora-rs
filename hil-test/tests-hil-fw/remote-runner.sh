@@ -10,7 +10,10 @@
 # Fallback if the server is down: scp "$1" lora-hil:/tmp/hil-test.elf &&
 # ssh lora-hil probe-rs run --chip STM32WL55JCIx /tmp/hil-test.elf <args>
 set -euo pipefail
+# --probe pins the WL55's onboard STLINK-V3: the rig carries a second probe
+# (the B-L072Z DUT's ST-LINK/V2-1) and an unpinned run grabs an arbitrary one.
 exec "$HOME/.cargo/bin/probe-rs" run --chip STM32WL55JCIx \
+    --probe 0483:374e:002700443234511733353533 \
     --host ws://192.168.1.190:3000 \
     --token "$(cat "$HOME/.config/probe-rs/remote-token")" \
     "$@"
