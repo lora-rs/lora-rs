@@ -1,0 +1,66 @@
+# On-target HIL tests for the second bench DUT: B-L072Z-LRWAN1 Discovery
+# (STM32L072CZ + SX1276 inside the Murata CMWX1ZZABZ module). Same test set
+# as tests-hil-fw, different radio and target triple (thumbv6m).
+[package]
+edition = "2021"
+name = "lora-hil-fw-tests-l072"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+description = "On-target HIL tests for lorawan-device on an SX1276 DUT, run via embedded-test + probe-rs against the bench gateway"
+
+[dependencies]
+embassy-stm32 = { version = "0.6.0", features = [
+    "defmt",
+    "stm32l072cz",
+    "time-driver-any",
+    "memory-x",
+    "exti",
+] }
+# Must match embassy-stm32 0.6's timer-queue executor (task_from_waker is
+# version-locked); embedded-test runs on it via external-executor.
+embassy-executor = { version = "0.10.0", features = ["platform-cortex-m", "executor-thread", "defmt"] }
+embassy-time = { version = "0.5.0", features = ["defmt"] }
+embassy-embedded-hal = { version = "0.6.0", default-features = false }
+embassy-futures = { version = "0", features = ["defmt"] }
+static_cell = "2"
+
+lora-phy = { path = "../../lora-phy", features = ["lorawan-radio", "defmt-03"] }
+lorawan-device = { path = "../../lorawan-device", features = [
+    "embassy-time",
+    "defmt-03",
+] }
+
+defmt = "1"
+defmt-rtt = "1"
+# NOTE: no panic-probe here; embedded-test provides the panic handler
+# (semihosting abort). defmt-rtt is still needed as the defmt sink.
+# 0.7.x is the embedded-test line that matches embassy-executor 0.10
+# (which embassy-stm32 0.6's timer queue is version-locked to).
+# embassy-010 (not the bare "embassy" feature, which aliases embassy-09)
+# so embedded-test uses the same executor 0.10 the rest of the crate does.
+embedded-test = { version = "0.7.2", features = ["embassy-010", "defmt"] }
+semihosting = "0.1"
+
+cortex-m = { version = "0.7.6", features = [
+    "inline-asm",
+    "critical-section-single-core",
+] }
+cortex-m-rt = "0.7.0"
+# thumbv6m has no native atomics; embassy and defmt lean on portable-atomic.
+portable-atomic = { version = "1.10.0", features = [
+    "unsafe-assume-single-core",
+] }
+embedded-hal = { version = "1.0.0" }
+embedded-hal-async = { version = "1.0.0" }
+embedded-hal-bus = { version = "0.3", features = ["async"] }
+
+[lib]
+test = false
+harness = false
+
+[[test]]
+name = "join"
+harness = false
+
+[profile.release]
+debug = 2

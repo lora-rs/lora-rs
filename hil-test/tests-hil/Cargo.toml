@@ -30,3 +30,7 @@ banc-host = "0.0.3"
 [[test]]
 name = "scenarios"
 harness = false
+
+[[test]]
+name = "scenarios_l072"
+harness = false
