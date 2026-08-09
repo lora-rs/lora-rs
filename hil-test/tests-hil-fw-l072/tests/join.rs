@@ -21,7 +21,7 @@ mod tests {
     use embassy_stm32::{bind_interrupts, peripherals};
     use embassy_time::Delay;
     use embedded_hal_bus::spi::ExclusiveDevice;
-    use lora_hil_fw_tests_l072::iv::MurataInterfaceVariant;
+    use lora_phy::iv::GenericSx127xInterfaceVariant;
     use lora_phy::lorawan_radio::LorawanRadio;
     use lora_phy::sx127x::{self, Sx1276, Sx127x};
     use lora_phy::LoRa;
@@ -49,7 +49,7 @@ mod tests {
                     Output<'static>,
                     Delay,
                 >,
-                MurataInterfaceVariant<Output<'static>>,
+                GenericSx127xInterfaceVariant<Output<'static>, ExtiInput<'static, embassy_stm32::mode::Async>>,
                 Sx1276,
             >,
             Delay,
@@ -84,6 +84,10 @@ mod tests {
         // antenna switch is PA1 (RX), PC2 (TX via RFO), PC1 (TX via
         // PA_BOOST, unused with tx_boost off — parked low). PA12/PC1 must
         // outlive init: dropping an embassy Output disconnects the pin.
+        //
+        // DIO0 (PB4) and DIO1 (PB1) both feed the interface variant: the
+        // sx127x routes RxTimeout only to DIO1, so an RX window that hears
+        // nothing needs DIO1 to wake the driver (lora-rs #476 / #312).
         let tcxo_vcc = Output::new(p.PA12, Level::High, Speed::Low);
         let boost_off = Output::new(p.PC1, Level::Low, Speed::Low);
         core::mem::forget(tcxo_vcc);
@@ -112,8 +116,14 @@ mod tests {
             rx_boost: false,
             tx_boost: false,
         };
-        let iv =
-            MurataInterfaceVariant::new(reset, dio0, dio1, Some(rf_switch_rx), Some(rf_switch_tx)).unwrap();
+        let iv = GenericSx127xInterfaceVariant::new_with_secondary_irq(
+            reset,
+            dio0,
+            Some(dio1),
+            Some(rf_switch_rx),
+            Some(rf_switch_tx),
+        )
+        .unwrap();
         let lora = LoRa::new(Sx127x::new(spi, iv, config), true, Delay).await.unwrap();
 
         let radio: LorawanRadio<_, _, MAX_TX_POWER> = lora.into();
