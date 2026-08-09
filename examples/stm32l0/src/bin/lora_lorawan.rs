@@ -1,4 +1,5 @@
-//! This example runs on the STM32 LoRa Discovery board, which has a builtin Semtech Sx1276 radio.
+//! This example runs on the STM32 LoRa Discovery board (B-L072Z-LRWAN1), which
+//! has a builtin Semtech Sx1276 radio inside the Murata CMWX1ZZABZ module.
 //! It demonstrates LoRaWAN join functionality.
 #![no_std]
 #![no_main]
@@ -22,6 +23,7 @@ use {defmt_rtt as _, panic_probe as _};
 
 bind_interrupts!(struct Irqs {
     RNG_LPUART1 => rng::InterruptHandler<peripherals::RNG>;
+    EXTI0_1 => exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI0_1>;
     EXTI4_15 => exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI4_15>;
     DMA1_CHANNEL2_3 => dma::InterruptHandler<peripherals::DMA1_CH2>, dma::InterruptHandler<peripherals::DMA1_CH3>;
 });
@@ -35,11 +37,27 @@ async fn main(_spawner: Spawner) {
     let mut config = embassy_stm32::Config::default();
     config.rcc.hsi = true;
     config.rcc.sys = embassy_stm32::rcc::Sysclk::HSI;
+    // The RNG needs its 48 MHz clock. Without it the clock-error flag stays
+    // set and Rng::new never returns; enable HSI48 and route it to clk48.
+    config.rcc.hsi48 = Some(embassy_stm32::rcc::Hsi48Config { sync_from_usb: false });
+    config.rcc.mux.clk48sel = embassy_stm32::rcc::mux::Clk48sel::HSI48;
     let p = embassy_stm32::init(config);
+
+    // Module RF plumbing (B-L072Z UM2115): PA12 powers the TCXO; the antenna
+    // switch is PA1 (RX) and PC2 (TX via RFO). PC1 (TX via PA_BOOST) is unused
+    // with tx_boost off, parked low. These pins must stay driven for the whole
+    // program, so keep them bound.
+    let _tcxo_vcc = Output::new(p.PA12, Level::High, Speed::Low);
+    let _pa_boost = Output::new(p.PC1, Level::Low, Speed::Low);
+    let rf_switch_rx = Output::new(p.PA1, Level::Low, Speed::Low);
+    let rf_switch_tx = Output::new(p.PC2, Level::Low, Speed::Low);
 
     let nss = Output::new(p.PA15, Level::High, Speed::Low);
     let reset = Output::new(p.PC0, Level::High, Speed::Low);
-    let irq = ExtiInput::new(p.PB4, p.EXTI4, Pull::Up, Irqs);
+    // The sx127x reports RxDone/TxDone on DIO0 but RxTimeout only on DIO1, and
+    // LoRaWAN needs the timeout to close an empty receive window. Watch both.
+    let dio0 = ExtiInput::new(p.PB4, p.EXTI4, Pull::Up, Irqs);
+    let dio1 = ExtiInput::new(p.PB1, p.EXTI1, Pull::Up, Irqs);
 
     let mut spi_config = spi::Config::default();
     spi_config.frequency = khz(200);
@@ -52,7 +70,14 @@ async fn main(_spawner: Spawner) {
         rx_boost: false,
         tx_boost: false,
     };
-    let iv = GenericSx127xInterfaceVariant::new(reset, irq, None, None).unwrap();
+    let iv = GenericSx127xInterfaceVariant::new_with_secondary_irq(
+        reset,
+        dio0,
+        Some(dio1),
+        Some(rf_switch_rx),
+        Some(rf_switch_tx),
+    )
+    .unwrap();
     let lora = LoRa::new(Sx127x::new(spi, iv, config), true, Delay).await.unwrap();
 
     let radio: LorawanRadio<_, _, MAX_TX_POWER> = lora.into();
