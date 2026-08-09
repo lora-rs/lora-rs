@@ -12,13 +12,12 @@ use defmt_rtt as _;
 
 #[embedded_test::tests]
 mod tests {
-    use embassy_embedded_hal::adapter::BlockingAsync;
     use embassy_stm32::exti::{self, ExtiInput};
     use embassy_stm32::gpio::{Level, Output, Pull, Speed};
     use embassy_stm32::rng::{self, Rng};
     use embassy_stm32::spi::{mode::Master, Spi};
     use embassy_stm32::time::khz;
-    use embassy_stm32::{bind_interrupts, peripherals};
+    use embassy_stm32::{bind_interrupts, dma, peripherals};
     use embassy_time::Delay;
     use embedded_hal_bus::spi::ExclusiveDevice;
     use lora_phy::iv::GenericSx127xInterfaceVariant;
@@ -39,13 +38,14 @@ mod tests {
         RNG_LPUART1 => rng::InterruptHandler<peripherals::RNG>;
         EXTI0_1 => exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI0_1>;
         EXTI4_15 => exti::InterruptHandler<embassy_stm32::interrupt::typelevel::EXTI4_15>;
+        DMA1_CHANNEL2_3 => dma::InterruptHandler<peripherals::DMA1_CH2>, dma::InterruptHandler<peripherals::DMA1_CH3>;
     });
 
     type HilDevice = Device<
         LorawanRadio<
             Sx127x<
                 ExclusiveDevice<
-                    BlockingAsync<Spi<'static, embassy_stm32::mode::Blocking, Master>>,
+                    Spi<'static, embassy_stm32::mode::Async, Master>,
                     Output<'static>,
                     Delay,
                 >,
@@ -103,11 +103,7 @@ mod tests {
 
         let mut spi_config = embassy_stm32::spi::Config::default();
         spi_config.frequency = khz(200);
-        // Blocking SPI on purpose: with the DMA path (DMA1_CH2/CH3), the
-        // DMA IRQ HardFaults in AtomicWaker::wake mid-join on this chip
-        // (embassy-stm32 0.6, thumbv6m). Transfers are tiny and the bus
-        // runs at 200 kHz; polling costs nothing the radio would notice.
-        let spi = BlockingAsync::new(Spi::new_blocking(p.SPI1, p.PB3, p.PA7, p.PA6, spi_config));
+        let spi = Spi::new(p.SPI1, p.PB3, p.PA7, p.PA6, p.DMA1_CH3, p.DMA1_CH2, Irqs, spi_config);
         let spi = ExclusiveDevice::new(spi, nss, Delay).unwrap();
 
         let config = sx127x::Config {
