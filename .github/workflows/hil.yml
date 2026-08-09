@@ -28,4 +28,8 @@ jobs:
           # itself now comes from the checkout, like tests-hil-fw always has.
           export BANC_RIG=/bench/lora-hil-harness/banc-rig.toml
           cd "$GITHUB_WORKSPACE/hil-test/tests-hil"
+          # One DUT at a time: both suites drive the same gateway and bind
+          # :1730, so they run sequentially in a single job. scenarios = the
+          # WL55 DUT, scenarios_l072 = the B-L072Z (SX1276).
           cargo test --locked --test scenarios -- --test-threads 1
+          cargo test --locked --test scenarios_l072 -- --test-threads 1
