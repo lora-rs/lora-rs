@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## Unreleased
 
 - Move to Rust edition 2024 (requires Rust 1.85+)
+- Add overflow-safe `delay_in_symbols_ceil` and expose `symbol_duration_us`
 - Rename defmt feature to defmt-03
 
 ## [v0.1.5]

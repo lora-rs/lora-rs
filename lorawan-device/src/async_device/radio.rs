@@ -46,6 +46,19 @@ pub trait PhyRxTx: Sized {
     /// Configures the radio to receive data. This future should not actually await the data itself.
     async fn setup_rx(&mut self, config: RxConfig) -> Result<(), Self::PhyError>;
 
+    /// Configure a single receive window with its precomputed timing.
+    ///
+    /// The default preserves compatibility with radios that derive their
+    /// timeout from [`RxConfig`]. Radios that support symbol-precise timeouts
+    /// can override this method.
+    async fn setup_rx_window(
+        &mut self,
+        config: RxConfig,
+        _timing: super::RxWindowTiming,
+    ) -> Result<(), Self::PhyError> {
+        self.setup_rx(config).await
+    }
+
     /// Receive data into the provided buffer with the given transceiver configuration. The returned
     /// future should only complete when RX data has been received. Furthermore, it should be
     /// possible to await the future again without settings up the receive config again.

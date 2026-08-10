@@ -517,8 +517,12 @@ where
     ) -> Result<mac::Response, Error<R::PhyError>> {
         self.radio_buffer.clear();
 
-        let rx1_start_delay = self.mac.get_rx_delay(frame, &Window::_1) + window_delay
-            - self.radio.get_rx_window_lead_time_ms();
+        let rx1_rf = rx_windows.get(&Window::_1);
+        let rx1_timing = self.radio.get_rx_window_timing(&rx1_rf);
+        let rx1_start_delay = apply_window_offset(
+            self.mac.get_rx_delay(frame, &Window::_1).saturating_add(window_delay),
+            rx1_timing.offset_ms,
+        );
 
         debug!("Starting RX1 in {} ms.", rx1_start_delay);
         // sleep or RXC
@@ -527,15 +531,19 @@ where
         // RX1
         let rx_config = rx_windows.rx_config(self.radio.get_rx_window_buffer(), &Window::_1);
         debug!("Configuring RX1 window with config {}.", rx_config);
-        self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+        self.radio.setup_rx_window(rx_config, rx1_timing).await.map_err(Error::Radio)?;
 
         if let Some(response) = self.rx_listen(&rx_config.rf).await? {
             debug!("RX1 received {}", response);
             return Ok(response);
         }
 
-        let rx2_start_delay = self.mac.get_rx_delay(frame, &Window::_2) + window_delay
-            - self.radio.get_rx_window_lead_time_ms();
+        let rx2_rf = rx_windows.get(&Window::_2);
+        let rx2_timing = self.radio.get_rx_window_timing(&rx2_rf);
+        let rx2_start_delay = apply_window_offset(
+            self.mac.get_rx_delay(frame, &Window::_2).saturating_add(window_delay),
+            rx2_timing.offset_ms,
+        );
         debug!("RX1 did not receive anything. Awaiting RX2 for {} ms.", rx2_start_delay);
         // sleep or RXC
         let _ = self.between_windows(rx2_start_delay).await?;
@@ -543,7 +551,7 @@ where
         // RX2
         let rx_config = rx_windows.rx_config(self.radio.get_rx_window_buffer(), &Window::_2);
         debug!("Configuring RX2 window with config {}.", rx_config);
-        self.radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+        self.radio.setup_rx_window(rx_config, rx2_timing).await.map_err(Error::Radio)?;
 
         if let Some(response) = self.rx_listen(&rx_config.rf).await? {
             debug!("RX2 received {}", response);
@@ -667,6 +675,14 @@ where
 }
 
 /// Allows to fine-tune the beginning and end of the receive windows for a specific board and runtime.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RxWindowTiming {
+    /// Offset from the nominal receive-window time at which radio setup starts.
+    pub offset_ms: i32,
+    /// Preamble-detection timeout programmed into the radio.
+    pub timeout_symbols: u16,
+}
+
 pub trait Timings {
     /// How many milliseconds before the RX window should the SPI transaction start?
     /// This value needs to account for the time it takes to wake up the radio and start the SPI transaction, as
@@ -678,5 +694,40 @@ pub trait Timings {
     /// < Self::get_rx_window_lead_time_ms`.
     fn get_rx_window_buffer(&self) -> u32 {
         self.get_rx_window_lead_time_ms()
+    }
+
+    /// Calculate timing for a receive window's modulation parameters.
+    ///
+    /// Implementations that do not override this retain the historical
+    /// behavior: start `lead_time` early and add `buffer` to a 13-symbol
+    /// preamble timeout.
+    fn get_rx_window_timing(&self, rf: &RfConfig) -> RxWindowTiming {
+        const PREAMBLE_SYMBOLS: u16 = 13;
+        RxWindowTiming {
+            offset_ms: -(self.get_rx_window_lead_time_ms().min(i32::MAX as u32) as i32),
+            timeout_symbols: PREAMBLE_SYMBOLS
+                .saturating_add(rf.bb.delay_in_symbols_ceil(self.get_rx_window_buffer())),
+        }
+    }
+}
+
+fn apply_window_offset(nominal_ms: u32, offset_ms: i32) -> u32 {
+    if offset_ms >= 0 {
+        nominal_ms.saturating_add(offset_ms as u32)
+    } else {
+        nominal_ms.saturating_sub(offset_ms.unsigned_abs())
+    }
+}
+
+#[cfg(test)]
+mod timing_tests {
+    use super::apply_window_offset;
+
+    #[test]
+    fn window_offset_is_applied_without_wrapping() {
+        assert_eq!(940, apply_window_offset(1_000, -60));
+        assert_eq!(1_060, apply_window_offset(1_000, 60));
+        assert_eq!(0, apply_window_offset(10, -60));
+        assert_eq!(u32::MAX, apply_window_offset(u32::MAX - 10, 60));
     }
 }
