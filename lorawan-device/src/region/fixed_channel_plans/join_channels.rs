@@ -215,9 +215,9 @@ mod test {
     use super::*;
     use crate::mac::Response;
     use crate::{
-        mac::{Mac, SendData},
-        test_util::{get_key, handle_join_request, Uplink},
         AppEui, AppKey, DevEui, NetworkCredentials,
+        mac::{Mac, SendData},
+        test_util::{Uplink, get_key, handle_join_request},
     };
     use heapless::Vec;
 

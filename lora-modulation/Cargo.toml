@@ -1,7 +1,7 @@
 [package]
 name = "lora-modulation"
 version = "0.1.5"
-edition = "2021"
+edition = "2024"
 authors = ["Louis Thiery <thiery.louis@gmail.com>"]
 license = "MIT"
 readme = "README.md"

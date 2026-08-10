@@ -105,7 +105,7 @@ impl Certification {
             confirmed: false,
         };
         match &mut state {
-            mac::State::Joined(ref mut session) => Ok(session.prepare_buffer::<N>(&send_data, buf)),
+            mac::State::Joined(session) => Ok(session.prepare_buffer::<N>(&send_data, buf)),
             mac::State::Otaa(_) => Err(mac::Error::NotJoined),
             mac::State::Unjoined => Err(mac::Error::NotJoined),
         }

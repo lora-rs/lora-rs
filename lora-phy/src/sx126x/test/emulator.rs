@@ -4,7 +4,7 @@
 use crate::mod_params::RadioError;
 use crate::mod_traits::InterfaceVariant;
 use crate::sx126x::radio_kind_params::{IrqMask, OpCode};
-use crate::sx126x::{Config, Sx1261, Sx126x};
+use crate::sx126x::{Config, Sx126x, Sx1261};
 use crate::test_fixtures::SpiError;
 use embedded_hal::spi::Operation;
 use embedded_hal_async::delay::DelayNs;
@@ -249,7 +249,7 @@ impl SpiDevice<u8> for FakeSpi {
         let mut response = if cmd.is_empty() {
             vec![]
         } else {
-            self.0 .0.lock().unwrap().execute(cmd[0], &cmd[1..])
+            self.0.0.lock().unwrap().execute(cmd[0], &cmd[1..])
         };
         let mut cursor = response.drain(..);
         for op in operations.iter_mut() {

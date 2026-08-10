@@ -1,6 +1,6 @@
+use crate::Downlink;
 use crate::mac::FcntDown;
 use crate::radio::RadioBuffer;
-use crate::Downlink;
 use crate::{async_device, mac};
 use core::fmt::Debug;
 use core::ops::RangeInclusive;
@@ -214,7 +214,7 @@ impl Multicast {
             confirmed: false,
         };
         match &mut state {
-            mac::State::Joined(ref mut session) => {
+            mac::State::Joined(session) => {
                 let response = session.prepare_buffer::<N>(&send_data, buf);
                 self.pending_uplinks.clear();
                 Ok(response)
@@ -229,10 +229,10 @@ impl Multicast {
         multicast_addr: McAddr,
     ) -> Option<(u8, &mut Session)> {
         self.sessions.iter_mut().enumerate().find_map(|(group_id, s)| {
-            if let Some(s) = s {
-                if s.multicast_addr() == multicast_addr {
-                    return Some((group_id as u8, s));
-                }
+            if let Some(s) = s
+                && s.multicast_addr() == multicast_addr
+            {
+                return Some((group_id as u8, s));
             }
             None
         })

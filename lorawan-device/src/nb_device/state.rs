@@ -40,8 +40,9 @@ else(Ready)║ ╚═════════════╝   ║              
  */
 use super::super::*;
 use super::{
+    Event, RadioBuffer, Response, Timings,
     mac::{Frame, Mac, RxWindows, Window},
-    radio, Event, RadioBuffer, Response, Timings,
+    radio,
 };
 
 #[derive(Copy, Clone)]

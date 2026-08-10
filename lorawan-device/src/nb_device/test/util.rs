@@ -2,8 +2,8 @@ use super::*;
 use crate::radio::{RfConfig, RxQuality};
 
 use crate::nb_device::{
-    radio::{Event, PhyRxTx, Response},
     Device, Timings,
+    radio::{Event, PhyRxTx, Response},
 };
 use crate::test_util::*;
 use region::{Configuration, Region};

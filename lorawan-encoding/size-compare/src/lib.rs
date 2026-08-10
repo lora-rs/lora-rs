@@ -85,13 +85,13 @@ mod new {
 }
 
 #[cfg(any(feature = "new1", feature = "new3"))]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn work_slice_new(ptr: *mut u8, len: usize) -> u32 {
     new::work(core::slice::from_raw_parts_mut(ptr, len))
 }
 
 #[cfg(feature = "new3")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn work_array_new(ptr: *const u8) -> u32 {
     let mut data = [0u8; 33];
     core::ptr::copy_nonoverlapping(ptr, data.as_mut_ptr(), 33);
@@ -99,7 +99,7 @@ pub unsafe extern "C" fn work_array_new(ptr: *const u8) -> u32 {
 }
 
 #[cfg(feature = "new3")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn work_wrapper_new(ptr: *const u8) -> u32 {
     let mut data = [0u8; 33];
     core::ptr::copy_nonoverlapping(ptr, data.as_mut_ptr(), 33);

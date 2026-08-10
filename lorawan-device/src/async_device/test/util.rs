@@ -2,9 +2,9 @@ use crate::radio::RfConfig;
 use lorawan::creator::DataFrame;
 use lorawan::parser::{self, DataFrameType, DecryptedDataPayload, PhyPayload};
 
-use super::{get_dev_addr, get_key, radio::*, region, timer::*, Device};
+use super::{Device, get_dev_addr, get_key, radio::*, region, timer::*};
 use crate::mac::Session;
-pub(crate) use crate::test_util::{get_crypto, handle_data_uplink_with_link_adr_req, Uplink};
+pub(crate) use crate::test_util::{Uplink, get_crypto, handle_data_uplink_with_link_adr_req};
 use crate::{AppSKey, NwkSKey};
 
 fn default_session() -> Session {

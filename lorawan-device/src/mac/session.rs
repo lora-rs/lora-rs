@@ -1,10 +1,11 @@
 use super::{
+    FcntUp, Response, SendData,
     otaa::{DevNonce, NetworkCredentials},
-    uplink, FcntUp, Response, SendData,
+    uplink,
 };
 use crate::radio::RadioBuffer;
 use crate::region::constants::MAX_FCNT_GAP;
-use crate::{region, AppSKey, Downlink, NwkSKey};
+use crate::{AppSKey, Downlink, NwkSKey, region};
 use core::num::NonZeroU8;
 use heapless::Vec;
 use lorawan::creator::{DataFrame, Payload};
@@ -13,7 +14,7 @@ use lorawan::maccommandcreator::{
     RXParamSetupAnsCreator, RXTimingSetupAnsCreator,
 };
 use lorawan::maccommands::DownlinkMacCommand;
-use lorawan::maccommands::{parse_downlink_mac_commands, MacCommands};
+use lorawan::maccommands::{MacCommands, parse_downlink_mac_commands};
 use lorawan::parser::{
     DataFrameType, DecryptedDataPayload, DecryptedJoinAcceptPayload, DevAddr, EncryptedDataPayload,
     FrmPayload,
@@ -160,16 +161,16 @@ impl Session {
             }
 
             #[cfg(feature = "certification")]
-            if let Some(port) = encrypted_data.f_port() {
-                if port > 0 {
-                    self.rx_app_cnt += 1;
-                }
+            if let Some(port) = encrypted_data.f_port()
+                && port > 0
+            {
+                self.rx_app_cnt += 1;
             }
             #[cfg(feature = "multicast")]
-            if let Some(port) = encrypted_data.f_port() {
-                if multicast.is_in_range(port) {
-                    return multicast.handle_rx(dl, bytes).into();
-                }
+            if let Some(port) = encrypted_data.f_port()
+                && multicast.is_in_range(port)
+            {
+                return multicast.handle_rx(dl, bytes).into();
             }
             let confirmed = encrypted_data.is_confirmed();
             let Some(fcnt) = next_fcnt_down(self.fcnt_down, encrypted_data.fhdr().fcnt()) else {
@@ -227,10 +228,10 @@ impl Session {
                                     self.override_adr = adr;
                                 }
                                 DutJoinReq => {
-                                    return Response::DeviceHandler(DeviceEvent::ResetMac)
+                                    return Response::DeviceHandler(DeviceEvent::ResetMac);
                                 }
                                 DutResetReq => {
-                                    return Response::DeviceHandler(DeviceEvent::ResetDevice)
+                                    return Response::DeviceHandler(DeviceEvent::ResetDevice);
                                 }
                                 LinkCheckReq => {
                                     return Response::LinkCheckReq;
@@ -244,7 +245,7 @@ impl Session {
                                 TxPeriodicityChange(periodicity) => {
                                     return Response::DeviceHandler(
                                         DeviceEvent::TxPeriodicityChange { periodicity },
-                                    )
+                                    );
                                 }
                                 UplinkPrepared => return Response::UplinkPrepared,
                                 NoUpdate => return Response::NoUpdate,
@@ -436,13 +437,11 @@ impl Session {
                     };
 
                     let cm_ack = region.channel_mask_validate(&channel_mask, dr);
-                    if cm_ack {
-                        if let (Some(dr), Some(pw)) = (dr, pw) {
-                            // TODO: handle nbtrans
-                            configuration.data_rate = dr;
-                            configuration.tx_power = pw;
-                            region.channel_mask_set(channel_mask.clone());
-                        }
+                    if cm_ack && let (Some(dr), Some(pw)) = (dr, pw) {
+                        // TODO: handle nbtrans
+                        configuration.data_rate = dr;
+                        configuration.tx_power = pw;
+                        region.channel_mask_set(channel_mask.clone());
                     }
                     // Add matching number of LinkADRAns responses
                     for _ in 0..num_adrreq {
@@ -493,12 +492,11 @@ impl Session {
                             }
                         }
                     };
-                    if freq_ack {
-                        if let (Some(rx2_dr), Some(rx1_dr_offset)) = (rx2_dr, rx1_dr_offset) {
-                            configuration.rx2_data_rate = rx2_dr;
-                            configuration.rx2_frequency = Some(freq);
-                            configuration.rx1_dr_offset = rx1_dr_offset;
-                        }
+                    if freq_ack && let (Some(rx2_dr), Some(rx1_dr_offset)) = (rx2_dr, rx1_dr_offset)
+                    {
+                        configuration.rx2_data_rate = rx2_dr;
+                        configuration.rx2_frequency = Some(freq);
+                        configuration.rx1_dr_offset = rx1_dr_offset;
                     }
 
                     let mut cmd = RXParamSetupAnsCreator::new();

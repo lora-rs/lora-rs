@@ -2,9 +2,9 @@
 //! allowing for asynchronous radio implementations. Requires the `async` feature.
 use super::mac::{self, FcntDown, Frame, Mac, Window};
 pub use super::{
+    Downlink, JoinMode,
     mac::{NetworkCredentials, SendData, Session},
     region::{self, Region},
-    Downlink, JoinMode,
 };
 use heapless::Vec;
 use rand_core::RngCore;
@@ -402,7 +402,7 @@ where
         duration: u32,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
         use self::radio::RxQuality;
-        use futures::{future::select, future::Either, pin_mut};
+        use futures::{future::Either, future::select, pin_mut};
 
         if !self.class_c {
             self.radio.low_power().await.map_err(Error::Radio)?;

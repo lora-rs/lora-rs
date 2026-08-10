@@ -6,17 +6,17 @@
 //
 // author: Ivaylo Petrov <ivajloip@gmail.com>
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use lorawan::default_crypto::DefaultCrypto;
-use lorawan::maccommands::parse_downlink_mac_commands;
 use lorawan::maccommands::DownlinkMacCommand;
+use lorawan::maccommands::parse_downlink_mac_commands;
 use std::alloc::System;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 extern crate std;
 
 use lorawan::keys::*;
-use lorawan::parser::{parse, DecryptedDataPayload, FrmPayload, PhyPayload};
+use lorawan::parser::{DecryptedDataPayload, FrmPayload, PhyPayload, parse};
 
 #[global_allocator]
 static GLOBAL: trallocator::Trallocator<System> = trallocator::Trallocator::new(System);

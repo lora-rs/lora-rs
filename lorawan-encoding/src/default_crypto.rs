@@ -4,8 +4,8 @@ use aes::cipher::{
     BlockCipherDecrypt as BlockDecrypt, BlockCipherEncrypt as BlockEncrypt, KeyInit,
 };
 use aes::{Aes128, Aes128Enc};
-use cmac::digest::InnerInit;
 use cmac::Cmac as RustCmac;
+use cmac::digest::InnerInit;
 
 /// Default software implementation of the device-side [`Crypto`] primitives.
 ///

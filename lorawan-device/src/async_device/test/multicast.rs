@@ -114,7 +114,7 @@ async fn test_multicast_remote_setup() {
     match response {
         Ok(ListenResponse::Multicast(MulticastResponse::NewSession { group_id })) => {
             assert_eq!(group_id, 1); // Group ID from the setup request
-                                     // Verify the session was created correctly
+            // Verify the session was created correctly
             let mc_addr = McAddr::from_wire_bytes([52, 110, 29, 60]);
             let (fetched_group_id, stored_session) =
                 device.mac.multicast.matching_session(mc_addr).unwrap();

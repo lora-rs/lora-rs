@@ -3,8 +3,9 @@
 //! decrypting from send and receive buffers.
 
 use crate::{
+    AppSKey, Downlink, NwkSKey,
     radio::{self, RadioBuffer, RfConfig, RxConfig, RxMode},
-    region, AppSKey, Downlink, NwkSKey,
+    region,
 };
 use heapless::Vec;
 use lora_modulation::BaseBandModulationParams;
@@ -183,7 +184,7 @@ impl Mac {
         send_data: &SendData<'_>,
     ) -> Result<(radio::TxConfig, RxWindows, FcntUp)> {
         let fcnt = match &mut self.state {
-            State::Joined(ref mut session) => Ok(session.prepare_buffer::<N>(send_data, buf)),
+            State::Joined(session) => Ok(session.prepare_buffer::<N>(send_data, buf)),
             State::Otaa(_) => Err(Error::NotJoined),
             State::Unjoined => Err(Error::NotJoined),
         }?;
@@ -198,7 +199,7 @@ impl Mac {
 
     pub(crate) fn add_uplink<M: SerializableMacCommand>(&mut self, cmd: M) -> Result<()> {
         let _fcnt = match &mut self.state {
-            State::Joined(ref mut session) => {
+            State::Joined(session) => {
                 session.uplink.add_mac_command(cmd);
                 Ok(())
             }
@@ -268,7 +269,7 @@ impl Mac {
         rf_config: &RfConfig,
     ) -> Response {
         match &mut self.state {
-            State::Joined(ref mut session) => session.handle_rx::<N, D>(
+            State::Joined(session) => session.handle_rx::<N, D>(
                 &mut self.region,
                 &mut self.configuration,
                 #[cfg(feature = "certification")]
@@ -281,7 +282,7 @@ impl Mac {
                 snr,
                 false,
             ),
-            State::Otaa(ref mut otaa) => {
+            State::Otaa(otaa) => {
                 if let Some(session) =
                     otaa.handle_rx::<N>(&mut self.region, &mut self.configuration, buf)
                 {
@@ -307,7 +308,7 @@ impl Mac {
         rf_config: &RfConfig,
     ) -> Result<Response> {
         match &mut self.state {
-            State::Joined(ref mut session) => Ok(session.handle_rx::<N, D>(
+            State::Joined(session) => Ok(session.handle_rx::<N, D>(
                 &mut self.region,
                 &mut self.configuration,
                 #[cfg(feature = "certification")]

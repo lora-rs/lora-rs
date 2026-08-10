@@ -3,8 +3,8 @@ use core::num::NonZeroU8;
 use lorawan::creator::{DataFrame, JoinAccept, Payload};
 use lorawan::default_crypto::{DefaultCrypto, DefaultNetworkCrypto};
 use lorawan::maccommandcreator::LinkADRReqCreator;
-use lorawan::maccommands::parse_uplink_mac_commands;
 use lorawan::maccommands::UplinkMacCommand;
+use lorawan::maccommands::parse_uplink_mac_commands;
 use lorawan::parser::{
     self, DataFrameType, DecryptedDataPayload, DecryptedJoinAcceptPayload, DevAddr, JoinNonce,
     NetId, PhyPayload,

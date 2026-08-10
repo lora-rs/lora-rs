@@ -1,6 +1,6 @@
 use crate::async_device::radio::Timer;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::{Mutex, mpsc};
 
 impl TestTimer {
     pub fn new() -> (TimerChannel, Self) {

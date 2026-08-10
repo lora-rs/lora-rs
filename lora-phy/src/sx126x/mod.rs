@@ -422,12 +422,11 @@ where
             DeviceSel::LowPowerPA => {
                 // For SX1261 the +15 dBm row is only valid above 400 MHz
                 // (below, paDutyCycle must not exceed 0x04)
-                if output_power >= 15 {
-                    if let Some(m_p) = mdltn_params {
-                        if m_p.frequency_in_hz < 400_000_000 {
-                            return Err(RadioError::InvalidOutputPowerForFrequency);
-                        }
-                    }
+                if output_power >= 15
+                    && let Some(m_p) = mdltn_params
+                    && m_p.frequency_in_hz < 400_000_000
+                {
+                    return Err(RadioError::InvalidOutputPowerForFrequency);
                 }
             }
             DeviceSel::HighPowerPA => {

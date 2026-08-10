@@ -1,4 +1,4 @@
-use crate::sx127x::{Config, Sx1276, Sx127x};
+use crate::sx127x::{Config, Sx127x, Sx1276};
 pub use crate::test_fixtures::{Delayer, DummyVariant, SpiError};
 use embedded_hal::spi::Operation;
 use embedded_hal_async::spi::SpiDevice;

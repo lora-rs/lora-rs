@@ -60,7 +60,11 @@ async fn oversized_payload_sf12_bw_125_eu868() {
     });
 
     fn oversized_payload(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
-        build_packet(buf, "07020101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101", 2)
+        build_packet(
+            buf,
+            "07020101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101010101",
+            2,
+        )
     }
     timer.fire_most_recent().await;
     radio.handle_rxtx(oversized_payload).await;

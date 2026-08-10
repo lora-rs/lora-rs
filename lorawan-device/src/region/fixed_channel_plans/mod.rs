@@ -152,18 +152,17 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
     }
 
     fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, dr: Option<DR>) -> bool {
-        if let Some(dr) = dr {
-            if let Some(dr) = &F::datarates()[dr as usize] {
-                return match dr.bandwidth {
-                    Bandwidth::_500KHz => (64..=71).any(|i| channel_mask.is_enabled(i).unwrap()),
-                    Bandwidth::_125KHz => {
-                        // Check that at least two channels are enabled
-                        (0..64).filter(|&i| channel_mask.is_enabled(i).unwrap()).take(2).count()
-                            == 2
-                    }
-                    _ => true,
-                };
-            }
+        if let Some(dr) = dr
+            && let Some(dr) = &F::datarates()[dr as usize]
+        {
+            return match dr.bandwidth {
+                Bandwidth::_500KHz => (64..=71).any(|i| channel_mask.is_enabled(i).unwrap()),
+                Bandwidth::_125KHz => {
+                    // Check that at least two channels are enabled
+                    (0..64).filter(|&i| channel_mask.is_enabled(i).unwrap()).take(2).count() == 2
+                }
+                _ => true,
+            };
         }
         false
     }

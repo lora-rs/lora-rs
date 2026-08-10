@@ -6,7 +6,7 @@
 //! byte plus data — so transactions are compared exactly.
 mod fixtures;
 use fixtures::{
-    get_lr1110, get_lr1110_boosted, get_lr1110_dcdc_tcxo, get_lr1110_hf, get_lr1110_lp, Delayer, TestFixture,
+    Delayer, TestFixture, get_lr1110, get_lr1110_boosted, get_lr1110_dcdc_tcxo, get_lr1110_hf, get_lr1110_lp,
 };
 
 use crate::mod_params::{RadioMode, RxMode};
@@ -844,8 +844,8 @@ async fn test_lr_fhss_init() {
 #[tokio::test]
 async fn test_lr_fhss_build_frame() {
     use crate::lr1110::{
-        LrFhssBandwidth, LrFhssCodingRate, LrFhssGrid, LrFhssModulationType, LrFhssParams, LrFhssV1Params,
-        LR_FHSS_DEFAULT_SYNC_WORD,
+        LR_FHSS_DEFAULT_SYNC_WORD, LrFhssBandwidth, LrFhssCodingRate, LrFhssGrid, LrFhssModulationType, LrFhssParams,
+        LrFhssV1Params,
     };
     let payload = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08];
 

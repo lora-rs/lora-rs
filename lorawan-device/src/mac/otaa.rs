@@ -1,4 +1,4 @@
-use super::{del_to_delay_ms, session::Session, Response};
+use super::{Response, del_to_delay_ms, session::Session};
 use crate::radio::RadioBuffer;
 use crate::region::Configuration;
 use crate::{AppEui, AppKey, DevEui};

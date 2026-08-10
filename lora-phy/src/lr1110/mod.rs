@@ -12,39 +12,38 @@ use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::spi::*;
 pub use radio_kind_params::TcxoCtrlVoltage;
 pub use radio_kind_params::{
-    LrFhssBandwidth, LrFhssCodingRate, LrFhssGrid, LrFhssModulationType, LrFhssParams, LrFhssV1Params,
-    LR_FHSS_DEFAULT_SYNC_WORD, LR_FHSS_SYNC_WORD_BYTES,
+    LR_FHSS_DEFAULT_SYNC_WORD, LR_FHSS_SYNC_WORD_BYTES, LrFhssBandwidth, LrFhssCodingRate, LrFhssGrid,
+    LrFhssModulationType, LrFhssParams, LrFhssV1Params,
 };
 // System types
 pub use radio_kind_params::{
-    ChipMode, ChipType, CommandStatus, ResetStatus, Stat1, Stat2, SystemStatus, Version, LR11XX_SYSTEM_JOIN_EUI_LENGTH,
-    LR11XX_SYSTEM_UID_LENGTH,
+    ChipMode, ChipType, CommandStatus, LR11XX_SYSTEM_JOIN_EUI_LENGTH, LR11XX_SYSTEM_UID_LENGTH, ResetStatus, Stat1,
+    Stat2, SystemStatus, Version,
 };
 // IrqMask for direct use
 pub use radio_kind_params::IrqMask;
 // Bootloader types
 pub use radio_kind_params::{
-    BootloaderChipEui, BootloaderCommandStatus, BootloaderJoinEui, BootloaderOpCode, BootloaderPin, BootloaderStat1,
-    BootloaderStat2, BootloaderStatus, BootloaderVersion, BOOTLOADER_CHIP_EUI_LENGTH,
-    BOOTLOADER_FLASH_BLOCK_SIZE_BYTES, BOOTLOADER_FLASH_BLOCK_SIZE_WORDS, BOOTLOADER_JOIN_EUI_LENGTH,
-    BOOTLOADER_PIN_LENGTH, BOOTLOADER_VERSION_LENGTH,
+    BOOTLOADER_CHIP_EUI_LENGTH, BOOTLOADER_FLASH_BLOCK_SIZE_BYTES, BOOTLOADER_FLASH_BLOCK_SIZE_WORDS,
+    BOOTLOADER_JOIN_EUI_LENGTH, BOOTLOADER_PIN_LENGTH, BOOTLOADER_VERSION_LENGTH, BootloaderChipEui,
+    BootloaderCommandStatus, BootloaderJoinEui, BootloaderOpCode, BootloaderPin, BootloaderStat1, BootloaderStat2,
+    BootloaderStatus, BootloaderVersion,
 };
 // RegMem (Register/Memory) types
-pub use radio_kind_params::{RegMemOpCode, REGMEM_BUFFER_SIZE_MAX, REGMEM_MAX_READ_WRITE_WORDS};
+pub use radio_kind_params::{REGMEM_BUFFER_SIZE_MAX, REGMEM_MAX_READ_WRITE_WORDS, RegMemOpCode};
 // GFSK types
 pub use radio_kind_params::{
-    GfskAddressFiltering, GfskBandwidth, GfskCrcType, GfskDcFree, GfskHeaderType, GfskModulationParams,
-    GfskPacketParams, GfskPreambleDetector, GfskPulseShape, GfskStats, GFSK_DEFAULT_SYNC_WORD,
-    GFSK_SYNC_WORD_MAX_LENGTH,
+    GFSK_DEFAULT_SYNC_WORD, GFSK_SYNC_WORD_MAX_LENGTH, GfskAddressFiltering, GfskBandwidth, GfskCrcType, GfskDcFree,
+    GfskHeaderType, GfskModulationParams, GfskPacketParams, GfskPreambleDetector, GfskPulseShape, GfskStats,
 };
 // Radio Statistics types
 pub use radio_kind_params::{LoRaStats, RadioStats};
 // Radio Timings helpers
 use radio_kind_params::*;
 pub use radio_kind_params::{
+    RX_DONE_IRQ_PROCESSING_TIME_IN_US, TX_DONE_IRQ_PROCESSING_TIME_IN_US,
     delay_between_last_bit_sent_and_rx_done_in_us, delay_between_last_bit_sent_and_tx_done_in_us,
-    lora_rx_input_delay_in_us, lora_symbol_time_in_us, RX_DONE_IRQ_PROCESSING_TIME_IN_US,
-    TX_DONE_IRQ_PROCESSING_TIME_IN_US,
+    lora_rx_input_delay_in_us, lora_symbol_time_in_us,
 };
 
 use crate::lr1110_interface::Lr1110SpiInterface;
@@ -2005,12 +2004,11 @@ where
                 // Duty cycles above 0x04 are not allowed below 400 MHz per the
                 // LR1110 User Manual. With the vendor table only the +15 dBm
                 // entry (duty 0x07) trips this.
-                if entry.pa_duty_cycle > 0x04 {
-                    if let Some(m_p) = mdltn_params {
-                        if m_p.frequency_in_hz < 400_000_000 {
-                            return Err(RadioError::InvalidOutputPowerForFrequency);
-                        }
-                    }
+                if entry.pa_duty_cycle > 0x04
+                    && let Some(m_p) = mdltn_params
+                    && m_p.frequency_in_hz < 400_000_000
+                {
+                    return Err(RadioError::InvalidOutputPowerForFrequency);
                 }
 
                 // LP PA always runs from the internal regulator.

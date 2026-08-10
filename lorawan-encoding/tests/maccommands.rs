@@ -1,7 +1,7 @@
 use lorawan::maccommandcreator::*;
 use lorawan::maccommands::*;
 use lorawan::maccommands::{parse_downlink_mac_commands, parse_uplink_mac_commands};
-use lorawan::types::{DLSettings, DataRateRange, Frequency, Redundancy, DR};
+use lorawan::types::{DLSettings, DR, DataRateRange, Frequency, Redundancy};
 
 macro_rules! test_helper {
     ( $cmd:ident, $data:ident, $name:ident, $type:ident, $size:expr, $( ( $method:ident, $val:expr ) ,)*) => {{
