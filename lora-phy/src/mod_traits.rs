@@ -33,6 +33,16 @@ pub enum IrqState {
 /// LoRa physical layer API
 #[allow(async_fn_in_trait)]
 pub trait RadioKind {
+    /// Minimum preamble-detection window, in symbols, for a single receive.
+    ///
+    /// The LoRaWAN receive-window timing shrinks the programmed timeout as the
+    /// data rate rises; this floor keeps it long enough for the chip to latch
+    /// an incoming preamble. The default of 6 matches LoRaMac-node. The
+    /// sx127x needs a longer floor to detect the 8-symbol LoRaWAN preamble, so
+    /// it raises this. Overridable at runtime via
+    /// [`LorawanRadio::set_min_rx_symbols`](crate::lorawan_radio::LorawanRadio::set_min_rx_symbols).
+    const DEFAULT_MIN_RX_SYMBOLS: u16 = 6;
+
     /// Initialize lora radio
     ///
     /// The sync word is given in the 16-bit sx126x register form; the legacy

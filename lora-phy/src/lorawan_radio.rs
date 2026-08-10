@@ -10,7 +10,6 @@ use lorawan_device::async_device::{
 };
 
 const DEFAULT_RX_WINDOW_LEAD_TIME: u32 = 50;
-const DEFAULT_MIN_RX_SYMBOLS: u16 = 6;
 const DEFAULT_SYSTEM_MAX_RX_ERROR_MS: u32 = 10;
 
 /// LoRaWAN radio implementation.
@@ -41,7 +40,7 @@ where
             rx_pkt_params: None,
             rx_window_lead_time: DEFAULT_RX_WINDOW_LEAD_TIME,
             rx_window_buffer: DEFAULT_RX_WINDOW_LEAD_TIME,
-            min_rx_symbols: DEFAULT_MIN_RX_SYMBOLS,
+            min_rx_symbols: RK::DEFAULT_MIN_RX_SYMBOLS,
             system_max_rx_error_ms: DEFAULT_SYSTEM_MAX_RX_ERROR_MS,
         }
     }
@@ -222,20 +221,26 @@ fn compute_rx_window_timing(
     let symbol_us = symbol_duration_us as u64;
     let min_symbols = min_rx_symbols.max(5) as u64;
     let error_us = system_max_rx_error_ms as u64 * 1_000;
+    let lead_us = wake_up_time_ms as u64 * 1_000;
 
-    // LoRaMac-node's RegionCommonComputeRxWindowParameters equations. The
-    // factor of two covers the same maximum timing error before and after the
-    // nominal window time.
-    let numerator = (2 * min_symbols - 8) * symbol_us + 2 * error_us;
-    let timeout_symbols = numerator.div_ceil(symbol_us).max(min_symbols);
-    let timeout_symbols = timeout_symbols.min(u16::MAX as u64) as u16;
+    // The radio is configured after the offset sleep, and the setup transaction
+    // itself takes up to `wake_up_time_ms` (the lead time budget). We do not
+    // know where in [0, lead] it actually lands, so the window has to cover the
+    // nominal time for the whole range. Open `lead + error` early so the radio
+    // is listening before the nominal window even when setup is slow and the
+    // device clock runs fast, and keep the window open for `lead + 2 * error`
+    // so it still spans the nominal time when setup is fast. This keeps the
+    // timeout data-rate-aware (it scales with the symbol duration) without
+    // assuming the setup latency equals the lead time, which is what made the
+    // narrower windows close before the nominal time on radios with fast setup.
+    let offset_us = -((lead_us + error_us) as i64);
 
-    let half_window_us = (timeout_symbols as u64 * symbol_us).div_ceil(2);
-    let offset_us = 4_i64 * symbol_us as i64 - half_window_us as i64 - wake_up_time_ms as i64 * 1_000;
+    let span_us = lead_us + 2 * error_us;
+    let timeout_symbols = span_us.div_ceil(symbol_us).max(min_symbols).min(u16::MAX as u64) as u16;
 
     RxWindowTiming {
-        // Integer division truncates negative values toward zero, which is
-        // equivalent to ceil(offset_us / 1000), as used by LoRaMac-node.
+        // Truncation toward zero on a negative value matches ceil(offset_us /
+        // 1000): the window opens no later than the microsecond-exact offset.
         offset_ms: (offset_us / 1_000).clamp(i32::MIN as i64, i32::MAX as i64) as i32,
         timeout_symbols,
     }
@@ -246,13 +251,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn loramac_default_window_timing_scales_with_symbol_duration() {
-        // SF7/BW125: 1.024 ms per symbol.
+    fn window_timeout_scales_with_symbol_duration() {
+        // The offset is set by the lead time and clock error (open lead + error
+        // = 60 ms early), not the data rate. The timeout, in symbols, grows as
+        // the symbols get shorter so the window spans the same wall-clock time.
+
+        // SF7/BW125: 1.024 ms per symbol. 70 ms span -> 69 symbols.
         assert_eq!(
             compute_rx_window_timing(1_024, 6, 10, 50),
             RxWindowTiming {
-                offset_ms: -58,
-                timeout_symbols: 24
+                offset_ms: -60,
+                timeout_symbols: 69
             }
         );
 
@@ -260,37 +269,38 @@ mod tests {
         assert_eq!(
             compute_rx_window_timing(32_768, 6, 10, 50),
             RxWindowTiming {
-                offset_ms: -17,
+                offset_ms: -60,
                 timeout_symbols: 6
             }
         );
     }
 
     #[test]
-    fn loramac_window_timing_supports_faster_bandwidths() {
+    fn window_timeout_supports_faster_bandwidths() {
         assert_eq!(
             compute_rx_window_timing(512, 6, 10, 50),
             RxWindowTiming {
-                offset_ms: -59,
-                timeout_symbols: 44
+                offset_ms: -60,
+                timeout_symbols: 137
             }
         );
         assert_eq!(
             compute_rx_window_timing(256, 6, 10, 50),
             RxWindowTiming {
-                offset_ms: -59,
-                timeout_symbols: 83
+                offset_ms: -60,
+                timeout_symbols: 274
             }
         );
     }
 
     #[test]
-    fn larger_system_error_expands_and_recenters_window() {
+    fn larger_system_error_expands_and_shifts_window_earlier() {
+        // error 50 ms, lead 50 ms: open 100 ms early, span 150 ms.
         assert_eq!(
             compute_rx_window_timing(1_024, 6, 50, 50),
             RxWindowTiming {
-                offset_ms: -98,
-                timeout_symbols: 102
+                offset_ms: -100,
+                timeout_symbols: 147
             }
         );
     }
