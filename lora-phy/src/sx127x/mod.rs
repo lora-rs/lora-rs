@@ -140,6 +140,11 @@ where
     IV: InterfaceVariant,
     C: Sx127xVariant,
 {
+    // The sx127x drives its single-receive timeout off SymbTimeout, which
+    // needs headroom over the 8-symbol LoRaWAN preamble to latch reliably; 6
+    // (the trait default) is too short and drops downlinks at higher rates.
+    const DEFAULT_MIN_RX_SYMBOLS: u16 = 8;
+
     async fn init_lora(&mut self, sync_word: u16) -> Result<(), RadioError> {
         let sync_word = sync_word_to_legacy(sync_word)?;
         if self.config.tcxo_used {
