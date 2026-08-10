@@ -73,7 +73,7 @@
 //! assert_eq!(bytes.len(), 18);
 //! ```
 
-use crate::keys::{AppSKey, Crypto, NwkSKey, AES128, MIC};
+use crate::keys::{AES128, AppSKey, Crypto, MIC, NwkSKey};
 use crate::packet_length::phy::join::{
     JOIN_ACCEPT_LEN, JOIN_ACCEPT_WITH_CFLIST_LEN, JOIN_REQUEST_LEN,
 };

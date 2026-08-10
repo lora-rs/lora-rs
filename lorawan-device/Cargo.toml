@@ -5,8 +5,7 @@ authors = [
     "Louis Thiery <thiery.louis@gmail.com>",
     "Ulf Lilleengen <lulf@redhat.com>",
 ]
-edition = "2021"
-rust-version = "1.75"
+edition = "2024"
 categories = ["embedded", "hardware-support", "no-std"]
 license = "MIT"
 readme = "README.md"

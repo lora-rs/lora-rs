@@ -15,7 +15,7 @@
 use super::fixtures::RESET_VALUES;
 use crate::mod_params::RadioError;
 use crate::mod_traits::InterfaceVariant;
-use crate::sx127x::{Config, Sx1276, Sx127x};
+use crate::sx127x::{Config, Sx127x, Sx1276};
 use crate::test_fixtures::SpiError;
 use embedded_hal::spi::Operation;
 use embedded_hal_async::delay::DelayNs;
@@ -144,10 +144,10 @@ impl ChipModel {
             let op_mode = (self.reg(REG_OP_MODE) & !0x07) | 0x01;
             self.regs.insert(REG_OP_MODE, op_mode);
             self.raise_irq(IRQ_TX_DONE);
-        } else if self.mode() == Mode::Rx {
-            if let Some(rx) = self.pending_rx.take() {
-                self.deliver_rx(rx);
-            }
+        } else if self.mode() == Mode::Rx
+            && let Some(rx) = self.pending_rx.take()
+        {
+            self.deliver_rx(rx);
         }
     }
 

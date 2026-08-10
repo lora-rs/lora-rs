@@ -68,8 +68,8 @@ impl defmt::Format for Uplink {
 #[cfg(test)]
 mod test {
     use super::*;
-    use lorawan::maccommands::parse_uplink_mac_commands;
     use lorawan::maccommands::LinkADRAnsCreator;
+    use lorawan::maccommands::parse_uplink_mac_commands;
     #[test]
     fn two_link_adr_ans() {
         let mut uplink = Uplink::default();

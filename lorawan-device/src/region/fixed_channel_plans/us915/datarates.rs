@@ -1,4 +1,4 @@
-use super::{Bandwidth, Datarate, SpreadingFactor, NUM_DATARATES};
+use super::{Bandwidth, Datarate, NUM_DATARATES, SpreadingFactor};
 
 pub(crate) const DATARATES: [Option<Datarate>; NUM_DATARATES as usize] = [
     // DR0

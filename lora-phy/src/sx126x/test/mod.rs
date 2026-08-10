@@ -3,18 +3,18 @@
 //! state machine against an emulated chip.
 mod emulator;
 mod fixtures;
-use emulator::{get_emulated_sx1261, Chip, FakeIv, FakeSpi, Mode};
-use fixtures::{get_sx1262, get_sx126x, Delayer, TestFixture};
+use emulator::{Chip, FakeIv, FakeSpi, Mode, get_emulated_sx1261};
+use fixtures::{Delayer, TestFixture, get_sx126x, get_sx1262};
 
+use crate::LoRa;
 use crate::mod_params::{RadioMode, RxMode};
 use crate::mod_traits::RadioKind;
-use crate::sx126x::{Sx1261, Sx126x};
-use crate::LoRa;
+use crate::sx126x::{Sx126x, Sx1261};
 use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 use smtc_modem_cores::sx126x::{
-    sx126x_cad_exit_modes_e, sx126x_cad_params_t, sx126x_cad_symbs_e, sx126x_lora_bw_e, sx126x_lora_cr_e,
-    sx126x_lora_pkt_len_modes_e, sx126x_lora_sf_e, sx126x_mod_params_lora_t, sx126x_pa_cfg_params_t,
-    sx126x_pkt_params_lora_t, sx126x_pkt_types_e, sx126x_ramp_time_e, sx126x_standby_cfgs_e, Context, SleepCfg,
+    Context, SleepCfg, sx126x_cad_exit_modes_e, sx126x_cad_params_t, sx126x_cad_symbs_e, sx126x_lora_bw_e,
+    sx126x_lora_cr_e, sx126x_lora_pkt_len_modes_e, sx126x_lora_sf_e, sx126x_mod_params_lora_t, sx126x_pa_cfg_params_t,
+    sx126x_pkt_params_lora_t, sx126x_pkt_types_e, sx126x_ramp_time_e, sx126x_standby_cfgs_e,
 };
 
 fn reference() -> Context<TestFixture> {

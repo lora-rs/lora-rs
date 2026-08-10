@@ -53,10 +53,10 @@ pub(crate) use dynamic_channel_plans::IN865;
 
 #[cfg(any(feature = "region-us915", feature = "region-au915"))]
 mod fixed_channel_plans;
-#[cfg(any(feature = "region-us915", feature = "region-au915"))]
-pub use fixed_channel_plans::Subband;
 #[cfg(feature = "region-au915")]
 pub use fixed_channel_plans::AU915;
+#[cfg(any(feature = "region-us915", feature = "region-au915"))]
+pub use fixed_channel_plans::Subband;
 #[cfg(feature = "region-us915")]
 pub use fixed_channel_plans::US915;
 

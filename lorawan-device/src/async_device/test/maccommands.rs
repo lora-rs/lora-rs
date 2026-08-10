@@ -1,7 +1,7 @@
 use super::util;
 use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
-use crate::test_util::{get_crypto, Uplink};
+use crate::test_util::{Uplink, get_crypto};
 
 use lorawan::creator::{DataFrame, Payload};
 use lorawan::maccommands::parse_uplink_mac_commands;

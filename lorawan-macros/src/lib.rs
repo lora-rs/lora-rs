@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, Span};
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields, Meta, PathArguments};
+use syn::{Data, DeriveInput, Fields, Meta, PathArguments, parse_macro_input};
 
 struct Payload {
     name: Ident,
@@ -209,33 +209,33 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
             });
 
             // Add fixed-length methods if len is specified
-            if let Some(ref len) = len_opt {
-                if let Some(lt) = lt {
-                    payload_struct_impls.push(quote! {
-                        impl<#lt> #t<#lt> {
-                            /// Creates a new instance of the MAC command if there is enough data.
-                            pub fn new(data: &#lt [u8]) -> Result<#t<#lt>, Error> {
-                                if data.len() != Self::max_len() {
-                                    Err(Error::BufferTooShort)
-                                } else {
-                                    Ok(#t(data))
-                                }
+            if let Some(len) = len_opt
+                && let Some(lt) = lt
+            {
+                payload_struct_impls.push(quote! {
+                    impl<#lt> #t<#lt> {
+                        /// Creates a new instance of the MAC command if there is enough data.
+                        pub fn new(data: &#lt [u8]) -> Result<#t<#lt>, Error> {
+                            if data.len() != Self::max_len() {
+                                Err(Error::BufferTooShort)
+                            } else {
+                                Ok(#t(data))
                             }
-
-                            /// Maximum length of payload without the CID.
-                            pub const fn max_len() -> usize {
-                                #len
-                            }
-
-                            /// Actual length of payload without the CID.
-                            #[allow(clippy::len_without_is_empty)]
-                            pub fn len(&self) -> usize {
-                                Self::max_len()
-                            }
-
                         }
-                    });
-                }
+
+                        /// Maximum length of payload without the CID.
+                        pub const fn max_len() -> usize {
+                            #len
+                        }
+
+                        /// Actual length of payload without the CID.
+                        #[allow(clippy::len_without_is_empty)]
+                        pub fn len(&self) -> usize {
+                            Self::max_len()
+                        }
+
+                    }
+                });
             }
 
             // Only build Creator structs for fixed-length commands

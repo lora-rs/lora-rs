@@ -2,7 +2,7 @@ use super::*;
 use crate::async_device::radio::{PhyRxTx, RxConfig, RxStatus};
 use std::sync::Arc;
 use tokio::{
-    sync::{mpsc, Mutex},
+    sync::{Mutex, mpsc},
     time,
 };
 impl TestRadio {

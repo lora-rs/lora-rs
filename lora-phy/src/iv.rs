@@ -1,4 +1,4 @@
-use embassy_futures::select::{select, Either};
+use embassy_futures::select::{Either, select};
 use embedded_hal::digital::OutputPin;
 use embedded_hal_async::delay::DelayNs;
 use embedded_hal_async::digital::Wait;

@@ -1,8 +1,8 @@
 # Before upgrading check that everything is available on all tier1 targets here:
 # https://rust-lang.github.io/rustup-components-history
 [toolchain]
-channel = "stable"
-components = [ "clippy", "rust-src", "rustfmt", "llvm-tools" ]
+channel = "1.97"
+components = [ "clippy", "rust-src", "rustfmt", "llvm-tools", "rust-analyzer" ]
 targets = [
     "thumbv6m-none-eabi",
     "thumbv7em-none-eabi",

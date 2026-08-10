@@ -1,4 +1,4 @@
-use crate::keys::{Crypto, McAppSKey, McKey, McNetSKey, NetworkCrypto, AES128};
+use crate::keys::{AES128, Crypto, McAppSKey, McKey, McNetSKey, NetworkCrypto};
 use crate::multicast::McGroupSetupReqCreator;
 use crate::{
     multicast::{McGroupSetupAnsCreator, McGroupSetupAnsPayload, McGroupSetupReqPayload},
@@ -189,8 +189,8 @@ mod tests {
     use super::*;
     use crate::default_crypto::{DefaultCrypto, DefaultNetworkCrypto};
     use crate::keys::McKEKey;
-    use crate::multicast::parse_downlink_multicast_commands;
     use crate::multicast::DownlinkRemoteSetup;
+    use crate::multicast::parse_downlink_multicast_commands;
 
     #[test]
     fn roundtrip() {

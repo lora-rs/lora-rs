@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## Unreleased
 
+- Move to Rust edition 2024 (requires Rust 1.85+)
 - Rename defmt feature to defmt-03
 
 ## [v0.1.5]

@@ -1,7 +1,7 @@
 use super::util;
 use crate::async_device::{ListenResponse, SendResponse};
 use crate::radio::RfConfig;
-use crate::test_util::{get_crypto, get_dev_addr, Uplink};
+use crate::test_util::{Uplink, get_crypto, get_dev_addr};
 use core::num::NonZeroU8;
 use lorawan::creator::{DataFrame, Payload};
 use lorawan::parser::DataFrameType;

@@ -1,13 +1,12 @@
 [package]
 name = "lora-phy"
 version = "3.0.2-alpha"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/embassy-rs/lora-phy"
 categories = ["embedded", "no-std", "asynchronous"]
 keywords = ["lora", "radio", "embedded-hal-async", "iot", "semtech"]
 description = "A LoRa physical layer implementation enabling utilization of a range of MCU/LoRa board combinations within embedded frameworks supporting embedded-hal-async."
-rust-version = "1.75"
 
 [package.metadata.docs.rs]
 all-features = true

@@ -2,7 +2,7 @@
 
 use lorawan::creator::{DataFrame, JoinAccept, JoinRequest, Payload};
 use lorawan::default_crypto::{DefaultCrypto, DefaultNetworkCrypto};
-use lorawan::keys::{AppKey, AppSKey, NwkSKey, AES128, MIC};
+use lorawan::keys::{AES128, AppKey, AppSKey, MIC, NwkSKey};
 use lorawan::parser::*;
 
 use core::str::FromStr;
@@ -491,10 +491,10 @@ fn join_accept_decryption_and_derived_keys() {
 // ---------------------------------------------------------------------------
 
 mod mac_commands {
-    use lorawan::maccommands::{
-        parse_downlink_mac_commands, parse_uplink_mac_commands, ParseError as MacError,
-    };
     use lorawan::maccommands::{DownlinkMacCommand, UplinkMacCommand};
+    use lorawan::maccommands::{
+        ParseError as MacError, parse_downlink_mac_commands, parse_uplink_mac_commands,
+    };
 
     #[test]
     fn parses_valid_uplink_stream() {
@@ -813,8 +813,8 @@ mod euis {
 mod certification {
     use lorawan::certification::*;
     use lorawan::certification::{
-        parse_downlink_dut_commands, parse_uplink_dut_commands, DownlinkDUTCommand,
-        UplinkDUTCommand,
+        DownlinkDUTCommand, UplinkDUTCommand, parse_downlink_dut_commands,
+        parse_uplink_dut_commands,
     };
     use lorawan::maccommands::ParseError as MacError;
 
@@ -888,8 +888,8 @@ mod multicast {
     use lorawan::keys::{McKEKey, McKey};
     use lorawan::maccommands::ParseError as MacError;
     use lorawan::multicast::{
-        parse_downlink_multicast_commands, parse_uplink_multicast_commands, DownlinkRemoteSetup,
-        UplinkRemoteSetup,
+        DownlinkRemoteSetup, UplinkRemoteSetup, parse_downlink_multicast_commands,
+        parse_uplink_multicast_commands,
     };
     use lorawan::multicast::{McGroupSetupReqCreator, McGroupStatusAnsCreator};
     use lorawan::parser::McAddr;

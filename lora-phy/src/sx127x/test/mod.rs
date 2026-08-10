@@ -12,15 +12,15 @@
 //! at all — noted per test.
 mod emulator;
 mod fixtures;
-use emulator::{get_emulated_sx1276, Chip, Mode};
-use fixtures::{get_sx1276, get_sx1276_boost, Delayer, TestFixture};
+use emulator::{Chip, Mode, get_emulated_sx1276};
+use fixtures::{Delayer, TestFixture, get_sx1276, get_sx1276_boost};
 
+use crate::LoRa;
 use crate::mod_params::{RadioMode, RxMode};
 use crate::mod_traits::RadioKind;
 use crate::sx127x::radio_kind_params::Register;
-use crate::LoRa;
 use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
-use smtc_modem_cores::sx127x::{sx127x_radio_id_e, Context};
+use smtc_modem_cores::sx127x::{Context, sx127x_radio_id_e};
 use smtc_modem_cores::sys;
 
 /// SX1276 reference with the LoRa packet engine selected. Selecting LoRa is

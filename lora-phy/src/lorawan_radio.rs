@@ -6,8 +6,8 @@ use super::{DelayNs, LoRa, RxMode};
 
 use lora_modulation::BaseBandModulationParams;
 use lorawan_device::async_device::{
-    radio::{PhyRxTx, RxConfig, RxMode as LorawanRxMode, RxQuality, RxStatus, TxConfig},
     Timings,
+    radio::{PhyRxTx, RxConfig, RxMode as LorawanRxMode, RxQuality, RxStatus, TxConfig},
 };
 
 const DEFAULT_RX_WINDOW_LEAD_TIME: u32 = 50;

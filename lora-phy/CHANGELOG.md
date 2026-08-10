@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Move to Rust edition 2024 (requires Rust 1.85+)
 - sx127x: Add `GenericSx127xInterfaceVariant::new_with_secondary_irq` to watch DIO1 (RxTimeout), fixing LoRaWAN RX-window hangs on single-IRQ boards
 - Bump MSRV to 1.75
 - Add documentation for crate features

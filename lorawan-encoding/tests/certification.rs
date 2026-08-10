@@ -1,5 +1,5 @@
-use lorawan::certification::parse_downlink_dut_commands;
 use lorawan::certification::DownlinkDUTCommand::*;
+use lorawan::certification::parse_downlink_dut_commands;
 use lorawan::certification::*;
 use lorawan::maccommands::ParseError as Error;
 

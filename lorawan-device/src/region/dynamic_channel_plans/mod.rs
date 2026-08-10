@@ -222,15 +222,15 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
             Frame::Data => {
                 let mut channel = self.get_random_in_range(rng);
                 loop {
-                    if self.channel_mask.is_enabled(channel).unwrap() {
-                        if let Some(ch) = self.channels[channel] {
-                            return TxChannel {
-                                datarate: R::datarates()[datarate as usize].clone().unwrap(),
-                                dr: datarate,
-                                frequency: ch.ul_frequency(),
-                                rx1_frequency: ch.rx1_frequency(),
-                            };
-                        }
+                    if self.channel_mask.is_enabled(channel).unwrap()
+                        && let Some(ch) = self.channels[channel]
+                    {
+                        return TxChannel {
+                            datarate: R::datarates()[datarate as usize].clone().unwrap(),
+                            dr: datarate,
+                            frequency: ch.ul_frequency(),
+                            rx1_frequency: ch.rx1_frequency(),
+                        };
                     }
                     channel = self.get_random_in_range(rng)
                 }
@@ -268,20 +268,18 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         }
         if self.channel_mask.is_enabled(index as usize).is_ok()
             && self.channel_mask.is_enabled(index as usize).unwrap()
+            && let Some(mut channel) = self.channels[index as usize]
+            && channel.frequency != 0
         {
-            if let Some(mut channel) = self.channels[index as usize] {
-                if channel.frequency != 0 {
-                    channel.dl_frequency = if freq == channel.frequency {
-                        // Reset downlink frequency
-                        None
-                    } else {
-                        // Update downlink frequency
-                        Some(freq)
-                    };
-                    self.channels[index as usize] = Some(channel);
-                    return (freq_valid, true);
-                }
-            }
+            channel.dl_frequency = if freq == channel.frequency {
+                // Reset downlink frequency
+                None
+            } else {
+                // Update downlink frequency
+                Some(freq)
+            };
+            self.channels[index as usize] = Some(channel);
+            return (freq_valid, true);
         }
         (freq_valid, false)
     }

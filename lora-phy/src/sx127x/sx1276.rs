@@ -1,10 +1,10 @@
 use crate::mod_params::{ModulationParams, PacketParams, RadioError};
 use crate::mod_traits::InterfaceVariant;
 use crate::sx127x::radio_kind_params::{
-    coding_rate_denominator_value, spreading_factor_value, OcpTrim, PaConfig, PaDac, RampTime, Register, Sx127xVariant,
+    OcpTrim, PaConfig, PaDac, RampTime, Register, Sx127xVariant, coding_rate_denominator_value, spreading_factor_value,
 };
 use crate::sx127x::{
-    pll_step_to_freq, Sx127x, SX1276_RF_MID_BAND_THRESH, SX1276_RSSI_OFFSET_HF, SX1276_RSSI_OFFSET_LF,
+    SX1276_RF_MID_BAND_THRESH, SX1276_RSSI_OFFSET_HF, SX1276_RSSI_OFFSET_LF, Sx127x, pll_step_to_freq,
 };
 use embedded_hal_async::spi::SpiDevice;
 use lora_modulation::Bandwidth;

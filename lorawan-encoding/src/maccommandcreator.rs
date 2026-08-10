@@ -1,4 +1,4 @@
-use super::maccommands::{mac_commands_len, SerializableMacCommand};
+use super::maccommands::{SerializableMacCommand, mac_commands_len};
 use crate::types::{ChannelMask, DLSettings, DataRateRange, Frequency, Redundancy};
 
 #[derive(Debug, PartialEq)]
