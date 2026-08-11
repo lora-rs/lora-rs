@@ -1909,14 +1909,14 @@ where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
-    // The lr11xx keeps its configuration across a warm-start sleep (its
-    // set_sleep already programs the retention flag), so the stack can use the
-    // low-current retention sleep between receive windows instead of paying the
-    // full init_system (TCXO wake + CalibrateAll) on every window. The stack
-    // only warm-sleeps between a transmit and its receive windows; the idle
-    // before the next transmit stays a cold sleep, so the retention-wake High
-    // ACP workaround (needed only before a transmit) is not on this path.
-    const SUPPORTS_WARM_START: bool = true;
+    // Although set_sleep programs the retention flag, a warm-started RX window
+    // is deaf on real hardware (lr1110, EU868 join: RX1 after a warm wake hears
+    // nothing; a cold-initialized window on the same session receives fine).
+    // The warm wake path skips init_lora (packet type, sync word, RF switch
+    // config), and whatever the chip fails to retain or the driver fails to
+    // restore has not been isolated yet. Keep the cold sleep until warm start
+    // can be brought up against local hardware.
+    const SUPPORTS_WARM_START: bool = false;
 
     async fn init_lora(&mut self, sync_word: u16) -> Result<(), RadioError> {
         // Initialize system (DC-DC, TCXO, calibration)
