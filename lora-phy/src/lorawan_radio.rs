@@ -243,8 +243,14 @@ fn compute_rx_window_timing(
     // narrower windows close before the nominal time on radios with fast setup.
     let offset_us = -((lead_us + error_us) as i64);
 
+    // Spanning the nominal time is not enough on its own: a packet arriving at
+    // the late edge of the clock-error bound begins its preamble exactly as a
+    // span-only timeout would fire, leaving no preamble symbols in the window
+    // for the radio to detect. Extend the timeout by `min_symbols` so even the
+    // latest packet has that much preamble in-window before the single-RX
+    // timeout expires.
     let span_us = lead_us + 2 * error_us;
-    let timeout_symbols = span_us.div_ceil(symbol_us).max(min_symbols).min(u16::MAX as u64) as u16;
+    let timeout_symbols = (span_us.div_ceil(symbol_us) + min_symbols).min(u16::MAX as u64) as u16;
 
     RxWindowTiming {
         // Truncation toward zero on a negative value matches ceil(offset_us /
@@ -262,23 +268,24 @@ mod tests {
     fn window_timeout_scales_with_symbol_duration() {
         // The offset is set by the lead time and clock error (open lead + error
         // = 60 ms early), not the data rate. The timeout, in symbols, grows as
-        // the symbols get shorter so the window spans the same wall-clock time.
+        // the symbols get shorter so the window spans the same wall-clock time,
+        // plus min_symbols of preamble margin for a latest-edge arrival.
 
-        // SF7/BW125: 1.024 ms per symbol. 70 ms span -> 69 symbols.
+        // SF7/BW125: 1.024 ms per symbol. 70 ms span -> 69 symbols, +6 margin.
         assert_eq!(
             compute_rx_window_timing(1_024, 6, 10, 50),
             RxWindowTiming {
                 offset_ms: -60,
-                timeout_symbols: 69
+                timeout_symbols: 75
             }
         );
 
-        // SF12/BW125: 32.768 ms per symbol. The six-symbol minimum dominates.
+        // SF12/BW125: 32.768 ms per symbol. 3 symbols cover the span, +6 margin.
         assert_eq!(
             compute_rx_window_timing(32_768, 6, 10, 50),
             RxWindowTiming {
                 offset_ms: -60,
-                timeout_symbols: 6
+                timeout_symbols: 9
             }
         );
     }
@@ -289,26 +296,27 @@ mod tests {
             compute_rx_window_timing(512, 6, 10, 50),
             RxWindowTiming {
                 offset_ms: -60,
-                timeout_symbols: 137
+                timeout_symbols: 143
             }
         );
         assert_eq!(
             compute_rx_window_timing(256, 6, 10, 50),
             RxWindowTiming {
                 offset_ms: -60,
-                timeout_symbols: 274
+                timeout_symbols: 280
             }
         );
     }
 
     #[test]
     fn larger_system_error_expands_and_shifts_window_earlier() {
-        // error 50 ms, lead 50 ms: open 100 ms early, span 150 ms.
+        // error 50 ms, lead 50 ms: open 100 ms early, span 150 ms -> 147
+        // symbols, +6 margin.
         assert_eq!(
             compute_rx_window_timing(1_024, 6, 50, 50),
             RxWindowTiming {
                 offset_ms: -100,
-                timeout_symbols: 147
+                timeout_symbols: 153
             }
         );
     }
