@@ -411,7 +411,7 @@ where
         &mut self,
         duration: u32,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
-        self.radio.low_power().await.map_err(Error::Radio)?;
+        self.radio.low_power_retain().await.map_err(Error::Radio)?;
         self.timer.at(duration.into()).await;
         Ok(None)
     }
@@ -425,7 +425,7 @@ where
         use futures::{future::Either, future::select, pin_mut};
 
         if !self.class_c {
-            self.radio.low_power().await.map_err(Error::Radio)?;
+            self.radio.low_power_retain().await.map_err(Error::Radio)?;
             self.timer.at(duration.into()).await;
             return Ok(None);
         }

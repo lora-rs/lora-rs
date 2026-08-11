@@ -177,6 +177,14 @@ where
     async fn low_power(&mut self) -> Result<(), Self::PhyError> {
         self.lora.sleep(false).await.map_err(|e| e.into())
     }
+    async fn low_power_retain(&mut self) -> Result<(), Self::PhyError> {
+        // Warm sleep between the transmit and its receive windows on chips that
+        // retain their configuration, so the next setup is a warm start
+        // (hundreds of us) instead of a cold re-init (tens of ms). Chips without
+        // a retention sleep must re-initialize after every sleep, so they take
+        // the normal cold sleep here.
+        self.lora.sleep(RK::SUPPORTS_WARM_START).await.map_err(|e| e.into())
+    }
 }
 
 impl<RK, DLY, const P: u8, const G: i8> LorawanRadio<RK, DLY, P, G>

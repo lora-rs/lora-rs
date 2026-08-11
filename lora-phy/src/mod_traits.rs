@@ -43,6 +43,15 @@ pub trait RadioKind {
     /// [`LorawanRadio::set_min_rx_symbols`](crate::lorawan_radio::LorawanRadio::set_min_rx_symbols).
     const DEFAULT_MIN_RX_SYMBOLS: u16 = 6;
 
+    /// Whether the chip can wake from sleep with its configuration retained,
+    /// skipping the full re-initialization on the next receive setup.
+    ///
+    /// Only chips with a real retention sleep should set this. The sx127x has
+    /// no warm start (its `set_sleep` ignores the request) and must run a fresh
+    /// `init_lora` after every sleep, so it leaves this `false`; the sx126x
+    /// keeps its configuration across a warm-start sleep and sets it `true`.
+    const SUPPORTS_WARM_START: bool = false;
+
     /// Initialize lora radio
     ///
     /// The sync word is given in the 16-bit sx126x register form; the legacy
