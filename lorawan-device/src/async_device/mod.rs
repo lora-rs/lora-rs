@@ -535,7 +535,15 @@ where
 
         if let Some(response) = self.rx_listen(&rx_config.rf).await? {
             debug!("RX1 received {}", response);
+            self.window_complete().await?;
             return Ok(response);
+        }
+        // No window_complete between RX1 and RX2: the radio keeps its
+        // retained configuration through the gap so RX2 gets the fast warm
+        // wake (class C instead returns to RXC listening right away).
+        #[cfg(feature = "class-c")]
+        if self.class_c {
+            self.window_complete().await?;
         }
 
         let rx2_rf = rx_windows.get(&Window::_2);
@@ -553,7 +561,9 @@ where
         debug!("Configuring RX2 window with config {}.", rx_config);
         self.radio.setup_rx_window(rx_config, rx2_timing).await.map_err(Error::Radio)?;
 
-        if let Some(response) = self.rx_listen(&rx_config.rf).await? {
+        let response = self.rx_listen(&rx_config.rf).await?;
+        self.window_complete().await?;
+        if let Some(response) = response {
             debug!("RX2 received {}", response);
             return Ok(response);
         }
@@ -639,7 +649,6 @@ where
                 }
                 RxStatus::RxTimeout => None,
             };
-        self.window_complete().await?;
         Ok(response)
     }
 
