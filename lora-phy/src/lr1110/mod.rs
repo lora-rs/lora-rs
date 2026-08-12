@@ -1909,13 +1909,20 @@ where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
-    // Although set_sleep programs the retention flag, a warm-started RX window
-    // is deaf on real hardware (lr1110, EU868 join: RX1 after a warm wake hears
-    // nothing; a cold-initialized window on the same session receives fine).
+    // The manual describes LoRaSynchTimeout as expiring when no packet has
+    // been "detected" after SymbolNum symbols, and on this chip that appears
+    // to be a later stage than the sx126x's preamble detection: a timeout
+    // with only preamble-symbol margin expires while the preamble is still on
+    // the air. Cover the full 12.25-symbol preamble-plus-sync sequence so the
+    // timeout cannot fire before the chip has had a complete sync word to
+    // detect. Overridable at runtime with set_min_rx_symbols.
+    const DEFAULT_MIN_RX_SYMBOLS: u16 = 13;
+
     // The warm wake path skips init_lora (packet type, sync word, RF switch
-    // config), and whatever the chip fails to retain or the driver fails to
-    // restore has not been isolated yet. Keep the cold sleep until warm start
-    // can be brought up against local hardware.
+    // config) on the assumption the chip retains that configuration through a
+    // retention sleep. What actually survives a retention sleep has not been
+    // validated on hardware yet; keep the cold sleep until warm start can be
+    // brought up against local hardware.
     const SUPPORTS_WARM_START: bool = false;
 
     async fn init_lora(&mut self, sync_word: u16) -> Result<(), RadioError> {
