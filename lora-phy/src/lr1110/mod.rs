@@ -916,24 +916,13 @@ where
         }
 
         // DIO3 acting as TCXO controller
-        if let Some(voltage) = self.config.tcxo_ctrl {
+        if self.config.tcxo_ctrl.is_some() {
             // Clear any TCXO startup errors
             let clear_opcode = SystemOpCode::ClearErrors.bytes();
             let clear_cmd = [clear_opcode[0], clear_opcode[1]];
             self.write_command(&clear_cmd).await?;
 
-            // Set TCXO mode - timeout in RTC steps (32.768 kHz)
-            let timeout = BRD_TCXO_WAKEUP_TIME * 32768 / 1000; // Convert ms to RTC steps
-            let opcode = SystemOpCode::SetTcxoMode.bytes();
-            let cmd = [
-                opcode[0],
-                opcode[1],
-                voltage.value(),
-                Self::timeout_1(timeout),
-                Self::timeout_2(timeout),
-                Self::timeout_3(timeout),
-            ];
-            self.write_command(&cmd).await?;
+            self.set_tcxo_mode().await?;
 
             // Re-run calibration now that chip knows it's running from TCXO
             let cal_opcode = SystemOpCode::Calibrate.bytes();
@@ -942,6 +931,27 @@ where
         }
 
         Ok(())
+    }
+
+    /// Configure DIO3 as the TCXO supply (no-op without `tcxo_ctrl`). The
+    /// timeout is the time the chip grants the TCXO to start before a radio
+    /// operation.
+    async fn set_tcxo_mode(&mut self) -> Result<(), RadioError> {
+        let Some(voltage) = self.config.tcxo_ctrl else {
+            return Ok(());
+        };
+        // Timeout in RTC steps (32.768 kHz)
+        let timeout = BRD_TCXO_WAKEUP_TIME * 32768 / 1000;
+        let opcode = SystemOpCode::SetTcxoMode.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            voltage.value(),
+            Self::timeout_1(timeout),
+            Self::timeout_2(timeout),
+            Self::timeout_3(timeout),
+        ];
+        self.write_command(&cmd).await
     }
 
     /// Wake up the LR1110 from sleep mode
@@ -1918,12 +1928,11 @@ where
     // detect. Overridable at runtime with set_min_rx_symbols.
     const DEFAULT_MIN_RX_SYMBOLS: u16 = 13;
 
-    // The warm wake path skips init_lora (packet type, sync word, RF switch
-    // config) on the assumption the chip retains that configuration through a
-    // retention sleep. What actually survives a retention sleep has not been
-    // validated on hardware yet; keep the cold sleep until warm start can be
-    // brought up against local hardware.
-    const SUPPORTS_WARM_START: bool = false;
+    // Retention sleep preserves the radio configuration (validated on the
+    // bench: modulation, packet params, sync word, RF-switch table and PA
+    // config all survive), EXCEPT the DIO3 TCXO-supply arming, which
+    // ensure_ready re-issues on every wake.
+    const SUPPORTS_WARM_START: bool = true;
 
     async fn init_lora(&mut self, sync_word: u16) -> Result<(), RadioError> {
         // Initialize system (DC-DC, TCXO, calibration)
@@ -2023,7 +2032,16 @@ where
         match mode {
             // In sleep mode BUSY is held high; toggle NSS to wake the chip,
             // then wait for BUSY to go low (chip booted and ready).
-            RadioMode::Sleep => self.intf.wakeup().await,
+            RadioMode::Sleep => {
+                self.intf.wakeup().await?;
+                // The chip does not re-arm the DIO3 TCXO supply on wake, not
+                // even from a retention sleep where every other radio setting
+                // survives: the first receive after a warm wake runs on a
+                // dead reference and hears nothing (HIL-verified on firmware
+                // 0x0303 and 0x0402; TX escapes because the cold path
+                // reconfigures the TCXO in init_system).
+                self.set_tcxo_mode().await
+            }
             _ => self.intf.iv.wait_on_busy().await,
         }
     }
