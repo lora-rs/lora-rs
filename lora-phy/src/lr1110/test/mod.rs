@@ -9,6 +9,9 @@ use fixtures::{
     Delayer, TestFixture, get_lr1110, get_lr1110_boosted, get_lr1110_dcdc_tcxo, get_lr1110_hf, get_lr1110_lp,
 };
 
+use crate::lr1110::{
+    GnssConstellation, GnssDestination, GnssDetectedSatellite, GnssEffort, GnssResultMask, GnssScanMode,
+};
 use crate::mod_params::{RadioMode, RxMode};
 use crate::mod_traits::RadioKind;
 use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
@@ -1042,4 +1045,192 @@ async fn test_regmem() {
     assert_eq!(our_words, words);
     assert_eq!(our_mem, c_mem);
     assert_eq!(our_mem, mem);
+}
+
+// --- GNSS ---
+
+#[tokio::test]
+async fn test_gnss_read_firmware_version() {
+    let mut reference_radio = reference();
+    reference_radio.inner.prime_read(&[0x04, 0x06], &[10, 17]);
+    let (_, c_version) = reference_radio.gnss_read_firmware_version();
+
+    let mut radio = get_lr1110();
+    radio.intf.spi.prime_read(&[0x04, 0x06], &[10, 17]);
+    let version = radio.gnss_read_firmware_version().await.unwrap();
+
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+    assert_eq!(version.firmware, c_version.gnss_firmware);
+    assert_eq!(version.almanac, c_version.gnss_almanac);
+}
+
+#[tokio::test]
+async fn test_gnss_set_constellations() {
+    let mask = GnssConstellation::Gps as u8 | GnssConstellation::Beidou as u8;
+
+    let mut reference_radio = reference();
+    reference_radio.gnss_set_constellations_to_use(mask);
+
+    let mut radio = get_lr1110();
+    radio.gnss_set_constellations(mask).await.unwrap();
+
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+}
+
+#[tokio::test]
+async fn test_gnss_read_constellations() {
+    let mut reference_radio = reference();
+    reference_radio.inner.prime_read(&[0x04, 0x01], &[0x01]);
+    reference_radio.inner.prime_read(&[0x04, 0x07], &[0x03]);
+    let (_, c_used) = reference_radio.gnss_read_used_constellations();
+    let (_, c_supported) = reference_radio.gnss_read_supported_constellations();
+
+    let mut radio = get_lr1110();
+    radio.intf.spi.prime_read(&[0x04, 0x01], &[0x01]);
+    radio.intf.spi.prime_read(&[0x04, 0x07], &[0x03]);
+    let used = radio.gnss_read_used_constellations().await.unwrap();
+    let supported = radio.gnss_read_supported_constellations().await.unwrap();
+
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+    assert_eq!(used, c_used);
+    assert_eq!(supported, c_supported);
+    assert_eq!(used, GnssConstellation::Gps as u8);
+}
+
+#[tokio::test]
+async fn test_gnss_set_scan_mode() {
+    let mut reference_radio = reference();
+    reference_radio
+        .gnss_set_scan_mode(sys::lr11xx_gnss_scan_mode_t_LR11XX_GNSS_SCAN_MODE_3_SINGLE_SCAN_AND_5_FAST_SCANS);
+
+    let mut radio = get_lr1110();
+    radio
+        .gnss_set_scan_mode(GnssScanMode::SingleAnd5FastScans)
+        .await
+        .unwrap();
+
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+}
+
+#[tokio::test]
+async fn test_gnss_scan() {
+    for (c_effort, effort) in [
+        (
+            sys::lr11xx_gnss_search_mode_t_LR11XX_GNSS_OPTION_LOW_EFFORT,
+            GnssEffort::Low,
+        ),
+        (
+            sys::lr11xx_gnss_search_mode_t_LR11XX_GNSS_OPTION_MID_EFFORT,
+            GnssEffort::Mid,
+        ),
+    ] {
+        let result_mask = GnssResultMask::DopplerEnable as u8 | GnssResultMask::Doppler as u8;
+
+        let mut reference_radio = reference();
+        reference_radio.gnss_scan(c_effort, result_mask, 16);
+
+        let mut radio = get_lr1110();
+        radio.gnss_scan(effort, result_mask, 16).await.unwrap();
+
+        assert_eq!(radio.intf.spi, reference_radio.inner, "effort {effort:?}");
+    }
+}
+
+#[tokio::test]
+async fn test_gnss_result_readout() {
+    // 8-byte result stream; first byte 0x01 = destination solver
+    let result = [0x01, 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x42];
+
+    let mut reference_radio = reference();
+    reference_radio.inner.prime_read(&[0x04, 0x0C], &[0x00, 0x08]);
+    reference_radio.inner.prime_read(&[0x04, 0x0D], &result);
+    let (_, c_size) = reference_radio.gnss_get_result_size();
+    let mut c_result = [0u8; 8];
+    reference_radio.gnss_read_results(&mut c_result);
+
+    let mut radio = get_lr1110();
+    radio.intf.spi.prime_read(&[0x04, 0x0C], &[0x00, 0x08]);
+    radio.intf.spi.prime_read(&[0x04, 0x0D], &result);
+    let size = radio.gnss_get_result_size().await.unwrap();
+    let mut our_result = [0u8; 8];
+    radio.gnss_read_results(&mut our_result).await.unwrap();
+
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+    assert_eq!(size, c_size);
+    assert_eq!(size as usize, result.len());
+    assert_eq!(our_result, c_result);
+    assert_eq!(our_result, result);
+    assert_eq!(GnssDestination::try_from(our_result[0]), Ok(GnssDestination::Solver));
+}
+
+#[tokio::test]
+async fn test_gnss_detected_satellites() {
+    // Two satellites: raw C/N is offset by 31 dB on read, doppler is a
+    // signed big-endian 16-bit value
+    let raw = [3, 14, 0xFB, 0x50, 30, 5, 0x01, 0x5E];
+
+    let mut reference_radio = reference();
+    reference_radio.inner.prime_read(&[0x04, 0x17], &[2]);
+    reference_radio.inner.prime_read(&[0x04, 0x18], &raw);
+    let (_, c_nb) = reference_radio.gnss_get_nb_detected_satellites();
+    let mut c_satellites = [sys::lr11xx_gnss_detected_satellite_t::default(); 2];
+    reference_radio.gnss_get_detected_satellites(&mut c_satellites);
+
+    let mut radio = get_lr1110();
+    radio.intf.spi.prime_read(&[0x04, 0x17], &[2]);
+    radio.intf.spi.prime_read(&[0x04, 0x18], &raw);
+    let nb = radio.gnss_get_nb_detected_satellites().await.unwrap();
+    let mut satellites = [GnssDetectedSatellite::default(); 2];
+    let filled = radio
+        .gnss_get_detected_satellites(&mut satellites[..nb as usize])
+        .await
+        .unwrap();
+
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+    assert_eq!(nb, c_nb);
+    assert_eq!(filled.len(), 2);
+    for (ours, c) in filled.iter().zip(c_satellites.iter()) {
+        assert_eq!(ours.id, c.satellite_id);
+        assert_eq!(ours.cnr, c.cnr);
+        assert_eq!(ours.doppler, c.doppler);
+    }
+    assert_eq!(filled[0].cnr, 45); // 14 + 31
+    assert_eq!(filled[0].doppler, -1200);
+    assert_eq!(filled[1].doppler, 350);
+}
+
+#[tokio::test]
+async fn test_gnss_assistance_position() {
+    let (latitude, longitude) = (45.5f32, -73.6f32);
+    // 45.5 * 2048 / 90 = 1035 = 0x040B, -73.6 * 2048 / 180 = -837 = 0xFCBB
+    let encoded = [0x04, 0x0B, 0xFC, 0xBB];
+
+    let mut reference_radio = reference();
+    reference_radio
+        .gnss_set_assistance_position(&sys::lr11xx_gnss_solver_assistance_position_t { latitude, longitude });
+    reference_radio.inner.prime_read(&[0x04, 0x11], &encoded);
+    let (_, c_position) = reference_radio.gnss_read_assistance_position();
+
+    let mut radio = get_lr1110();
+    radio.gnss_set_assistance_position(latitude, longitude).await.unwrap();
+    radio.intf.spi.prime_read(&[0x04, 0x11], &encoded);
+    let (lat, lon) = radio.gnss_read_assistance_position().await.unwrap();
+
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+    assert_eq!(lat, c_position.latitude);
+    assert_eq!(lon, c_position.longitude);
+}
+
+#[tokio::test]
+async fn test_gnss_read_last_scan_mode() {
+    let mut reference_radio = reference();
+    reference_radio.inner.prime_read(&[0x04, 0x26], &[4]);
+    let (_, c_mode) = reference_radio.gnss_read_last_scan_mode_launched();
+
+    let mut radio = get_lr1110();
+    radio.intf.spi.prime_read(&[0x04, 0x26], &[4]);
+    let mode = radio.gnss_read_last_scan_mode().await.unwrap();
+
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+    assert_eq!(mode as u32, c_mode);
 }

@@ -1410,3 +1410,132 @@ impl Default for SetDioAsRfSwitchParams {
         }
     }
 }
+
+/// GNSS scanner OpCodes (16-bit commands for LR1110)
+#[derive(Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssOpCode {
+    SetConstellation = 0x0400,
+    ReadConstellation = 0x0401,
+    ReadFwVersion = 0x0406,
+    ReadSupportedConstellation = 0x0407,
+    SetScanMode = 0x0408,
+    Scan = 0x040B,
+    GetResultSize = 0x040C,
+    ReadResults = 0x040D,
+    SetAssistancePosition = 0x0410,
+    ReadAssistancePosition = 0x0411,
+    GetNbSatellites = 0x0417,
+    GetSatellites = 0x0418,
+    ReadLastScanModeLaunched = 0x0426,
+}
+
+impl GnssOpCode {
+    pub fn bytes(self) -> [u8; 2] {
+        let val = self as u16;
+        [(val >> 8) as u8, (val & 0xFF) as u8]
+    }
+}
+
+/// GNSS constellations; OR the discriminants together to build the
+/// constellation masks taken by `gnss_set_constellations` and returned by the
+/// constellation reads.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssConstellation {
+    Gps = 0x01,
+    Beidou = 0x02,
+}
+
+/// GNSS scan effort mode. The reference enum also defines a high-effort mode,
+/// but the GnssScan command does not accept it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssEffort {
+    /// Search only the requested satellites, low scan duration
+    Low = 0x00,
+    /// Search additionally if not all requested satellites are found
+    Mid = 0x01,
+}
+
+/// Single or multi capture configuration for GnssScan
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssScanMode {
+    /// One legacy capture, NAV3 message
+    SingleLegacy = 0x00,
+    /// One capture followed by up to five fast captures, NAV3 message
+    SingleAnd5FastScans = 0x03,
+}
+
+/// Result-field selection bits for GnssScan's `result_mask` parameter; OR the
+/// discriminants together.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssResultMask {
+    /// Include Doppler information in the NAV message
+    DopplerEnable = 0x01,
+    /// Up to 14 Dopplers instead of 7 (needs DopplerEnable)
+    Doppler = 0x02,
+    /// Include bit change (SingleAnd5FastScans mode only)
+    BitChange = 0x04,
+    /// Include time demodulation (SingleAnd5FastScans mode only). A chip
+    /// that holds no time yet needs this bit: observed on firmware 0x0402,
+    /// a cold scan without it ends within tens of milliseconds and the
+    /// result stream carries the "no time" host status (0x06) instead of
+    /// a NAV message.
+    DemodulateTime = 0x08,
+    /// Strip time from the NAV message
+    RemoveTimeFromNav = 0x10,
+    /// Strip the aiding position from the NAV message
+    RemoveApFromNav = 0x20,
+}
+
+/// Destination of a GNSS scan result byte stream (its first byte)
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssDestination {
+    /// Consumed locally by the host MCU
+    Host = 0x00,
+    /// To be forwarded to the GNSS solver (e.g. LoRa Cloud)
+    Solver = 0x01,
+    /// To be forwarded to the device management stack
+    Dmc = 0x02,
+}
+
+impl TryFrom<u8> for GnssDestination {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, ()> {
+        match value {
+            0x00 => Ok(GnssDestination::Host),
+            0x01 => Ok(GnssDestination::Solver),
+            0x02 => Ok(GnssDestination::Dmc),
+            _ => Err(()),
+        }
+    }
+}
+
+/// Version of the LR11XX GNSS firmware and almanac format
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GnssVersion {
+    pub firmware: u8,
+    pub almanac: u8,
+}
+
+/// One satellite detected by a GNSS scan
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GnssDetectedSatellite {
+    /// Chip satellite numbering: GPS ids 0-31 are PRN 1-32 (id + 1),
+    /// BeiDou ids start at 64
+    pub id: u8,
+    /// Carrier-to-noise ratio (C/N) in dB
+    pub cnr: i8,
+    /// Doppler in Hz
+    pub doppler: i16,
+}
+
+/// The chip reports at most this many detected satellites per scan
+pub const GNSS_MAX_DETECTED_SV: usize = 32;
