@@ -33,8 +33,10 @@ pub use radio_kind_params::{
 pub use radio_kind_params::{REGMEM_BUFFER_SIZE_MAX, REGMEM_MAX_READ_WRITE_WORDS, RegMemOpCode};
 // GNSS types
 pub use radio_kind_params::{
-    GNSS_MAX_DETECTED_SV, GnssConstellation, GnssDestination, GnssDetectedSatellite, GnssEffort, GnssOpCode,
-    GnssResultMask, GnssScanMode, GnssVersion,
+    GNSS_ALMANAC_N_SATELLITES, GNSS_ALMANAC_WRITE_BLOCK_SIZE, GNSS_MAX_DETECTED_SV, GnssAlmanacConstellation,
+    GnssAlmanacConstellationStatus, GnssAlmanacStatus, GnssConstellation, GnssDemodStatus, GnssDestination,
+    GnssDetectedSatellite, GnssEffort, GnssFetchTimeOption, GnssOpCode, GnssResultMask, GnssScanMode, GnssTime,
+    GnssTimeStatus, GnssVersion,
 };
 // LF clock source (GNSS scanning relies on the LF clock)
 pub use radio_kind_params::LfClockSource;
@@ -1425,6 +1427,121 @@ where
         let mut rbuffer = [0u8; 1];
         self.read_command(&cmd, &mut rbuffer).await?;
         Ok(rbuffer[0])
+    }
+
+    /// Read the GPS time held by the GNSS firmware (demodulated by a scan or
+    /// a time fetch; survives retention sleep, lost on reset)
+    pub async fn gnss_read_time(&mut self) -> Result<GnssTime, RadioError> {
+        let cmd = GnssOpCode::ReadTime.bytes();
+        let mut rbuffer = [0u8; 12];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(GnssTime {
+            status: GnssTimeStatus::from(rbuffer[0]),
+            gps_time_s: u32::from_be_bytes([rbuffer[1], rbuffer[2], rbuffer[3], rbuffer[4]]),
+            // Sub-second fields are reported in 1/16 µs units
+            us_in_second: (((rbuffer[5] as u32) << 16) | ((rbuffer[6] as u32) << 8) | (rbuffer[7] as u32)) / 16,
+            accuracy_us: u32::from_be_bytes([rbuffer[8], rbuffer[9], rbuffer[10], rbuffer[11]]) / 16,
+        })
+    }
+
+    /// Launch a time acquisition/demodulation; completion is signalled by
+    /// `IrqMask::GnssScanDone`
+    pub async fn gnss_fetch_time(&mut self, effort: GnssEffort, option: GnssFetchTimeOption) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::FetchTime.bytes();
+        self.write_command(&[opcode[0], opcode[1], effort as u8, option as u8])
+            .await
+    }
+
+    /// Read the almanac state: per-constellation update planning (when the
+    /// next demodulation window opens, which subframes/satellites) plus
+    /// activation masks. Only constellations selected by
+    /// `gnss_set_constellations` are reported.
+    pub async fn gnss_read_almanac_status(&mut self) -> Result<GnssAlmanacStatus, RadioError> {
+        let cmd = GnssOpCode::ReadAlmanacStatus.bytes();
+        let mut r = [0u8; 53];
+        self.read_command(&cmd, &mut r).await?;
+
+        let be = |b: &[u8]| u32::from_be_bytes([b[0], b[1], b[2], b[3]]);
+        Ok(GnssAlmanacStatus {
+            gps: GnssAlmanacConstellation {
+                status: GnssAlmanacConstellationStatus::from(r[0] as i8),
+                next_time_to_update_ms: be(&r[1..5]),
+                next_nb_subframe: r[5],
+                next_sat_id_in_subframe_4: r[6],
+                next_sat_id_in_subframe_5: r[7],
+                next_subframe_id_start: r[8],
+                nb_sat_to_update: r[9],
+            },
+            gps_sat_to_update_mask: be(&r[10..14]),
+            gps_sat_activated_mask: be(&r[14..18]),
+            beidou: GnssAlmanacConstellation {
+                status: GnssAlmanacConstellationStatus::from(r[18] as i8),
+                next_time_to_update_ms: be(&r[19..23]),
+                next_nb_subframe: r[23],
+                next_sat_id_in_subframe_4: r[24],
+                next_sat_id_in_subframe_5: r[25],
+                next_subframe_id_start: r[26],
+                nb_sat_to_update: r[27],
+            },
+            beidou_sat_to_update_mask: [be(&r[28..32]), be(&r[32..36])],
+            beidou_sat_activated_mask: [be(&r[36..40]), be(&r[40..44])],
+            beidou_sat_blacklist_mask: [be(&r[44..48]), be(&r[48..52])],
+            next_am_id: r[52],
+        })
+    }
+
+    /// Demodulate almanac data from the satellites of one constellation and
+    /// update the almanac in the chip's flash. Start it at the window
+    /// indicated by `gnss_read_almanac_status` (the reference service leads
+    /// it by ~1.3 s of warmup plus 1 s of margin for GPS); completion is
+    /// signalled by `IrqMask::GnssScanDone`.
+    pub async fn gnss_almanac_update_from_sat(
+        &mut self,
+        constellation_mask: u8,
+        effort: GnssEffort,
+    ) -> Result<(), RadioError> {
+        let opcode = GnssOpCode::AlmanacUpdateFromSat.bytes();
+        self.write_command(&[opcode[0], opcode[1], effort as u8, constellation_mask])
+            .await
+    }
+
+    /// Read the outcome of the last time fetch / almanac demodulation
+    pub async fn gnss_read_demod_status(&mut self) -> Result<GnssDemodStatus, RadioError> {
+        let cmd = GnssOpCode::ReadDemodStatus.bytes();
+        let mut rbuffer = [0u8; 2];
+        self.read_command(&cmd, &mut rbuffer).await?;
+        Ok(GnssDemodStatus {
+            status: rbuffer[0] as i8,
+            word_sync_found: rbuffer[1] & 0x01 != 0,
+            first_tow_found: rbuffer[1] & 0x02 != 0,
+            wn_demodulated: rbuffer[1] & 0x04 != 0,
+            wn_found: rbuffer[1] & 0x08 != 0,
+            subframe_1_found: rbuffer[1] & 0x10 != 0,
+            subframe_4_found: rbuffer[1] & 0x20 != 0,
+            subframe_5_found: rbuffer[1] & 0x40 != 0,
+        })
+    }
+
+    /// Write almanac blocks (20 bytes each) into the chip's flash. A full
+    /// image update is the 20-byte header block plus all 128 satellite
+    /// entries written in order with no other command in between; the chip
+    /// commits and re-CRCs the almanac at the end. `blocks` length must be a
+    /// multiple of `GNSS_ALMANAC_WRITE_BLOCK_SIZE`.
+    pub async fn gnss_almanac_update(&mut self, blocks: &[u8]) -> Result<(), RadioError> {
+        if !blocks.len().is_multiple_of(GNSS_ALMANAC_WRITE_BLOCK_SIZE) {
+            return Err(RadioError::PayloadSizeMismatch(
+                blocks.len(),
+                GNSS_ALMANAC_WRITE_BLOCK_SIZE,
+            ));
+        }
+        // The reference splits at its 512-byte command cap: 25 blocks per
+        // AlmanacUpdate write
+        const MAX_CHUNK: usize = (512 - 2) / GNSS_ALMANAC_WRITE_BLOCK_SIZE * GNSS_ALMANAC_WRITE_BLOCK_SIZE;
+        let cmd = GnssOpCode::AlmanacUpdate.bytes();
+        for chunk in blocks.chunks(MAX_CHUNK) {
+            self.intf.write_with_payload(&cmd, chunk, false).await?;
+        }
+        Ok(())
     }
 
     // =========================================================================

@@ -1423,11 +1423,17 @@ pub enum GnssOpCode {
     Scan = 0x040B,
     GetResultSize = 0x040C,
     ReadResults = 0x040D,
+    AlmanacUpdate = 0x040E,
     SetAssistancePosition = 0x0410,
     ReadAssistancePosition = 0x0411,
     GetNbSatellites = 0x0417,
     GetSatellites = 0x0418,
     ReadLastScanModeLaunched = 0x0426,
+    FetchTime = 0x0432,
+    ReadTime = 0x0434,
+    ReadDemodStatus = 0x0439,
+    AlmanacUpdateFromSat = 0x0454,
+    ReadAlmanacStatus = 0x0457,
 }
 
 impl GnssOpCode {
@@ -1551,3 +1557,140 @@ pub enum LfClockSource {
     /// External signal on DIO11
     Ext = 0x02,
 }
+
+/// Validity of the time held by the GNSS firmware
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssTimeStatus {
+    Valid,
+    /// The 32 kHz LF clock stopped since the time was acquired
+    LfClockStopped,
+    /// No time has been demodulated or set yet
+    NotSet,
+    /// Unknown status byte
+    Other(u8),
+}
+
+impl From<u8> for GnssTimeStatus {
+    fn from(value: u8) -> Self {
+        match value {
+            0 => GnssTimeStatus::Valid,
+            1 => GnssTimeStatus::LfClockStopped,
+            2 => GnssTimeStatus::NotSet,
+            other => GnssTimeStatus::Other(other),
+        }
+    }
+}
+
+/// GPS time held by the GNSS firmware
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GnssTime {
+    pub status: GnssTimeStatus,
+    /// Seconds since the GPS epoch, modulo 1024 weeks
+    pub gps_time_s: u32,
+    /// Microseconds into the current second
+    pub us_in_second: u32,
+    /// Time accuracy in microseconds
+    pub accuracy_us: u32,
+}
+
+/// What GnssFetchTime demodulates
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssFetchTimeOption {
+    /// Time of week only; valid only after a successful scan or a
+    /// TowWn/TowWnRollover fetch
+    Tow = 0x00,
+    /// Time of week and week number
+    TowWn = 0x01,
+    /// Time of week, week number and rollover since 1980
+    TowWnRollover = 0x02,
+}
+
+/// Almanac state of one constellation, from GnssReadAlmanacStatus
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum GnssAlmanacConstellationStatus {
+    UpToDate,
+    /// At least one satellite needs a demodulation update
+    UpdateNeeded,
+    /// The chip cannot compute the next demodulation window
+    InternalAccuracyTooLow,
+    NoTimeSet,
+    ImpossibleToFindNextTime,
+    NoPageIdKnown,
+    Other(i8),
+}
+
+impl From<i8> for GnssAlmanacConstellationStatus {
+    fn from(value: i8) -> Self {
+        match value {
+            0 => GnssAlmanacConstellationStatus::UpToDate,
+            1 => GnssAlmanacConstellationStatus::UpdateNeeded,
+            -4 => GnssAlmanacConstellationStatus::InternalAccuracyTooLow,
+            -3 => GnssAlmanacConstellationStatus::NoTimeSet,
+            -2 => GnssAlmanacConstellationStatus::ImpossibleToFindNextTime,
+            -1 => GnssAlmanacConstellationStatus::NoPageIdKnown,
+            other => GnssAlmanacConstellationStatus::Other(other),
+        }
+    }
+}
+
+/// Per-constellation almanac demodulation planning, from
+/// GnssReadAlmanacStatus
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GnssAlmanacConstellation {
+    pub status: GnssAlmanacConstellationStatus,
+    /// Delay in ms until the next demodulation window for this
+    /// constellation's satellites opens
+    pub next_time_to_update_ms: u32,
+    /// Subframes to demodulate in the next window
+    pub next_nb_subframe: u8,
+    pub next_sat_id_in_subframe_4: u8,
+    pub next_sat_id_in_subframe_5: u8,
+    pub next_subframe_id_start: u8,
+    /// Satellites still needing an almanac update
+    pub nb_sat_to_update: u8,
+}
+
+/// GnssReadAlmanacStatus response (GPS + BeiDou planning and activation
+/// masks)
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GnssAlmanacStatus {
+    pub gps: GnssAlmanacConstellation,
+    /// Bit mask of GPS satellites needing update (SV 0-31)
+    pub gps_sat_to_update_mask: u32,
+    /// Bit mask of activated GPS satellites
+    pub gps_sat_activated_mask: u32,
+    pub beidou: GnssAlmanacConstellation,
+    /// Bit masks of BeiDou satellites needing update (SV 0-63)
+    pub beidou_sat_to_update_mask: [u32; 2],
+    pub beidou_sat_activated_mask: [u32; 2],
+    pub beidou_sat_blacklist_mask: [u32; 2],
+    pub next_am_id: u8,
+}
+
+/// Almanac demodulation outcome details, from GnssReadDemodStatus. The
+/// status byte is the raw reference-enum value (SWDR001
+/// `lr11xx_gnss_demod_status_t`): 0/positive = progressing, negative =
+/// the specific failure.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct GnssDemodStatus {
+    pub status: i8,
+    pub word_sync_found: bool,
+    pub first_tow_found: bool,
+    pub wn_demodulated: bool,
+    pub wn_found: bool,
+    pub subframe_1_found: bool,
+    pub subframe_4_found: bool,
+    pub subframe_5_found: bool,
+}
+
+/// One almanac write block (a header or one satellite entry)
+pub const GNSS_ALMANAC_WRITE_BLOCK_SIZE: usize = 20;
+/// Satellite entries in a full almanac image (plus one header block)
+pub const GNSS_ALMANAC_N_SATELLITES: usize = 128;
