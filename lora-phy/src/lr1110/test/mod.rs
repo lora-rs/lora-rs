@@ -471,6 +471,21 @@ async fn test_set_irq_params_tx() {
 }
 
 #[tokio::test]
+async fn test_set_dio_irq_params() {
+    use crate::lr1110::IrqMask;
+    // Distinct masks pin the DIO9-then-DIO11 argument order
+    let mut reference_radio = reference();
+    reference_radio.set_dio_irq_params(IrqMask::GnssScanDone.value(), IrqMask::TxDone.value());
+
+    let mut radio = get_lr1110();
+    radio
+        .set_dio_irq_params(IrqMask::GnssScanDone.value(), IrqMask::TxDone.value())
+        .await
+        .unwrap();
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+}
+
+#[tokio::test]
 async fn test_clear_irq_status() {
     let mut reference_radio = reference();
     reference_radio.clear_irq_status(0xFFFFFFFF);
@@ -1219,6 +1234,23 @@ async fn test_gnss_assistance_position() {
     assert_eq!(radio.intf.spi, reference_radio.inner);
     assert_eq!(lat, c_position.latitude);
     assert_eq!(lon, c_position.longitude);
+}
+
+#[tokio::test]
+async fn test_cfg_lf_clock() {
+    // smtc-modem-cores does not wrap lr11xx_system_cfg_lfclk yet, so the
+    // wire bytes are pinned directly (SWDR001: cfg byte = source | wait << 2)
+    use crate::lr1110::LfClockSource;
+    let mut radio = get_lr1110();
+    radio.cfg_lf_clock(LfClockSource::Xtal, true).await.unwrap();
+    radio.cfg_lf_clock(LfClockSource::Rc, false).await.unwrap();
+    assert_eq!(
+        radio.intf.spi.ops,
+        vec![
+            fixtures::Ops::Write(vec![0x01, 0x16, 0x05]),
+            fixtures::Ops::Write(vec![0x01, 0x16, 0x00]),
+        ]
+    );
 }
 
 #[tokio::test]

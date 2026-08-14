@@ -1539,3 +1539,15 @@ pub struct GnssDetectedSatellite {
 
 /// The chip reports at most this many detected satellites per scan
 pub const GNSS_MAX_DETECTED_SV: usize = 32;
+
+/// Source of the 32.768 kHz low-frequency clock
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum LfClockSource {
+    /// Internal 32 kHz RC oscillator (default at power-up)
+    Rc = 0x00,
+    /// External 32.768 kHz crystal
+    Xtal = 0x01,
+    /// External signal on DIO11
+    Ext = 0x02,
+}

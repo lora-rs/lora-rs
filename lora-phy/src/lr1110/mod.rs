@@ -36,6 +36,8 @@ pub use radio_kind_params::{
     GNSS_MAX_DETECTED_SV, GnssConstellation, GnssDestination, GnssDetectedSatellite, GnssEffort, GnssOpCode,
     GnssResultMask, GnssScanMode, GnssVersion,
 };
+// LF clock source (GNSS scanning relies on the LF clock)
+pub use radio_kind_params::LfClockSource;
 // GFSK types
 pub use radio_kind_params::{
     GFSK_DEFAULT_SYNC_WORD, GFSK_SYNC_WORD_MAX_LENGTH, GfskAddressFiltering, GfskBandwidth, GfskCrcType, GfskDcFree,
@@ -1016,6 +1018,35 @@ where
     ///
     /// Returns version information useful for identifying the chip and
     /// checking firmware compatibility.
+    /// Configure the 32.768 kHz LF clock source, optionally holding BUSY
+    /// until the 32k clock is ready. GNSS scanning relies on the LF clock;
+    /// configure it once before the first scan and do not reconfigure it
+    /// between scans.
+    pub async fn cfg_lf_clock(&mut self, source: LfClockSource, wait_32k_ready: bool) -> Result<(), RadioError> {
+        let opcode = SystemOpCode::CfgLfClk.bytes();
+        let cfg = source as u8 | ((wait_32k_ready as u8) << 2);
+        self.write_command(&[opcode[0], opcode[1], cfg]).await
+    }
+
+    /// Enable the given IRQ masks and route them to the DIO9 and DIO11 pins
+    /// (an OR of `IrqMask` values per pin)
+    pub async fn set_dio_irq_params(&mut self, dio9_mask: u32, dio11_mask: u32) -> Result<(), RadioError> {
+        let opcode = SystemOpCode::SetDioIrqParams.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (dio9_mask >> 24) as u8,
+            (dio9_mask >> 16) as u8,
+            (dio9_mask >> 8) as u8,
+            dio9_mask as u8,
+            (dio11_mask >> 24) as u8,
+            (dio11_mask >> 16) as u8,
+            (dio11_mask >> 8) as u8,
+            dio11_mask as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+
     pub async fn get_version(&mut self) -> Result<Version, RadioError> {
         let opcode = SystemOpCode::GetVersion.bytes();
         let cmd = [opcode[0], opcode[1]];
