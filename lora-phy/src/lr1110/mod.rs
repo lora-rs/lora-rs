@@ -1164,6 +1164,79 @@ where
         Ok(irq_flags)
     }
 
+    fn interpret_irq_flags(
+        &mut self,
+        irq_flags: u32,
+        radio_mode: RadioMode,
+        cad_activity_detected: Option<&mut bool>,
+    ) -> Result<Option<IrqState>, RadioError> {
+        debug!(
+            "process_irq: irq_flags = 0x{:08x} in radio mode {}",
+            irq_flags, radio_mode
+        );
+
+        match radio_mode {
+            RadioMode::Transmit => {
+                if IrqMask::TxDone.is_set(irq_flags) {
+                    return Ok(Some(IrqState::Done));
+                }
+                if IrqMask::Timeout.is_set(irq_flags) {
+                    return Err(RadioError::TransmitTimeout);
+                }
+                // LR1110 may auto-clear IRQ flags when DIO1 triggers.
+                // If we waited for DIO1 and flags are 0, TX is complete.
+                if irq_flags == 0 {
+                    return Ok(Some(IrqState::Done));
+                }
+            }
+            RadioMode::Receive(_) => {
+                if IrqMask::CrcError.is_set(irq_flags) || IrqMask::HeaderError.is_set(irq_flags) {
+                    debug!("CRC or Header error");
+                }
+                if IrqMask::RxDone.is_set(irq_flags) {
+                    return Ok(Some(IrqState::Done));
+                }
+                if IrqMask::Timeout.is_set(irq_flags) {
+                    return Err(RadioError::ReceiveTimeout);
+                }
+                if IrqMask::PreambleDetected.is_set(irq_flags) || IrqMask::SyncWordHeaderValid.is_set(irq_flags) {
+                    return Ok(Some(IrqState::PreambleReceived));
+                }
+            }
+            RadioMode::ChannelActivityDetection => {
+                if IrqMask::CadDone.is_set(irq_flags) {
+                    if let Some(detected) = cad_activity_detected {
+                        *detected = IrqMask::CadDetected.is_set(irq_flags);
+                    }
+                    return Ok(Some(IrqState::Done));
+                }
+            }
+            RadioMode::Sleep | RadioMode::Standby | RadioMode::Listen => {
+                warn!("IRQ during sleep/standby/listen?");
+            }
+            RadioMode::FrequencySynthesis => {}
+        }
+
+        Ok(None)
+    }
+
+    /// Clear the given IRQ flags (lr11xx_system_clear_irq_status).
+    pub async fn clear_irq_flags(&mut self, irq_flags: u32) -> Result<(), RadioError> {
+        if irq_flags == 0 {
+            return Ok(());
+        }
+        let opcode = SystemOpCode::ClearIrq.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            (irq_flags >> 24) as u8,
+            (irq_flags >> 16) as u8,
+            (irq_flags >> 8) as u8,
+            irq_flags as u8,
+        ];
+        self.write_command(&cmd).await
+    }
+
     // =========================================================================
     // GFSK Functions (from SWDR001 lr11xx_radio.c)
     // =========================================================================
@@ -2388,66 +2461,12 @@ where
         radio_mode: RadioMode,
         cad_activity_detected: Option<&mut bool>,
     ) -> Result<Option<IrqState>, RadioError> {
-        // Read IRQ status from the LR1110
         let irq_flags = self.get_irq_flags().await?;
-
-        debug!(
-            "process_irq: irq_flags = 0x{:08x} in radio mode {}",
-            irq_flags, radio_mode
-        );
-
-        match radio_mode {
-            RadioMode::Transmit => {
-                if IrqMask::TxDone.is_set(irq_flags) {
-                    return Ok(Some(IrqState::Done));
-                }
-                if IrqMask::Timeout.is_set(irq_flags) {
-                    return Err(RadioError::TransmitTimeout);
-                }
-                // LR1110 may auto-clear IRQ flags when DIO1 triggers.
-                // If we waited for DIO1 and flags are 0, TX is complete.
-                if irq_flags == 0 {
-                    return Ok(Some(IrqState::Done));
-                }
-            }
-            RadioMode::Receive(_) => {
-                if IrqMask::CrcError.is_set(irq_flags) || IrqMask::HeaderError.is_set(irq_flags) {
-                    debug!("CRC or Header error");
-                }
-                if IrqMask::RxDone.is_set(irq_flags) {
-                    return Ok(Some(IrqState::Done));
-                }
-                if IrqMask::Timeout.is_set(irq_flags) {
-                    return Err(RadioError::ReceiveTimeout);
-                }
-                if IrqMask::PreambleDetected.is_set(irq_flags) || IrqMask::SyncWordHeaderValid.is_set(irq_flags) {
-                    return Ok(Some(IrqState::PreambleReceived));
-                }
-            }
-            RadioMode::ChannelActivityDetection => {
-                if IrqMask::CadDone.is_set(irq_flags) {
-                    if let Some(detected) = cad_activity_detected {
-                        *detected = IrqMask::CadDetected.is_set(irq_flags);
-                    }
-                    return Ok(Some(IrqState::Done));
-                }
-            }
-            RadioMode::Sleep | RadioMode::Standby | RadioMode::Listen => {
-                warn!("IRQ during sleep/standby/listen?");
-            }
-            RadioMode::FrequencySynthesis => {}
-        }
-
-        Ok(None)
+        self.interpret_irq_flags(irq_flags, radio_mode, cad_activity_detected)
     }
 
     async fn clear_irq_status(&mut self) -> Result<(), RadioError> {
-        let opcode = SystemOpCode::ClearIrq.bytes();
-        let cmd = [
-            opcode[0], opcode[1], 0xFF, // Clear all interrupts (32-bit mask)
-            0xFF, 0xFF, 0xFF,
-        ];
-        self.write_command(&cmd).await
+        self.clear_irq_flags(0xFFFF_FFFF).await
     }
 
     async fn process_irq_event(
@@ -2456,13 +2475,19 @@ where
         cad_activity_detected: Option<&mut bool>,
         clear_interrupts: bool,
     ) -> Result<Option<IrqState>, RadioError> {
-        let irq_state = self.get_irq_state(radio_mode, cad_activity_detected).await;
+        let irq_flags = self.get_irq_flags().await?;
 
         if clear_interrupts {
-            self.clear_irq_status().await?;
+            // Clear exactly what was read. Clearing everything races the
+            // chip: an IRQ that fires between the status read and the clear
+            // write is wiped unseen. At SF7/BW500 RxDone lands milliseconds
+            // after the header/timestamp IRQs, inside that window, and a
+            // swallowed RxDone leaves the caller awaiting a DIO edge that
+            // never comes.
+            self.clear_irq_flags(irq_flags).await?;
         }
 
-        irq_state
+        self.interpret_irq_flags(irq_flags, radio_mode, cad_activity_detected)
     }
 }
 
