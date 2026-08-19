@@ -220,6 +220,10 @@ where
     IV: InterfaceVariant,
     C: Sx126xVariant,
 {
+    // The sx126x keeps its configuration across a warm-start sleep, so the
+    // stack can use the low-current retention sleep between receive windows.
+    const SUPPORTS_WARM_START: bool = true;
+
     async fn init_lora(&mut self, sync_word: u16) -> Result<(), RadioError> {
         // DC-DC regulator setup (default is LDO)
         if self.config.use_dcdc {

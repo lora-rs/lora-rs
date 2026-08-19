@@ -46,6 +46,19 @@ pub trait PhyRxTx: Sized {
     /// Configures the radio to receive data. This future should not actually await the data itself.
     async fn setup_rx(&mut self, config: RxConfig) -> Result<(), Self::PhyError>;
 
+    /// Configure a single receive window with its precomputed timing.
+    ///
+    /// The default preserves compatibility with radios that derive their
+    /// timeout from [`RxConfig`]. Radios that support symbol-precise timeouts
+    /// can override this method.
+    async fn setup_rx_window(
+        &mut self,
+        config: RxConfig,
+        _timing: super::RxWindowTiming,
+    ) -> Result<(), Self::PhyError> {
+        self.setup_rx(config).await
+    }
+
     /// Receive data into the provided buffer with the given transceiver configuration. The returned
     /// future should only complete when RX data has been received. Furthermore, it should be
     /// possible to await the future again without settings up the receive config again.
@@ -58,8 +71,25 @@ pub trait PhyRxTx: Sized {
     /// future should complete when RX data has been received or when the timeout has expired.
     async fn rx_single(&mut self, buf: &mut [u8]) -> Result<RxStatus, Self::PhyError>;
 
-    /// Puts the radio into a low-power mode
+    /// Puts the radio into a low-power mode.
+    ///
+    /// Used at the end of a receive cycle, before the potentially long idle
+    /// until the next uplink. Radios should favor the lowest-current sleep here
+    /// even when that means a slower, more expensive wake-up next time.
     async fn low_power(&mut self) -> Result<(), Self::PhyError> {
         Ok(())
+    }
+
+    /// Puts the radio into a low-power mode that keeps its configuration, for a
+    /// short idle where a fast wake-up matters more than the sleep current.
+    ///
+    /// Called between the transmit and its receive windows, and between RX1 and
+    /// RX2: gaps of seconds where re-initializing the radio from a cold sleep
+    /// would both burn the setup time and force the receive window to open
+    /// earlier to hide it. Radios with a retention sleep (e.g. the sx126x warm
+    /// start) should use it here; the default keeps the old behavior by
+    /// deferring to [`low_power`](Self::low_power).
+    async fn low_power_retain(&mut self) -> Result<(), Self::PhyError> {
+        self.low_power().await
     }
 }
