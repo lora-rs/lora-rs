@@ -301,6 +301,26 @@ where
         self.mac.configuration.data_rate = datarate;
     }
 
+    /// Whether Adaptive Data Rate (ADR) is enabled.
+    ///
+    /// When enabled, uplinks set the FCtrl ADR bit so the network may adjust
+    /// data rate and TX power via LinkADRReq. ADRACKReq / DR backoff also run
+    /// when connectivity is lost.
+    pub fn get_adr(&self) -> bool {
+        self.mac.configuration.adr_enabled
+    }
+
+    /// Enable or disable Adaptive Data Rate (ADR).
+    ///
+    /// ADR is enabled by default. Disable it for mobile devices or when the
+    /// application manages data rate itself.
+    pub fn set_adr(&mut self, enabled: bool) {
+        self.mac.configuration.adr_enabled = enabled;
+        if !enabled && let Some(session) = self.mac.get_session_mut() {
+            session.adr_ack_cnt = 0;
+        }
+    }
+
     /// Join the LoRaWAN network asynchronously. The returned future completes when
     /// the LoRaWAN network has been joined successfully, or an error has occurred.
     ///

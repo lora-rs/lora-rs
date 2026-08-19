@@ -207,6 +207,8 @@ impl Multicast {
         &mut self,
         mut state: &mut mac::State,
         buf: &mut RadioBuffer<N>,
+        configuration: &mac::Configuration,
+        region: &crate::region::Configuration,
     ) -> mac::Result<mac::FcntUp> {
         let send_data = mac::SendData {
             fport: self.remote_setup_port,
@@ -215,7 +217,7 @@ impl Multicast {
         };
         match &mut state {
             mac::State::Joined(session) => {
-                let response = session.prepare_buffer::<N>(&send_data, buf);
+                let response = session.prepare_buffer::<N>(&send_data, buf, configuration, region);
                 self.pending_uplinks.clear();
                 Ok(response)
             }

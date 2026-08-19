@@ -83,6 +83,9 @@ pub struct Configuration {
     pub(crate) rx1_dr_offset: u8,
     pub(crate) rx2_data_rate: Option<DR>,
     pub(crate) rx2_frequency: Option<u32>,
+    /// When true, uplinks set the FCtrl ADR bit so the network may manage
+    /// data rate and TX power via LinkADRReq.
+    pub(crate) adr_enabled: bool,
 }
 
 pub(crate) struct Mac {
@@ -140,6 +143,7 @@ impl Mac {
                 rx2_data_rate: None,
                 rx2_frequency: None,
                 tx_power: None,
+                adr_enabled: true,
             },
             #[cfg(feature = "certification")]
             certification: certification::Certification::new(),
@@ -184,7 +188,9 @@ impl Mac {
         send_data: &SendData<'_>,
     ) -> Result<(radio::TxConfig, RxWindows, FcntUp)> {
         let fcnt = match &mut self.state {
-            State::Joined(session) => Ok(session.prepare_buffer::<N>(send_data, buf)),
+            State::Joined(session) => {
+                Ok(session.prepare_buffer::<N>(send_data, buf, &self.configuration, &self.region))
+            }
             State::Otaa(_) => Err(Error::NotJoined),
             State::Unjoined => Err(Error::NotJoined),
         }?;
@@ -215,16 +221,18 @@ impl Mac {
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
     ) -> Result<(radio::TxConfig, FcntUp)> {
-        self.multicast.setup_send::<N>(&mut self.state, buf).map(|fcnt_up| {
-            // No RX windows follow this uplink; the caller re-arms the RXC window.
-            let (mut tx_config, _) =
-                self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
-            tx_config.adjust_power(
-                self.configuration.tx_power.unwrap_or(self.board_eirp.max_power),
-                self.board_eirp.antenna_gain,
-            );
-            (tx_config, fcnt_up)
-        })
+        self.multicast.setup_send::<N>(&mut self.state, buf, &self.configuration, &self.region).map(
+            |fcnt_up| {
+                // No RX windows follow this uplink; the caller re-arms the RXC window.
+                let (mut tx_config, _) =
+                    self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
+                tx_config.adjust_power(
+                    self.configuration.tx_power.unwrap_or(self.board_eirp.max_power),
+                    self.board_eirp.antenna_gain,
+                );
+                (tx_config, fcnt_up)
+            },
+        )
     }
 
     #[cfg(feature = "certification")]
@@ -233,13 +241,15 @@ impl Mac {
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
     ) -> Result<(radio::TxConfig, FcntUp)> {
-        self.certification.setup_send::<N>(&mut self.state, buf).map(|fcnt_up| {
-            // No RX windows follow this uplink; the caller completes with rx2_complete().
-            let (mut tx_config, _) =
-                self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
-            tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
-            (tx_config, fcnt_up)
-        })
+        self.certification
+            .setup_send::<N>(&mut self.state, buf, &self.configuration, &self.region)
+            .map(|fcnt_up| {
+                // No RX windows follow this uplink; the caller completes with rx2_complete().
+                let (mut tx_config, _) =
+                    self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
+                tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
+                (tx_config, fcnt_up)
+            })
     }
 
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
@@ -328,7 +338,7 @@ impl Mac {
 
     pub(crate) fn rx2_complete(&mut self) -> Response {
         match &mut self.state {
-            State::Joined(session) => session.rx2_complete(),
+            State::Joined(session) => session.rx2_complete(&mut self.configuration, &self.region),
             State::Otaa(otaa) => otaa.rx2_complete(),
             State::Unjoined => Response::NoUpdate,
         }
@@ -344,6 +354,14 @@ impl Mac {
 
     pub(crate) fn get_session(&self) -> Option<&Session> {
         match &self.state {
+            State::Joined(session) => Some(session),
+            State::Otaa(_) => None,
+            State::Unjoined => None,
+        }
+    }
+
+    pub(crate) fn get_session_mut(&mut self) -> Option<&mut Session> {
+        match &mut self.state {
             State::Joined(session) => Some(session),
             State::Otaa(_) => None,
             State::Unjoined => None,
