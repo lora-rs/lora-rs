@@ -316,10 +316,8 @@ where
     /// application manages data rate itself.
     pub fn set_adr(&mut self, enabled: bool) {
         self.mac.configuration.adr_enabled = enabled;
-        if !enabled {
-            if let Some(session) = self.mac.get_session_mut() {
-                session.adr_ack_cnt = 0;
-            }
+        if !enabled && let Some(session) = self.mac.get_session_mut() {
+            session.adr_ack_cnt = 0;
         }
     }
 

@@ -73,10 +73,8 @@ where
     /// Enable or disable Adaptive Data Rate (ADR). Enabled by default.
     pub fn set_adr(&mut self, enabled: bool) {
         self.shared.mac.configuration.adr_enabled = enabled;
-        if !enabled {
-            if let Some(session) = self.shared.mac.get_session_mut() {
-                session.adr_ack_cnt = 0;
-            }
+        if !enabled && let Some(session) = self.shared.mac.get_session_mut() {
+            session.adr_ack_cnt = 0;
         }
     }
 

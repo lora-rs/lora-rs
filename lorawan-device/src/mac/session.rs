@@ -5,7 +5,7 @@ use super::{
 };
 use crate::radio::RadioBuffer;
 use crate::region::constants::{ADR_ACK_DELAY, ADR_ACK_LIMIT, MAX_FCNT_GAP};
-use crate::{region, AppSKey, Downlink, NwkSKey};
+use crate::{AppSKey, Downlink, NwkSKey, region};
 use core::num::NonZeroU8;
 use heapless::Vec;
 use lorawan::creator::{DataFrame, Payload};
@@ -287,10 +287,10 @@ impl Session {
             // step down the data rate to try to regain connectivity.
             if self.adr_ack_cnt >= (ADR_ACK_LIMIT + ADR_ACK_DELAY) as u32 {
                 let past_limit = self.adr_ack_cnt - ADR_ACK_LIMIT as u32;
-                if past_limit.is_multiple_of(ADR_ACK_DELAY as u32) {
-                    if let Some(dr) = next_lower_datarate(region, configuration.data_rate) {
-                        configuration.data_rate = dr;
-                    }
+                if past_limit.is_multiple_of(ADR_ACK_DELAY as u32)
+                    && let Some(dr) = next_lower_datarate(region, configuration.data_rate)
+                {
+                    configuration.data_rate = dr;
                 }
             }
         }
@@ -587,11 +587,82 @@ fn next_fcnt_down(last: Option<u32>, wire: u16) -> Option<u32> {
 mod tests {
     use super::next_fcnt_down;
     use super::{SendData, Session};
+    use crate::mac::Mac;
     use crate::radio::RadioBuffer;
+    use crate::region;
     use crate::{AppSKey, NwkSKey};
     use lorawan::default_crypto::DefaultCrypto;
     use lorawan::maccommandcreator::LinkADRAnsCreator;
-    use lorawan::parser::{DecryptedDataPayload, DevAddr, FrmPayload};
+    use lorawan::parser::{DecryptedDataPayload, DevAddr, EncryptedDataPayload, FrmPayload};
+    use lorawan::types::DR;
+
+    fn uplink_fctrl(session: &mut Session, mac: &Mac) -> lorawan::parser::FCtrl {
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        session.prepare_buffer::<256>(
+            &SendData { data: &[], fport: 1, confirmed: false },
+            &mut tx,
+            &mac.configuration,
+            &mac.region,
+        );
+        EncryptedDataPayload::parse(tx.as_mut_for_read()).unwrap().fhdr().fctrl()
+    }
+
+    fn eu868_mac() -> Mac {
+        Mac::new(region::Configuration::new(region::Region::EU868), 14, 0)
+    }
+
+    fn session() -> Session {
+        Session::new(NwkSKey::from([2; 16]), AppSKey::from([1; 16]), DevAddr::from_value(1))
+    }
+
+    #[test]
+    fn adr_bits_follow_configuration_and_ack_limit() {
+        let mut mac = eu868_mac();
+        mac.configuration.data_rate = DR::_5;
+        let mut session = session();
+
+        let fctrl = uplink_fctrl(&mut session, &mac);
+        assert!(fctrl.adr());
+        assert!(!fctrl.adr_ack_req());
+
+        session.adr_ack_cnt = super::ADR_ACK_LIMIT as u32;
+        let fctrl = uplink_fctrl(&mut session, &mac);
+        assert!(fctrl.adr());
+        assert!(fctrl.adr_ack_req());
+
+        mac.configuration.adr_enabled = false;
+        let fctrl = uplink_fctrl(&mut session, &mac);
+        assert!(!fctrl.adr());
+        assert!(!fctrl.adr_ack_req());
+    }
+
+    #[test]
+    fn adr_backoff_starts_after_ack_limit_and_delay() {
+        let mut mac = eu868_mac();
+        mac.configuration.data_rate = DR::_5;
+        let mut session = session();
+        session.adr_ack_cnt = (super::ADR_ACK_LIMIT + super::ADR_ACK_DELAY - 1) as u32;
+
+        session.rx2_complete(&mut mac.configuration, &mac.region);
+        assert_eq!(mac.configuration.data_rate, DR::_4);
+
+        for _ in 0..super::ADR_ACK_DELAY {
+            session.rx2_complete(&mut mac.configuration, &mac.region);
+        }
+        assert_eq!(mac.configuration.data_rate, DR::_3);
+    }
+
+    #[test]
+    fn adr_ack_req_stops_at_lowest_supported_datarate() {
+        let mut mac = eu868_mac();
+        mac.configuration.data_rate = DR::_0;
+        let mut session = session();
+        session.adr_ack_cnt = super::ADR_ACK_LIMIT as u32;
+
+        let fctrl = uplink_fctrl(&mut session, &mac);
+        assert!(fctrl.adr());
+        assert!(!fctrl.adr_ack_req());
+    }
 
     /// FPort 0 sends the queued MAC commands as the FRMPayload (encrypted
     /// with the NwkSKey), with FOpts left empty.
@@ -607,7 +678,7 @@ mod tests {
         session.uplink.add_mac_command(cmd);
 
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
-        let mac = super::Mac::new(region::Configuration::new(region::Region::EU868), 14, 0);
+        let mac = Mac::new(region::Configuration::new(region::Region::EU868), 14, 0);
         session.prepare_buffer::<256>(
             &SendData { data: &[], fport: 0, confirmed: false },
             &mut tx,
