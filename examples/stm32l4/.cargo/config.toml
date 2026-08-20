@@ -1,0 +1,9 @@
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+# probe-rs cannot autodetect the L476; the explicit chip is required.
+runner = "probe-rs run --chip STM32L476RGTx"
+
+[build]
+target = "thumbv7em-none-eabi"
+
+[env]
+DEFMT_LOG = "info"
