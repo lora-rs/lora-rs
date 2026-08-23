@@ -1,5 +1,11 @@
 name: HIL bench
 
+# GitHub-hosted runner reaching the bench rig over authenticated tunnels:
+# rigd on the CM4 (rig lease + gateway datagram relay, TCP 4830) and
+# probe-rs serve (DUT flash/run, TCP 3000). No self-hosted runner, no
+# workflow code executing on bench machines. Secrets live in the hil-rig
+# environment; fork PRs get no secrets and need maintainer approval there.
+
 on:
   workflow_dispatch:
   push:
@@ -7,26 +13,92 @@ on:
   pull_request:
     branches: [hil-tests]
 
+# One runner at a time: the rig lease enforces this server-side, but
+# queueing here avoids burning runner minutes waiting on the lease.
 concurrency:
   group: hil-bench
   cancel-in-progress: false
 
+env:
+  PROBE_RS_VERSION: "0.32.0"
+
 jobs:
   paired-scenarios:
-    runs-on: [self-hosted, lora-hil]
-    timeout-minutes: 30
+    runs-on: ubuntu-latest
+    environment: hil-rig
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Rust targets
+        run: rustup target add thumbv7em-none-eabi thumbv6m-none-eabi
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            hil-test/tests-hil
+            hil-test/tests-hil-fw
+            hil-test/tests-hil-fw-l072
+
+      # probe-rs with the remote feature (release binaries omit it).
+      - name: Cache probe-rs
+        id: cache-probe-rs
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/probe-rs
+          key: probe-rs-remote-${{ env.PROBE_RS_VERSION }}
+      - name: Install probe-rs (remote feature)
+        if: steps.cache-probe-rs.outputs.cache-hit != 'true'
+        run: cargo install probe-rs-tools@${{ env.PROBE_RS_VERSION }} --locked --features remote
+
+      - name: Open tunnels to the rig
+        env:
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          curl -fsSL -o /tmp/cloudflared \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x /tmp/cloudflared
+          /tmp/cloudflared access tcp --hostname hil-rig.louis.rodeo --url 127.0.0.1:4830 &
+          /tmp/cloudflared access tcp --hostname hil-probe.louis.rodeo --url 127.0.0.1:3000 &
+          sleep 2
+
+      - name: Write rig credentials
+        run: |
+          install -d -m 700 "$HOME/.config/lora-hil"
+          printf '%s' "${{ secrets.RIGD_TOKEN }}" > "$HOME/.config/lora-hil/rigd-token"
+          printf '%s' "${{ secrets.PROBE_RS_TOKEN }}" > "$HOME/.config/lora-hil/probe-rs-token"
+          chmod 600 "$HOME/.config/lora-hil/"*
+          cat > /tmp/banc-rig-ci.toml <<'EOF'
+          [rig]
+          name = "lora-hil"
+          lease = { addr = "127.0.0.1:4830", token_file = "/home/runner/.config/lora-hil/rigd-token" }
+
+          [[assistant]]
+          name = "relay"
+          addr = "127.0.0.1:4830"
+          token_file = "/home/runner/.config/lora-hil/rigd-token"
+          EOF
+
+      - name: Preflight rig reachability
+        run: |
+          for p in 4830 3000; do
+            if ! timeout 5 bash -c "</dev/tcp/127.0.0.1/$p"; then
+              echo "::error::cannot reach the rig on tunnel port $p (bench down or tunnel misconfigured)"
+              exit 1
+            fi
+          done
+
       - name: Run paired HIL scenarios
+        env:
+          BANC_RIG: /tmp/banc-rig-ci.toml
+          BANC_LEASE_HOLDER: gh-run-${{ github.run_id }}
+          HIL_FW_OFFLINE: "0"
+          CARGO_TARGET_DIR: /tmp/hil-target
+          PROBE_RS_HOST: ws://127.0.0.1:3000
+          PROBE_RS_TOKEN_FILE: /home/runner/.config/lora-hil/probe-rs-token
         run: |
           export PATH="$HOME/.cargo/bin:$PATH"
-          export HIL_FW_OFFLINE=0
-          export CARGO_TARGET_DIR=/tmp/hil-target
-          # Rig marker lives on the bench (read-only mount), not in the repo:
-          # its presence is what marks this runner as rig-attached. The suite
-          # itself now comes from the checkout, like tests-hil-fw always has.
-          export BANC_RIG=/bench/lora-hil-harness/banc-rig.toml
           cd "$GITHUB_WORKSPACE/hil-test/tests-hil"
           # One DUT at a time: both suites drive the same gateway and bind
           # :1730, so they run sequentially in a single job. scenarios = the
