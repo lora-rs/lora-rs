@@ -15,6 +15,6 @@ set -euo pipefail
 exec "$HOME/.cargo/bin/probe-rs" run --chip STM32L072CZTx \
     --probe 0483:374b:066EFF495351677867143312 \
     --connect-under-reset \
-    --host ws://192.168.1.190:3000 \
-    --token "$(cat "$HOME/.config/probe-rs/remote-token")" \
+    --host "${PROBE_RS_HOST:-ws://192.168.1.190:3000}" \
+    --token "$(cat "${PROBE_RS_TOKEN_FILE:-$HOME/.config/probe-rs/remote-token}")" \
     "$@"

@@ -2,6 +2,8 @@
 //! services OTAA joins from the bench DUT and emits typed events so host-side
 //! tests can assert on the RF/crypto path.
 
+pub mod relay;
+
 use lora_modulation::{Bandwidth, SpreadingFactor};
 use lorawan::default_crypto::{DefaultCrypto, DefaultNetworkCrypto};
 use lorawan::keys::{AES128, AppSKey, Crypto, NetworkCrypto, NwkSKey};

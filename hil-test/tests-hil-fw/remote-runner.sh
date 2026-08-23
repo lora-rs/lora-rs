@@ -14,6 +14,6 @@ set -euo pipefail
 # (the B-L072Z DUT's ST-LINK/V2-1) and an unpinned run grabs an arbitrary one.
 exec "$HOME/.cargo/bin/probe-rs" run --chip STM32WL55JCIx \
     --probe 0483:374e:002700443234511733353533 \
-    --host ws://192.168.1.190:3000 \
-    --token "$(cat "$HOME/.config/probe-rs/remote-token")" \
+    --host "${PROBE_RS_HOST:-ws://192.168.1.190:3000}" \
+    --token "$(cat "${PROBE_RS_TOKEN_FILE:-$HOME/.config/probe-rs/remote-token}")" \
     "$@"
