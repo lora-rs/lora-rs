@@ -21,9 +21,11 @@ lorawan = { path = "../../lorawan-encoding" }
 # from the crates.io lora-modulation's types, and a path dep would be a
 # second, incompatible instance of the crate.
 lora-modulation = "0.1.5"
-
-[dev-dependencies]
-banc-host = "0.0.3"
+# 0.0.4: network node transport + rig lease, for remote (CI) rigs. A regular
+# dependency because the relay pump lives in the fixture lib.
+banc-host = "0.0.4"
+lora-hil-relay-icd = { path = "../relay-icd" }
+anyhow = "1"
 
 # banc runner: runtime self-skip off-rig, cross-process rig lock, evidence
 # attached to failures.

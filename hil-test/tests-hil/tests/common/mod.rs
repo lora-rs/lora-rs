@@ -34,6 +34,10 @@ pub fn device_suite(env_var: &str, default_crate_dir: String) -> DeviceSuite {
 pub struct Net {
     pub events: UnboundedReceiver<HarnessEvent>,
     harness_task: tokio::task::JoinHandle<()>,
+    /// On remote rigs (a "relay" assistant in the rig config), the pump
+    /// carrying gateway datagrams between the rig daemon and our local
+    /// harness socket. Dropped with the scenario, like the harness.
+    _relay: Option<lora_hil_harness::relay::RelayPump>,
 }
 
 impl Drop for Net {
@@ -74,6 +78,26 @@ impl Net {
         harness.uplink_response = uplink_response;
         let harness_task = tokio::spawn(async move { harness.run().await });
 
+        // Remote rig: gateway datagrams arrive via the rig daemon rather
+        // than directly on :1730. The pump is per-scenario like the harness;
+        // the daemon replays its peer table to each fresh connection.
+        let relay = match cx.rig.config.assistant("relay") {
+            Some(_) => {
+                let node = cx
+                    .rig
+                    .assistant("relay")
+                    .await
+                    .map_err(|e| Failed::from(format!("connecting to rig daemon: {e}")))?;
+                let harness_addr = SocketAddr::from(([127, 0, 0, 1], 1730));
+                Some(
+                    lora_hil_harness::relay::RelayPump::start(node, harness_addr)
+                        .await
+                        .map_err(|e| Failed::from(format!("starting relay pump: {e}")))?,
+                )
+            }
+            None => None,
+        };
+
         // Tee every fixture event into evidence so a failing scenario dumps
         // the full network-side narrative.
         let (tx, events) = tokio::sync::mpsc::unbounded_channel();
@@ -86,7 +110,7 @@ impl Net {
             }
         });
 
-        let mut net = Net { events, harness_task };
+        let mut net = Net { events, harness_task, _relay: relay };
 
         // Downlink-readiness gate: after a rebind the gateway can deliver
         // uplinks (PUSH_DATA) before it has registered its downlink socket

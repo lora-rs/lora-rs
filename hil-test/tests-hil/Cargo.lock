@@ -101,14 +101,13 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
 name = "banc-host"
-version = "0.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "941ee2fac55a1b657c14e6ff1e9bbbc857a8eec81586c14b169c5c376e5db306"
+version = "0.0.4"
 dependencies = [
  "anyhow",
  "banc-icd",
  "fs4",
  "libtest-mimic",
+ "postcard",
  "postcard-rpc",
  "serde",
  "thiserror 2.0.19",
@@ -119,8 +118,6 @@ dependencies = [
 [[package]]
 name = "banc-icd"
 version = "0.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cb3253a5fc071cfdd27a6665d258a20fd7dcde106f1998e81ea18ba1a0147bc6"
 dependencies = [
  "heapless 0.8.0",
  "postcard-rpc",
@@ -375,7 +372,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -618,6 +615,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "lora-hil-relay-icd"
+version = "0.1.0"
+dependencies = [
+ "postcard-rpc",
+ "postcard-schema",
+ "serde",
+]
+
+[[package]]
 name = "lora-modulation"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -627,7 +633,9 @@ checksum = "2c96c4a41a1f1ad04de765306e1829c7007a37898fe4033204fa82cf2e055624"
 name = "lora-tests-hil"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "banc-host",
+ "lora-hil-relay-icd",
  "lora-modulation",
  "lorawan",
  "semtech-udp",
@@ -728,7 +736,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1018,7 +1026,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
