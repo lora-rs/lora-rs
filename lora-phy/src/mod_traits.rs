@@ -37,9 +37,9 @@ pub trait RadioKind {
     ///
     /// The LoRaWAN receive-window timing shrinks the programmed timeout as the
     /// data rate rises; this floor keeps it long enough for the chip to latch
-    /// an incoming preamble. The default of 6 matches LoRaMac-node. The
-    /// sx127x needs a longer floor to detect the 8-symbol LoRaWAN preamble, so
-    /// it raises this. Overridable at runtime via
+    /// an incoming preamble. The default of 6 matches LoRaMac-node; chips
+    /// whose detection needs more headroom (sx127x, lr11xx) raise it.
+    /// Overridable at runtime via
     /// [`LorawanRadio::set_min_rx_symbols`](crate::lorawan_radio::LorawanRadio::set_min_rx_symbols).
     const DEFAULT_MIN_RX_SYMBOLS: u16 = 6;
 

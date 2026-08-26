@@ -62,7 +62,8 @@ where
         self.system_max_rx_error_ms = error_ms;
     }
 
-    /// Set the minimum preamble-detection timeout.
+    /// Set the minimum preamble-detection timeout, in symbols. Values below 5
+    /// are raised to 5.
     pub fn set_min_rx_symbols(&mut self, symbols: u16) {
         self.min_rx_symbols = symbols.max(5);
     }
@@ -184,11 +185,9 @@ where
         self.lora.sleep(false).await.map_err(|e| e.into())
     }
     async fn low_power_retain(&mut self) -> Result<(), Self::PhyError> {
-        // Warm sleep between the transmit and its receive windows on chips that
-        // retain their configuration, so the next setup is a warm start
-        // (hundreds of us) instead of a cold re-init (tens of ms). Chips without
-        // a retention sleep must re-initialize after every sleep, so they take
-        // the normal cold sleep here.
+        // Warm sleep on chips that retain their configuration, so the next
+        // setup is a warm start instead of a full cold re-init. Chips without
+        // a retention sleep take the normal cold sleep.
         self.lora.sleep(RK::SUPPORTS_WARM_START).await.map_err(|e| e.into())
     }
 }
@@ -234,8 +233,8 @@ impl RxMode {
 /// there would close the window before a latest-edge packet inside the
 /// configured error bound arrives, so fall back to the wall-clock RX timer,
 /// which covers the same span and stops on preamble detection just like the
-/// symbol timeout. Chips without that timer keep the clamped symbol timeout;
-/// their windows shorten by the clamped amount at the late edge.
+/// symbol timeout. Chips without that timer keep the clamped symbol timeout
+/// and lose the excess from the late edge of the window.
 fn select_single_rx_mode(
     timeout_symbols: u16,
     symbol_duration_us: u32,
@@ -275,8 +274,7 @@ fn compute_rx_window_timing(
     // device clock runs fast, and keep the window open for `lead + 2 * error`
     // so it still spans the nominal time when setup is fast. This keeps the
     // timeout data-rate-aware (it scales with the symbol duration) without
-    // assuming the setup latency equals the lead time, which is what made the
-    // narrower windows close before the nominal time on radios with fast setup.
+    // assuming the setup latency equals the lead time.
     let offset_us = -((lead_us + error_us) as i64);
 
     // Spanning the nominal time is not enough on its own: a packet arriving at
@@ -364,8 +362,8 @@ mod tests {
     #[test]
     fn under_cap_window_keeps_symbol_timeout() {
         // At or below the ceiling nothing changes: EU868's fastest window
-        // (SF7/BW250 = 143+6 symbols) stays symbol-closed.
-        assert_eq!(select_single_rx_mode(149, 512, 248, true), RxMode::Single(149));
+        // (SF7/BW250 with defaults = 137 span + 6 margin) stays symbol-closed.
+        assert_eq!(select_single_rx_mode(143, 512, 248, true), RxMode::Single(143));
         assert_eq!(select_single_rx_mode(248, 256, 248, true), RxMode::Single(248));
     }
 

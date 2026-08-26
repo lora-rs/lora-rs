@@ -87,8 +87,8 @@ pub trait PhyRxTx: Sized {
     /// RX2: gaps of seconds where re-initializing the radio from a cold sleep
     /// would both burn the setup time and force the receive window to open
     /// earlier to hide it. Radios with a retention sleep (e.g. the sx126x warm
-    /// start) should use it here; the default keeps the old behavior by
-    /// deferring to [`low_power`](Self::low_power).
+    /// start) should use it here; the default defers to
+    /// [`low_power`](Self::low_power).
     async fn low_power_retain(&mut self) -> Result<(), Self::PhyError> {
         self.low_power().await
     }

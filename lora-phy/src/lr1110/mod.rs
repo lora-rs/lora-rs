@@ -1919,13 +1919,11 @@ where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
-    // The manual describes LoRaSynchTimeout as expiring when no packet has
-    // been "detected" after SymbolNum symbols, and on this chip that appears
-    // to be a later stage than the sx126x's preamble detection: a timeout
-    // with only preamble-symbol margin expires while the preamble is still on
-    // the air. Cover the full 12.25-symbol preamble-plus-sync sequence so the
-    // timeout cannot fire before the chip has had a complete sync word to
-    // detect. Overridable at runtime with set_min_rx_symbols.
+    // Cover the full 12.25-symbol preamble-plus-sync sequence. Bench devices
+    // at BW500 detect mid-preamble and pass with 6, but the reported EU868
+    // SF12/BW125 failures fit a detection needing ~12 symbols under LDRO, so
+    // the default stays conservative. Overridable at runtime with
+    // set_min_rx_symbols.
     const DEFAULT_MIN_RX_SYMBOLS: u16 = 13;
 
     // Retention sleep preserves the radio configuration (validated on the

@@ -703,7 +703,8 @@ where
     }
 }
 
-/// Allows to fine-tune the beginning and end of the receive windows for a specific board and runtime.
+/// Timing for one receive window: when to start radio setup relative to the
+/// nominal window time, and the timeout to program into the radio.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RxWindowTiming {
     /// Offset from the nominal receive-window time at which radio setup starts.
@@ -712,6 +713,7 @@ pub struct RxWindowTiming {
     pub timeout_symbols: u16,
 }
 
+/// Allows to fine-tune the beginning and end of the receive windows for a specific board and runtime.
 pub trait Timings {
     /// How many milliseconds before the RX window should the SPI transaction start?
     /// This value needs to account for the time it takes to wake up the radio and start the SPI transaction, as
@@ -727,8 +729,7 @@ pub trait Timings {
 
     /// Calculate timing for a receive window's modulation parameters.
     ///
-    /// Implementations that do not override this retain the historical
-    /// behavior: start `lead_time` early and add `buffer` to a 13-symbol
+    /// The default starts `lead_time` early and adds `buffer` to a 13-symbol
     /// preamble timeout.
     fn get_rx_window_timing(&self, rf: &RfConfig) -> RxWindowTiming {
         const PREAMBLE_SYMBOLS: u16 = 13;
