@@ -588,7 +588,8 @@ impl<'a> DecryptedJoinAcceptPayload<'a> {
         validate_join_accept_structure(buf)?;
         // The device side runs AES *encryption* to invert the server's
         // decrypt-mode transformation, per the spec.
-        for block in buf[1..].chunks_exact_mut(16) {
+        let (blocks, _) = buf[1..].as_chunks_mut::<16>();
+        for block in blocks {
             crypto.encrypt_block(block);
         }
         Ok(Self { bytes: buf })
@@ -663,8 +664,9 @@ impl<'a> DecryptedJoinAcceptPayload<'a> {
         match cflist[15] {
             0 => {
                 let mut freqs = [Frequency::default(); 5];
-                for (freq, chunk) in freqs.iter_mut().zip(cflist.chunks_exact(3)) {
-                    *freq = Frequency::from_wire_bytes(arr(chunk));
+                let (chunks, _) = cflist.as_chunks::<3>();
+                for (freq, chunk) in freqs.iter_mut().zip(chunks) {
+                    *freq = Frequency::from_wire_bytes(*chunk);
                 }
                 Some(CfList::DynamicChannel(freqs))
             }
