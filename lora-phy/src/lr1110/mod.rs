@@ -1934,6 +1934,14 @@ where
     // ensure_ready re-issues on every wake.
     const SUPPORTS_WARM_START: bool = true;
 
+    const MAX_SINGLE_RX_SYMBOLS: u16 = LR1110_MAX_LORA_SYMB_NUM_TIMEOUT as u16;
+
+    // StopTimeoutOnPreamble(1) gives the SetRx tick timeout the same
+    // stop-on-preamble semantics as the symbol timeout. (Transceiver fw
+    // >= 0x0308 also has an extended 16-bit symbol timeout command, but the
+    // wall-clock close works on every fw so it needs no version gate.)
+    const SUPPORTS_TIMED_SINGLE_RX: bool = true;
+
     async fn init_lora(&mut self, sync_word: u16) -> Result<(), RadioError> {
         // Initialize system (DC-DC, TCXO, calibration)
         self.init_system().await?;
@@ -2308,7 +2316,7 @@ where
 
         // Set symbol timeout
         let num_symbols = match rx_mode {
-            RxMode::DutyCycle(_) | RxMode::Continuous => 0,
+            RxMode::DutyCycle(_) | RxMode::Continuous | RxMode::SingleMs(_) => 0,
             RxMode::Single(n) => n,
         };
         self.set_lora_symbol_num_timeout(num_symbols).await?;
@@ -2340,11 +2348,16 @@ where
                 ];
                 self.write_command(&cmd).await
             }
-            RxMode::Single(_) | RxMode::Continuous => {
-                let timeout = if matches!(rx_mode, RxMode::Continuous) {
-                    RX_CONTINUOUS_TIMEOUT
-                } else {
-                    0
+            RxMode::Single(_) | RxMode::SingleMs(_) | RxMode::Continuous => {
+                let timeout = match rx_mode {
+                    RxMode::Continuous => RX_CONTINUOUS_TIMEOUT,
+                    // SetRx ticks are 32.768 kHz RTC steps. Round up so the
+                    // window never closes short of the requested span;
+                    // 0xffffff is the continuous sentinel, saturate below it.
+                    RxMode::SingleMs(ms) => {
+                        ((ms as u64 * 32_768).div_ceil(1_000)).min(RX_CONTINUOUS_TIMEOUT as u64 - 1) as u32
+                    }
+                    _ => 0,
                 };
 
                 // Reference driver behavior; RX duty cycle notably does NOT

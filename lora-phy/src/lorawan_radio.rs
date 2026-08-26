@@ -145,7 +145,13 @@ where
     }
 
     async fn setup_rx_window(&mut self, config: RxConfig, timing: RxWindowTiming) -> Result<(), Self::PhyError> {
-        self.setup_rx_mode(config, RxMode::Single(timing.timeout_symbols)).await
+        let mode = select_single_rx_mode(
+            timing.timeout_symbols,
+            config.rf.bb.symbol_duration_us(),
+            RK::MAX_SINGLE_RX_SYMBOLS,
+            RK::SUPPORTS_TIMED_SINGLE_RX,
+        );
+        self.setup_rx_mode(config, mode).await
     }
 
     async fn rx_single(&mut self, buf: &mut [u8]) -> Result<RxStatus, Self::PhyError> {
@@ -217,6 +223,36 @@ impl RxMode {
                 RxMode::Single(PREAMBLE_SYMBOLS.saturating_add(bb.delay_in_symbols_ceil(ms)))
             }
         }
+    }
+}
+
+/// Choose how the chip should close a receive window `timeout_symbols` long.
+///
+/// At fast data rates the window span can exceed what the chip's symbol
+/// counter can express (SF7/BW500 with the default lead and error wants 280+
+/// symbols against the sx126x/lr11xx ceiling of 248). Letting the driver clamp
+/// there would close the window before a latest-edge packet inside the
+/// configured error bound arrives, so fall back to the wall-clock RX timer,
+/// which covers the same span and stops on preamble detection just like the
+/// symbol timeout. Chips without that timer keep the clamped symbol timeout;
+/// their windows shorten by the clamped amount at the late edge.
+fn select_single_rx_mode(
+    timeout_symbols: u16,
+    symbol_duration_us: u32,
+    max_symbols: u16,
+    timed_single_rx: bool,
+) -> RxMode {
+    if timeout_symbols <= max_symbols {
+        RxMode::Single(timeout_symbols)
+    } else if timed_single_rx {
+        let ms = (timeout_symbols as u64 * symbol_duration_us as u64).div_ceil(1_000) as u32;
+        RxMode::SingleMs(ms)
+    } else {
+        warn!(
+            "rx window of {} symbols exceeds the chip's {}-symbol timeout ceiling; clamping shortens the late edge",
+            timeout_symbols, max_symbols
+        );
+        RxMode::Single(max_symbols)
     }
 }
 
@@ -306,6 +342,39 @@ mod tests {
                 timeout_symbols: 280
             }
         );
+    }
+
+    #[test]
+    fn over_cap_window_falls_back_to_wall_clock_close() {
+        // SF7/BW500 (256 us symbols), defaults: 280 symbols > the sx126x/lr11xx
+        // 248-symbol ceiling. The wall-clock close covers the full span
+        // (280 * 256 us = 71.68 ms, rounded up) instead of clamping to
+        // 248 * 256 us = 63.5 ms, which would close before a latest-edge
+        // packet inside the error bound arrives.
+        let timing = compute_rx_window_timing(256, 6, 10, 50);
+        assert_eq!(timing.timeout_symbols, 280);
+        assert_eq!(select_single_rx_mode(280, 256, 248, true), RxMode::SingleMs(72));
+
+        // lr11xx min_rx_symbols default of 13: 287 symbols, same fallback.
+        let timing = compute_rx_window_timing(256, 13, 10, 50);
+        assert_eq!(timing.timeout_symbols, 287);
+        assert_eq!(select_single_rx_mode(287, 256, 248, true), RxMode::SingleMs(74));
+    }
+
+    #[test]
+    fn under_cap_window_keeps_symbol_timeout() {
+        // At or below the ceiling nothing changes: EU868's fastest window
+        // (SF7/BW250 = 143+6 symbols) stays symbol-closed.
+        assert_eq!(select_single_rx_mode(149, 512, 248, true), RxMode::Single(149));
+        assert_eq!(select_single_rx_mode(248, 256, 248, true), RxMode::Single(248));
+    }
+
+    #[test]
+    fn over_cap_window_clamps_without_wall_clock_timer() {
+        // A chip with no wall-clock RX timer (sx127x) clamps to its ceiling;
+        // only reachable there with an extreme configured error (its ceiling
+        // is 1023 symbols).
+        assert_eq!(select_single_rx_mode(1030, 1_024, 1023, false), RxMode::Single(1023));
     }
 
     #[test]

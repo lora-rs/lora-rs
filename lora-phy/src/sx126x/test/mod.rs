@@ -222,6 +222,8 @@ async fn test_do_rx() {
     let cases = [
         ("continuous", RxMode::Continuous, 0u8, 0xFFFFFF_u32),
         ("single8", RxMode::Single(8), 8, 0),
+        // wall-clock close: no symbol timeout, SetRx at 64 ticks/ms
+        ("single_72ms", RxMode::SingleMs(72), 0, 72 * 64),
     ];
     for (label, mode, symbs, rtc_timeout) in cases {
         let mut reference = reference();

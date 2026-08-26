@@ -329,6 +329,20 @@ async fn test_do_rx_single() {
 }
 
 #[tokio::test]
+async fn test_do_rx_single_ms() {
+    // Wall-clock close: no symbol timeout, SetRx at 32.768 kHz RTC steps
+    // rounded up (72 ms -> ceil(72 * 32.768) = 2360 ticks).
+    let mut reference_radio = reference();
+    reference_radio.stop_timeout_on_preamble(true);
+    reference_radio.set_lora_sync_timeout(0);
+    reference_radio.set_rx_with_timeout_in_rtc_step(2360);
+
+    let mut radio = get_lr1110();
+    radio.do_rx(RxMode::SingleMs(72)).await.unwrap();
+    assert_eq!(radio.intf.spi, reference_radio.inner);
+}
+
+#[tokio::test]
 async fn test_do_cad() {
     let mut reference_radio = reference();
     reference_radio.set_cad_params(&sys::lr11xx_radio_cad_params_t {

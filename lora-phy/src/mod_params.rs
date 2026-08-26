@@ -29,6 +29,7 @@ pub enum RadioError {
     TransmitTimeout,
     ReceiveTimeout,
     DutyCycleUnsupported,
+    TimedSingleRxUnsupported,
     RngUnsupported,
 }
 
@@ -42,7 +43,7 @@ pub struct PacketStatus {
 }
 
 /// The state of the radio
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum RadioMode {
     /// Sleep mode
@@ -68,7 +69,7 @@ impl From<RxMode> for RadioMode {
 }
 
 /// Listening mode for LoRaWAN packet detection/reception
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum RxMode {
     /// Single shot Rx Mode to listen until packet preamble is detected or RxTimeout occurs.
@@ -76,8 +77,15 @@ pub enum RxMode {
     /// Preamble length as symbols is configured via following registers:
     /// * sx126x: uses `SetLoRaSymbNumTimeout(0 < n < 255)` + `SetStopRxTimerOnPreamble(1)`
     /// * sx127x: uses `RegSymbTimeout (4 < n < 1023)`
-    // TODO: Single mode with time-based timeout is available on sx126x, but not sx127x
     Single(u16),
+    /// Single shot Rx mode closed by the chip's wall-clock RX timer instead of the
+    /// symbol counter, for windows longer than the symbol counter can express
+    /// (see [`RadioKind::MAX_SINGLE_RX_SYMBOLS`](crate::mod_traits::RadioKind::MAX_SINGLE_RX_SYMBOLS)).
+    /// Like [`RxMode::Single`], the timer stops on preamble detection and the radio
+    /// stays in RX until the packet completes. Not available on the sx127x, which
+    /// has no wall-clock RX timer
+    /// ([`RadioKind::SUPPORTS_TIMED_SINGLE_RX`](crate::mod_traits::RadioKind::SUPPORTS_TIMED_SINGLE_RX)).
+    SingleMs(u32),
     /// Continuous Rx mode to listen for incoming packets continuously
     Continuous,
     /// Receive in Duty Cycle mode (NB! Not supported on sx127x)
@@ -131,7 +139,7 @@ impl PacketParams {
 }
 
 /// Receive duty cycle parameters
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct DutyCycleParams {
     /// receive interval

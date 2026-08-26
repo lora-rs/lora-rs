@@ -52,6 +52,22 @@ pub trait RadioKind {
     /// keeps its configuration across a warm-start sleep and sets it `true`.
     const SUPPORTS_WARM_START: bool = false;
 
+    /// Largest symbol count the chip's single-RX preamble timeout can express;
+    /// [`RxMode::Single`](crate::RxMode::Single) requests above it are clamped
+    /// to it by the driver. The sx126x and lr11xx symbol timeout tops out at
+    /// 248 symbols, which at fast data rates is shorter than the wall-clock
+    /// span a LoRaWAN receive window needs (SF7/BW500 with the default lead
+    /// and error wants 280+); [`LorawanRadio`](crate::lorawan_radio::LorawanRadio)
+    /// switches to [`RxMode::SingleMs`](crate::RxMode::SingleMs) above this
+    /// ceiling on chips that support it.
+    const MAX_SINGLE_RX_SYMBOLS: u16 = u16::MAX;
+
+    /// Whether the chip can close a single receive with its wall-clock RX
+    /// timer ([`RxMode::SingleMs`](crate::RxMode::SingleMs)). The sx126x and
+    /// lr11xx stop that timer on preamble detection, giving it the same
+    /// semantics as the symbol timeout; the sx127x has no such timer.
+    const SUPPORTS_TIMED_SINGLE_RX: bool = false;
+
     /// Initialize lora radio
     ///
     /// The sync word is given in the 16-bit sx126x register form; the legacy
