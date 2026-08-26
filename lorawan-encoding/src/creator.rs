@@ -123,7 +123,8 @@ impl JoinAccept {
         // The server encrypts by running AES in *decrypt* mode so that the
         // device can decrypt with the cheaper encrypt mode. MHDR stays clear;
         // the MIC is inside the encrypted region.
-        for block in out[MHDR_LEN..].chunks_exact_mut(16) {
+        let (blocks, _) = out[MHDR_LEN..].as_chunks_mut::<16>();
+        for block in blocks {
             crypto.decrypt_block(block);
         }
         Ok(out)
