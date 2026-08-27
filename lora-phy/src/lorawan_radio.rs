@@ -275,12 +275,8 @@ fn compute_rx_window_timing(
     // both sides of the nominal receive time.
     let span_us = buffer_us + 2 * error_us;
 
-    // Spanning the nominal time is not enough on its own: a packet arriving at
-    // the late edge of the clock-error bound begins its preamble exactly as a
-    // span-only timeout would fire, leaving no preamble symbols in the window
-    // for the radio to detect. Extend the timeout by `min_symbols` so even the
-    // latest packet has that much preamble in-window before the single-RX
-    // timeout expires.
+    // Add enough preamble margin to detect a packet arriving at the latest
+    // expected time.
     let timeout_symbols = (span_us.div_ceil(symbol_us) + min_symbols).min(u16::MAX as u64) as u16;
 
     RxWindowTiming {
