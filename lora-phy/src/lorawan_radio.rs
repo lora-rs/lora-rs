@@ -229,14 +229,11 @@ impl RxMode {
 
 /// Choose how the chip should close a receive window `timeout_symbols` long.
 ///
-/// At fast data rates the window span can exceed what the chip's symbol
-/// counter can express (SF7/BW500 with the default lead and error wants 280+
-/// symbols against the sx126x/lr11xx ceiling of 248). Letting the driver clamp
-/// there would close the window before a latest-edge packet inside the
-/// configured error bound arrives, so fall back to the wall-clock RX timer,
-/// which covers the same span and stops on preamble detection just like the
-/// symbol timeout. Chips without that timer keep the clamped symbol timeout
-/// and lose the excess from the late edge of the window.
+/// Uses the symbol timeout when it fits, otherwise falls back to the
+/// wall-clock timeout when supported.
+///
+/// If neither timeout can represent the requested window, clamps it to
+/// `max_symbols` and logs a warning.
 fn select_single_rx_mode(
     timeout_symbols: u16,
     symbol_duration_us: u32,
