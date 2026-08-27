@@ -129,10 +129,6 @@ impl BaseBandModulationParams {
         Self { sf, bw, cr, ldro, t_sym_us }
     }
 
-    pub const fn delay_in_symbols(&self, delay_in_ms: u32) -> u16 {
-        (delay_in_ms * 1000 / self.t_sym_us) as u16
-    }
-
     /// Convert a millisecond duration to symbols, rounding up so the resulting
     /// symbol count never represents less than the requested duration.
     pub const fn delay_in_symbols_ceil(&self, delay_in_ms: u32) -> u16 {
