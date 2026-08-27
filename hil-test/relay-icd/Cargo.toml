@@ -1,0 +1,15 @@
+# Wire contract between the runner-side network fixture (tests-hil) and the
+# rig daemon on the bench (lora-hil-rigd, in the lora-hil-harness repo).
+# Lives in this repo so it rides PRs with the fixture; the daemon pins it by
+# git rev. postcard-rpc keys are structural, so a contract change shows up as
+# an unknown-endpoint failure ("rig redeploy needed"), never silent skew.
+[package]
+name = "lora-hil-relay-icd"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+postcard-rpc = "0.12"
+postcard-schema = { version = "0.2", features = ["derive", "use-std"] }
+serde = { version = "1", features = ["derive"] }
