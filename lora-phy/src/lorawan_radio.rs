@@ -270,17 +270,13 @@ fn compute_rx_window_timing(
     let lead_us = wake_up_time_ms as u64 * 1_000;
     let buffer_us = window_buffer_ms as u64 * 1_000;
 
-    // The radio is configured after the offset sleep, and the setup transaction
-    // itself takes up to `wake_up_time_ms` (the lead time budget). We do not
-    // know where in [0, lead] it actually lands, so the window has to cover the
-    // nominal time for the whole range. Open `lead + error` early so the radio
-    // is listening before the nominal window even when setup is slow and the
-    // device clock runs fast, and keep the window open for `buffer + 2 * error`.
-    // The buffer defaults to the lead time, preserving that coverage while
-    // allowing applications to explicitly widen the receive window. This
-    // keeps the timeout data-rate-aware (it scales with the symbol duration)
-    // without assuming the setup latency equals the lead time.
+    // Start setup early enough to cover the radio wake-up time and the maximum
+    // clock or scheduling error.
     let offset_us = -((lead_us + error_us) as i64);
+
+    // Keep the window open for the configured buffer plus the maximum error on
+    // both sides of the nominal receive time.
+    let span_us = buffer_us + 2 * error_us;
 
     // Spanning the nominal time is not enough on its own: a packet arriving at
     // the late edge of the clock-error bound begins its preamble exactly as a
@@ -288,7 +284,6 @@ fn compute_rx_window_timing(
     // for the radio to detect. Extend the timeout by `min_symbols` so even the
     // latest packet has that much preamble in-window before the single-RX
     // timeout expires.
-    let span_us = buffer_us + 2 * error_us;
     let timeout_symbols = (span_us.div_ceil(symbol_us) + min_symbols).min(u16::MAX as u64) as u16;
 
     RxWindowTiming {
