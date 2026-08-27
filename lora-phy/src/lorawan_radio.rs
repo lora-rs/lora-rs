@@ -186,7 +186,7 @@ where
     async fn low_power(&mut self) -> Result<(), Self::PhyError> {
         self.lora.sleep(false).await.map_err(|e| e.into())
     }
-    async fn low_power_retain(&mut self) -> Result<(), Self::PhyError> {
+    async fn warm_sleep(&mut self) -> Result<(), Self::PhyError> {
         // Warm sleep on chips that retain their configuration, so the next
         // setup is a warm start instead of a full cold re-init. Chips without
         // a retention sleep take the normal cold sleep.

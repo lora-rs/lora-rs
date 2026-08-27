@@ -89,7 +89,7 @@ pub trait PhyRxTx: Sized {
     /// earlier to hide it. Radios with a retention sleep (e.g. the sx126x warm
     /// start) should use it here; the default defers to
     /// [`low_power`](Self::low_power).
-    async fn low_power_retain(&mut self) -> Result<(), Self::PhyError> {
+    async fn warm_sleep(&mut self) -> Result<(), Self::PhyError> {
         self.low_power().await
     }
 }
