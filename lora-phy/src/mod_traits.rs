@@ -35,37 +35,35 @@ pub enum IrqState {
 pub trait RadioKind {
     /// Minimum preamble-detection window, in symbols, for a single receive.
     ///
-    /// The LoRaWAN receive-window timing shrinks the programmed timeout as the
-    /// data rate rises; this floor keeps it long enough for the chip to latch
-    /// an incoming preamble. The default of 6 matches LoRaMac-node; chips
-    /// whose detection needs more headroom (sx127x, lr11xx) raise it.
-    /// Overridable at runtime via
+    /// LoRaWAN receive-window timing adds this many symbols beyond the
+    /// calculated window span, ensuring the chip has enough preamble in the
+    /// window to detect it regardless of data rate.
+    ///
+    /// Radio implementations may override the default. It can also be changed
+    /// at runtime via
     /// [`LorawanRadio::set_min_rx_symbols`](crate::lorawan_radio::LorawanRadio::set_min_rx_symbols).
     const DEFAULT_MIN_RX_SYMBOLS: u16 = 6;
 
-    /// Whether the chip can wake from sleep with its configuration retained,
-    /// skipping the full re-initialization on the next receive setup.
+    /// Whether the chip has a warm sleep that retains receive configuration.
     ///
-    /// Only chips with a real retention sleep should set this. The sx127x has
-    /// no warm start (its `set_sleep` ignores the request) and must run a fresh
-    /// `init_lora` after every sleep, so it leaves this `false`; the sx126x
-    /// keeps its configuration across a warm-start sleep and sets it `true`.
+    /// Used when possible between TX and RX1 and between RX1 and RX2. Only
+    /// chips with a real retention sleep should set this.
     const SUPPORTS_WARM_START: bool = false;
 
     /// Largest symbol count the chip's single-RX preamble timeout can express;
-    /// [`RxMode::Single`](crate::RxMode::Single) requests above it are clamped
-    /// to it by the driver. The sx126x and lr11xx symbol timeout tops out at
-    /// 248 symbols, which at fast data rates is shorter than the wall-clock
-    /// span a LoRaWAN receive window needs (SF7/BW500 with the default lead
-    /// and error wants 280+); [`LorawanRadio`](crate::lorawan_radio::LorawanRadio)
-    /// switches to [`RxMode::SingleMs`](crate::RxMode::SingleMs) above this
-    /// ceiling on chips that support it.
+    /// [`RxMode::Single`] requests above it are clamped to it by the driver.
+    ///
+    /// [`LorawanRadio`](crate::lorawan_radio::LorawanRadio) switches to
+    /// [`RxMode::SingleMs`] when the desired timeout exceeds this value and the
+    /// chip supports a timed single receive.
     const MAX_SINGLE_RX_SYMBOLS: u16 = u16::MAX;
 
     /// Whether the chip can close a single receive with its wall-clock RX
-    /// timer ([`RxMode::SingleMs`](crate::RxMode::SingleMs)). The sx126x and
-    /// lr11xx stop that timer on preamble detection, giving it the same
-    /// semantics as the symbol timeout; the sx127x has no such timer.
+    /// timer ([`RxMode::SingleMs`]).
+    ///
+    /// If the desired timeout exceeds [`RadioKind::MAX_SINGLE_RX_SYMBOLS`] and
+    /// this is `false`, the timeout is clamped to the largest supported symbol
+    /// count and a warning is logged.
     const SUPPORTS_TIMED_SINGLE_RX: bool = false;
 
     /// Initialize lora radio
