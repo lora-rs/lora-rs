@@ -2040,12 +2040,7 @@ where
             // then wait for BUSY to go low (chip booted and ready).
             RadioMode::Sleep => {
                 self.intf.wakeup().await?;
-                // The chip does not re-arm the DIO3 TCXO supply on wake, not
-                // even from a retention sleep where every other radio setting
-                // survives: the first receive after a warm wake runs on a
-                // dead reference and hears nothing (HIL-verified on firmware
-                // 0x0303 and 0x0402; TX escapes because the cold path
-                // reconfigures the TCXO in init_system).
+                // tcxo is not retained to warm sleep. it must be set
                 self.set_tcxo_mode().await
             }
             _ => self.intf.iv.wait_on_busy().await,
