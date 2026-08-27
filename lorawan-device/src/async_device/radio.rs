@@ -84,11 +84,7 @@ pub trait PhyRxTx: Sized {
     /// short idle where a fast wake-up matters more than the sleep current.
     ///
     /// Called between the transmit and its receive windows, and between RX1 and
-    /// RX2: gaps of seconds where re-initializing the radio from a cold sleep
-    /// would both burn the setup time and force the receive window to open
-    /// earlier to hide it. Radios with a retention sleep (e.g. the sx126x warm
-    /// start) should use it here; the default defers to
-    /// [`low_power`](Self::low_power).
+    /// RX2.
     async fn warm_sleep(&mut self) -> Result<(), Self::PhyError> {
         self.low_power().await
     }
