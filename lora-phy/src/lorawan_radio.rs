@@ -68,6 +68,7 @@ where
         self.min_rx_symbols = symbols.max(5);
     }
 
+    /// Set the receive-window timeout margin, in milliseconds.
     pub fn set_rx_window_buffer(&mut self, buffer: u32) {
         self.rx_window_buffer = buffer;
     }
@@ -93,6 +94,7 @@ where
             self.min_rx_symbols,
             self.system_max_rx_error_ms,
             self.rx_window_lead_time,
+            self.rx_window_buffer,
         )
     }
 }
@@ -260,21 +262,24 @@ fn compute_rx_window_timing(
     min_rx_symbols: u16,
     system_max_rx_error_ms: u32,
     wake_up_time_ms: u32,
+    window_buffer_ms: u32,
 ) -> RxWindowTiming {
     let symbol_us = symbol_duration_us as u64;
     let min_symbols = min_rx_symbols.max(5) as u64;
     let error_us = system_max_rx_error_ms as u64 * 1_000;
     let lead_us = wake_up_time_ms as u64 * 1_000;
+    let buffer_us = window_buffer_ms as u64 * 1_000;
 
     // The radio is configured after the offset sleep, and the setup transaction
     // itself takes up to `wake_up_time_ms` (the lead time budget). We do not
     // know where in [0, lead] it actually lands, so the window has to cover the
     // nominal time for the whole range. Open `lead + error` early so the radio
     // is listening before the nominal window even when setup is slow and the
-    // device clock runs fast, and keep the window open for `lead + 2 * error`
-    // so it still spans the nominal time when setup is fast. This keeps the
-    // timeout data-rate-aware (it scales with the symbol duration) without
-    // assuming the setup latency equals the lead time.
+    // device clock runs fast, and keep the window open for `buffer + 2 * error`.
+    // The buffer defaults to the lead time, preserving that coverage while
+    // allowing applications to explicitly widen the receive window. This
+    // keeps the timeout data-rate-aware (it scales with the symbol duration)
+    // without assuming the setup latency equals the lead time.
     let offset_us = -((lead_us + error_us) as i64);
 
     // Spanning the nominal time is not enough on its own: a packet arriving at
@@ -283,7 +288,7 @@ fn compute_rx_window_timing(
     // for the radio to detect. Extend the timeout by `min_symbols` so even the
     // latest packet has that much preamble in-window before the single-RX
     // timeout expires.
-    let span_us = lead_us + 2 * error_us;
+    let span_us = buffer_us + 2 * error_us;
     let timeout_symbols = (span_us.div_ceil(symbol_us) + min_symbols).min(u16::MAX as u64) as u16;
 
     RxWindowTiming {
@@ -307,7 +312,7 @@ mod tests {
 
         // SF7/BW125: 1.024 ms per symbol. 70 ms span -> 69 symbols, +6 margin.
         assert_eq!(
-            compute_rx_window_timing(1_024, 6, 10, 50),
+            compute_rx_window_timing(1_024, 6, 10, 50, 50),
             RxWindowTiming {
                 offset_ms: -60,
                 timeout_symbols: 75
@@ -316,7 +321,7 @@ mod tests {
 
         // SF12/BW125: 32.768 ms per symbol. 3 symbols cover the span, +6 margin.
         assert_eq!(
-            compute_rx_window_timing(32_768, 6, 10, 50),
+            compute_rx_window_timing(32_768, 6, 10, 50, 50),
             RxWindowTiming {
                 offset_ms: -60,
                 timeout_symbols: 9
@@ -327,14 +332,14 @@ mod tests {
     #[test]
     fn window_timeout_supports_faster_bandwidths() {
         assert_eq!(
-            compute_rx_window_timing(512, 6, 10, 50),
+            compute_rx_window_timing(512, 6, 10, 50, 50),
             RxWindowTiming {
                 offset_ms: -60,
                 timeout_symbols: 143
             }
         );
         assert_eq!(
-            compute_rx_window_timing(256, 6, 10, 50),
+            compute_rx_window_timing(256, 6, 10, 50, 50),
             RxWindowTiming {
                 offset_ms: -60,
                 timeout_symbols: 280
@@ -349,12 +354,12 @@ mod tests {
         // (280 * 256 us = 71.68 ms, rounded up) instead of clamping to
         // 248 * 256 us = 63.5 ms, which would close before a latest-edge
         // packet inside the error bound arrives.
-        let timing = compute_rx_window_timing(256, 6, 10, 50);
+        let timing = compute_rx_window_timing(256, 6, 10, 50, 50);
         assert_eq!(timing.timeout_symbols, 280);
         assert_eq!(select_single_rx_mode(280, 256, 248, true), RxMode::SingleMs(72));
 
         // lr11xx min_rx_symbols default of 13: 287 symbols, same fallback.
-        let timing = compute_rx_window_timing(256, 13, 10, 50);
+        let timing = compute_rx_window_timing(256, 13, 10, 50, 50);
         assert_eq!(timing.timeout_symbols, 287);
         assert_eq!(select_single_rx_mode(287, 256, 248, true), RxMode::SingleMs(74));
     }
@@ -380,10 +385,21 @@ mod tests {
         // error 50 ms, lead 50 ms: open 100 ms early, span 150 ms -> 147
         // symbols, +6 margin.
         assert_eq!(
-            compute_rx_window_timing(1_024, 6, 50, 50),
+            compute_rx_window_timing(1_024, 6, 50, 50, 50),
             RxWindowTiming {
                 offset_ms: -100,
                 timeout_symbols: 153
+            }
+        );
+    }
+
+    #[test]
+    fn window_buffer_expands_timeout_without_changing_offset() {
+        assert_eq!(
+            compute_rx_window_timing(1_000, 6, 10, 50, 100),
+            RxWindowTiming {
+                offset_ms: -60,
+                timeout_symbols: 126
             }
         );
     }
