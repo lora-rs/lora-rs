@@ -220,6 +220,16 @@ where
     IV: InterfaceVariant,
     C: Sx126xVariant,
 {
+    // The sx126x keeps its configuration across a warm-start sleep, so the
+    // stack can use the low-current retention sleep between receive windows.
+    const SUPPORTS_WARM_START: bool = true;
+
+    const MAX_SINGLE_RX_SYMBOLS: u16 = SX126X_MAX_LORA_SYMB_NUM_TIMEOUT as u16;
+
+    // SetStopRxTimerOnPreamble(1) gives the SetRx tick timeout the same
+    // stop-on-preamble semantics as the symbol timeout.
+    const SUPPORTS_TIMED_SINGLE_RX: bool = true;
+
     async fn init_lora(&mut self, sync_word: u16) -> Result<(), RadioError> {
         // DC-DC regulator setup (default is LDO)
         if self.config.use_dcdc {
@@ -568,7 +578,7 @@ where
         self.intf.write(&op_code_and_true_flag, false).await?;
 
         let num_symbols = match rx_mode {
-            RxMode::DutyCycle(_) | RxMode::Continuous => 0,
+            RxMode::DutyCycle(_) | RxMode::Continuous | RxMode::SingleMs(_) => 0,
             RxMode::Single(n) => n,
         };
         self.set_lora_symbol_num_timeout(num_symbols).await?;
@@ -595,6 +605,18 @@ where
                     Self::timeout_1(0),
                     Self::timeout_2(0),
                     Self::timeout_3(0),
+                ];
+                self.intf.write(&op, false).await
+            }
+            RxMode::SingleMs(ms) => {
+                // SetRx ticks are 15.625 us, 64 per millisecond; 0xffffff is
+                // the continuous sentinel, so saturate below it.
+                let ticks = (ms as u64 * 64).min(RX_CONTINUOUS_TIMEOUT as u64 - 1) as u32;
+                let op = [
+                    OpCode::SetRx.value(),
+                    Self::timeout_1(ticks),
+                    Self::timeout_2(ticks),
+                    Self::timeout_3(ticks),
                 ];
                 self.intf.write(&op, false).await
             }

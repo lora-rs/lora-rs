@@ -33,6 +33,39 @@ pub enum IrqState {
 /// LoRa physical layer API
 #[allow(async_fn_in_trait)]
 pub trait RadioKind {
+    /// Minimum preamble-detection window, in symbols, for a single receive.
+    ///
+    /// LoRaWAN receive-window timing adds this many symbols beyond the
+    /// calculated window span, ensuring the chip has enough preamble in the
+    /// window to detect it regardless of data rate.
+    ///
+    /// Radio implementations may override the default. It can also be changed
+    /// at runtime via
+    /// [`LorawanRadio::set_min_rx_symbols`](crate::lorawan_radio::LorawanRadio::set_min_rx_symbols).
+    const DEFAULT_MIN_RX_SYMBOLS: u16 = 6;
+
+    /// Whether the chip has a warm sleep that retains receive configuration.
+    ///
+    /// Used when possible between TX and RX1 and between RX1 and RX2. Only
+    /// chips with a real retention sleep should set this.
+    const SUPPORTS_WARM_START: bool = false;
+
+    /// Largest symbol count the chip's single-RX preamble timeout can express;
+    /// [`RxMode::Single`] requests above it are clamped to it by the driver.
+    ///
+    /// [`LorawanRadio`](crate::lorawan_radio::LorawanRadio) switches to
+    /// [`RxMode::SingleMs`] when the desired timeout exceeds this value and the
+    /// chip supports a timed single receive.
+    const MAX_SINGLE_RX_SYMBOLS: u16 = u16::MAX;
+
+    /// Whether the chip can close a single receive with its wall-clock RX
+    /// timer ([`RxMode::SingleMs`]).
+    ///
+    /// If the desired timeout exceeds [`RadioKind::MAX_SINGLE_RX_SYMBOLS`] and
+    /// this is `false`, the timeout is clamped to the largest supported symbol
+    /// count and a warning is logged.
+    const SUPPORTS_TIMED_SINGLE_RX: bool = false;
+
     /// Initialize lora radio
     ///
     /// The sync word is given in the 16-bit sx126x register form; the legacy

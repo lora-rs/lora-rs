@@ -129,8 +129,21 @@ impl BaseBandModulationParams {
         Self { sf, bw, cr, ldro, t_sym_us }
     }
 
-    pub const fn delay_in_symbols(&self, delay_in_ms: u32) -> u16 {
-        (delay_in_ms * 1000 / self.t_sym_us) as u16
+    /// Convert a millisecond duration to symbols, rounding up so the resulting
+    /// symbol count never represents less than the requested duration.
+    pub const fn delay_in_symbols_ceil(&self, delay_in_ms: u32) -> u16 {
+        let delay_us = delay_in_ms as u64 * 1_000;
+        let symbols = delay_us.div_ceil(self.t_sym_us as u64);
+        if symbols > u16::MAX as u64 {
+            u16::MAX
+        } else {
+            symbols as u16
+        }
+    }
+
+    /// Duration of one symbol in microseconds.
+    pub const fn symbol_duration_us(&self) -> u32 {
+        self.t_sym_us
     }
 
     pub const fn symbols_to_ms(&self, symbols: u32) -> u32 {
@@ -223,6 +236,13 @@ mod tests {
         assert_eq!(1152, SF5BW500.time_on_air_us(None, true, 0));
         assert_eq!(6656, SF7BW250.time_on_air_us(None, true, 0));
         assert_eq!(13312, SF7BW125.time_on_air_us(None, true, 0));
+    }
+
+    #[test]
+    fn delay_in_symbols_ceil_never_shortens_the_delay() {
+        assert_eq!(1, SF7BW125.delay_in_symbols_ceil(1));
+        assert_eq!(2, SF7BW125.delay_in_symbols_ceil(2));
+        assert_eq!(u16::MAX, SF5BW500.delay_in_symbols_ceil(u32::MAX));
     }
 
     #[test]

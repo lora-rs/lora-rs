@@ -140,6 +140,15 @@ where
     IV: InterfaceVariant,
     C: Sx127xVariant,
 {
+    // The sx127x drives its single-receive timeout off SymbTimeout, which
+    // needs headroom over the 8-symbol LoRaWAN preamble to latch reliably; 6
+    // (the trait default) is too short and drops downlinks at higher rates.
+    const DEFAULT_MIN_RX_SYMBOLS: u16 = 8;
+
+    // RegSymbTimeout is 10 bits and there is no wall-clock RX timer to fall
+    // back on, so longer windows clamp (SUPPORTS_TIMED_SINGLE_RX stays false).
+    const MAX_SINGLE_RX_SYMBOLS: u16 = SX127X_MAX_LORA_SYMB_NUM_TIMEOUT;
+
     async fn init_lora(&mut self, sync_word: u16) -> Result<(), RadioError> {
         let sync_word = sync_word_to_legacy(sync_word)?;
         if self.config.tcxo_used {
@@ -372,6 +381,7 @@ where
         let (num_symbols, mode) = match rx_mode {
             RxMode::DutyCycle(_) => Err(RadioError::DutyCycleUnsupported),
             RxMode::Single(ns) => Ok((ns.max(SX127X_MIN_LORA_SYMB_NUM_TIMEOUT), LoRaMode::RxSingle)),
+            RxMode::SingleMs(_) => Err(RadioError::TimedSingleRxUnsupported),
             RxMode::Continuous => Ok((0, LoRaMode::RxContinuous)),
         }?;
 
@@ -552,7 +562,7 @@ where
                     return Ok(Some(IrqState::Done));
                 }
             }
-            RadioMode::Receive(RxMode::Continuous) | RadioMode::Receive(RxMode::Single(_)) => {
+            RadioMode::Receive(RxMode::Continuous | RxMode::Single(_) | RxMode::SingleMs(_)) => {
                 if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
                     debug!("RxDone in radio mode {}", radio_mode);
                     return Ok(Some(IrqState::Done));

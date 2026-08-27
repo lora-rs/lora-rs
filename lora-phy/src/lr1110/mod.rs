@@ -916,24 +916,13 @@ where
         }
 
         // DIO3 acting as TCXO controller
-        if let Some(voltage) = self.config.tcxo_ctrl {
+        if self.config.tcxo_ctrl.is_some() {
             // Clear any TCXO startup errors
             let clear_opcode = SystemOpCode::ClearErrors.bytes();
             let clear_cmd = [clear_opcode[0], clear_opcode[1]];
             self.write_command(&clear_cmd).await?;
 
-            // Set TCXO mode - timeout in RTC steps (32.768 kHz)
-            let timeout = BRD_TCXO_WAKEUP_TIME * 32768 / 1000; // Convert ms to RTC steps
-            let opcode = SystemOpCode::SetTcxoMode.bytes();
-            let cmd = [
-                opcode[0],
-                opcode[1],
-                voltage.value(),
-                Self::timeout_1(timeout),
-                Self::timeout_2(timeout),
-                Self::timeout_3(timeout),
-            ];
-            self.write_command(&cmd).await?;
+            self.set_tcxo_mode().await?;
 
             // Re-run calibration now that chip knows it's running from TCXO
             let cal_opcode = SystemOpCode::Calibrate.bytes();
@@ -942,6 +931,27 @@ where
         }
 
         Ok(())
+    }
+
+    /// Configure DIO3 as the TCXO supply (no-op without `tcxo_ctrl`). The
+    /// timeout is the time the chip grants the TCXO to start before a radio
+    /// operation.
+    async fn set_tcxo_mode(&mut self) -> Result<(), RadioError> {
+        let Some(voltage) = self.config.tcxo_ctrl else {
+            return Ok(());
+        };
+        // Timeout in RTC steps (32.768 kHz)
+        let timeout = BRD_TCXO_WAKEUP_TIME * 32768 / 1000;
+        let opcode = SystemOpCode::SetTcxoMode.bytes();
+        let cmd = [
+            opcode[0],
+            opcode[1],
+            voltage.value(),
+            Self::timeout_1(timeout),
+            Self::timeout_2(timeout),
+            Self::timeout_3(timeout),
+        ];
+        self.write_command(&cmd).await
     }
 
     /// Wake up the LR1110 from sleep mode
@@ -1909,6 +1919,27 @@ where
     SPI: SpiDevice<u8>,
     IV: InterfaceVariant,
 {
+    // Cover the full 12.25-symbol preamble-plus-sync sequence. Bench devices
+    // at BW500 detect mid-preamble and pass with 6, but the reported EU868
+    // SF12/BW125 failures fit a detection needing ~12 symbols under LDRO, so
+    // the default stays conservative. Overridable at runtime with
+    // set_min_rx_symbols.
+    const DEFAULT_MIN_RX_SYMBOLS: u16 = 13;
+
+    // Retention sleep preserves the radio configuration (validated on the
+    // bench: modulation, packet params, sync word, RF-switch table and PA
+    // config all survive), EXCEPT the DIO3 TCXO-supply arming, which
+    // ensure_ready re-issues on every wake.
+    const SUPPORTS_WARM_START: bool = true;
+
+    const MAX_SINGLE_RX_SYMBOLS: u16 = LR1110_MAX_LORA_SYMB_NUM_TIMEOUT as u16;
+
+    // StopTimeoutOnPreamble(1) gives the SetRx tick timeout the same
+    // stop-on-preamble semantics as the symbol timeout. (Transceiver fw
+    // >= 0x0308 also has an extended 16-bit symbol timeout command, but the
+    // wall-clock close works on every fw so it needs no version gate.)
+    const SUPPORTS_TIMED_SINGLE_RX: bool = true;
+
     async fn init_lora(&mut self, sync_word: u16) -> Result<(), RadioError> {
         // Initialize system (DC-DC, TCXO, calibration)
         self.init_system().await?;
@@ -2007,7 +2038,11 @@ where
         match mode {
             // In sleep mode BUSY is held high; toggle NSS to wake the chip,
             // then wait for BUSY to go low (chip booted and ready).
-            RadioMode::Sleep => self.intf.wakeup().await,
+            RadioMode::Sleep => {
+                self.intf.wakeup().await?;
+                // tcxo is not retained to warm sleep. it must be set
+                self.set_tcxo_mode().await
+            }
             _ => self.intf.iv.wait_on_busy().await,
         }
     }
@@ -2274,7 +2309,7 @@ where
 
         // Set symbol timeout
         let num_symbols = match rx_mode {
-            RxMode::DutyCycle(_) | RxMode::Continuous => 0,
+            RxMode::DutyCycle(_) | RxMode::Continuous | RxMode::SingleMs(_) => 0,
             RxMode::Single(n) => n,
         };
         self.set_lora_symbol_num_timeout(num_symbols).await?;
@@ -2306,11 +2341,16 @@ where
                 ];
                 self.write_command(&cmd).await
             }
-            RxMode::Single(_) | RxMode::Continuous => {
-                let timeout = if matches!(rx_mode, RxMode::Continuous) {
-                    RX_CONTINUOUS_TIMEOUT
-                } else {
-                    0
+            RxMode::Single(_) | RxMode::SingleMs(_) | RxMode::Continuous => {
+                let timeout = match rx_mode {
+                    RxMode::Continuous => RX_CONTINUOUS_TIMEOUT,
+                    // SetRx ticks are 32.768 kHz RTC steps. Round up so the
+                    // window never closes short of the requested span;
+                    // 0xffffff is the continuous sentinel, saturate below it.
+                    RxMode::SingleMs(ms) => {
+                        ((ms as u64 * 32_768).div_ceil(1_000)).min(RX_CONTINUOUS_TIMEOUT as u64 - 1) as u32
+                    }
+                    _ => 0,
                 };
 
                 // Reference driver behavior; RX duty cycle notably does NOT
