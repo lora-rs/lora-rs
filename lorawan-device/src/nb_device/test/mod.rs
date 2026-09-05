@@ -55,6 +55,90 @@ fn test_unconfirmed_uplink_no_downlink() {
     assert!(matches!(response, Response::RxComplete));
 }
 #[test]
+fn test_unconfirmed_uplink_retransmission() {
+    let mut device = test_device();
+    device.join(get_abp_credentials()).unwrap();
+    device.shared.mac.configuration.nb_trans = 2;
+    let response = device.send(&[0; 1], 1, false).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+    let first = device.get_radio().take_last_uplink().unwrap();
+
+    // RX windows of the first transmission time out
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx1
+    assert!(matches!(response, Response::TimeoutRequest(1100)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // end Rx1
+    assert!(matches!(response, Response::TimeoutRequest(2000)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx2
+    assert!(matches!(response, Response::TimeoutRequest(2100)));
+    // End Rx2: NbTrans allows another transmission, so the radio is re-armed
+    let response = device.handle_event(Event::TimeoutFired).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+
+    // The retransmission resends the exact same frame (same FCntUp)
+    let second = device.get_radio().take_last_uplink().unwrap();
+    assert_eq!(first.data(), second.data());
+
+    // RX windows of the retransmission time out; the FCntUp is consumed
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx1
+    assert!(matches!(response, Response::TimeoutRequest(1100)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // end Rx1
+    assert!(matches!(response, Response::TimeoutRequest(2000)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx2
+    assert!(matches!(response, Response::TimeoutRequest(2100)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // end Rx2
+    assert!(matches!(response, Response::RxComplete));
+    assert_eq!(device.get_fcnt_up(), Some(1));
+}
+
+#[test]
+fn test_unconfirmed_uplink_downlink_stops_retransmission() {
+    let mut device = test_device();
+    device.join(get_abp_credentials()).unwrap();
+    device.shared.mac.configuration.nb_trans = 4;
+    let response = device.send(&[0; 1], 1, false).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx1
+    assert!(matches!(response, Response::TimeoutRequest(1100)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // end Rx1
+    assert!(matches!(response, Response::TimeoutRequest(2000)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx2
+    assert!(matches!(response, Response::TimeoutRequest(2100)));
+    device.get_radio().set_rxtx_handler(handle_data_uplink_with_link_adr_req::<0, 0>);
+    // A downlink in RX2 acknowledges the uplink: no retransmission
+    let response = device.handle_event(Event::RadioEvent(radio::Event::Phy(()))).unwrap();
+    assert!(matches!(response, Response::DownlinkReceived(0)));
+    assert_eq!(device.get_fcnt_up(), Some(1));
+}
+
+#[test]
+fn test_confirmed_uplink_no_ack_retransmission() {
+    let mut device = test_device();
+    device.join(get_abp_credentials()).unwrap();
+    device.shared.mac.configuration.nb_trans = 2;
+    let response = device.send(&[0; 1], 1, true).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+    let _first = device.get_radio().take_last_uplink().unwrap();
+    for attempt in 0..2 {
+        let response = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx1
+        assert!(matches!(response, Response::TimeoutRequest(1100)));
+        let response = device.handle_event(Event::TimeoutFired).unwrap(); // end Rx1
+        assert!(matches!(response, Response::TimeoutRequest(2000)));
+        let response = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx2
+        assert!(matches!(response, Response::TimeoutRequest(2100)));
+        let response = device.handle_event(Event::TimeoutFired).unwrap(); // end Rx2
+        if attempt == 0 {
+            // NbTrans allows one more transmission
+            assert!(matches!(response, Response::TimeoutRequest(1000)));
+            let _second = device.get_radio().take_last_uplink().unwrap();
+        } else {
+            // No confirmation after all NbTrans attempts
+            assert!(matches!(response, Response::NoAck));
+        }
+    }
+    assert_eq!(device.get_fcnt_up(), Some(1));
+}
+
+#[test]
 fn test_confirmed_uplink_no_ack() {
     let mut device = test_device();
     let response = device.join(get_abp_credentials());

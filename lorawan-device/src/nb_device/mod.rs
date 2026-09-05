@@ -35,6 +35,7 @@ where
                 radio,
                 rng,
                 tx_buffer: RadioBuffer::new(),
+                retransmit_buffer: RadioBuffer::new(),
                 mac: Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN),
                 downlink: Vec::new(),
             },
@@ -112,6 +113,7 @@ where
             &mut self.shared.radio,
             &mut self.shared.rng,
             &mut self.shared.tx_buffer,
+            &mut self.shared.retransmit_buffer,
             &mut self.shared.downlink,
             event,
         );
@@ -124,6 +126,10 @@ pub(crate) struct Shared<R: PhyRxTx + Timings, RNG: RngCore, const N: usize, con
     pub(crate) radio: R,
     pub(crate) rng: RNG,
     pub(crate) tx_buffer: RadioBuffer<N>,
+    /// Copy of the frame built for the current uplink, retained so that NbTrans
+    /// retransmissions can resend the exact same bytes (same FCntUp, ADRACKReq
+    /// bit and MAC commands) after the radio buffer is reused for reception.
+    pub(crate) retransmit_buffer: RadioBuffer<N>,
     pub(crate) mac: Mac,
     pub(crate) downlink: Vec<Downlink, D>,
 }

@@ -25,6 +25,11 @@ impl TestRadio {
     pub fn set_rxtx_handler(&mut self, handler: RxTxHandler) {
         self.rxtx_handler = Some(handler);
     }
+
+    /// Take the most recently transmitted uplink, if any.
+    pub fn take_last_uplink(&mut self) -> Option<Uplink> {
+        self.last_uplink.take()
+    }
 }
 
 impl Default for TestRadio {

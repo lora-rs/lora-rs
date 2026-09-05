@@ -102,6 +102,7 @@ impl<R: radio::PhyRxTx> From<Error> for super::Error<R> {
 }
 
 impl State {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn handle_event<
         R: radio::PhyRxTx + Timings,
         RNG: RngCore,
@@ -113,14 +114,19 @@ impl State {
         radio: &mut R,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
+        retransmit_buf: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
         event: Event<'_, R>,
     ) -> (Self, Result<Response, super::Error<R>>) {
         match self {
-            State::Idle(s) => s.handle_event::<R, RNG, N>(mac, radio, rng, buf, event),
+            State::Idle(s) => {
+                s.handle_event::<R, RNG, N>(mac, radio, rng, buf, retransmit_buf, event)
+            }
             State::SendingData(s) => s.handle_event::<R, N>(mac, radio, event),
             State::WaitingForRxWindow(s) => s.handle_event::<R, N>(mac, radio, event),
-            State::WaitingForRx(s) => s.handle_event::<R, N, D>(mac, radio, buf, event, dl),
+            State::WaitingForRx(s) => {
+                s.handle_event::<R, RNG, N, D>(mac, radio, rng, buf, retransmit_buf, event, dl)
+            }
         }
     }
 }
@@ -135,6 +141,7 @@ impl Idle {
         radio: &mut R,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
+        retransmit_buf: &mut RadioBuffer<N>,
         event: Event<'_, R>,
     ) -> (State, Result<Response, super::Error<R>>) {
         enum IntermediateResponse<R: radio::PhyRxTx> {
@@ -162,6 +169,11 @@ impl Idle {
                 match tx_config {
                     Err(e) => IntermediateResponse::EarlyReturn(Err(e.into())),
                     Ok((tx_config, rx_windows, fcnt_up)) => {
+                        // Retain a copy of the built frame for NbTrans
+                        // retransmissions; the radio buffer is reused for
+                        // received packets.
+                        retransmit_buf.clear();
+                        retransmit_buf.extend_from_slice(buf.as_ref_for_read()).unwrap();
                         IntermediateResponse::RadioTx((Frame::Data, tx_config, rx_windows, fcnt_up))
                     }
                 }
@@ -317,11 +329,19 @@ pub struct WaitingForRx {
 }
 
 impl WaitingForRx {
-    pub(crate) fn handle_event<R: radio::PhyRxTx + Timings, const N: usize, const D: usize>(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn handle_event<
+        R: radio::PhyRxTx + Timings,
+        RNG: RngCore,
+        const N: usize,
+        const D: usize,
+    >(
         self,
         mac: &mut Mac,
         radio: &mut R,
+        rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
+        retransmit_buf: &mut RadioBuffer<N>,
         event: Event<'_, R>,
         dl: &mut Vec<Downlink, D>,
     ) -> (State, Result<Response, super::Error<R>>) {
@@ -342,14 +362,9 @@ impl WaitingForRx {
                                     Err(Error::BufferTooSmall.into()),
                                 );
                             }
-                            match mac.handle_rx::<N, D>(buf, dl, quality.snr(), &self.rf_config) {
-                                // NoUpdate can occur when a stray radio packet is received. Maintain state
-                                mac::Response::NoUpdate => {
-                                    (State::WaitingForRx(self), Ok(Response::NoUpdate))
-                                }
-                                // Any other type of update indicates we are done receiving. Change to Idle
-                                r => (State::Idle(Idle), Ok(r.into())),
-                            }
+                            let response =
+                                mac.handle_rx::<N, D>(buf, dl, quality.snr(), &self.rf_config);
+                            self.complete_or_retransmit(response, mac, radio, rng, retransmit_buf)
                         }
                         _ => (State::WaitingForRx(self), Ok(Response::NoUpdate)),
                     },
@@ -376,10 +391,11 @@ impl WaitingForRx {
                             Ok(Response::TimeoutRequest(t2)),
                         )
                     }
-                    // Timeout during second RxWindow leads to giving up
+                    // Timeout during second RxWindow: give up, or retransmit
+                    // the frame while NbTrans allows it
                     Rx::_2(_) => {
                         let response = mac.rx2_complete();
-                        (State::Idle(Idle), Ok(response.into()))
+                        self.complete_or_retransmit(response, mac, radio, rng, retransmit_buf)
                     }
                 }
             }
@@ -389,6 +405,42 @@ impl WaitingForRx {
             Event::SendDataRequest(_) => {
                 (State::WaitingForRx(self), Err(Error::SendDataWhileWaitingForRx.into()))
             }
+        }
+    }
+
+    /// Handle the outcome of a completed RX window (or an early exit, eg: an
+    /// oversized downlink): if the MAC wants to retransmit the current frame
+    /// (NbTrans), re-arm the radio with the retained copy; otherwise complete
+    /// the uplink cycle.
+    fn complete_or_retransmit<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize>(
+        self,
+        response: mac::Response,
+        mac: &mut Mac,
+        radio: &mut R,
+        rng: &mut RNG,
+        retransmit_buf: &mut RadioBuffer<N>,
+    ) -> (State, Result<Response, super::Error<R>>) {
+        match response {
+            mac::Response::Retransmit => {
+                // Re-run the normal channel selection so retransmissions hop
+                // frequencies as usual; the frame itself (and its FCntUp) is
+                // unchanged.
+                let (tx, rx_windows) = mac.retransmit_config::<RNG>(rng);
+                let event = radio::Event::TxRequest(tx, retransmit_buf.as_ref_for_read());
+                match radio.handle_event(event) {
+                    Ok(radio::Response::Txing) => (
+                        State::SendingData(SendingData { frame: self.frame, rx_windows }),
+                        Ok(Response::UplinkSending(mac.get_fcnt_up().unwrap())),
+                    ),
+                    Ok(radio::Response::TxDone(ms)) => {
+                        data_rxwindow1_timeout::<R, N>(self.frame, rx_windows, mac, radio, ms)
+                    }
+                    _ => (State::WaitingForRx(self), Err(Error::UnexpectedRadioResponse.into())),
+                }
+            }
+            // Any other type of update indicates we are done receiving.
+            // Change to Idle
+            r => (State::Idle(Idle), Ok(r.into())),
         }
     }
 }
