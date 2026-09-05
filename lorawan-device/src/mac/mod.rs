@@ -86,6 +86,10 @@ pub struct Configuration {
     /// When true, uplinks set the FCtrl ADR bit so the network may manage
     /// data rate and TX power via LinkADRReq.
     pub(crate) adr_enabled: bool,
+    /// Number of transmissions of each uplink (LoRaWAN 1.0.4 NbTrans), set by
+    /// the network via LinkADRReq: 1..=15 transmissions per FCntUp. Defaults
+    /// to 1 (no retransmission).
+    pub(crate) nb_trans: u8,
 }
 
 pub(crate) struct Mac {
@@ -144,6 +148,7 @@ impl Mac {
                 rx2_frequency: None,
                 tx_power: None,
                 adr_enabled: true,
+                nb_trans: 1,
             },
             #[cfg(feature = "certification")]
             certification: certification::Certification::new(),
@@ -189,18 +194,45 @@ impl Mac {
     ) -> Result<(radio::TxConfig, RxWindows, FcntUp)> {
         let fcnt = match &mut self.state {
             State::Joined(session) => {
-                Ok(session.prepare_buffer::<N>(send_data, buf, &self.configuration, &self.region))
+                let fcnt =
+                    session.prepare_buffer::<N>(send_data, buf, &self.configuration, &self.region);
+                // Data uplinks participate in NbTrans retransmission; the other
+                // senders (multicast setup, certification) do not.
+                session.retransmissions = 1;
+                Ok(fcnt)
             }
             State::Otaa(_) => Err(Error::NotJoined),
             State::Unjoined => Err(Error::NotJoined),
         }?;
+        let (tx_config, rx_windows) = self.tx_config_and_windows(rng);
+        Ok((tx_config, rx_windows, fcnt))
+    }
+
+    /// Prepare the radio configuration and RX windows for a NbTrans
+    /// retransmission of the current uplink. The frame itself (and its
+    /// FCntUp) is unchanged; the region's normal channel selection is run
+    /// again so that retransmissions hop frequencies as usual.
+    pub(crate) fn retransmit_config<RNG: RngCore>(
+        &mut self,
+        rng: &mut RNG,
+    ) -> (radio::TxConfig, RxWindows) {
+        self.tx_config_and_windows(rng)
+    }
+
+    /// Channel selection, TX power, and RX windows for the next data
+    /// transmission, derived together so the windows match the channel
+    /// actually used.
+    fn tx_config_and_windows<RNG: RngCore>(
+        &mut self,
+        rng: &mut RNG,
+    ) -> (radio::TxConfig, RxWindows) {
         let (mut tx_config, tx_channel) =
             self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
         tx_config.adjust_power(
             self.configuration.tx_power.unwrap_or(self.board_eirp.max_power),
             self.board_eirp.antenna_gain,
         );
-        Ok((tx_config, self.rx_windows(&tx_channel), fcnt))
+        (tx_config, self.rx_windows(&tx_channel))
     }
 
     pub(crate) fn add_uplink<M: SerializableMacCommand>(&mut self, cmd: M) -> Result<()> {
@@ -450,6 +482,9 @@ pub(crate) enum Response {
     JoinSuccess,
     NoUpdate,
     RxComplete,
+    /// Both RX windows expired without a downlink and NbTrans permits another
+    /// transmission of the same frame (same FCntUp).
+    Retransmit,
     LinkCheckReq,
     #[cfg(feature = "certification")]
     UplinkPrepared,
@@ -478,6 +513,8 @@ impl From<Response> for nb_device::Response {
             Response::JoinSuccess => nb_device::Response::JoinSuccess,
             Response::NoUpdate => nb_device::Response::NoUpdate,
             Response::RxComplete => nb_device::Response::RxComplete,
+            // Handled internally by the nb_device state machine.
+            Response::Retransmit => unimplemented!(),
             Response::LinkCheckReq => unimplemented!(),
             #[cfg(feature = "certification")]
             Response::UplinkPrepared => unimplemented!(),

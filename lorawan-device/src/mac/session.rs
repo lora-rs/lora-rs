@@ -44,6 +44,10 @@ pub struct Session {
     fcnt_down: Option<u32>,
     /// Uplinks since the last accepted downlink; used for ADRACKReq / ADR backoff.
     pub(crate) adr_ack_cnt: u32,
+    /// Transmissions already made at the current FCntUp. Set by `Mac::send`
+    /// and consumed by `rx2_complete` to implement NbTrans retransmission.
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub(crate) retransmissions: u8,
     #[cfg(feature = "certification")]
     /// Whether to override confirmation bit for sent frames
     pub override_confirmed: Option<bool>,
@@ -88,6 +92,7 @@ impl Session {
             fcnt_down: None,
             fcnt_up: 0,
             adr_ack_cnt: 0,
+            retransmissions: 0,
             uplink: uplink::Uplink::default(),
 
             #[cfg(feature = "certification")]
@@ -214,8 +219,10 @@ impl Session {
                     // if the FCnt is used up, the session has expired
                     Response::SessionExpired
                 } else {
-                    // we can always increment fcnt_up when we receive a downlink
+                    // we can always increment fcnt_up when we receive a downlink;
+                    // the accepted downlink also ends any retransmission cycle
                     self.fcnt_up += 1;
+                    self.retransmissions = 0;
                     if let (Some(fport), FrmPayload::Data(data)) =
                         (decrypted.f_port(), decrypted.frm_payload())
                     {
@@ -273,11 +280,22 @@ impl Session {
         configuration: &mut super::Configuration,
         region: &region::Configuration,
     ) -> Response {
-        // Until we handle NbTrans, there is no case where we should not increment FCntUp.
-        if self.fcnt_up == 0xFFFF_FFFF {
-            // if the FCnt is used up, the session has expired
-            return Response::SessionExpired;
+        // With NbTrans > 1, a missed downlink does not consume the FCntUp: the
+        // same frame is retransmitted (same FCntUp) until NbTrans is reached
+        // or a downlink is accepted. A used-up FCntUp can never be
+        // retransmitted, so the session expires.
+        let retransmit = self.retransmissions > 0
+            && self.fcnt_up != 0xFFFF_FFFF
+            && self.retransmissions < configuration.nb_trans;
+
+        if retransmit {
+            self.retransmissions += 1;
         } else {
+            self.retransmissions = 0;
+            if self.fcnt_up == 0xFFFF_FFFF {
+                // if the FCnt is used up, the session has expired
+                return Response::SessionExpired;
+            }
             self.fcnt_up += 1;
         }
 
@@ -295,7 +313,9 @@ impl Session {
             }
         }
 
-        if self.confirmed {
+        if retransmit {
+            Response::Retransmit
+        } else if self.confirmed {
             Response::NoAck
         } else {
             Response::RxComplete
@@ -586,7 +606,7 @@ fn next_fcnt_down(last: Option<u32>, wire: u16) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::next_fcnt_down;
-    use super::{SendData, Session};
+    use super::{Response, SendData, Session};
     use crate::mac::Mac;
     use crate::radio::RadioBuffer;
     use crate::region;
@@ -595,6 +615,7 @@ mod tests {
     use lorawan::maccommandcreator::LinkADRAnsCreator;
     use lorawan::parser::{DecryptedDataPayload, DevAddr, EncryptedDataPayload, FrmPayload};
     use lorawan::types::DR;
+    use rand_core::RngCore;
 
     fn uplink_fctrl(session: &mut Session, mac: &Mac) -> lorawan::parser::FCtrl {
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
@@ -662,6 +683,152 @@ mod tests {
         let fctrl = uplink_fctrl(&mut session, &mac);
         assert!(fctrl.adr());
         assert!(!fctrl.adr_ack_req());
+    }
+
+    /// A deterministic RNG returning consecutive u32 values so tests can
+    /// rely on distinct channel-selection draws.
+    struct SeqRng(u32);
+
+    impl RngCore for SeqRng {
+        fn next_u32(&mut self) -> u32 {
+            let v = self.0;
+            self.0 = self.0.wrapping_add(1);
+            v
+        }
+        fn next_u64(&mut self) -> u64 {
+            let v = self.0 as u64;
+            self.0 = self.0.wrapping_add(1);
+            v
+        }
+        fn fill_bytes(&mut self, bytes: &mut [u8]) {
+            for b in bytes.iter_mut() {
+                *b = (self.0 & 0xFF) as u8;
+                self.0 = self.0.wrapping_add(1);
+            }
+        }
+        fn try_fill_bytes(&mut self, bytes: &mut [u8]) -> Result<(), rand_core::Error> {
+            self.fill_bytes(bytes);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn retransmission_reselects_channel() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+        let mut rng = SeqRng(0);
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+
+        let (first, first_windows, _) = mac
+            .send::<SeqRng, 256>(
+                &mut rng,
+                &mut tx,
+                &SendData { data: &[1, 2, 3], fport: 1, confirmed: false },
+            )
+            .unwrap();
+        let (second, second_windows) = mac.retransmit_config::<SeqRng>(&mut rng);
+
+        // Each attempt goes through the normal channel selection, so the
+        // retransmission hops to another channel at the same data rate, and
+        // its RX1 window follows the new channel
+        assert_ne!(first.rf.frequency, second.rf.frequency);
+        assert_eq!(first.rf.bb, second.rf.bb);
+        assert_ne!(first_windows.rx1.frequency, second_windows.rx1.frequency);
+    }
+
+    #[cfg(feature = "serde")]
+    #[test]
+    fn session_serde_roundtrip_and_missing_retransmissions() {
+        let session = session();
+        let json = serde_json::to_string(&session).unwrap();
+        let back: Session = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.fcnt_up, session.fcnt_up);
+
+        // Sessions serialized before retransmissions existed still
+        // deserialize, defaulting to no retransmission in flight.
+        let mut value: serde_json::Value = serde_json::from_str(&json).unwrap();
+        value.as_object_mut().unwrap().remove("retransmissions");
+        let back: Session = serde_json::from_value(value).unwrap();
+        assert_eq!(back.retransmissions, 0);
+    }
+
+    #[test]
+    fn rx2_complete_without_retransmission_consumes_fcnt() {
+        let mut mac = eu868_mac();
+        let mut session = session();
+        session.retransmissions = 1;
+
+        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        assert!(matches!(response, Response::RxComplete));
+        assert_eq!(session.fcnt_up, 1);
+        assert_eq!(session.retransmissions, 0);
+    }
+
+    #[test]
+    fn rx2_complete_retransmits_up_to_nb_trans() {
+        let mut mac = eu868_mac();
+        mac.configuration.nb_trans = 3;
+        let mut session = session();
+        session.retransmissions = 1;
+
+        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        assert!(matches!(response, Response::Retransmit));
+        assert_eq!(session.fcnt_up, 0);
+        assert_eq!(session.retransmissions, 2);
+
+        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        assert!(matches!(response, Response::Retransmit));
+        assert_eq!(session.retransmissions, 3);
+
+        // Third transmission done: the FCntUp is consumed.
+        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        assert!(matches!(response, Response::RxComplete));
+        assert_eq!(session.fcnt_up, 1);
+        assert_eq!(session.retransmissions, 0);
+    }
+
+    #[test]
+    fn rx2_complete_retransmits_up_to_high_nb_trans() {
+        let mut mac = eu868_mac();
+        mac.configuration.nb_trans = 15;
+        let mut session = session();
+        session.retransmissions = 1;
+
+        for expected in 2..=15 {
+            let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+            assert!(matches!(response, Response::Retransmit));
+            assert_eq!(session.retransmissions, expected);
+            assert_eq!(session.fcnt_up, 0);
+        }
+        // 15th transmission done: the FCntUp is consumed
+        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        assert!(matches!(response, Response::RxComplete));
+        assert_eq!(session.fcnt_up, 1);
+    }
+
+    #[test]
+    fn rx2_complete_exhausted_fcnt_expires_instead_of_retransmitting() {
+        let mut mac = eu868_mac();
+        mac.configuration.nb_trans = 4;
+        let mut session = session();
+        session.fcnt_up = 0xFFFF_FFFF;
+        session.retransmissions = 1;
+
+        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        assert!(matches!(response, Response::SessionExpired));
+    }
+
+    #[test]
+    fn rx2_complete_without_uplink_in_flight_consumes_fcnt() {
+        // retransmissions == 0 (join, multicast setup, certification): the
+        // FCntUp is consumed even when NbTrans > 1.
+        let mut mac = eu868_mac();
+        mac.configuration.nb_trans = 4;
+        let mut session = session();
+
+        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        assert!(matches!(response, Response::RxComplete));
+        assert_eq!(session.fcnt_up, 1);
     }
 
     /// FPort 0 sends the queued MAC commands as the FRMPayload (encrypted
