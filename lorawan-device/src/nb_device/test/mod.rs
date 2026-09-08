@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(feature = "certification")]
+mod linkadrreq_eu868;
 mod util;
 use crate::test_util::*;
 use util::*;
