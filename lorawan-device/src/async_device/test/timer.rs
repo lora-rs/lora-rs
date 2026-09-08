@@ -57,6 +57,17 @@ impl TimerChannel {
         tx.send(()).await.unwrap();
     }
 
+    /// Fire the most recent timer, first waiting until `count` timers have
+    /// been armed. Use this when the device arms the timer as a result of an
+    /// earlier test event (eg: a retransmission after an RX window) so the
+    /// test does not race the device task.
+    pub async fn fire_when_armed(&self, count: usize) {
+        while self.get_armed_count().await < count {
+            tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
+        }
+        self.fire_most_recent().await;
+    }
+
     #[allow(unused)]
     pub async fn confirm_dropped_timer(&self, index: usize) {
         tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;

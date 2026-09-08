@@ -73,6 +73,10 @@ where
     timer: T,
     mac: Mac,
     radio_buffer: RadioBuffer<N>,
+    /// Copy of the frame built for the current uplink, retained so that NbTrans
+    /// retransmissions can resend the exact same bytes (same FCntUp, ADRACKReq
+    /// bit and MAC commands) after the radio buffer is reused for reception.
+    retransmit_buffer: RadioBuffer<N>,
     downlink: Vec<Downlink, D>,
     #[cfg(feature = "class-c")]
     class_c: bool,
@@ -198,6 +202,7 @@ where
             rng,
             mac,
             radio_buffer: RadioBuffer::new(),
+            retransmit_buffer: RadioBuffer::new(),
             timer,
             downlink: Vec::new(),
             #[cfg(feature = "class-c")]
@@ -362,6 +367,12 @@ where
     /// if any, is available by calling take_downlink. Response::DownlinkReceived indicates a
     /// downlink is available.
     ///
+    /// When the network has set NbTrans > 1 via LinkADRReq (LoRaWAN 1.0.4), a frame that
+    /// receives no downlink in RX1/RX2 is retransmitted automatically with the same FCntUp,
+    /// up to NbTrans times (1..=15). Each retransmission is a full transmission with its
+    /// own channel selection and RX1/RX2 windows, and a downlink in either window
+    /// stops the retransmission.
+    ///
     /// In Class C mode, it is possible to get one or more downlinks and `Reponse::DownlinkReceived`
     /// maybe not even be indicated. It is recommended to call `take_downlink` after `send` until
     /// it returns `None`.
@@ -372,21 +383,35 @@ where
         confirmed: bool,
     ) -> Result<SendResponse, Error<R::PhyError>> {
         // Prepare transmission buffer
-        let (tx_config, rx_windows, _fcnt_up) = self.mac.send::<G, N>(
+        let (mut tx_config, mut rx_windows, _fcnt_up) = self.mac.send::<G, N>(
             &mut self.rng,
             &mut self.radio_buffer,
             &SendData { data, fport, confirmed },
         )?;
-        // Transmit our data packet
-        let ms = self
-            .radio
-            .tx(tx_config, self.radio_buffer.as_ref_for_read())
-            .await
-            .map_err(Error::Radio)?;
+        // Retain a copy of the built frame for potential NbTrans retransmissions
+        self.retransmit_buffer.clear();
+        self.retransmit_buffer.extend_from_slice(self.radio_buffer.as_ref_for_read()).unwrap();
 
-        // Wait for received data within window
-        self.timer.reset();
-        Ok(self.rx_downlink(&Frame::Data, ms, &rx_windows).await?.into())
+        loop {
+            // Transmit our data packet
+            let ms = self
+                .radio
+                .tx(tx_config, self.retransmit_buffer.as_ref_for_read())
+                .await
+                .map_err(Error::Radio)?;
+
+            // Wait for received data within window
+            self.timer.reset();
+            match self.rx_downlink(&Frame::Data, ms, &rx_windows).await? {
+                // NbTrans: the MAC will resend this frame with the same FCntUp;
+                // re-select the channel (and its RX windows) as usual
+                mac::Response::Retransmit => {
+                    (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
+                    continue;
+                }
+                response => return Ok(response.into()),
+            }
+        }
     }
 
     /// Take the downlink data from the device. This is typically called after a

@@ -201,6 +201,93 @@ async fn test_unconfirmed_uplink_no_downlink() {
 }
 
 #[tokio::test]
+async fn test_unconfirmed_uplink_retransmission() {
+    let (radio, timer, mut async_device) = setup_with_session();
+    async_device.mac.configuration.nb_trans = 2;
+
+    let async_device = tokio::spawn(async move {
+        let response = async_device.send(&[1, 2, 3], 3, false).await;
+        (async_device, response)
+    });
+
+    // First transmission: RX1 and RX2 both time out
+    timer.fire_when_armed(1).await; // RX1 start
+    let first = radio.get_last_uplink().await;
+    radio.handle_timeout().await; // RX1 end
+    timer.fire_when_armed(2).await; // RX2 start
+    radio.handle_timeout().await; // RX2 end -> retransmit
+
+    // Retransmission: RX1 and RX2 both time out
+    timer.fire_when_armed(3).await; // RX1 start
+    let second = radio.get_last_uplink().await;
+    radio.handle_timeout().await; // RX1 end
+    timer.fire_when_armed(4).await; // RX2 start
+    radio.handle_timeout().await; // RX2 end -> FCntUp consumed
+
+    let (mut device, response) = async_device.await.unwrap();
+    match response {
+        Ok(SendResponse::RxComplete) => (),
+        _ => panic!(),
+    }
+
+    // The retransmission resends the exact same frame (same FCntUp)
+    assert_eq!(first.data(), second.data());
+    // The FCntUp was consumed only once for the two attempts
+    assert_eq!(device.get_session().unwrap().fcnt_up, 1);
+}
+
+#[tokio::test]
+async fn test_unconfirmed_uplink_downlink_stops_retransmission() {
+    let (radio, timer, mut async_device) = setup_with_session();
+    async_device.mac.configuration.nb_trans = 3;
+
+    let async_device = tokio::spawn(async move {
+        let response = async_device.send(&[1, 2, 3], 3, false).await;
+        (async_device, response)
+    });
+
+    // First transmission: RX1 times out, a downlink arrives in RX2
+    timer.fire_when_armed(1).await; // RX1 start
+    radio.handle_timeout().await; // RX1 end
+    timer.fire_when_armed(2).await; // RX2 start
+    radio.handle_rxtx(handle_data_uplink_with_link_adr_req::<0, 0>).await;
+
+    let (mut device, response) = async_device.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(_)) => (),
+        _ => panic!(),
+    }
+    // A single transmission was made
+    assert_eq!(device.get_session().unwrap().fcnt_up, 1);
+}
+
+#[tokio::test]
+async fn test_confirmed_uplink_no_ack_retransmission() {
+    let (radio, timer, mut async_device) = setup_with_session();
+    async_device.mac.configuration.nb_trans = 3;
+
+    let async_device = tokio::spawn(async move {
+        let response = async_device.send(&[1, 2, 3], 3, true).await;
+        (async_device, response)
+    });
+
+    for (rx1, rx2) in [(1, 2), (3, 4), (5, 6)] {
+        timer.fire_when_armed(rx1).await; // RX1 start
+        radio.handle_timeout().await; // RX1 end
+        timer.fire_when_armed(rx2).await; // RX2 start
+        radio.handle_timeout().await; // RX2 end
+    }
+
+    // No confirmation after all NbTrans attempts
+    let (mut device, response) = async_device.await.unwrap();
+    match response {
+        Ok(SendResponse::NoAck) => (),
+        _ => panic!(),
+    }
+    assert_eq!(device.get_session().unwrap().fcnt_up, 1);
+}
+
+#[tokio::test]
 async fn test_confirmed_uplink_no_ack() {
     let (radio, timer, mut async_device) = setup_with_session();
     let send_await_complete = Arc::new(Mutex::new(false));

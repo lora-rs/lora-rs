@@ -27,9 +27,9 @@ async fn oversized_payload_sf12_bw_125_eu868() {
     });
 
     fn cfg_rx(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
-        // LinkADRReq: DR=0 (SF12BW125), MAX, 0700, 01
+        // LinkADRReq: DR=0 (SF12BW125), MAX, 0700, 02
         // RXParamSetupReq: Rx1DROffset=0, RX2DataRate=DR0 (SF12BW125), Frequency=869525000
-        build_mac(buf, "03000700010500d2ad84", 1)
+        build_mac(buf, "03000700020500d2ad84", 1)
     }
 
     timer.fire_most_recent().await;
@@ -66,8 +66,14 @@ async fn oversized_payload_sf12_bw_125_eu868() {
             2,
         )
     }
-    timer.fire_most_recent().await;
-    radio.handle_rxtx(oversized_payload).await;
+    // The LinkADRReq in step 1 set NbTrans to 2, so the oversized (invalid,
+    // therefore not acknowledging) downlink triggers a retransmission.
+    timer.fire_when_armed(2).await; // RX1 start, attempt 1
+    radio.handle_rxtx(oversized_payload).await; // oversized, dropped -> retransmit
+    timer.fire_when_armed(3).await; // RX1 start, attempt 2
+    radio.handle_timeout().await; // RX1 end
+    timer.fire_when_armed(4).await; // RX2 start
+    radio.handle_timeout().await; // RX2 end
 
     // We should skip this packet as it's oversized...
     let (mut device, response) = task.await.unwrap();
@@ -92,20 +98,26 @@ async fn oversized_payload_sf12_bw_125_eu868() {
     });
 
     // Skip RX1
-    timer.fire_most_recent().await;
-    radio.handle_timeout().await;
+    timer.fire_when_armed(5).await; // RX1 start, attempt 1
+    radio.handle_timeout().await; // RX1 end
 
     // Check that we are not using RX2 frequency
     let rx_conf = radio.get_rxconfig().await.unwrap();
     assert_ne!(rx_conf.rf.frequency, 869525000);
 
-    timer.fire_most_recent().await;
-    radio.handle_rxtx(oversized_payload).await;
+    timer.fire_when_armed(6).await; // RX2 start, attempt 1
+    radio.handle_rxtx(oversized_payload).await; // oversized, dropped -> retransmit
 
     let rx_conf = radio.get_rxconfig().await.unwrap();
     assert_eq!(rx_conf.rf.frequency, 869525000);
 
-    // RX2
+    // NbTrans is still 2, so the retransmission's windows time out and the
+    // FCntUp is consumed
+    timer.fire_when_armed(7).await; // RX1 start, attempt 2
+    radio.handle_timeout().await; // RX1 end
+    timer.fire_when_armed(8).await; // RX2 start
+    radio.handle_timeout().await; // RX2 end
+
     // We should skip this packet as it's oversized...
     let (_device, response) = task.await.unwrap();
     match response {

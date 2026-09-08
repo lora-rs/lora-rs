@@ -43,6 +43,11 @@ impl Uplink {
     pub fn data_mut(&mut self) -> &mut [u8] {
         &mut self.data
     }
+
+    /// The raw frame bytes.
+    pub fn data(&self) -> &[u8] {
+        &self.data
+    }
 }
 
 /// Test functions shared by async_device and no_async_device tests
