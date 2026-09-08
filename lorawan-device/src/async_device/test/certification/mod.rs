@@ -14,6 +14,7 @@ use tokio::sync::Mutex;
 mod mac_common;
 
 mod dlchannelreq_eu868;
+mod linkadrreq_eu868;
 mod mac_priority;
 mod newchannelreq_eu868;
 mod oversized_payload_eu868;
