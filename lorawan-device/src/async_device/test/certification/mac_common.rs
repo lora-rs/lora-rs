@@ -175,12 +175,24 @@ async fn rxtimingsetup_eu868() {
 
     timer.fire_most_recent().await;
     radio.handle_rxtx(fp_echopayloadreq).await;
+    // The EchoIncPayloadAns is a regular uplink: it opens its own RX
+    // windows.
+    timer.fire_when_armed(5).await; // answer RX1 start
+    radio.handle_timeout().await; // answer RX1 end
+    timer.fire_most_recent().await; // answer RX2 start
+    radio.handle_timeout().await; // answer RX2 end
     let (device, response) = task.await.unwrap();
 
     match response {
         Ok(SendResponse::RxComplete) => {}
         _ => panic!(),
     }
+
+    // The answer was transmitted inside the uplink's RX window
+    let mut uplink = radio.get_last_uplink().await;
+    let dl = decrypt_uplink(&mut uplink);
+    assert_eq!(dl.f_port(), Some(224));
+    assert_eq!(dl.frm_payload(), FrmPayload::Data(&[0x08, 0x02, 0x03, 0x04]));
 
     // Check that uplink has been cleared after receiving frame
     // Check whether uplink still contains required data
@@ -266,6 +278,12 @@ async fn eu868_linkcheckreq_test() {
     }
     timer.fire_most_recent().await;
     radio.handle_rxtx(fp_echopayloadreq).await;
+    // The EchoIncPayloadAns is a regular uplink: it opens its own RX
+    // windows.
+    timer.fire_when_armed(4).await; // answer RX1 start
+    radio.handle_timeout().await; // answer RX1 end
+    timer.fire_most_recent().await; // answer RX2 start
+    radio.handle_timeout().await; // answer RX2 end
     let (_device, response) = task.await.unwrap();
 
     match response {
@@ -424,6 +442,11 @@ async fn eu868_rxappcnt_test() {
         build_downlink(buf, 224, false, 7, &[0x09])
     }
     radio.handle_rxtx(dl_rxappcntreq).await;
+    // The answer is a regular uplink: it opens its own RX windows.
+    timer.fire_when_armed(8).await; // answer RX1 start
+    radio.handle_timeout().await; // answer RX1 end
+    timer.fire_most_recent().await; // answer RX2 start
+    radio.handle_timeout().await; // answer RX2 end
     let (device, response) = task.await.unwrap();
     match response {
         Ok(SendResponse::RxComplete) => {}

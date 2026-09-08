@@ -371,7 +371,9 @@ where
     /// receives no downlink in RX1/RX2 is retransmitted automatically with the same FCntUp,
     /// up to NbTrans times (1..=15). Each retransmission is a full transmission with its
     /// own channel selection and RX1/RX2 windows, and a downlink in either window
-    /// stops the retransmission.
+    /// stops the retransmission. This also applies to uplinks the stack itself
+    /// transmits (such as certification answer frames on FPort 224), which open
+    /// their own RX windows after transmission.
     ///
     /// In Class C mode, it is possible to get one or more downlinks and `Reponse::DownlinkReceived`
     /// maybe not even be indicated. It is recommended to call `take_downlink` after `send` until
@@ -392,13 +394,17 @@ where
         self.retransmit_buffer.clear();
         self.retransmit_buffer.extend_from_slice(self.radio_buffer.as_ref_for_read()).unwrap();
 
+        let mut ms = 0u32;
+        let mut tx_pending = true;
         loop {
-            // Transmit our data packet
-            let ms = self
-                .radio
-                .tx(tx_config, self.retransmit_buffer.as_ref_for_read())
-                .await
-                .map_err(Error::Radio)?;
+            if tx_pending {
+                // Transmit our data packet
+                ms = self
+                    .radio
+                    .tx(tx_config, self.retransmit_buffer.as_ref_for_read())
+                    .await
+                    .map_err(Error::Radio)?;
+            }
 
             // Wait for received data within window
             self.timer.reset();
@@ -407,7 +413,15 @@ where
                 // re-select the channel (and its RX windows) as usual
                 mac::Response::Retransmit => {
                     (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
-                    continue;
+                    tx_pending = true;
+                }
+                // A certification answer was transmitted inside the RX window;
+                // it is a regular uplink, so run its RX windows (and NbTrans
+                // retransmissions) without transmitting again.
+                #[cfg(feature = "certification")]
+                mac::Response::UplinkPrepared => {
+                    (ms, rx_windows) = self.mac.take_pending_cert_rx();
+                    tx_pending = false;
                 }
                 response => return Ok(response.into()),
             }
@@ -520,6 +534,7 @@ where
                     )?;
                     match Self::handle_mac_response(
                         &mut self.radio_buffer,
+                        &mut self.retransmit_buffer,
                         &mut self.mac,
                         &mut self.radio,
                         &mut self.rng,
@@ -571,6 +586,14 @@ where
 
         debug!("Starting RX1 in {} ms.", rx1_start_delay);
         // sleep or RXC
+        #[cfg(feature = "certification")]
+        if let Some(mac::Response::UplinkPrepared) = self.between_windows(rx1_start_delay).await? {
+            // Class C: a certification request was answered during the
+            // inter-window gap, where the send loop cannot run the answer's
+            // RX windows; complete it here instead.
+            let _ = self.mac.rx2_complete();
+        }
+        #[cfg(not(feature = "certification"))]
         let _ = self.between_windows(rx1_start_delay).await?;
 
         // RX1
@@ -620,6 +643,7 @@ where
     #[allow(unused_variables)]
     async fn handle_mac_response(
         radio_buffer: &mut RadioBuffer<N>,
+        retransmit_buffer: &mut RadioBuffer<N>,
         mac: &mut Mac,
         radio: &mut R,
         rng: &mut G,
@@ -636,10 +660,21 @@ where
             }
             #[cfg(feature = "certification")]
             mac::Response::UplinkPrepared => {
-                let (tx_config, _rx_windows, _fcnt_up) =
+                let (tx_config, rx_windows, _fcnt_up) =
                     mac.certification_setup_send::<G, N>(rng, radio_buffer)?;
-                radio.tx(tx_config, radio_buffer.as_ref_for_read()).await.map_err(Error::Radio)?;
-                Ok(Some(mac.rx2_complete()))
+                // The answer is a regular uplink: retain it so the send loop
+                // can retransmit it per NbTrans (the radio buffer is reused
+                // for reception).
+                retransmit_buffer.clear();
+                retransmit_buffer.extend_from_slice(radio_buffer.as_ref_for_read()).unwrap();
+                let tx_duration_ms = radio
+                    .tx(tx_config, retransmit_buffer.as_ref_for_read())
+                    .await
+                    .map_err(Error::Radio)?;
+                // The answer opens its own RX windows; the send loop runs
+                // them (and any NbTrans retransmissions) after this response.
+                mac.set_pending_cert_rx(tx_duration_ms, rx_windows);
+                Ok(Some(mac::Response::UplinkPrepared))
             }
             #[cfg(feature = "multicast")]
             mac::Response::Multicast(mut response) => {
@@ -684,6 +719,7 @@ where
                     );
                     Self::handle_mac_response(
                         &mut self.radio_buffer,
+                        &mut self.retransmit_buffer,
                         &mut self.mac,
                         &mut self.radio,
                         &mut self.rng,
@@ -714,6 +750,7 @@ where
             )?;
             if let Some(response) = Self::handle_mac_response(
                 &mut self.radio_buffer,
+                &mut self.retransmit_buffer,
                 &mut self.mac,
                 &mut self.radio,
                 &mut self.rng,
