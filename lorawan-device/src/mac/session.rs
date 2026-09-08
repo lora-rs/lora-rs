@@ -163,10 +163,19 @@ impl Session {
             }
 
             #[cfg(feature = "certification")]
-            if let Some(port) = encrypted_data.f_port()
-                && port > 0
             {
-                self.rx_app_cnt += 1;
+                // RxAppCnt counts applicative downlinks:
+                // - frames with FPort > 0
+                // - empty frames (no FPort, or FPort 0) with the FCtrl ACK bit set,
+                //   which the certification spec considers an applicative downlink
+                let ack = encrypted_data.fhdr().fctrl().ack();
+                let is_app_downlink = match encrypted_data.f_port() {
+                    Some(port) => port > 0 || (port == 0 && ack),
+                    None => ack,
+                };
+                if is_app_downlink {
+                    self.rx_app_cnt += 1;
+                }
             }
             #[cfg(feature = "multicast")]
             if let Some(port) = encrypted_data.f_port()
@@ -229,7 +238,7 @@ impl Session {
                         #[cfg(feature = "certification")]
                         if certification.fport(fport) {
                             use crate::mac::certification::Response::*;
-                            match certification.handle_message(data, fcnt as u16) {
+                            match certification.handle_message(data, self.rx_app_cnt) {
                                 AdrBitChange(adr) => {
                                     configuration.adr_enabled = adr;
                                 }

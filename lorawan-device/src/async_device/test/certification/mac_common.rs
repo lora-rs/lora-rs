@@ -5,6 +5,7 @@
 //! * DevStatusReq (2.5.1)
 //! * RXTimingSetupReq (2.5.5)
 //! * LinkCheckReq (2.5.7)
+//! * RxAppCnt (certification protocol)
 //!
 //! Region-specific tests (in separate files):
 //! * NewChannelReq (2.5.2)
@@ -19,10 +20,12 @@
 use super::util;
 use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
-use crate::test_util::Uplink;
+use crate::test_util::{Uplink, get_crypto, get_dev_addr};
+use core::num::NonZeroU8;
 
+use lorawan::creator::{DataFrame, Payload};
 use lorawan::maccommands::parse_uplink_mac_commands;
-use lorawan::parser::FrmPayload;
+use lorawan::parser::{DataFrameType, FrmPayload};
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -277,4 +280,162 @@ async fn eu868_linkcheckreq_test() {
     let dl = decrypt_uplink(&mut uplink);
     assert_eq!(dl.f_port(), Some(224));
     assert_eq!(dl.frm_payload(), FrmPayload::Data(&[0x08, 0x02, 0x03, 0x04]));
+}
+
+#[tokio::test]
+/// RxAppCnt test (certification protocol): the DUT increments RxAppCnt for
+/// each applicative downlink, i.e. a frame with FPort > 0, plus an empty
+/// downlink frame with the FCtrl ACK bit set (whether or not it carries a
+/// FPort 0 MAC-command payload). Downlinks without application data and
+/// without the ACK bit are not counted. The final RxAppCntAns reports the
+/// number of counted downlinks, including the RxAppCntReq itself.
+async fn eu868_rxappcnt_test() {
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+
+    /// Build a downlink of a given shape: `fport > 0` carries `data` on
+    /// that port; `fport == 0` is a FPort-0 frame with an empty
+    /// MAC-command payload; `fport == 0xFF` has neither a FPort nor a
+    /// FRMPayload.
+    fn build_downlink(buf: &mut [u8], fport: u8, ack: bool, fcnt: u16, data: &[u8]) -> usize {
+        let frame = DataFrame {
+            frame_type: DataFrameType::UnconfirmedDown,
+            dev_addr: get_dev_addr(),
+            ack,
+            fcnt: fcnt.into(),
+            payload: match fport {
+                0xFF => Payload::None,
+                0 => Payload::MacCommands(&[]),
+                p => Payload::Data { f_port: NonZeroU8::new(p).unwrap(), data },
+            },
+            ..Default::default()
+        };
+        frame.build_into(buf, &get_crypto(), Some(&get_crypto())).unwrap().len()
+    }
+
+    // Downlink 1: FPort 3 without the ACK bit: application data, counted.
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        (device, response)
+    });
+    timer.fire_most_recent().await; // RX1 start
+    fn dl_fport3_noack(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_downlink(buf, 3, false, 1, &[1, 2, 3])
+    }
+    radio.handle_rxtx(dl_fport3_noack).await;
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(1)) => {}
+        _ => panic!("expected DownlinkReceived, got {response:?}"),
+    }
+
+    // Downlink 2: FPort 3 with the ACK bit: application data, counted.
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        (device, response)
+    });
+    timer.fire_most_recent().await; // RX1 start
+    fn dl_fport3_ack(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_downlink(buf, 3, true, 2, &[1, 2, 3])
+    }
+    radio.handle_rxtx(dl_fport3_ack).await;
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(2)) => {}
+        _ => panic!("expected DownlinkReceived, got {response:?}"),
+    }
+
+    // Downlink 3: FPort 0, empty MAC-command payload, no ACK bit:
+    // not counted.
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        (device, response)
+    });
+    timer.fire_most_recent().await; // RX1 start
+    fn dl_fport0_noack(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_downlink(buf, 0, false, 3, &[])
+    }
+    radio.handle_rxtx(dl_fport0_noack).await;
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(3)) => {}
+        _ => panic!("expected DownlinkReceived, got {response:?}"),
+    }
+
+    // Downlink 4: FPort 0, empty MAC-command payload, ACK bit:
+    // counted as an applicative downlink.
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        (device, response)
+    });
+    timer.fire_most_recent().await; // RX1 start
+    fn dl_fport0_ack(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_downlink(buf, 0, true, 4, &[])
+    }
+    radio.handle_rxtx(dl_fport0_ack).await;
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(4)) => {}
+        _ => panic!("expected DownlinkReceived, got {response:?}"),
+    }
+
+    // Downlink 5: no FPort and no FRMPayload, no ACK bit: not counted.
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        (device, response)
+    });
+    timer.fire_most_recent().await; // RX1 start
+    fn dl_bare_noack(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_downlink(buf, 0xFF, false, 5, &[])
+    }
+    radio.handle_rxtx(dl_bare_noack).await;
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(5)) => {}
+        _ => panic!("expected DownlinkReceived, got {response:?}"),
+    }
+
+    // Downlink 6: no FPort and no FRMPayload, ACK bit: counted as an
+    // applicative downlink.
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        (device, response)
+    });
+    timer.fire_most_recent().await; // RX1 start
+    fn dl_bare_ack(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_downlink(buf, 0xFF, true, 6, &[])
+    }
+    radio.handle_rxtx(dl_bare_ack).await;
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(6)) => {}
+        _ => panic!("expected DownlinkReceived, got {response:?}"),
+    }
+
+    // Downlink 7: CP-CMD RxAppCntReq (FPort 224): counted. The answer
+    // reports the number of counted downlinks so far, i.e. 5 (downlinks 1,
+    // 2, 4, 6 and 7).
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        (device, response)
+    });
+    timer.fire_most_recent().await; // RX1 start
+    fn dl_rxappcntreq(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_downlink(buf, 224, false, 7, &[0x09])
+    }
+    radio.handle_rxtx(dl_rxappcntreq).await;
+    let (device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::RxComplete) => {}
+        _ => panic!("expected RxComplete, got {response:?}"),
+    }
+
+    let mut uplink = radio.get_last_uplink().await;
+    let dl = decrypt_uplink(&mut uplink);
+    assert_eq!(dl.f_port(), Some(224));
+    assert_eq!(dl.frm_payload(), FrmPayload::Data(&[0x09, 0x05, 0x00]));
+
+    // Final state: 5 applicative downlinks were counted.
+    let session = device.mac.get_session().unwrap();
+    assert_eq!(session.rx_app_cnt, 5);
 }
