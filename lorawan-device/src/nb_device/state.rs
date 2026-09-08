@@ -364,6 +364,18 @@ impl WaitingForRx {
                             }
                             let response =
                                 mac.handle_rx::<N, D>(buf, dl, quality.snr(), &self.rf_config);
+                            #[cfg(feature = "certification")]
+                            if let mac::Response::UplinkPrepared = response {
+                                // Transmit the certification answer in place,
+                                // like a regular uplink.
+                                return self.answer_certification_uplink(
+                                    buf,
+                                    mac,
+                                    radio,
+                                    rng,
+                                    retransmit_buf,
+                                );
+                            }
                             self.complete_or_retransmit(response, mac, radio, rng, retransmit_buf)
                         }
                         _ => (State::WaitingForRx(self), Ok(Response::NoUpdate)),
@@ -441,6 +453,39 @@ impl WaitingForRx {
             // Any other type of update indicates we are done receiving.
             // Change to Idle
             r => (State::Idle(Idle), Ok(r.into())),
+        }
+    }
+
+    /// Handle a certification request received in an RX window: the answer is a regular
+    /// uplink, so prepare it exactly like a data uplink (arming NbTrans retransmission)
+    /// and transmit it in place; it opens its own RX windows.
+    #[cfg(feature = "certification")]
+    fn answer_certification_uplink<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize>(
+        self,
+        buf: &mut RadioBuffer<N>,
+        mac: &mut Mac,
+        radio: &mut R,
+        rng: &mut RNG,
+        retransmit_buf: &mut RadioBuffer<N>,
+    ) -> (State, Result<Response, super::Error<R>>) {
+        let (tx, rx_windows) = match mac.certification_setup_send::<RNG, N>(rng, buf) {
+            Ok((tx, rx_windows, _)) => (tx, rx_windows),
+            Err(e) => return (State::WaitingForRx(self), Err(e.into())),
+        };
+        // Retain the answer so it can be retransmitted per NbTrans (the radio
+        // buffer is reused for reception).
+        retransmit_buf.clear();
+        retransmit_buf.extend_from_slice(buf.as_ref_for_read()).unwrap();
+        let event = radio::Event::TxRequest(tx, retransmit_buf.as_ref_for_read());
+        match radio.handle_event(event) {
+            Ok(radio::Response::Txing) => (
+                State::SendingData(SendingData { frame: self.frame, rx_windows }),
+                Ok(Response::UplinkSending(mac.get_fcnt_up().unwrap())),
+            ),
+            Ok(radio::Response::TxDone(ms)) => {
+                data_rxwindow1_timeout::<R, N>(self.frame, rx_windows, mac, radio, ms)
+            }
+            _ => (State::WaitingForRx(self), Err(Error::UnexpectedRadioResponse.into())),
         }
     }
 }
