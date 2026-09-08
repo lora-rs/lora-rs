@@ -471,12 +471,16 @@ impl Session {
                         DR::_15 => Some(configuration.tx_power),
                         p => region.check_tx_power(p as u8),
                     };
+                    // Handle NbTrans: a redundancy nibble of 0 means the
+                    // default of 1 transmission; 1..=15 is the number of
+                    // transmissions as-is.
+                    let nb_trans = payload.redundancy().number_of_transmissions().max(1);
 
                     let cm_ack = region.channel_mask_validate(&channel_mask, dr);
                     if cm_ack && let (Some(dr), Some(pw)) = (dr, pw) {
-                        // TODO: handle nbtrans
                         configuration.data_rate = dr;
                         configuration.tx_power = pw;
+                        configuration.nb_trans = nb_trans;
                         region.channel_mask_set(channel_mask.clone());
                     }
                     // Add matching number of LinkADRAns responses
@@ -608,12 +612,17 @@ mod tests {
     use super::next_fcnt_down;
     use super::{Response, SendData, Session};
     use crate::mac::Mac;
-    use crate::radio::RadioBuffer;
+    use crate::radio::{RadioBuffer, RfConfig};
     use crate::region;
-    use crate::{AppSKey, NwkSKey};
+    use crate::{AppSKey, Downlink, NwkSKey};
+    use core::num::NonZeroU8;
+    use lora_modulation::BaseBandModulationParams;
+    use lorawan::creator::{DataFrame, Payload};
     use lorawan::default_crypto::DefaultCrypto;
     use lorawan::maccommandcreator::LinkADRAnsCreator;
-    use lorawan::parser::{DecryptedDataPayload, DevAddr, EncryptedDataPayload, FrmPayload};
+    use lorawan::parser::{
+        DataFrameType, DecryptedDataPayload, DevAddr, EncryptedDataPayload, FrmPayload,
+    };
     use lorawan::types::DR;
     use rand_core::RngCore;
 
@@ -634,6 +643,65 @@ mod tests {
 
     fn session() -> Session {
         Session::new(NwkSKey::from([2; 16]), AppSKey::from([1; 16]), DevAddr::from_value(1))
+    }
+
+    /// Feed an encrypted downlink with the given FOpts (and a data payload on
+    /// port 1) into a Mac with the standard test session, returning the
+    /// Mac's response.
+    fn handle_downlink_with_fopts(mac: &mut Mac, f_opts: &[u8]) -> Response {
+        let mut rx: RadioBuffer<256> = RadioBuffer::new();
+        let mut buf = [0u8; 256];
+        let nwk_crypto = DefaultCrypto::new(NwkSKey::from([2; 16]).inner());
+        let app_crypto = DefaultCrypto::new(AppSKey::from([1; 16]).inner());
+        let frame = DataFrame {
+            frame_type: DataFrameType::UnconfirmedDown,
+            dev_addr: DevAddr::from_value(1),
+            fcnt: 0,
+            f_opts,
+            payload: Payload::Data { f_port: NonZeroU8::new(1).unwrap(), data: &[3, 2, 1] },
+            ..Default::default()
+        };
+        let packet = frame.build_into(&mut buf, &nwk_crypto, Some(&app_crypto)).unwrap();
+        rx.extend_from_slice(packet).unwrap();
+
+        let dr = mac.region.get_datarate(5).unwrap();
+        let rf_config = RfConfig {
+            frequency: 868_100_000,
+            bb: BaseBandModulationParams::new(
+                dr.spreading_factor,
+                dr.bandwidth,
+                mac.region.get_coding_rate(),
+            ),
+            max_payload_len: 255,
+        };
+        let mut dl: heapless::Vec<Downlink, 1> = heapless::Vec::new();
+        mac.handle_rx::<256, 1>(&mut rx, &mut dl, 10, &rf_config)
+    }
+
+    #[test]
+    fn link_adr_req_sets_nb_trans() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+        // LinkADRReq: DR 5, TxPower 0, CMControl 5 (per-bank) with bank 0
+        // enabled, NbTrans 2 (=> 2 transmissions)
+        let f_opts = [0x03, 0x50, 0x01, 0x00, 0x52];
+
+        let response = handle_downlink_with_fopts(&mut mac, &f_opts);
+        assert!(matches!(response, Response::DownlinkReceived(0)));
+        assert_eq!(mac.configuration.nb_trans, 2);
+    }
+
+    #[test]
+    fn link_adr_req_zero_nb_trans_restores_default() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+        mac.configuration.nb_trans = 3;
+        // Same command as above but with NbTrans 0: use the default of 1
+        let f_opts = [0x03, 0x50, 0x01, 0x00, 0x50];
+
+        let response = handle_downlink_with_fopts(&mut mac, &f_opts);
+        assert!(matches!(response, Response::DownlinkReceived(0)));
+        assert_eq!(mac.configuration.nb_trans, 1);
     }
 
     #[test]
