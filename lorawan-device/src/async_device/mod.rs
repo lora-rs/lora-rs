@@ -636,7 +636,7 @@ where
             }
             #[cfg(feature = "certification")]
             mac::Response::UplinkPrepared => {
-                let (tx_config, _fcnt_up) =
+                let (tx_config, _rx_windows, _fcnt_up) =
                     mac.certification_setup_send::<G, N>(rng, radio_buffer)?;
                 radio.tx(tx_config, radio_buffer.as_ref_for_read()).await.map_err(Error::Radio)?;
                 Ok(Some(mac.rx2_complete()))

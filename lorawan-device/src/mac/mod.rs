@@ -99,6 +99,11 @@ pub(crate) struct Mac {
     state: State,
     #[cfg(feature = "certification")]
     certification: certification::Certification,
+    /// Actual TX duration and RX windows of the prepared certification answer
+    /// uplink, stashed by the device after transmitting it, for the send loop
+    /// which runs its RX windows and any NbTrans retransmissions.
+    #[cfg(feature = "certification")]
+    pending_cert_rx: Option<(u32, RxWindows)>,
     #[cfg(feature = "multicast")]
     pub multicast: multicast::Multicast,
 }
@@ -152,6 +157,8 @@ impl Mac {
             },
             #[cfg(feature = "certification")]
             certification: certification::Certification::new(),
+            #[cfg(feature = "certification")]
+            pending_cert_rx: None,
             #[cfg(feature = "multicast")]
             multicast: multicast::Multicast::new(),
         }
@@ -196,8 +203,9 @@ impl Mac {
             State::Joined(session) => {
                 let fcnt =
                     session.prepare_buffer::<N>(send_data, buf, &self.configuration, &self.region);
-                // Data uplinks participate in NbTrans retransmission; the other
-                // senders (multicast setup, certification) do not.
+                // Uplinks prepared here (data uplinks and certification answers)
+                // participate in NbTrans retransmission; multicast setup uplinks
+                // do not.
                 session.retransmissions = 1;
                 Ok(fcnt)
             }
@@ -267,21 +275,35 @@ impl Mac {
         )
     }
 
+    /// Prepare the pending certification uplink for transmission. A certification answer is a
+    /// regular Class A uplink, so it is prepared exactly like a data uplink: NbTrans
+    /// retransmission is armed and the RX windows are derived from the selected channel.
+    /// Returns the TX configuration, the RX windows and the frame counter of the answer.
     #[cfg(feature = "certification")]
     pub(crate) fn certification_setup_send<RNG: RngCore, const N: usize>(
         &mut self,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
-    ) -> Result<(radio::TxConfig, FcntUp)> {
-        self.certification
-            .setup_send::<N>(&mut self.state, buf, &self.configuration, &self.region)
-            .map(|fcnt_up| {
-                // No RX windows follow this uplink; the caller completes with rx2_complete().
-                let (mut tx_config, _) =
-                    self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
-                tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
-                (tx_config, fcnt_up)
-            })
+    ) -> Result<(radio::TxConfig, RxWindows, FcntUp)> {
+        let data = self.certification.take_pending_uplink().unwrap();
+        let send_data =
+            SendData { fport: certification::CERTIFICATION_PORT, data: &data, confirmed: false };
+        self.send::<RNG, N>(rng, buf, &send_data)
+    }
+
+    /// Stash the actual TX duration and RX windows of the transmitted
+    /// certification answer; see [`take_pending_cert_rx`](Self::take_pending_cert_rx).
+    #[cfg(feature = "certification")]
+    pub(crate) fn set_pending_cert_rx(&mut self, tx_duration_ms: u32, rx_windows: RxWindows) {
+        self.pending_cert_rx = Some((tx_duration_ms, rx_windows));
+    }
+
+    /// Take the TX duration and RX windows stashed by
+    /// [`set_pending_cert_rx`](Self::set_pending_cert_rx). Only valid immediately
+    /// after an `UplinkPrepared` response.
+    #[cfg(feature = "certification")]
+    pub(crate) fn take_pending_cert_rx(&mut self) -> (u32, RxWindows) {
+        self.pending_cert_rx.take().unwrap()
     }
 
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
