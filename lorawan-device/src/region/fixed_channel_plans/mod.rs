@@ -174,7 +174,7 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
     }
 
     fn get_datarate(&self, dr: u8) -> Option<&Datarate> {
-        F::datarates()[dr as usize].as_ref()
+        F::datarates().get(dr as usize).and_then(|dr| dr.as_ref())
     }
 
     fn select_tx_channel<RNG: RngCore>(
