@@ -299,15 +299,18 @@ impl Session {
 
         if retransmit {
             self.retransmissions += 1;
-        } else {
-            self.retransmissions = 0;
-            if self.fcnt_up == 0xFFFF_FFFF {
-                // if the FCnt is used up, the session has expired
-                return Response::SessionExpired;
-            }
-            self.fcnt_up += 1;
+            return Response::Retransmit;
         }
 
+        self.retransmissions = 0;
+        if self.fcnt_up == 0xFFFF_FFFF {
+            // if the FCnt is used up, the session has expired
+            return Response::SessionExpired;
+        }
+        self.fcnt_up += 1;
+
+        // ADRACKCnt counts uplink frames, not transmissions: it advances
+        // once per new FCntUp.
         if configuration.adr_enabled {
             self.adr_ack_cnt = self.adr_ack_cnt.saturating_add(1);
             // After ADR_ACK_LIMIT + N*ADR_ACK_DELAY uplinks without a downlink,
@@ -322,9 +325,7 @@ impl Session {
             }
         }
 
-        if retransmit {
-            Response::Retransmit
-        } else if self.confirmed {
+        if self.confirmed {
             Response::NoAck
         } else {
             Response::RxComplete
@@ -881,6 +882,30 @@ mod tests {
         let response = session.rx2_complete(&mut mac.configuration, &mac.region);
         assert!(matches!(response, Response::RxComplete));
         assert_eq!(session.fcnt_up, 1);
+    }
+
+    #[test]
+    fn retransmissions_do_not_increment_adr_ack_cnt() {
+        let mut mac = eu868_mac();
+        mac.configuration.nb_trans = 3;
+        let mut session = session();
+        session.retransmissions = 1;
+
+        // Two retransmissions of the same FCntUp: ADRACKCnt must stay put.
+        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        assert!(matches!(response, Response::Retransmit));
+        assert_eq!(session.adr_ack_cnt, 0);
+
+        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        assert!(matches!(response, Response::Retransmit));
+        assert_eq!(session.adr_ack_cnt, 0);
+
+        // The third transmission completes the cycle and consumes the
+        // FCntUp: only now does ADRACKCnt advance, and by exactly one.
+        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        assert!(matches!(response, Response::RxComplete));
+        assert_eq!(session.fcnt_up, 1);
+        assert_eq!(session.adr_ack_cnt, 1);
     }
 
     #[test]
