@@ -317,10 +317,15 @@ impl Session {
             // step down the data rate to try to regain connectivity.
             if self.adr_ack_cnt >= (ADR_ACK_LIMIT + ADR_ACK_DELAY) as u32 {
                 let past_limit = self.adr_ack_cnt - ADR_ACK_LIMIT as u32;
-                if past_limit.is_multiple_of(ADR_ACK_DELAY as u32)
-                    && let Some(dr) = next_lower_datarate(region, configuration.data_rate)
-                {
-                    configuration.data_rate = dr;
+                if past_limit.is_multiple_of(ADR_ACK_DELAY as u32) {
+                    match next_lower_datarate(region, configuration.data_rate) {
+                        Some(dr) => configuration.data_rate = dr,
+                        // At the default data rate, reset NbTrans to 1 so a
+                        // device in a silent network stops retransmitting
+                        // every frame.
+                        // TODO: Re-enable disabled channels
+                        None => configuration.nb_trans = 1,
+                    }
                 }
             }
         }
@@ -749,6 +754,28 @@ mod tests {
             session.rx2_complete(&mut mac.configuration, &mac.region);
         }
         assert_eq!(mac.configuration.data_rate, DR::_3);
+    }
+
+    #[test]
+    fn adr_backoff_resets_nb_trans_at_lowest_datarate() {
+        let mut mac = eu868_mac();
+        mac.configuration.data_rate = DR::_1;
+        mac.configuration.nb_trans = 5;
+        let mut session = session();
+        session.adr_ack_cnt = (super::ADR_ACK_LIMIT + super::ADR_ACK_DELAY - 1) as u32;
+
+        // First backoff step: the data rate drops to DR0, NbTrans untouched.
+        session.rx2_complete(&mut mac.configuration, &mac.region);
+        assert_eq!(mac.configuration.data_rate, DR::_0);
+        assert_eq!(mac.configuration.nb_trans, 5);
+
+        // Next backoff step: already at the lowest data rate, so NbTrans
+        // is reset to 1 instead.
+        for _ in 0..super::ADR_ACK_DELAY {
+            session.rx2_complete(&mut mac.configuration, &mac.region);
+        }
+        assert_eq!(mac.configuration.data_rate, DR::_0);
+        assert_eq!(mac.configuration.nb_trans, 1);
     }
 
     #[test]
