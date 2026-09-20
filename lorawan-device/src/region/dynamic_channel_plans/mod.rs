@@ -191,6 +191,19 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         // (2..9).all(|i| channel_mask.get_index(i) == 0)
     }
 
+    /// Re-enable the default channels. Channels added with
+    /// NewChannelReq are kept as they are, as required by the ADR
+    /// backoff procedure.
+    fn enable_default_channels(&mut self) {
+        let mut default = [None; NUM_CHANNELS_DYNAMIC as usize];
+        R::init_channels(&mut default);
+        for (i, channel) in default.iter().enumerate() {
+            if channel.is_some() {
+                self.channel_mask.set_channel(i, true);
+            }
+        }
+    }
+
     fn get_datarate(&self, dr: u8) -> Option<&Datarate> {
         R::datarates()[dr as usize].as_ref()
     }
@@ -397,5 +410,26 @@ mod tests {
         let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));
         let mut config = Configuration::new(Region::EU868);
         assert_eq!(config.handle_new_channel(VALID_INDEX, VALID_FREQ, dr), (true, true));
+    }
+
+    // The region's default channels come back; a channel added with
+    // NewChannelReq is not a default and stays off.
+    #[test]
+    fn enable_default_channels_reenables_defaults() {
+        let mut config = Configuration::new(Region::EU868);
+        let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));
+        assert_eq!(config.handle_new_channel(VALID_INDEX, VALID_FREQ, dr), (true, true));
+        let mut mask = config.channel_mask_get();
+        mask.set_channel(0, false);
+        mask.set_channel(1, false);
+        mask.set_channel(VALID_INDEX as usize, false);
+        config.channel_mask_set(mask);
+
+        config.enable_default_channels();
+
+        let mask = config.channel_mask_get();
+        assert!(mask.is_enabled(0).unwrap());
+        assert!(mask.is_enabled(1).unwrap());
+        assert!(!mask.is_enabled(VALID_INDEX as usize).unwrap());
     }
 }

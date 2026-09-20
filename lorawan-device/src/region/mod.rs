@@ -446,6 +446,10 @@ impl Configuration {
         region_dispatch!(self, channel_mask_validate, channel_mask, dr)
     }
 
+    pub(crate) fn enable_default_channels(&mut self) {
+        mut_region_dispatch!(self, enable_default_channels)
+    }
+
     pub(crate) fn get_rx_datarate(&self, tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {
         region_dispatch!(self, get_rx_datarate, tx_dr, rx1_dr_offset, window)
     }
@@ -537,6 +541,10 @@ pub(crate) trait RegionHandler {
     ) -> Option<()>;
 
     fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, dr: Option<DR>) -> bool;
+
+    /// Enable the region's default channels.
+    /// Used by the last ADR backoff step.
+    fn enable_default_channels(&mut self);
 
     fn channel_dl_update(&mut self, index: u8, freq: u32) -> (bool, bool);
 
@@ -739,6 +747,23 @@ mod tests {
             .unwrap();
         for ch in 0..72 {
             assert_eq!(with_rfu.is_enabled(ch).unwrap(), without_rfu.is_enabled(ch).unwrap());
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "region-us915")]
+    fn test_enable_default_channels_us915() {
+        let mut r = Configuration::new(Region::US915);
+        let mut mask = ChannelMask::<9>::default();
+        mask.set_bank(0, 0x00);
+        mask.set_channel(70, false);
+        r.channel_mask_set(mask);
+
+        r.enable_default_channels();
+
+        let mask = r.channel_mask_get();
+        for ch in 0..72 {
+            assert!(mask.is_enabled(ch).unwrap(), "channel {ch}");
         }
     }
 

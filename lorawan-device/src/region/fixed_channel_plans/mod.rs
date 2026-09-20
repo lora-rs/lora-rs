@@ -167,6 +167,12 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         false
     }
 
+    /// Enable the default channels. NewChannelReq is not supported,
+    /// so there is no need to handle it.
+    fn enable_default_channels(&mut self) {
+        self.channel_mask = ChannelMask::default();
+    }
+
     fn get_datarate(&self, dr: u8) -> Option<&Datarate> {
         F::datarates()[dr as usize].as_ref()
     }
