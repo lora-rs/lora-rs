@@ -372,8 +372,8 @@ where
     /// up to NbTrans times (1..=15). Each retransmission is a full transmission with its
     /// own channel selection and RX1/RX2 windows, and a downlink in either window
     /// stops the retransmission. This also applies to uplinks the stack itself
-    /// transmits (such as certification answer frames on FPort 224), which open
-    /// their own RX windows after transmission.
+    /// transmits (such as certification answer frames on FPort 224), which are
+    /// followed by RX windows like any other uplink.
     ///
     /// In Class C mode, it is possible to get one or more downlinks and `Reponse::DownlinkReceived`
     /// maybe not even be indicated. It is recommended to call `take_downlink` after `send` until
@@ -585,15 +585,10 @@ where
         );
 
         debug!("Starting RX1 in {} ms.", rx1_start_delay);
-        // sleep or RXC
-        #[cfg(feature = "certification")]
-        if let Some(mac::Response::UplinkPrepared) = self.between_windows(rx1_start_delay).await? {
-            // Class C: a certification request was answered during the
-            // inter-window gap, where the send loop cannot run the answer's
-            // RX windows; complete it here instead.
-            let _ = self.mac.rx2_complete();
-        }
-        #[cfg(not(feature = "certification"))]
+        // sleep or RXC. A certification answer sent in the gap (Class C)
+        // stays the in-flight uplink: its cycle completes through the
+        // send loop, and the remaining RX windows of this send serve as
+        // its best-effort RX1/RX2.
         let _ = self.between_windows(rx1_start_delay).await?;
 
         // RX1
@@ -671,8 +666,11 @@ where
                     .tx(tx_config, retransmit_buffer.as_ref_for_read())
                     .await
                     .map_err(Error::Radio)?;
-                // The answer opens its own RX windows; the send loop runs
-                // them (and any NbTrans retransmissions) after this response.
+                // Stash the answer's RX windows for the send loop's
+                // UplinkPrepared arm.
+                //
+                // A gap answer's stash goes unused: this send's remaining
+                // windows serve as its best-effort RX1/RX2.
                 mac.set_pending_cert_rx(tx_duration_ms, rx_windows);
                 Ok(Some(mac::Response::UplinkPrepared))
             }
