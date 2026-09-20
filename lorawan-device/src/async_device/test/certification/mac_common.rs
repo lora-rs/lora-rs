@@ -307,9 +307,13 @@ async fn eu868_linkcheckreq_test() {
 /// FPort 0 MAC-command payload). Downlinks without application data and
 /// without the ACK bit are not counted. The final RxAppCntAns reports the
 /// number of counted downlinks, including the RxAppCntReq itself.
+///
+/// Runs in class C; the RxAppCntReq is delivered in the TX->RX1 gap,
+/// so the answer is transmitted in place as a regular uplink.
 async fn eu868_rxappcnt_test() {
     let (radio, timer, mut device) =
         util::session_with_region(crate::region::EU868::new_eu868().into());
+    device.enable_class_c();
 
     /// Build a downlink of a given shape: `fport > 0` carries `data` on
     /// that port; `fport == 0` is a FPort-0 frame with an empty
@@ -431,22 +435,20 @@ async fn eu868_rxappcnt_test() {
     }
 
     // Downlink 7: CP-CMD RxAppCntReq (FPort 224): counted. The answer
-    // reports the number of counted downlinks so far, i.e. 5 (downlinks 1,
-    // 2, 4, 6 and 7).
+    // reports the number of counted downlinks so far, i.e. 5 (downlinks
+    // 1, 2, 4, 6 and 7).
     let task = tokio::spawn(async move {
         let response = device.send(&[1, 2, 3], 3, false).await;
         (device, response)
     });
-    timer.fire_most_recent().await; // RX1 start
     fn dl_rxappcntreq(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
         build_downlink(buf, 224, false, 7, &[0x09])
     }
     radio.handle_rxtx(dl_rxappcntreq).await;
-    // The answer is a regular uplink: it opens its own RX windows.
-    timer.fire_when_armed(8).await; // answer RX1 start
-    radio.handle_timeout().await; // answer RX1 end
-    timer.fire_most_recent().await; // answer RX2 start
-    radio.handle_timeout().await; // answer RX2 end
+    timer.fire_most_recent().await; // RX1 start
+    radio.handle_timeout().await; // RX1 end
+    timer.fire_most_recent().await; // RX2 start
+    radio.handle_timeout().await; // RX2 end
     let (device, response) = task.await.unwrap();
     match response {
         Ok(SendResponse::RxComplete) => {}
@@ -458,7 +460,9 @@ async fn eu868_rxappcnt_test() {
     assert_eq!(dl.f_port(), Some(224));
     assert_eq!(dl.frm_payload(), FrmPayload::Data(&[0x09, 0x05, 0x00]));
 
-    // Final state: 5 applicative downlinks were counted.
+    // Final state: 5 applicative downlinks counted, and the answer
+    // consumed exactly one FCntUp.
     let session = device.mac.get_session().unwrap();
     assert_eq!(session.rx_app_cnt, 5);
+    assert_eq!(session.fcnt_up, 8);
 }
