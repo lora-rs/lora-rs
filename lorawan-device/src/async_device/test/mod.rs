@@ -200,6 +200,27 @@ async fn test_unconfirmed_uplink_no_downlink() {
     assert!(*send_await_complete.lock().await);
 }
 
+/// What the stack does when the radio reports a receive error during RX1:
+/// with lora-phy PR 487 that is a downlink whose header CRC failed. Every
+/// PhyError from rx_single ends the send, so RX2 never opens.
+#[tokio::test]
+async fn test_unconfirmed_uplink_phy_error_in_rx1_ends_the_send() {
+    let (radio, timer, mut async_device) = setup_with_session();
+
+    let async_device = tokio::spawn(async move { async_device.send(&[1, 2, 3], 3, false).await });
+    // Trigger beginning of RX1
+    timer.fire_most_recent().await;
+    // The radio reports a bad frame in RX1
+    radio.handle_phy_error("HeaderError").await;
+
+    // No RX2 timer is armed and send() has already returned an error
+    let result = async_device.await.unwrap();
+    assert!(
+        matches!(result, Err(Error::Radio("HeaderError"))),
+        "send() after a bad frame in RX1: {result:?}"
+    );
+}
+
 #[tokio::test]
 async fn test_unconfirmed_uplink_retransmission() {
     let (radio, timer, mut async_device) = setup_with_session();
