@@ -34,6 +34,9 @@ impl TestRadio {
 enum Msg {
     RxTx(RxTxHandler),
     Timeout,
+    /// The radio reports a receive error, the way lora-phy's adapter does
+    /// for a frame whose header or payload CRC failed.
+    PhyError(&'static str),
 }
 
 pub struct TestRadio {
@@ -85,6 +88,7 @@ impl PhyRxTx for TestRadio {
                 }
             }
             Msg::Timeout => Err("Unexpected Timeout"),
+            Msg::PhyError(e) => Err(e),
         }
     }
     async fn rx_single(&mut self, rx_buf: &mut [u8]) -> Result<RxStatus, Self::PhyError> {
@@ -102,6 +106,7 @@ impl PhyRxTx for TestRadio {
                 }
             }
             Msg::Timeout => Ok(RxStatus::RxTimeout),
+            Msg::PhyError(e) => Err(e),
         }
     }
 }
@@ -128,6 +133,10 @@ impl RadioChannel {
     pub async fn handle_timeout(&self) {
         tokio::time::sleep(time::Duration::from_millis(5)).await;
         self.tx.send(Msg::Timeout).await.unwrap();
+    }
+    pub async fn handle_phy_error(&self, e: &'static str) {
+        tokio::time::sleep(time::Duration::from_millis(5)).await;
+        self.tx.send(Msg::PhyError(e)).await.unwrap();
     }
 
     pub async fn get_rxconfig(&self) -> Option<RxConfig> {
