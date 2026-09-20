@@ -392,7 +392,9 @@ impl Mac {
 
     pub(crate) fn rx2_complete(&mut self) -> Response {
         match &mut self.state {
-            State::Joined(session) => session.rx2_complete(&mut self.configuration, &self.region),
+            State::Joined(session) => {
+                session.rx2_complete(&mut self.configuration, &mut self.region)
+            }
             State::Otaa(otaa) => otaa.rx2_complete(),
             State::Unjoined => Response::NoUpdate,
         }

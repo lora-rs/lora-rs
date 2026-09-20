@@ -287,7 +287,7 @@ impl Session {
     pub(crate) fn rx2_complete(
         &mut self,
         configuration: &mut super::Configuration,
-        region: &region::Configuration,
+        region: &mut region::Configuration,
     ) -> Response {
         // With NbTrans > 1, a missed downlink does not consume the FCntUp: the
         // same frame is retransmitted (same FCntUp) until NbTrans is reached
@@ -320,11 +320,14 @@ impl Session {
                 if past_limit.is_multiple_of(ADR_ACK_DELAY as u32) {
                     match next_lower_datarate(region, configuration.data_rate) {
                         Some(dr) => configuration.data_rate = dr,
-                        // At the default data rate, reset NbTrans to 1 so a
-                        // device in a silent network stops retransmitting
-                        // every frame.
-                        // TODO: Re-enable disabled channels
-                        None => configuration.nb_trans = 1,
+                        // At the default data rate, the backoff step re-enables
+                        // the region's default channels and resets NbTrans to 1
+                        // so a device left in a silent network stops
+                        // retransmitting every frame.
+                        None => {
+                            region.enable_default_channels();
+                            configuration.nb_trans = 1;
+                        }
                     }
                 }
             }
@@ -747,11 +750,11 @@ mod tests {
         let mut session = session();
         session.adr_ack_cnt = (super::ADR_ACK_LIMIT + super::ADR_ACK_DELAY - 1) as u32;
 
-        session.rx2_complete(&mut mac.configuration, &mac.region);
+        session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert_eq!(mac.configuration.data_rate, DR::_4);
 
         for _ in 0..super::ADR_ACK_DELAY {
-            session.rx2_complete(&mut mac.configuration, &mac.region);
+            session.rx2_complete(&mut mac.configuration, &mut mac.region);
         }
         assert_eq!(mac.configuration.data_rate, DR::_3);
     }
@@ -765,17 +768,35 @@ mod tests {
         session.adr_ack_cnt = (super::ADR_ACK_LIMIT + super::ADR_ACK_DELAY - 1) as u32;
 
         // First backoff step: the data rate drops to DR0, NbTrans untouched.
-        session.rx2_complete(&mut mac.configuration, &mac.region);
+        session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert_eq!(mac.configuration.data_rate, DR::_0);
         assert_eq!(mac.configuration.nb_trans, 5);
 
         // Next backoff step: already at the lowest data rate, so NbTrans
-        // is reset to 1 instead.
+        // is reset to 1.
         for _ in 0..super::ADR_ACK_DELAY {
-            session.rx2_complete(&mut mac.configuration, &mac.region);
+            session.rx2_complete(&mut mac.configuration, &mut mac.region);
         }
         assert_eq!(mac.configuration.data_rate, DR::_0);
         assert_eq!(mac.configuration.nb_trans, 1);
+    }
+
+    #[test]
+    fn adr_backoff_reenables_channels_at_lowest_datarate() {
+        let mut mac = eu868_mac();
+        mac.configuration.data_rate = DR::_0;
+        let mut session = session();
+        // Disable a default channel, as a LinkADRReq ChMask would.
+        let mut mask = mac.region.channel_mask_get();
+        mask.set_channel(1, false);
+        mac.region.channel_mask_set(mask);
+        session.adr_ack_cnt = (super::ADR_ACK_LIMIT + super::ADR_ACK_DELAY - 1) as u32;
+
+        // Backoff step at the lowest data rate re-enables the channel.
+        session.rx2_complete(&mut mac.configuration, &mut mac.region);
+
+        let mask = mac.region.channel_mask_get();
+        assert!(mask.is_enabled(1).unwrap());
     }
 
     #[test]
@@ -863,7 +884,7 @@ mod tests {
         let mut session = session();
         session.retransmissions = 1;
 
-        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::RxComplete));
         assert_eq!(session.fcnt_up, 1);
         assert_eq!(session.retransmissions, 0);
@@ -876,17 +897,17 @@ mod tests {
         let mut session = session();
         session.retransmissions = 1;
 
-        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::Retransmit));
         assert_eq!(session.fcnt_up, 0);
         assert_eq!(session.retransmissions, 2);
 
-        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::Retransmit));
         assert_eq!(session.retransmissions, 3);
 
         // Third transmission done: the FCntUp is consumed.
-        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::RxComplete));
         assert_eq!(session.fcnt_up, 1);
         assert_eq!(session.retransmissions, 0);
@@ -900,13 +921,13 @@ mod tests {
         session.retransmissions = 1;
 
         for expected in 2..=15 {
-            let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+            let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
             assert!(matches!(response, Response::Retransmit));
             assert_eq!(session.retransmissions, expected);
             assert_eq!(session.fcnt_up, 0);
         }
         // 15th transmission done: the FCntUp is consumed
-        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::RxComplete));
         assert_eq!(session.fcnt_up, 1);
     }
@@ -919,17 +940,17 @@ mod tests {
         session.retransmissions = 1;
 
         // Two retransmissions of the same FCntUp: ADRACKCnt must stay put.
-        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::Retransmit));
         assert_eq!(session.adr_ack_cnt, 0);
 
-        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::Retransmit));
         assert_eq!(session.adr_ack_cnt, 0);
 
         // The third transmission completes the cycle and consumes the
         // FCntUp: only now does ADRACKCnt advance, and by exactly one.
-        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::RxComplete));
         assert_eq!(session.fcnt_up, 1);
         assert_eq!(session.adr_ack_cnt, 1);
@@ -943,7 +964,7 @@ mod tests {
         session.fcnt_up = 0xFFFF_FFFF;
         session.retransmissions = 1;
 
-        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::SessionExpired));
     }
 
@@ -955,7 +976,7 @@ mod tests {
         mac.configuration.nb_trans = 4;
         let mut session = session();
 
-        let response = session.rx2_complete(&mut mac.configuration, &mac.region);
+        let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::RxComplete));
         assert_eq!(session.fcnt_up, 1);
     }
