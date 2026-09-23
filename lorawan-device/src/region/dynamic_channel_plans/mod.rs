@@ -205,7 +205,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
     }
 
     fn get_datarate(&self, dr: u8) -> Option<&Datarate> {
-        R::datarates()[dr as usize].as_ref()
+        R::datarates().get(dr as usize).and_then(|dr| dr.as_ref())
     }
 
     fn select_tx_channel<RNG: RngCore>(
