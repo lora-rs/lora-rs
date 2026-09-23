@@ -1,18 +1,19 @@
+# Examples for the Semtech LR1110 development kit: an LR1110MB1DxS shield
+# (LR1110DVK1TxKS kits) seated on a NUCLEO-L476RG's Arduino headers.
 [package]
 edition = "2024"
-name = "lora-stm32wba-lr1110-examples"
+name = "lora-stm32l4-lr1110-examples"
 version = "0.1.0"
 license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-# STM32WBA65RI with LR1110 external radio
 embassy-stm32 = { version = "0.6.0", features = [
     "defmt",
-    "stm32wba65ri",
+    "stm32l476rg",
     "time-driver-any",
-    "memory-x",
     "exti",
+    "memory-x",
 ] }
 embassy-executor = { version = "0.10.0", features = [
     "platform-cortex-m",
@@ -22,10 +23,7 @@ embassy-executor = { version = "0.10.0", features = [
 embassy-time = { version = "0.5.0", features = [
     "defmt",
     "defmt-timestamp-uptime",
-    "tick-hz-32_768",
 ] }
-embassy-sync = { version = "0.8.0", features = ["defmt"] }
-embassy-futures = { version = "0.1.2" }
 
 lora-phy = { path = "../../lora-phy", features = ["lorawan-radio", "defmt-03"] }
 lorawan-device = { path = "../../lorawan-device", features = [
@@ -33,20 +31,16 @@ lorawan-device = { path = "../../lorawan-device", features = [
     "defmt-03",
 ] }
 
-defmt = "1.0.1"
-defmt-rtt = "1.0.0"
-panic-probe = { version = "1.0.0", features = ["print-defmt"] }
+defmt = "1"
+defmt-rtt = "1"
+panic-probe = { version = "1", features = ["print-defmt"] }
 
 cortex-m = { version = "0.7.6", features = [
     "inline-asm",
     "critical-section-single-core",
 ] }
 cortex-m-rt = "0.7.0"
-embedded-hal = { version = "1.0.0" }
-embedded-hal-async = { version = "1.0.0" }
-embedded-hal-bus = { version = "0.3.0", features = ["async"] }
-heapless = { version = "0.8", default-features = false }
-static_cell = "2"
+embedded-hal-bus = { version = "0.3", features = ["async"] }
 
 [profile.release]
 debug = 2
