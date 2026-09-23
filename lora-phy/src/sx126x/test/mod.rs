@@ -848,3 +848,120 @@ fn opcodes_match_swl2001() {
         );
     }
 }
+
+// Drive the LoRaWAN adapter over the emulated chip: this is the path
+// lorawan-device takes for RX1/RX2 and Class C, not the raw rx() the PR
+// tests above cover.
+#[cfg(feature = "lorawan-radio")]
+mod lorawan_adapter {
+    use super::*;
+    use crate::lorawan_radio::{Error, LorawanRadio};
+    use lora_modulation::BaseBandModulationParams;
+    use lorawan_device::async_device::radio::{PhyRxTx, RfConfig, RxConfig, RxMode as LorawanRxMode, RxStatus};
+    use std::string::String;
+
+    const TEST_FREQ_HZ: u32 = 868_100_000;
+
+    fn rx_config(mode: LorawanRxMode) -> RxConfig {
+        RxConfig {
+            rf: RfConfig {
+                frequency: TEST_FREQ_HZ,
+                bb: BaseBandModulationParams::new(SpreadingFactor::_7, Bandwidth::_125KHz, CodingRate::_4_5),
+                max_payload_len: 222,
+            },
+            mode,
+        }
+    }
+
+    fn describe(got: &Result<RxStatus, Error>) -> String {
+        match got {
+            Ok(RxStatus::RxTimeout) => "Ok(RxTimeout)".into(),
+            Ok(RxStatus::Rx(n, _)) => format!("Ok(Rx({n} bytes))"),
+            Err(Error::Radio(e)) => format!("Err(Radio({e:?}))"),
+            Err(Error::NoRxParams) => "Err(NoRxParams)".into(),
+        }
+    }
+
+    async fn adapter(chip: &Chip) -> LorawanRadio<Sx126x<FakeSpi, FakeIv, Sx1261>, Delayer, 14, 0> {
+        LoRa::new(get_emulated_sx1261(chip), true, Delayer)
+            .await
+            .unwrap()
+            .into()
+    }
+
+    /// RX1/RX2 window: a header CRC failure is what a marginal downlink or a
+    /// false sync looks like to the chip. The window is over either way, so
+    /// the stack must see a timeout and go on to RX2, exactly as it does for
+    /// ReceiveTimeout.
+    #[tokio::test]
+    async fn rx_window_header_error_is_a_window_timeout() {
+        let chip = Chip::new();
+        let mut radio = adapter(&chip).await;
+        radio
+            .setup_rx(rx_config(LorawanRxMode::Single { ms: 10 }))
+            .await
+            .unwrap();
+
+        chip.inject_rx_with_fate(b"", -110, -12, RxFate::HeaderError);
+
+        let mut buf = [0u8; 255];
+        let got = radio.rx_single(&mut buf).await;
+        assert!(
+            matches!(got, Ok(RxStatus::RxTimeout)),
+            "rx_single after HeaderErr: expected Ok(RxTimeout), got {}",
+            describe(&got)
+        );
+    }
+
+    /// Same window, payload CRC failure (cannot happen on a LoRaWAN downlink,
+    /// which carries no payload CRC, but a P2P caller over the same adapter
+    /// can see it).
+    #[tokio::test]
+    async fn rx_window_crc_error_is_a_window_timeout() {
+        let chip = Chip::new();
+        let mut radio = adapter(&chip).await;
+        radio
+            .setup_rx(rx_config(LorawanRxMode::Single { ms: 10 }))
+            .await
+            .unwrap();
+
+        chip.inject_rx_with_fate(b"garbled", -100, -8, RxFate::CrcError);
+
+        let mut buf = [0u8; 255];
+        let got = radio.rx_single(&mut buf).await;
+        assert!(
+            matches!(got, Ok(RxStatus::RxTimeout)),
+            "rx_single after CrcErr: expected Ok(RxTimeout), got {}",
+            describe(&got)
+        );
+    }
+
+    /// Class C: the chip stays armed after a bad frame in continuous mode
+    /// (the PR's own test shows that), so one rx_continuous call must ride
+    /// through it and hand back the next intact frame.
+    #[tokio::test]
+    async fn class_c_listen_rides_through_a_bad_frame() {
+        let chip = Chip::new();
+        let mut radio = adapter(&chip).await;
+        radio.setup_rx(rx_config(LorawanRxMode::Continuous)).await.unwrap();
+
+        chip.inject_rx_with_fate(b"garbled", -100, -8, RxFate::CrcError);
+        // The clean frame lands once the driver is back waiting on the IRQ
+        // line (await_irq yields to the runtime between polls).
+        let later = chip.clone();
+        tokio::spawn(async move {
+            for _ in 0..20 {
+                tokio::task::yield_now().await;
+            }
+            later.inject_rx(b"clean", -80, 5);
+        });
+
+        let mut buf = [0u8; 255];
+        let got = radio.rx_continuous(&mut buf).await;
+        match got {
+            Ok((len, _)) => assert_eq!(&buf[..len], b"clean"),
+            Err(Error::Radio(e)) => panic!("rx_continuous surfaced the bad frame as an error: {e:?}"),
+            Err(Error::NoRxParams) => panic!("no rx params"),
+        }
+    }
+}

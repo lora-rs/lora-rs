@@ -68,6 +68,10 @@ pub struct ChipModel {
     irq_mask: u16,
     dio1_mask: u16,
     rx_len: u8,
+    /// Set by SetRx with the no-timeout (continuous) argument: the chip
+    /// stays armed after a packet, so an injected packet is delivered at
+    /// once rather than queued for the next SetRx.
+    rx_continuous: bool,
     pub cad_activity: bool,
     pub pending_rx: Option<PendingRx>,
     pub tx_log: Vec<TxRecord>,
@@ -86,6 +90,7 @@ impl ChipModel {
             irq_mask: 0,
             dio1_mask: 0,
             rx_len: 0,
+            rx_continuous: false,
             cad_activity: false,
             pending_rx: None,
             tx_log: vec![],
@@ -94,6 +99,22 @@ impl ChipModel {
 
     fn raise_irq(&mut self, irq: u16) {
         self.irq_status |= irq & self.irq_mask;
+    }
+
+    /// Land a packet on the chip: buffer, shadow registers, IRQ flags.
+    fn deliver(&mut self, rx: PendingRx) {
+        self.buffer[..rx.payload.len()].copy_from_slice(&rx.payload);
+        self.rx_len = rx.payload.len() as u8;
+        self.registers.insert(REG_RSSI_SHADOW, (-2 * rx.rssi_dbm) as u8);
+        self.registers.insert(REG_SNR_SHADOW, (4 * rx.snr_db) as u8);
+        // DS.SX1261-2 13.3.9: a payload CRC failure raises RxDone
+        // together with CrcErr; a header CRC failure raises
+        // HeaderErr and no RxDone.
+        match rx.fate {
+            RxFate::Intact => self.raise_irq(IRQ_RX_DONE),
+            RxFate::CrcError => self.raise_irq(IRQ_RX_DONE | IRQ_CRC_ERROR),
+            RxFate::HeaderError => self.raise_irq(IRQ_HEADER_ERROR),
+        }
     }
 
     fn reg_read(&self, addr: u16) -> u8 {
@@ -175,20 +196,10 @@ impl ChipModel {
             }
             Some(OpCode::SetRx) => {
                 self.mode = Mode::Rx;
+                self.rx_continuous = params[..3] == [0xFF, 0xFF, 0xFF];
                 if let Some(rx) = self.pending_rx.take() {
-                    self.buffer[..rx.payload.len()].copy_from_slice(&rx.payload);
-                    self.rx_len = rx.payload.len() as u8;
-                    self.registers.insert(REG_RSSI_SHADOW, (-2 * rx.rssi_dbm) as u8);
-                    self.registers.insert(REG_SNR_SHADOW, (4 * rx.snr_db) as u8);
-                    // DS.SX1261-2 13.3.9: a payload CRC failure raises RxDone
-                    // together with CrcErr; a header CRC failure raises
-                    // HeaderErr and no RxDone.
-                    match rx.fate {
-                        RxFate::Intact => self.raise_irq(IRQ_RX_DONE),
-                        RxFate::CrcError => self.raise_irq(IRQ_RX_DONE | IRQ_CRC_ERROR),
-                        RxFate::HeaderError => self.raise_irq(IRQ_HEADER_ERROR),
-                    }
-                } else if params[..3] != [0xFF, 0xFF, 0xFF] {
+                    self.deliver(rx);
+                } else if !self.rx_continuous {
                     // Anything but continuous mode times out when no packet
                     // is pending. The wait is collapsed to zero — the model
                     // has no clock, and nothing can arrive once SetRx has
@@ -242,12 +253,18 @@ impl Chip {
 
     /// Queue a packet that arrives with the given fate.
     pub fn inject_rx_with_fate(&self, payload: &[u8], rssi_dbm: i16, snr_db: i16, fate: RxFate) {
-        self.0.lock().unwrap().pending_rx = Some(PendingRx {
+        let rx = PendingRx {
             payload: payload.to_vec(),
             rssi_dbm,
             snr_db,
             fate,
-        });
+        };
+        let mut m = self.0.lock().unwrap();
+        if m.mode == Mode::Rx && m.rx_continuous {
+            m.deliver(rx);
+        } else {
+            m.pending_rx = Some(rx);
+        }
     }
 
     pub fn with_model<R>(&self, f: impl FnOnce(&mut ChipModel) -> R) -> R {

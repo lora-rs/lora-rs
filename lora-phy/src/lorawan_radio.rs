@@ -161,7 +161,12 @@ where
         if let Some(rx_params) = &self.rx_pkt_params {
             match self.lora.rx(rx_params, buf).await {
                 Ok((len, q)) => Ok(RxStatus::Rx(len as usize, RxQuality::new(q.rssi, q.snr as i8))),
-                Err(RadioError::ReceiveTimeout) => Ok(RxStatus::RxTimeout),
+                // A frame that failed its header or payload CRC ends the
+                // window the same way silence does: the chip is back in
+                // standby and the stack moves on to the next window.
+                Err(RadioError::ReceiveTimeout | RadioError::CrcError | RadioError::HeaderError) => {
+                    Ok(RxStatus::RxTimeout)
+                }
                 Err(err) => Err(err.into()),
             }
         } else {
@@ -170,14 +175,19 @@ where
     }
     async fn rx_continuous(&mut self, receiving_buffer: &mut [u8]) -> Result<(usize, RxQuality), Self::PhyError> {
         if let Some(rx_params) = &self.rx_pkt_params {
-            match self.lora.rx(rx_params, receiving_buffer).await {
-                Ok((received_len, rx_pkt_status)) => {
-                    Ok((
-                        received_len as usize,
-                        RxQuality::new(rx_pkt_status.rssi, rx_pkt_status.snr as i8), // downcast snr
-                    ))
+            loop {
+                match self.lora.rx(rx_params, receiving_buffer).await {
+                    Ok((received_len, rx_pkt_status)) => {
+                        return Ok((
+                            received_len as usize,
+                            RxQuality::new(rx_pkt_status.rssi, rx_pkt_status.snr as i8), // downcast snr
+                        ));
+                    }
+                    // Continuous receive keeps the chip armed after a frame
+                    // that failed its CRC; wait for the next one.
+                    Err(RadioError::CrcError | RadioError::HeaderError) => continue,
+                    Err(err) => return Err(err.into()),
                 }
-                Err(err) => Err(err.into()),
             }
         } else {
             Err(Error::NoRxParams)
