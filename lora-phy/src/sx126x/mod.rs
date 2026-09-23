@@ -820,11 +820,16 @@ where
                 }
             }
             RadioMode::Receive(_) => {
+                // A header or payload CRC failure is an outcome of the
+                // receive, not a footnote to it: the caller must not read the
+                // buffer as a packet.
                 if IrqMask::HeaderError.is_set(irq_flags) {
                     debug!("HeaderError in radio mode {}", radio_mode);
+                    return Err(RadioError::HeaderError);
                 }
                 if IrqMask::CRCError.is_set(irq_flags) {
                     debug!("CRCError in radio mode {}", radio_mode);
+                    return Err(RadioError::CrcError);
                 }
                 if IrqMask::RxDone.is_set(irq_flags) {
                     debug!("RxDone in radio mode {}", radio_mode);

@@ -20,6 +20,8 @@ use std::vec::Vec;
 
 const IRQ_TX_DONE: u16 = IrqMask::TxDone as u16;
 const IRQ_RX_DONE: u16 = IrqMask::RxDone as u16;
+const IRQ_CRC_ERROR: u16 = IrqMask::CRCError as u16;
+const IRQ_HEADER_ERROR: u16 = IrqMask::HeaderError as u16;
 const IRQ_CAD_DONE: u16 = IrqMask::CADDone as u16;
 const IRQ_CAD_DETECTED: u16 = IrqMask::CADActivityDetected as u16;
 const IRQ_RX_TX_TIMEOUT: u16 = IrqMask::RxTxTimeout as u16;
@@ -37,6 +39,16 @@ pub struct PendingRx {
     pub payload: Vec<u8>,
     pub rssi_dbm: i16,
     pub snr_db: i16,
+    /// The packet's fate: intact, payload CRC failed, or header CRC failed.
+    pub fate: RxFate,
+}
+
+/// How a receive ends on the chip.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum RxFate {
+    Intact,
+    CrcError,
+    HeaderError,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -168,7 +180,14 @@ impl ChipModel {
                     self.rx_len = rx.payload.len() as u8;
                     self.registers.insert(REG_RSSI_SHADOW, (-2 * rx.rssi_dbm) as u8);
                     self.registers.insert(REG_SNR_SHADOW, (4 * rx.snr_db) as u8);
-                    self.raise_irq(IRQ_RX_DONE);
+                    // DS.SX1261-2 13.3.9: a payload CRC failure raises RxDone
+                    // together with CrcErr; a header CRC failure raises
+                    // HeaderErr and no RxDone.
+                    match rx.fate {
+                        RxFate::Intact => self.raise_irq(IRQ_RX_DONE),
+                        RxFate::CrcError => self.raise_irq(IRQ_RX_DONE | IRQ_CRC_ERROR),
+                        RxFate::HeaderError => self.raise_irq(IRQ_HEADER_ERROR),
+                    }
                 } else if params[..3] != [0xFF, 0xFF, 0xFF] {
                     // Anything but continuous mode times out when no packet
                     // is pending. The wait is collapsed to zero — the model
@@ -218,10 +237,16 @@ impl Chip {
     }
 
     pub fn inject_rx(&self, payload: &[u8], rssi_dbm: i16, snr_db: i16) {
+        self.inject_rx_with_fate(payload, rssi_dbm, snr_db, RxFate::Intact);
+    }
+
+    /// Queue a packet that arrives with the given fate.
+    pub fn inject_rx_with_fate(&self, payload: &[u8], rssi_dbm: i16, snr_db: i16, fate: RxFate) {
         self.0.lock().unwrap().pending_rx = Some(PendingRx {
             payload: payload.to_vec(),
             rssi_dbm,
             snr_db,
+            fate,
         });
     }
 

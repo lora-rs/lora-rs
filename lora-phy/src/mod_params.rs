@@ -28,6 +28,11 @@ pub enum RadioError {
     InvalidOutputPowerForFrequency,
     TransmitTimeout,
     ReceiveTimeout,
+    /// A frame was received and its payload CRC failed: the bytes in the
+    /// buffer are not what was sent.
+    CrcError,
+    /// A frame's header failed its CRC: nothing was received.
+    HeaderError,
     DutyCycleUnsupported,
     TimedSingleRxUnsupported,
     RngUnsupported,

@@ -3,11 +3,11 @@
 //! state machine against an emulated chip.
 mod emulator;
 mod fixtures;
-use emulator::{Chip, FakeIv, FakeSpi, Mode, get_emulated_sx1261};
+use emulator::{Chip, FakeIv, FakeSpi, Mode, RxFate, get_emulated_sx1261};
 use fixtures::{Delayer, TestFixture, get_sx126x, get_sx1262};
 
 use crate::LoRa;
-use crate::mod_params::{RadioMode, RxMode};
+use crate::mod_params::{RadioError, RadioMode, RxMode};
 use crate::mod_traits::RadioKind;
 use crate::sx126x::{Sx126x, Sx1261};
 use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
@@ -530,6 +530,58 @@ async fn test_emulated_rx_end_to_end() {
     assert_eq!(&buf[..len as usize], b"ping");
     assert_eq!(status.rssi, -80);
     assert_eq!(status.snr, 5);
+}
+
+#[tokio::test]
+async fn test_emulated_rx_crc_error_is_reported_not_handed_up() {
+    let chip = Chip::new();
+    let mut lora = LoRa::new(get_emulated_sx1261(&chip), true, Delayer).await.unwrap();
+
+    let mdltn_params = modulation(&mut lora);
+    let rx_pkt_params = lora
+        .create_rx_packet_params(8, false, 255, true, false, &mdltn_params)
+        .unwrap();
+    lora.prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params)
+        .await
+        .unwrap();
+
+    // RxDone together with CrcErr: the chip received something, and it was
+    // not what was sent.
+    chip.inject_rx_with_fate(b"garbled", -100, -8, RxFate::CrcError);
+
+    let mut buf = [0u8; 255];
+    assert!(matches!(
+        lora.rx(&rx_pkt_params, &mut buf).await,
+        Err(RadioError::CrcError)
+    ));
+
+    // Continuous receive stays armed: the next intact packet arrives.
+    chip.inject_rx(b"clean", -80, 5);
+    let (len, _) = lora.rx(&rx_pkt_params, &mut buf).await.unwrap();
+    assert_eq!(&buf[..len as usize], b"clean");
+}
+
+#[tokio::test]
+async fn test_emulated_rx_header_error_is_reported() {
+    let chip = Chip::new();
+    let mut lora = LoRa::new(get_emulated_sx1261(&chip), true, Delayer).await.unwrap();
+
+    let mdltn_params = modulation(&mut lora);
+    let rx_pkt_params = lora
+        .create_rx_packet_params(8, false, 255, true, false, &mdltn_params)
+        .unwrap();
+    lora.prepare_for_rx(RxMode::Continuous, &mdltn_params, &rx_pkt_params)
+        .await
+        .unwrap();
+
+    // HeaderErr and no RxDone: nothing was received.
+    chip.inject_rx_with_fate(b"", -110, -12, RxFate::HeaderError);
+
+    let mut buf = [0u8; 255];
+    assert!(matches!(
+        lora.rx(&rx_pkt_params, &mut buf).await,
+        Err(RadioError::HeaderError)
+    ));
 }
 
 #[tokio::test]

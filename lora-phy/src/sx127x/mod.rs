@@ -564,6 +564,10 @@ where
             }
             RadioMode::Receive(RxMode::Continuous | RxMode::Single(_) | RxMode::SingleMs(_)) => {
                 if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
+                    if IrqMask::CRCError.is_set_in(irq_flags) {
+                        debug!("RxDone with CRCError in radio mode {}", radio_mode);
+                        return Err(RadioError::CrcError);
+                    }
                     debug!("RxDone in radio mode {}", radio_mode);
                     return Ok(Some(IrqState::Done));
                 }
