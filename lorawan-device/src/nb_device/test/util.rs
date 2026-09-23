@@ -8,8 +8,8 @@ use crate::nb_device::{
 use crate::test_util::*;
 use region::{Configuration, Region};
 
-pub fn test_device() -> Device<TestRadio, rand_core::OsRng, 255> {
-    Device::new(Configuration::new(Region::US915), TestRadio::default(), rand::rngs::OsRng)
+pub fn test_device() -> Device<TestRadio, rand::rngs::StdRng, 255> {
+    Device::new(Configuration::new(Region::US915), TestRadio::default(), rand::make_rng())
 }
 
 #[derive(Debug)]

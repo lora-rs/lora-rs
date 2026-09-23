@@ -17,7 +17,7 @@ pub type FcntDown = u32;
 pub type FcntUp = u32;
 
 mod session;
-use rand_core::RngCore;
+use rand_core::Rng;
 pub use session::{Session, SessionKeys};
 
 mod otaa;
@@ -166,7 +166,7 @@ impl Mac {
 
     /// Prepare the radio buffer with transmitting a join request frame and provides the radio
     /// configuration for the transmission along with the RX window configurations bound to it.
-    pub(crate) fn join_otaa<RNG: RngCore, const N: usize>(
+    pub(crate) fn join_otaa<RNG: Rng, const N: usize>(
         &mut self,
         rng: &mut RNG,
         credentials: NetworkCredentials,
@@ -193,7 +193,7 @@ impl Mac {
 
     /// Prepare the radio buffer for transmitting a data frame and provide the radio configuration
     /// for the transmission. Returns an error if the device is not joined.
-    pub(crate) fn send<RNG: RngCore, const N: usize>(
+    pub(crate) fn send<RNG: Rng, const N: usize>(
         &mut self,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
@@ -256,7 +256,7 @@ impl Mac {
     }
 
     #[cfg(feature = "multicast")]
-    pub(crate) fn multicast_setup_send<RNG: RngCore, const N: usize>(
+    pub(crate) fn multicast_setup_send<RNG: Rng, const N: usize>(
         &mut self,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
@@ -280,7 +280,7 @@ impl Mac {
     /// retransmission is armed and the RX windows are derived from the selected channel.
     /// Returns the TX configuration, the RX windows and the frame counter of the answer.
     #[cfg(feature = "certification")]
-    pub(crate) fn certification_setup_send<RNG: RngCore, const N: usize>(
+    pub(crate) fn certification_setup_send<RNG: Rng, const N: usize>(
         &mut self,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,

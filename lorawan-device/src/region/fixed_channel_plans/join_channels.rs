@@ -26,7 +26,7 @@ impl JoinChannels {
 
     /// The first data channel will always be some random channel (possibly the same as previous)
     /// of the preferred subband. Returns None if there is no preferred subband.
-    pub(crate) fn first_data_channel(&mut self, rng: &mut impl RngCore) -> Option<u8> {
+    pub(crate) fn first_data_channel(&mut self, rng: &mut impl Rng) -> Option<u8> {
         if self.preferred_subband.is_some() && self.num_retries != 0 {
             self.clear_join_bias();
             // determine which subband the successful join was sent on
@@ -58,7 +58,7 @@ impl JoinChannels {
         self.available_channels = AvailableChannels::default();
     }
 
-    pub(crate) fn get_next_channel(&mut self, rng: &mut impl RngCore) -> u8 {
+    pub(crate) fn get_next_channel(&mut self, rng: &mut impl Rng) -> u8 {
         match (self.preferred_subband, self.num_retries.cmp(&self.max_retries)) {
             (Some(sb), Ordering::Less) => {
                 self.num_retries += 1;
@@ -101,7 +101,7 @@ impl AvailableChannels {
         true
     }
 
-    fn get_next(&mut self, rng: &mut impl RngCore) -> u8 {
+    fn get_next(&mut self, rng: &mut impl Rng) -> u8 {
         // this guarantees that there will be _some_ open channel available
         if self.is_exhausted() {
             self.reset();
@@ -114,7 +114,7 @@ impl AvailableChannels {
         channel
     }
 
-    fn get_next_channel_inner(&mut self, rng: &mut impl RngCore) -> u8 {
+    fn get_next_channel_inner(&mut self, rng: &mut impl Rng) -> u8 {
         if let Some(previous) = self.previous {
             // choose the next one by possibly wrapping around
             let next = (previous + 8) % 72;
@@ -223,7 +223,7 @@ mod test {
 
     #[test]
     fn test_join_channels_standard() {
-        let mut rng = rand_core::OsRng;
+        let mut rng = rand::rng();
         // run the test a bunch of times due to the rng
         for _ in 0..100 {
             let mut join_channels = JoinChannels::default();
@@ -248,7 +248,7 @@ mod test {
 
     #[test]
     fn test_join_channels_standard_exhausted() {
-        let mut rng = rand_core::OsRng;
+        let mut rng = rand::rng();
 
         let mut join_channels = JoinChannels::default();
         let first_channel = join_channels.get_next_channel(&mut rng);
@@ -267,7 +267,7 @@ mod test {
 
     #[test]
     fn test_join_channels_biased() {
-        let mut rng = rand_core::OsRng;
+        let mut rng = rand::rng();
         // run the test a bunch of times due to the rng
         for _ in 0..100 {
             let mut join_channels = JoinChannels::default();
@@ -299,7 +299,7 @@ mod test {
     fn test_join_rx1_datarate_follows_forced_join_dr() {
         use lora_modulation::{Bandwidth, SpreadingFactor};
 
-        let mut rng = rand_core::OsRng;
+        let mut rng = rand::rng();
         let mut mac = Mac::new(US915::new().into(), 21, 2);
         let mut buf: RadioBuffer<255> = RadioBuffer::new();
         let credentials = NetworkCredentials::new(
@@ -342,7 +342,7 @@ mod test {
 
         let mut buf: RadioBuffer<255> = RadioBuffer::new();
         let (tx_config, rx_windows, _dev_nonce) = mac.join_otaa::<_, 255>(
-            &mut rand::rngs::OsRng,
+            &mut rand::rng(),
             NetworkCredentials::new(
                 AppEui::from([0x0; 8]),
                 DevEui::from([0x0; 8]),
@@ -378,7 +378,7 @@ mod test {
         }
         let (tx_config, _rx_windows, _fcnt) = mac
             .send::<_, 255>(
-                &mut rand::rngs::OsRng,
+                &mut rand::rng(),
                 &mut buf,
                 &SendData { fport: 1, data: &[0x0; 1], confirmed: false },
             )
@@ -404,7 +404,7 @@ mod test {
 
         let mut buf: RadioBuffer<255> = RadioBuffer::new();
         let (tx_config, rx_windows, _dev_nonce) = mac.join_otaa::<_, 255>(
-            &mut rand::rngs::OsRng,
+            &mut rand::rng(),
             NetworkCredentials::new(
                 AppEui::from([0x0; 8]),
                 DevEui::from([0x0; 8]),
@@ -440,7 +440,7 @@ mod test {
         for _ in 0..8 {
             let (tx_config, _rx_windows, _fcnt) = mac
                 .send::<_, 255>(
-                    &mut rand::rngs::OsRng,
+                    &mut rand::rng(),
                     &mut buf,
                     &SendData { fport: 1, data: &[0x0; 1], confirmed: false },
                 )

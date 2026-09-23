@@ -17,7 +17,7 @@ type TimestampMs = u32;
 pub struct Device<R, RNG, const N: usize, const D: usize = 1>
 where
     R: PhyRxTx + Timings,
-    RNG: RngCore,
+    RNG: Rng,
 {
     state: State,
     shared: Shared<R, RNG, N, D>,
@@ -26,7 +26,7 @@ where
 impl<R, RNG, const N: usize, const D: usize> Device<R, RNG, N, D>
 where
     R: PhyRxTx + Timings,
-    RNG: RngCore,
+    RNG: Rng,
 {
     pub fn new(region: region::Configuration, radio: R, rng: RNG) -> Device<R, RNG, N, D> {
         Device {
@@ -122,7 +122,7 @@ where
     }
 }
 
-pub(crate) struct Shared<R: PhyRxTx + Timings, RNG: RngCore, const N: usize, const D: usize> {
+pub(crate) struct Shared<R: PhyRxTx + Timings, RNG: Rng, const N: usize, const D: usize> {
     pub(crate) radio: R,
     pub(crate) rng: RNG,
     pub(crate) tx_buffer: RadioBuffer<N>,

@@ -16,12 +16,12 @@
 //! * No one cares if the channel selected for the next uplink is predictable,
 //!   as long as the channel selection yields an uniform distribution.
 //!
-//! By providing a PRNG `RngCore` implementation, we enable the crate users the
+//! By providing a PRNG `Rng` implementation, we enable the crate users the
 //! flexibility of choosing whether they want to provide their own RNG, or just
 //! a seed to instantiate this PRNG to generate the random numbers for them.
 
 use fastrand::Rng;
-use rand_core::RngCore;
+use rand_core::TryRng;
 
 #[derive(Clone)]
 /// A pseudorandom number generator utilizing Wyrand algorithm via
@@ -34,21 +34,25 @@ impl Prng {
     }
 }
 
-impl RngCore for Prng {
-    fn next_u32(&mut self) -> u32 {
-        self.0.u32(..)
+impl TryRng for Prng {
+    type Error = core::convert::Infallible;
+
+    fn try_next_u32(&mut self) -> Result<u32, core::convert::Infallible> {
+        Ok(self.0.u32(..))
     }
 
-    fn next_u64(&mut self) -> u64 {
-        self.0.u64(..)
+    fn try_next_u64(&mut self) -> Result<u64, core::convert::Infallible> {
+        Ok(self.0.u64(..))
     }
 
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        rand_core::impls::fill_bytes_via_next(self, dest)
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
-        self.fill_bytes(dest);
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), core::convert::Infallible> {
+        let mut offset = 0;
+        while offset < dest.len() {
+            let word = self.try_next_u64()?.to_le_bytes();
+            let n = word.len().min(dest.len() - offset);
+            dest[offset..offset + n].copy_from_slice(&word[..n]);
+            offset += n;
+        }
         Ok(())
     }
 }

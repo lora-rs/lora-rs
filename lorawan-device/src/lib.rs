@@ -36,7 +36,7 @@ pub use lorawan::{
 #[deprecated(since = "0.12.2", note = "Please use `NwkSKey` instead")]
 pub use lorawan::keys::NwkSKey as NewSKey;
 
-pub use rand_core::RngCore;
+pub use rand_core::Rng;
 mod rng;
 pub use rng::Prng;
 

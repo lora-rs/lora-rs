@@ -5,7 +5,7 @@ use crate::{AppEui, AppKey, DevEui};
 use lorawan::creator::JoinRequest;
 use lorawan::default_crypto::DefaultCrypto;
 use lorawan::parser::DecryptedJoinAcceptPayload;
-use rand_core::RngCore;
+use rand_core::Rng;
 
 pub(crate) type DevNonce = lorawan::parser::DevNonce;
 
@@ -28,7 +28,7 @@ impl Otaa {
 
     /// Prepare a join request to be sent. This populates the radio buffer with the request to be
     /// sent, and returns the radio config to use for transmitting.
-    pub(crate) fn prepare_buffer<G: RngCore, const N: usize>(
+    pub(crate) fn prepare_buffer<G: Rng, const N: usize>(
         &mut self,
         rng: &mut G,
         buf: &mut RadioBuffer<N>,

@@ -80,7 +80,7 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
         }
     }
 
-    fn get_random_in_range<RNG: RngCore>(&self, rng: &mut RNG) -> usize {
+    fn get_random_in_range<RNG: Rng>(&self, rng: &mut RNG) -> usize {
         // SAFETY: We will always have at least number of join channels, therefore
         // unwrap is safe to use.
         let range = self.channels.iter().rposition(|&x| x.is_some()).unwrap() + 1;
@@ -208,7 +208,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         R::datarates()[dr as usize].as_ref()
     }
 
-    fn select_tx_channel<RNG: RngCore>(
+    fn select_tx_channel<RNG: Rng>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,

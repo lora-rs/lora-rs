@@ -7,7 +7,7 @@ pub use super::{
     region::{self, Region},
 };
 use heapless::Vec;
-use rand_core::RngCore;
+use rand_core::Rng;
 
 pub use crate::region::DR;
 use crate::{
@@ -65,7 +65,7 @@ pub struct Device<R, T, G, const N: usize = 256, const D: usize = 1>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
-    G: RngCore,
+    G: Rng,
 {
     radio: R,
     /// Access to provided (pseudo)-random number generator.
@@ -174,10 +174,10 @@ impl<R, T, G, const N: usize, const D: usize> Device<R, T, G, N, D>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
-    G: RngCore,
+    G: Rng,
 {
     /// Create a new instance of [`Device`] with a RNG external to the LoRa chip. You must provide your own RNG
-    /// implementing [`RngCore`].
+    /// implementing [`Rng`].
     ///
     /// See also [`new_with_seed`](Device::new_with_seed) to let [`Device`] use a builtin PRNG by providing a random
     /// seed.

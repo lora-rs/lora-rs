@@ -4,7 +4,7 @@ use lorawan::{
     parser::CfList,
     types::{ChannelMask, DataRateRange},
 };
-use rand_core::RngCore;
+use rand_core::Rng;
 
 use crate::mac::{Frame, Window};
 pub(crate) mod constants;
@@ -377,7 +377,7 @@ impl Configuration {
         )
     }
 
-    pub(crate) fn create_tx_config<RNG: RngCore>(
+    pub(crate) fn create_tx_config<RNG: Rng>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
@@ -408,7 +408,7 @@ impl Configuration {
         region_dispatch!(self, check_tx_power, tx_power).map(Some)
     }
 
-    fn select_tx_channel<RNG: RngCore>(
+    fn select_tx_channel<RNG: Rng>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,
@@ -561,7 +561,7 @@ pub(crate) trait RegionHandler {
         DR::_0
     }
 
-    fn select_tx_channel<RNG: RngCore>(
+    fn select_tx_channel<RNG: Rng>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,

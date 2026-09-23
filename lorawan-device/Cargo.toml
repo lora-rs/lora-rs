@@ -23,7 +23,7 @@ heapless = "0.9"
 defmt = { version = "0.3", optional = true }
 fastrand = { version = "2", default-features = false }
 futures = { version = "0.3", default-features = false }
-rand_core = { version = "0.6", default-features = false }
+rand_core = { version = "0.10", default-features = false }
 serde = { version = "1", default-features = false, features = [
     "derive",
 ], optional = true }
@@ -32,7 +32,7 @@ embassy-time = { version = ">=0.3, <0.6", optional = true }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros", "time", "sync"] }
-rand = { version = "0", features = ["getrandom"] }
+rand = "0.10"
 serde_json = "1"
 hex = "0.4.3"
 

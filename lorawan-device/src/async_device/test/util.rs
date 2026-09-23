@@ -18,7 +18,7 @@ pub fn session_with_region(region: region::Configuration) -> (RadioChannel, Time
         region,
         mock_radio,
         mock_timer,
-        rand::rngs::OsRng,
+        rand::make_rng(),
         Some(default_session()),
     );
     (radio_channel, timer_channel, async_device)
@@ -32,7 +32,7 @@ fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel,
         region.into(),
         mock_radio,
         mock_timer,
-        rand::rngs::OsRng,
+        rand::make_rng(),
         session_data,
     );
     (radio_channel, timer_channel, async_device)

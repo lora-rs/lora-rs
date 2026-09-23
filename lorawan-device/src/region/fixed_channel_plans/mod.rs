@@ -177,7 +177,7 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         F::datarates()[dr as usize].as_ref()
     }
 
-    fn select_tx_channel<RNG: RngCore>(
+    fn select_tx_channel<RNG: Rng>(
         &mut self,
         rng: &mut RNG,
         datarate: DR,

@@ -105,7 +105,7 @@ impl State {
     #[allow(clippy::too_many_arguments)]
     pub(crate) fn handle_event<
         R: radio::PhyRxTx + Timings,
-        RNG: RngCore,
+        RNG: Rng,
         const N: usize,
         const D: usize,
     >(
@@ -135,7 +135,7 @@ impl State {
 pub struct Idle;
 
 impl Idle {
-    pub(crate) fn handle_event<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize>(
+    pub(crate) fn handle_event<R: radio::PhyRxTx + Timings, RNG: Rng, const N: usize>(
         self,
         mac: &mut Mac,
         radio: &mut R,
