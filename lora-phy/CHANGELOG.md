@@ -7,7 +7,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Report a payload CRC failure as `RadioError::CrcError` and a header CRC failure as `RadioError::HeaderError` from `rx()` on sx126x, sx127x and lr1110, instead of handing the buffer up as a received packet (or, for a header error, waiting on)
+- Report a payload CRC failure as `RadioError::CrcError` and a header CRC failure as `RadioError::HeaderError` from `rx()` on sx126x, sx127x and lr1110, instead of handing up a corrupted buffer or waiting on a frame that will never complete
+- lorawan-radio: Treat a CRC or header error in an RX window as a window timeout, and keep listening after one in Class C continuous receive
 - Move to Rust edition 2024 (requires Rust 1.85+)
 - lorawan-radio: Compute datarate-aware RX window offsets and symbol timeouts using LoRaMac-node's configurable system-error model
 - sx127x: Add `GenericSx127xInterfaceVariant::new_with_secondary_irq` to watch DIO1 (RxTimeout), fixing LoRaWAN RX-window hangs on single-IRQ boards
