@@ -336,7 +336,11 @@ fn eu868_linkadrreq_redundancy() {
     let response = expire_rx_windows(&mut device); // -> retransmit
     assert!(matches!(response, Response::TimeoutRequest(1000)));
     transmissions.push(device.get_radio().take_last_uplink().unwrap());
-    let response = expire_rx_windows(&mut device); // -> FCntUp consumed
+    let response = expire_rx_windows(&mut device); // -> retransmit timeout
+    // Unacknowledged confirmed uplink: a random RETRANSMIT_TIMEOUT (1..=3 s)
+    // after the RX2 window (closed at t = 2100) before NoAck is reported
+    assert!(matches!(response, Response::TimeoutRequest(t) if (3100..=5100).contains(&t)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // retransmit timeout
     assert!(matches!(response, Response::NoAck));
     for tx in &transmissions {
         assert_data_uplink(tx, 12, true, true, LINKADR_ANS);
