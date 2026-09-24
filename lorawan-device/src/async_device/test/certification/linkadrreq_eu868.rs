@@ -405,6 +405,9 @@ async fn eu868_linkadrreq_redundancy() {
         timer.fire_most_recent().await; // RX2 start
         radio.handle_timeout().await; // RX2 end
     }
+    // No ACK after all NbTrans attempts: wait for random
+    // RETRANSMIT_TIMEOUT (timer 33) before NoAck is reported
+    timer.fire_when_armed(33).await; // retransmit timeout
 
     let (mut device, response) = task.await.unwrap();
     match response {
@@ -470,11 +473,11 @@ async fn eu868_linkadrreq_redundancy() {
     // there is no confirmed downlink left to acknowledge. The answer is a
     // regular uplink: it opens its own RX windows and, as it receives no
     // downlink, is sent three times (NbTrans = 3) with the same FCntUp.
-    // (fire_when_armed(35): the armed count is monotonic, so this only
+    // (fire_when_armed(36): the armed count is monotonic, so this only
     // blocks on the first iteration, for the first answer RX1 start.)
     let mut transmissions = Vec::new();
     for _ in 0..3 {
-        timer.fire_when_armed(35).await; // answer RX1 start
+        timer.fire_when_armed(36).await; // answer RX1 start
         transmissions.push(radio.get_last_uplink().await);
         radio.handle_timeout().await; // answer RX1 end
         timer.fire_most_recent().await; // answer RX2 start
