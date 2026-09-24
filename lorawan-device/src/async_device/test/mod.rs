@@ -299,7 +299,10 @@ async fn test_confirmed_uplink_no_ack_retransmission() {
         radio.handle_timeout().await; // RX2 end
     }
 
-    // No confirmation after all NbTrans attempts
+    // No confirmation after all NbTrans attempts: wait out the random
+    // RETRANSMIT_TIMEOUT before NoAck is reported
+    timer.fire_when_armed(7).await; // retransmit timeout
+
     let (mut device, response) = async_device.await.unwrap();
     match response {
         Ok(SendResponse::NoAck) => (),
@@ -332,6 +335,8 @@ async fn test_confirmed_uplink_no_ack() {
     assert!(!*send_await_complete.lock().await);
     // Trigger end of RX1
     radio.handle_timeout().await;
+    // Wait out the random RETRANSMIT_TIMEOUT before NoAck is reported
+    timer.fire_when_armed(3).await;
 
     match async_device.await.unwrap() {
         Ok(SendResponse::NoAck) => (),

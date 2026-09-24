@@ -51,6 +51,7 @@ pub enum State {
     SendingData(SendingData),
     WaitingForRxWindow(WaitingForRxWindow),
     WaitingForRx(WaitingForRx),
+    WaitingForRetransmitTimeout(WaitingForRetransmitTimeout),
 }
 
 macro_rules! into_state {
@@ -65,7 +66,7 @@ macro_rules! into_state {
     )*};
 }
 
-into_state!(Idle, SendingData, WaitingForRxWindow, WaitingForRx);
+into_state!(Idle, SendingData, WaitingForRxWindow, WaitingForRx, WaitingForRetransmitTimeout);
 
 impl Default for State {
     fn default() -> Self {
@@ -91,6 +92,9 @@ pub enum Error {
     TxRequestDuringTx,
     NewSessionWhileWaitingForRx,
     SendDataWhileWaitingForRx,
+    RadioEventWhileWaitingForRetransmitTimeout,
+    NewSessionWhileWaitingForRetransmitTimeout,
+    SendDataWhileWaitingForRetransmitTimeout,
     BufferTooSmall,
     UnexpectedRadioResponse,
 }
@@ -127,6 +131,7 @@ impl State {
             State::WaitingForRx(s) => {
                 s.handle_event::<R, RNG, N, D>(mac, radio, rng, buf, retransmit_buf, event, dl)
             }
+            State::WaitingForRetransmitTimeout(s) => s.handle_event(event),
         }
     }
 }
@@ -450,6 +455,30 @@ impl WaitingForRx {
                     _ => (State::WaitingForRx(self), Err(Error::UnexpectedRadioResponse.into())),
                 }
             }
+            // Not acknowledged: wait a random RETRANSMIT_TIMEOUT after the
+            // RX window closes before allowing the next uplink. NoAck is
+            // reported once the timeout fires.
+            mac::Response::NoAck => {
+                // The window timestamp is its start, so anchor the timeout
+                // to the close, mirroring WaitingForRxWindow.
+                let window_close = match self.window {
+                    Rx::_1(t) => {
+                        let time_between_windows = mac.get_rx_delay(&self.frame, &Window::_2)
+                            - mac.get_rx_delay(&self.frame, &Window::_1);
+                        if time_between_windows > radio.get_rx_window_duration_ms() {
+                            t + radio.get_rx_window_duration_ms()
+                        } else {
+                            t + time_between_windows
+                        }
+                    }
+                    Rx::_2(t) => t + radio.get_rx_window_duration_ms(),
+                };
+                let until = window_close + super::mac::retransmit_timeout_ms(rng);
+                (
+                    State::WaitingForRetransmitTimeout(WaitingForRetransmitTimeout),
+                    Ok(Response::TimeoutRequest(until)),
+                )
+            }
             // Any other type of update indicates we are done receiving.
             // Change to Idle
             r => (State::Idle(Idle), Ok(r.into())),
@@ -486,6 +515,30 @@ impl WaitingForRx {
                 data_rxwindow1_timeout::<R, N>(self.frame, rx_windows, mac, radio, ms)
             }
             _ => (State::WaitingForRx(self), Err(Error::UnexpectedRadioResponse.into())),
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub struct WaitingForRetransmitTimeout;
+
+impl WaitingForRetransmitTimeout {
+    pub(crate) fn handle_event<R: radio::PhyRxTx>(
+        self,
+        event: Event<'_, R>,
+    ) -> (State, Result<Response, super::Error<R>>) {
+        match event {
+            // The RETRANSMIT_TIMEOUT elapsed: report the missing ACK.
+            Event::TimeoutFired => (State::Idle(Idle), Ok(Response::NoAck)),
+            Event::RadioEvent(_) => {
+                (self.into(), Err(Error::RadioEventWhileWaitingForRetransmitTimeout.into()))
+            }
+            Event::Join(_) => {
+                (self.into(), Err(Error::NewSessionWhileWaitingForRetransmitTimeout.into()))
+            }
+            Event::SendDataRequest(_) => {
+                (self.into(), Err(Error::SendDataWhileWaitingForRetransmitTimeout.into()))
+            }
         }
     }
 }

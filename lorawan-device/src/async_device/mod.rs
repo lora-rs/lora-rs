@@ -423,7 +423,18 @@ where
                     (ms, rx_windows) = self.mac.take_pending_cert_rx();
                     tx_pending = false;
                 }
-                response => return Ok(response.into()),
+                response => {
+                    // Wait for random RETRANSMIT_TIMEOUT before reporting a NoAck.
+                    if matches!(response, mac::Response::NoAck) {
+                        let timeout_ms = mac::retransmit_timeout_ms(&mut self.rng);
+                        debug!(
+                            "No ACK received; waiting {} ms before the next uplink.",
+                            timeout_ms
+                        );
+                        self.timer.delay_ms(u64::from(timeout_ms)).await;
+                    }
+                    return Ok(response.into());
+                }
             }
         }
     }
