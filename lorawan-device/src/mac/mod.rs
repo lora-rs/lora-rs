@@ -594,3 +594,11 @@ fn del_to_delay_ms(del: u8) -> u32 {
         _ => region::constants::RECEIVE_DELAY1,
     }
 }
+
+/// Draw a random RETRANSMIT_TIMEOUT (1..=3 s) to wait after an
+/// unacknowledged confirmed uplink before the next transmission.
+pub(crate) fn retransmit_timeout_ms<G: RngCore>(rng: &mut G) -> u32 {
+    use region::constants::{RETRANSMIT_TIMEOUT_MAX_MS, RETRANSMIT_TIMEOUT_MIN_MS};
+    rng.next_u32() % (RETRANSMIT_TIMEOUT_MAX_MS - RETRANSMIT_TIMEOUT_MIN_MS + 1)
+        + RETRANSMIT_TIMEOUT_MIN_MS
+}
