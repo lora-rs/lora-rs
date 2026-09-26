@@ -81,6 +81,38 @@ async fn test_class_c_data_before_rx2() {
 }
 
 #[tokio::test]
+async fn test_class_c_downlink_during_retransmit_timeout() {
+    let (radio, timer, mut async_device) = util::setup_with_session_class_c().await;
+    // Run the device
+    let task = tokio::spawn(async move {
+        let response = async_device.send(&[1, 2, 3], 3, true).await;
+        (async_device, response)
+    });
+
+    // No downlink in RX1 or RX2
+    timer.fire_most_recent().await; // RX1 start
+    radio.handle_timeout().await; // RX1 end
+    timer.fire_most_recent().await; // RX2 start
+    radio.handle_timeout().await; // RX2 end
+
+    // Class C keeps listening in RXC during the RETRANSMIT_TIMEOUT.
+    radio.handle_rxtx(class_c_downlink::<1>).await;
+    timer.fire_most_recent().await; // retransmit timeout
+
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::NoAck) => (),
+        _ => {
+            panic!()
+        }
+    }
+    // The downlink received while waiting was processed
+    let downlink = device.take_downlink().unwrap();
+    assert_eq!(downlink.data, [1, 2, 3]);
+    assert_eq!(downlink.fport, 3);
+}
+
+#[tokio::test]
 async fn test_class_c_async_down() {
     let (radio, _timer, mut async_device) = util::setup_with_session_class_c().await;
     // Run the device
