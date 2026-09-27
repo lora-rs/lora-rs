@@ -85,6 +85,22 @@ async fn test_modulation_params() {
             sx126x_lora_bw_e::SX126X_LORA_BW_125,
             1u8,
         ),
+        // symbol duration exactly 16.384ms
+        (
+            SpreadingFactor::_12,
+            Bandwidth::_250KHz,
+            sx126x_lora_sf_e::SX126X_LORA_SF12,
+            sx126x_lora_bw_e::SX126X_LORA_BW_250,
+            1u8,
+        ),
+        // symbol duration exactly 16.384ms
+        (
+            SpreadingFactor::_9,
+            Bandwidth::_31KHz,
+            sx126x_lora_sf_e::SX126X_LORA_SF9,
+            sx126x_lora_bw_e::SX126X_LORA_BW_031,
+            1u8,
+        ),
     ];
     for (sf, bw, c_sf, c_bw, ldro) in cases {
         let mut reference = reference();
@@ -101,6 +117,43 @@ async fn test_modulation_params() {
         assert_eq!(mdltn_params.low_data_rate_optimize, ldro, "ldro for {sf:?}/{bw:?}");
         sx1261.set_modulation_params(&mdltn_params).await.unwrap();
         assert_eq!(sx1261.take_spi(), reference.inner, "{sf:?}/{bw:?}");
+    }
+}
+
+#[test]
+fn test_all_modulation_params_for_ldro() {
+    // LDRO per (SF and BW)
+    let expected: [(SpreadingFactor, [u8; 10]); 8] = [
+        (SpreadingFactor::_5, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_6, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_7, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_8, [1, 1, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_9, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_10, [1, 1, 1, 1, 1, 1, 1, 0, 0, 0]),
+        (SpreadingFactor::_11, [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]),
+        (SpreadingFactor::_12, [1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),
+    ];
+    let bws = [
+        Bandwidth::_7KHz,
+        Bandwidth::_10KHz,
+        Bandwidth::_15KHz,
+        Bandwidth::_20KHz,
+        Bandwidth::_31KHz,
+        Bandwidth::_41KHz,
+        Bandwidth::_62KHz,
+        Bandwidth::_125KHz,
+        Bandwidth::_250KHz,
+        Bandwidth::_500KHz,
+    ];
+
+    let sx1261 = get_sx126x();
+    for (sf, row) in expected {
+        for (bw, want) in bws.iter().zip(row) {
+            let params = sx1261
+                .create_modulation_params(sf, *bw, CodingRate::_4_5, TEST_FREQ_HZ)
+                .unwrap();
+            assert_eq!(params.low_data_rate_optimize, want, "ldro for {sf:?}/{bw:?}");
+        }
     }
 }
 

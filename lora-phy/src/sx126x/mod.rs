@@ -318,13 +318,8 @@ where
             return Err(RadioError::InvalidBandwidthForFrequency);
         }
 
-        let mut low_data_rate_optimize = 0x00u8;
-        if (((spreading_factor == SpreadingFactor::_11) || (spreading_factor == SpreadingFactor::_12))
-            && (bandwidth == Bandwidth::_125KHz))
-            || ((spreading_factor == SpreadingFactor::_12) && (bandwidth == Bandwidth::_250KHz))
-        {
-            low_data_rate_optimize = 0x01u8;
-        }
+        let low_data_rate_optimize =
+            u8::from(BaseBandModulationParams::new(spreading_factor, bandwidth, coding_rate).ldro);
         Ok(ModulationParams {
             spreading_factor,
             bandwidth,
