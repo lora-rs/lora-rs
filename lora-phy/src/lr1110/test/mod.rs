@@ -93,21 +93,86 @@ async fn test_set_lora_mod_params() {
 
 #[tokio::test]
 async fn test_set_lora_mod_params_ldro() {
-    // SF12 @ 125 kHz forces the low-data-rate optimization on
-    let mut reference_radio = reference();
-    reference_radio.set_lora_mod_params(&sys::lr11xx_radio_mod_params_lora_t {
-        sf: sys::lr11xx_radio_lora_sf_t_LR11XX_RADIO_LORA_SF12,
-        bw: sys::lr11xx_radio_lora_bw_t_LR11XX_RADIO_LORA_BW_125,
-        cr: sys::lr11xx_radio_lora_cr_t_LR11XX_RADIO_LORA_CR_4_8,
-        ldro: 1,
-    });
+    // Low-data-rate optimization forced on
+    let cases = [
+        (
+            SpreadingFactor::_12,
+            sys::lr11xx_radio_lora_sf_t_LR11XX_RADIO_LORA_SF12,
+            Bandwidth::_125KHz,
+            sys::lr11xx_radio_lora_bw_t_LR11XX_RADIO_LORA_BW_125,
+            CodingRate::_4_8,
+            sys::lr11xx_radio_lora_cr_t_LR11XX_RADIO_LORA_CR_4_8,
+        ),
+        // symbol duration exactly 16.384ms
+        (
+            SpreadingFactor::_12,
+            sys::lr11xx_radio_lora_sf_t_LR11XX_RADIO_LORA_SF12,
+            Bandwidth::_250KHz,
+            sys::lr11xx_radio_lora_bw_t_LR11XX_RADIO_LORA_BW_250,
+            CodingRate::_4_5,
+            sys::lr11xx_radio_lora_cr_t_LR11XX_RADIO_LORA_CR_4_5,
+        ),
+        // symbol duration exactly 16.384ms
+        (
+            SpreadingFactor::_9,
+            sys::lr11xx_radio_lora_sf_t_LR11XX_RADIO_LORA_SF9,
+            Bandwidth::_31KHz,
+            sys::lr11xx_radio_lora_bw_t_LR11XX_RADIO_LORA_BW_31,
+            CodingRate::_4_5,
+            sys::lr11xx_radio_lora_cr_t_LR11XX_RADIO_LORA_CR_4_5,
+        ),
+    ];
+    for (sf, c_sf, bw, c_bw, cr, c_cr) in cases {
+        let mut reference_radio = reference();
+        reference_radio.set_lora_mod_params(&sys::lr11xx_radio_mod_params_lora_t {
+            sf: c_sf,
+            bw: c_bw,
+            cr: c_cr,
+            ldro: 1,
+        });
 
-    let mut radio = get_lr1110();
-    let params = radio
-        .create_modulation_params(SpreadingFactor::_12, Bandwidth::_125KHz, CodingRate::_4_8, 868_100_000)
-        .unwrap();
-    radio.set_modulation_params(&params).await.unwrap();
-    assert_eq!(radio.intf.spi, reference_radio.inner);
+        let mut radio = get_lr1110();
+        let params = radio.create_modulation_params(sf, bw, cr, 868_100_000).unwrap();
+        assert_eq!(params.low_data_rate_optimize, 1, "ldro for {sf:?}/{bw:?}");
+        radio.set_modulation_params(&params).await.unwrap();
+        assert_eq!(radio.intf.spi, reference_radio.inner, "{sf:?}/{bw:?}");
+    }
+}
+
+#[test]
+fn test_all_modulation_params_for_ldro() {
+    // LDRO per (SF and BW)
+    let expected: [(SpreadingFactor, [u8; 9]); 8] = [
+        (SpreadingFactor::_5, [0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_6, [0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_7, [0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_8, [1, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_9, [1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_10, [1, 1, 1, 1, 1, 1, 0, 0, 0]),
+        (SpreadingFactor::_11, [1, 1, 1, 1, 1, 1, 1, 0, 0]),
+        (SpreadingFactor::_12, [1, 1, 1, 1, 1, 1, 1, 1, 0]),
+    ];
+    let bws = [
+        Bandwidth::_10KHz,
+        Bandwidth::_15KHz,
+        Bandwidth::_20KHz,
+        Bandwidth::_31KHz,
+        Bandwidth::_41KHz,
+        Bandwidth::_62KHz,
+        Bandwidth::_125KHz,
+        Bandwidth::_250KHz,
+        Bandwidth::_500KHz,
+    ];
+
+    let radio = get_lr1110();
+    for (sf, row) in expected {
+        for (bw, want) in bws.iter().zip(row) {
+            let params = radio
+                .create_modulation_params(sf, *bw, CodingRate::_4_5, 868_100_000)
+                .unwrap();
+            assert_eq!(params.low_data_rate_optimize, want, "ldro for {sf:?}/{bw:?}");
+        }
+    }
 }
 
 #[tokio::test]
