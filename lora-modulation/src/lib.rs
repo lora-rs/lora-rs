@@ -116,17 +116,42 @@ pub struct BaseBandModulationParams {
 }
 
 impl BaseBandModulationParams {
-    /// Create a set of parameters, possible forcing low data rate optimization on or off.
-    /// Low data rate optimization is determined automatically
-    /// based on `sf` and `bw` according to Semtech's datasheets for SX126x/SX127x
-    /// (enabled if symbol length is >= 16.384ms)
+    /// Create a set of parameters. Low data rate optimization is derived from
+    /// `sf` and `bw`, see [`Self::low_data_rate_optimize`].
     pub const fn new(sf: SpreadingFactor, bw: Bandwidth, cr: CodingRate) -> Self {
         let t_sym_us = 2u32.pow(sf.factor()) * 1_000_000 / bw.hz();
-        // according to SX127x 4.1.1.6 it's 16ms
-        // SX126x says it's 16.38ms
-        // probably it's 16.384ms which is SF11@125kHz
-        let ldro = t_sym_us >= 16_384;
+        let ldro = Self::low_data_rate_optimize(sf, bw);
         Self { sf, bw, cr, ldro, t_sym_us }
+    }
+
+    /// Whether low data rate optimization (LDRO) is used for the given `sf` and `bw`.
+    ///
+    /// This is the table Semtech's reference stack uses for all of its LoRa
+    /// transceivers (`ral_compute_lora_ldro` in SWL2001). The datasheets describe
+    /// it as "symbol duration of 16.38 ms or longer", which is what the 62.5 kHz
+    /// to 250 kHz rows follow; the narrower bandwidths turn it on for every SF
+    /// instead. Both ends of a link must agree on this bit, so match the reference.
+    pub const fn low_data_rate_optimize(sf: SpreadingFactor, bw: Bandwidth) -> bool {
+        match bw {
+            Bandwidth::_500KHz => false,
+            Bandwidth::_250KHz => matches!(sf, SpreadingFactor::_12),
+            Bandwidth::_125KHz => matches!(sf, SpreadingFactor::_11 | SpreadingFactor::_12),
+            Bandwidth::_62KHz => {
+                matches!(sf, SpreadingFactor::_10 | SpreadingFactor::_11 | SpreadingFactor::_12)
+            }
+            Bandwidth::_41KHz => matches!(
+                sf,
+                SpreadingFactor::_9
+                    | SpreadingFactor::_10
+                    | SpreadingFactor::_11
+                    | SpreadingFactor::_12
+            ),
+            Bandwidth::_31KHz
+            | Bandwidth::_20KHz
+            | Bandwidth::_15KHz
+            | Bandwidth::_10KHz
+            | Bandwidth::_7KHz => true,
+        }
     }
 
     /// Convert a millisecond duration to symbols, rounding up so the resulting
@@ -239,35 +264,46 @@ mod tests {
     }
 
     #[test]
-    fn ldro_boundary_at_16_384us() {
-        // LDRO is enabled when symbol duration is >= 16.384ms.
+    fn ldro_matches_semtech_table() {
+        use Bandwidth::*;
+        use SpreadingFactor::*;
+        let bws =
+            [_7KHz, _10KHz, _15KHz, _20KHz, _31KHz, _41KHz, _62KHz, _125KHz, _250KHz, _500KHz];
+        // rows are SF5..SF12, columns follow `bws`
+        let expected = [
+            (_5, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+            (_6, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+            (_7, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+            (_8, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+            (_9, [1, 1, 1, 1, 1, 1, 0, 0, 0, 0]),
+            (_10, [1, 1, 1, 1, 1, 1, 1, 0, 0, 0]),
+            (_11, [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]),
+            (_12, [1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),
+        ];
+        for (sf, row) in expected {
+            for (bw, want) in bws.iter().zip(row) {
+                let params = BaseBandModulationParams::new(sf, *bw, CodingRate::_4_5);
+                assert_eq!(params.ldro, want == 1, "ldro for {sf:?}/{bw:?}");
+                assert_eq!(BaseBandModulationParams::low_data_rate_optimize(sf, *bw), want == 1);
+            }
+        }
+    }
+
+    #[test]
+    fn ldro_on_the_16_384ms_diagonal() {
+        // Every cell on this diagonal has the same symbol duration (2^sf / bw
+        // with sf + log2(500 kHz / bw) = 13), so LDRO must not depend on how
+        // the bandwidth constants are rounded.
+        use Bandwidth::*;
+        use SpreadingFactor::*;
+        for (sf, bw) in
+            [(_7, _7KHz), (_8, _15KHz), (_9, _31KHz), (_10, _62KHz), (_11, _125KHz), (_12, _250KHz)]
+        {
+            let params = BaseBandModulationParams::new(sf, bw, CodingRate::_4_5);
+            assert!(params.ldro, "ldro for {sf:?}/{bw:?}");
+            assert!(params.symbol_duration_us().abs_diff(16_384) <= 8, "{sf:?}/{bw:?}");
+        }
         assert_eq!(SF11BW125.symbol_duration_us(), 16_384);
-        const {
-            assert!(SF11BW125.ldro);
-        }
-
-        // SF11/BW125 and SF12/BW250 sit exactly on the boundary
-        let sf12bw250 = BaseBandModulationParams::new(
-            SpreadingFactor::_12,
-            Bandwidth::_250KHz,
-            CodingRate::_4_5,
-        );
-        assert_eq!(sf12bw250.symbol_duration_us(), 16_384);
-        assert!(sf12bw250.ldro);
-
-        const {
-            assert!(SF12BW125.ldro);
-        }
-
-        // SF8/BW15 is just below the boundary
-        let sf8bw15 =
-            BaseBandModulationParams::new(SpreadingFactor::_8, Bandwidth::_15KHz, CodingRate::_4_5);
-        assert_eq!(sf8bw15.symbol_duration_us(), 16_378);
-        assert!(!sf8bw15.ldro);
-
-        const {
-            assert!(!SF10BW125.ldro);
-        }
     }
 
     #[test]

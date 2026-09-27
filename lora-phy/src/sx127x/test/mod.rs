@@ -77,7 +77,9 @@ async fn compare_mod_params(sf: SpreadingFactor, c_sf: u32, bw: Bandwidth, c_bw:
         sf: c_sf,
         bw: c_bw,
         cr: c_cr,
-        ldro: u8::from(BaseBandModulationParams::new(sf, bw, cr).ldro),
+        // same source as the driver: this compares register encoding, the
+        // decision itself is covered by test_all_modulation_params_for_ldro
+        ldro: u8::from(BaseBandModulationParams::low_data_rate_optimize(sf, bw)),
     });
 
     // errata 2.3 registers: SWL2001 writes these on every SetRx, ours with
@@ -141,12 +143,12 @@ async fn test_set_modulation_params() {
 
 #[test]
 fn test_all_modulation_params_for_ldro() {
-    // LDRO per (SF and BW), rows in SF6..SF12 order (SF5 unsupported)
+    // LDRO per (SF and BW), Semtech ral_compute_lora_ldro table, rows in SF6..SF12 order (SF5 unsupported)
     let expected: [(SpreadingFactor, [u8; 10]); 7] = [
-        (SpreadingFactor::_6, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (SpreadingFactor::_7, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (SpreadingFactor::_8, [1, 1, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (SpreadingFactor::_9, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_6, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_7, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_8, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_9, [1, 1, 1, 1, 1, 1, 0, 0, 0, 0]),
         (SpreadingFactor::_10, [1, 1, 1, 1, 1, 1, 1, 0, 0, 0]),
         (SpreadingFactor::_11, [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]),
         (SpreadingFactor::_12, [1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),

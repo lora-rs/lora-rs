@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 - Move to Rust edition 2024 (requires Rust 1.85+)
 - Add overflow-safe `delay_in_symbols_ceil` and expose `symbol_duration_us`
 - Rename defmt feature to defmt-03
+- Add `BaseBandModulationParams::low_data_rate_optimize` and derive LDRO from the (SF, BW) table Semtech's SWL2001 uses (`ral_compute_lora_ldro`) instead of a 16.384 ms symbol-time threshold
 
 ## [v0.1.5]
 - Derive Eq for `Bandwidth`, `SpreadingFactor`, and `CodingRate`
