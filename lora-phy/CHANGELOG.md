@@ -18,8 +18,9 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Disable `default-features` for lorawan-device dependency
 - Preparations for Rust 2024 edition
 - sx126x: Fix IRQ processing order to handle Timeout before Preamble
+- sx126x: Calculate LDRO using common BaseBandModulationParams (fixes SF9/BW31.25 and SF10/BW62.5) (#491)
+- sx127x: Calculate LDRO using common BaseBandModulationParams (fixes SF11/BW125 and SF12/BW250) (#491)
 - sx127x: Switch to integer math for frequency handling
-- sx127x: Fix LDRO setting for certain modulations (SF11/BW125 and SF12/BW250) #491
 - Make defmt optional
 
 ## [v3.0.1] - 2024-07-01
