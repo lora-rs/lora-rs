@@ -119,7 +119,7 @@ impl BaseBandModulationParams {
     /// Create a set of parameters, possible forcing low data rate optimization on or off.
     /// Low data rate optimization is determined automatically
     /// based on `sf` and `bw` according to Semtech's datasheets for SX126x/SX127x
-    /// (enabled if symbol length is >= 16.38ms)
+    /// (enabled if symbol length is >= 16.384ms)
     pub const fn new(sf: SpreadingFactor, bw: Bandwidth, cr: CodingRate) -> Self {
         let t_sym_us = 2u32.pow(sf.factor()) * 1_000_000 / bw.hz();
         // according to SX127x 4.1.1.6 it's 16ms
@@ -236,6 +236,38 @@ mod tests {
         assert_eq!(1152, SF5BW500.time_on_air_us(None, true, 0));
         assert_eq!(6656, SF7BW250.time_on_air_us(None, true, 0));
         assert_eq!(13312, SF7BW125.time_on_air_us(None, true, 0));
+    }
+
+    #[test]
+    fn ldro_boundary_at_16_384us() {
+        // LDRO is enabled when symbol duration is >= 16.384ms.
+        assert_eq!(SF11BW125.symbol_duration_us(), 16_384);
+        const {
+            assert!(SF11BW125.ldro);
+        }
+
+        // SF11/BW125 and SF12/BW250 sit exactly on the boundary
+        let sf12bw250 = BaseBandModulationParams::new(
+            SpreadingFactor::_12,
+            Bandwidth::_250KHz,
+            CodingRate::_4_5,
+        );
+        assert_eq!(sf12bw250.symbol_duration_us(), 16_384);
+        assert!(sf12bw250.ldro);
+
+        const {
+            assert!(SF12BW125.ldro);
+        }
+
+        // SF8/BW15 is just below the boundary
+        let sf8bw15 =
+            BaseBandModulationParams::new(SpreadingFactor::_8, Bandwidth::_15KHz, CodingRate::_4_5);
+        assert_eq!(sf8bw15.symbol_duration_us(), 16_378);
+        assert!(!sf8bw15.ldro);
+
+        const {
+            assert!(!SF10BW125.ldro);
+        }
     }
 
     #[test]
