@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 - Disable `default-features` for lorawan-device dependency
 - Preparations for Rust 2024 edition
 - sx126x: Fix IRQ processing order to handle Timeout before Preamble
-- sx126x, sx127x: Take LDRO from `BaseBandModulationParams::low_data_rate_optimize` (Semtech's SF/BW table); fixes SF11/BW125 and SF12/BW250 on sx127x and all narrow-bandwidth cases on sx126x (#491)
+- lr1110, sx126x, sx127x: Take LDRO from `BaseBandModulationParams::low_data_rate_optimize` (Semtech's SF/BW table); fixes SF11/BW125 and SF12/BW250 on sx127x and all narrow-bandwidth cases on sx126x and lr1110 (#491)
 - sx127x: Switch to integer math for frequency handling
 - Make defmt optional
 

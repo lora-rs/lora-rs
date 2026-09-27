@@ -50,6 +50,7 @@ use crate::lr1110_interface::Lr1110SpiInterface;
 use crate::mod_params::*;
 use crate::mod_traits::IrqState;
 use crate::{InterfaceVariant, RadioKind};
+use lora_modulation::BaseBandModulationParams;
 pub use radio_kind_params::{PaSelection, SetDioAsRfSwitchParams};
 
 // Internal frequency of the radio
@@ -1993,8 +1994,10 @@ where
             return Err(RadioError::InvalidBandwidthForFrequency);
         }
 
-        let low_data_rate_optimize =
-            u8::from(BaseBandModulationParams::new(spreading_factor, bandwidth, coding_rate).ldro);
+        let low_data_rate_optimize = u8::from(BaseBandModulationParams::low_data_rate_optimize(
+            spreading_factor,
+            bandwidth,
+        ));
 
         Ok(ModulationParams {
             spreading_factor,
