@@ -11,6 +11,7 @@ use radio_kind_params::*;
 use crate::mod_params::*;
 use crate::mod_traits::IrqState;
 use crate::{InterfaceVariant, RadioKind, SpiInterface};
+use lora_modulation::BaseBandModulationParams;
 mod variant;
 pub use variant::*;
 
@@ -318,8 +319,10 @@ where
             return Err(RadioError::InvalidBandwidthForFrequency);
         }
 
-        let low_data_rate_optimize =
-            u8::from(BaseBandModulationParams::new(spreading_factor, bandwidth, coding_rate).ldro);
+        let low_data_rate_optimize = u8::from(BaseBandModulationParams::low_data_rate_optimize(
+            spreading_factor,
+            bandwidth,
+        ));
         Ok(ModulationParams {
             spreading_factor,
             bandwidth,

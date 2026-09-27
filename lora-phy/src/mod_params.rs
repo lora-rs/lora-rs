@@ -1,4 +1,5 @@
-pub use lora_modulation::{Bandwidth, BaseBandModulationParams, CodingRate, SpreadingFactor};
+use lora_modulation::BaseBandModulationParams;
+pub use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 
 /// Errors types reported during LoRa physical layer processing
 #[allow(clippy::upper_case_acronyms)]

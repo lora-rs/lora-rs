@@ -122,13 +122,13 @@ async fn test_modulation_params() {
 
 #[test]
 fn test_all_modulation_params_for_ldro() {
-    // LDRO per (SF and BW)
+    // LDRO per (SF and BW), Semtech ral_compute_lora_ldro table
     let expected: [(SpreadingFactor, [u8; 10]); 8] = [
-        (SpreadingFactor::_5, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (SpreadingFactor::_6, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (SpreadingFactor::_7, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (SpreadingFactor::_8, [1, 1, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (SpreadingFactor::_9, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_5, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_6, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_7, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_8, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_9, [1, 1, 1, 1, 1, 1, 0, 0, 0, 0]),
         (SpreadingFactor::_10, [1, 1, 1, 1, 1, 1, 1, 0, 0, 0]),
         (SpreadingFactor::_11, [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]),
         (SpreadingFactor::_12, [1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),

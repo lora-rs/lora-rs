@@ -13,6 +13,7 @@ use radio_kind_params::*;
 use crate::mod_params::*;
 use crate::mod_traits::IrqState;
 use crate::{InterfaceVariant, RadioKind, SpiInterface};
+use lora_modulation::BaseBandModulationParams;
 
 // TCXO flag
 const TCXO_FOR_OSCILLATOR: u8 = 0x10u8;
@@ -184,8 +185,11 @@ where
             return Err(RadioError::InvalidBandwidthForFrequency);
         }
 
-        let low_data_rate_optimize =
-            u8::from(BaseBandModulationParams::new(spreading_factor, bandwidth, coding_rate).ldro);
+        // Section 4.1.1.5 and 4.1.1.6
+        let low_data_rate_optimize = u8::from(BaseBandModulationParams::low_data_rate_optimize(
+            spreading_factor,
+            bandwidth,
+        ));
 
         Ok(ModulationParams {
             spreading_factor,
