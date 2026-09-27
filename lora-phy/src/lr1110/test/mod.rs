@@ -141,13 +141,13 @@ async fn test_set_lora_mod_params_ldro() {
 
 #[test]
 fn test_all_modulation_params_for_ldro() {
-    // LDRO per (SF and BW)
+    // LDRO per (SF and BW), Semtech ral_compute_lora_ldro table (BW 7.8 kHz is not supported on LR1110)
     let expected: [(SpreadingFactor, [u8; 9]); 8] = [
-        (SpreadingFactor::_5, [0, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (SpreadingFactor::_6, [0, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (SpreadingFactor::_7, [0, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (SpreadingFactor::_8, [1, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (SpreadingFactor::_9, [1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_5, [1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_6, [1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_7, [1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_8, [1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_9, [1, 1, 1, 1, 1, 0, 0, 0, 0]),
         (SpreadingFactor::_10, [1, 1, 1, 1, 1, 1, 0, 0, 0]),
         (SpreadingFactor::_11, [1, 1, 1, 1, 1, 1, 1, 0, 0]),
         (SpreadingFactor::_12, [1, 1, 1, 1, 1, 1, 1, 1, 0]),
