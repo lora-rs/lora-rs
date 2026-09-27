@@ -19,7 +19,7 @@ use crate::LoRa;
 use crate::mod_params::{RadioMode, RxMode};
 use crate::mod_traits::RadioKind;
 use crate::sx127x::radio_kind_params::Register;
-use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
+use lora_modulation::{Bandwidth, BaseBandModulationParams, CodingRate, SpreadingFactor};
 use smtc_modem_cores::sx127x::{Context, sx127x_radio_id_e};
 use smtc_modem_cores::sys;
 
@@ -72,16 +72,12 @@ async fn test_set_channel() {
 
 async fn compare_mod_params(sf: SpreadingFactor, c_sf: u32, bw: Bandwidth, c_bw: u32, cr: CodingRate, c_cr: u32) {
     let mut reference_radio = reference();
-    let ldro = match (sf, bw) {
-        // symbol duration > 16 ms
-        (SpreadingFactor::_12, Bandwidth::_125KHz) | (SpreadingFactor::_11, Bandwidth::_125KHz) => 1,
-        _ => 0,
-    };
+
     reference_radio.set_lora_mod_params(&sys::sx127x_lora_mod_params_t {
         sf: c_sf,
         bw: c_bw,
         cr: c_cr,
-        ldro,
+        ldro: u8::from(BaseBandModulationParams::new(sf, bw, cr).ldro),
     });
 
     // errata 2.3 registers: SWL2001 writes these on every SetRx, ours with
@@ -109,6 +105,18 @@ async fn test_set_modulation_params() {
         sys::sx127x_lora_cr_e_SX127X_LORA_CR_4_5,
     )
     .await;
+
+    // LDRO forced on: SF11/BW125 is the boundary case,
+    // its symbol duration is exactly 16.384ms
+    compare_mod_params(
+        SpreadingFactor::_11,
+        sys::sx127x_lora_sf_e_SX127X_LORA_SF11,
+        Bandwidth::_125KHz,
+        sys::sx127x_lora_bw_e_SX127X_LORA_BW_125,
+        CodingRate::_4_5,
+        sys::sx127x_lora_cr_e_SX127X_LORA_CR_4_5,
+    )
+    .await;
     // LDRO forced on
     compare_mod_params(
         SpreadingFactor::_12,
@@ -129,6 +137,42 @@ async fn test_set_modulation_params() {
         sys::sx127x_lora_cr_e_SX127X_LORA_CR_4_5,
     )
     .await;
+}
+
+#[test]
+fn test_all_modulation_params_for_ldro() {
+    // LDRO per (SF and BW), rows in SF6..SF12 order (SF5 unsupported)
+    let expected: [(SpreadingFactor, [u8; 10]); 7] = [
+        (SpreadingFactor::_6, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_7, [1, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_8, [1, 1, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_9, [1, 1, 1, 1, 1, 0, 0, 0, 0, 0]),
+        (SpreadingFactor::_10, [1, 1, 1, 1, 1, 1, 1, 0, 0, 0]),
+        (SpreadingFactor::_11, [1, 1, 1, 1, 1, 1, 1, 1, 0, 0]),
+        (SpreadingFactor::_12, [1, 1, 1, 1, 1, 1, 1, 1, 1, 0]),
+    ];
+    let bws = [
+        Bandwidth::_7KHz,
+        Bandwidth::_10KHz,
+        Bandwidth::_15KHz,
+        Bandwidth::_20KHz,
+        Bandwidth::_31KHz,
+        Bandwidth::_41KHz,
+        Bandwidth::_62KHz,
+        Bandwidth::_125KHz,
+        Bandwidth::_250KHz,
+        Bandwidth::_500KHz,
+    ];
+
+    let radio = get_sx1276();
+    for (sf, row) in expected {
+        for (bw, want) in bws.iter().zip(row) {
+            let params = radio
+                .create_modulation_params(sf, *bw, CodingRate::_4_5, 868_100_000)
+                .unwrap();
+            assert_eq!(params.low_data_rate_optimize, want, "ldro for {sf:?}/{bw:?}");
+        }
+    }
 }
 
 #[tokio::test]

@@ -184,13 +184,8 @@ where
             return Err(RadioError::InvalidBandwidthForFrequency);
         }
 
-        // Section 4.1.1.5 and 4.1.1.6
-        let bw_in_hz = u32::from(bandwidth);
-        let symbol_duration = 1000 / (bw_in_hz / (0x01u32 << spreading_factor_value(spreading_factor)?));
-        let mut low_data_rate_optimize = 0x00u8;
-        if symbol_duration > 16 {
-            low_data_rate_optimize = 0x01u8
-        }
+        let low_data_rate_optimize =
+            u8::from(BaseBandModulationParams::new(spreading_factor, bandwidth, coding_rate).ldro);
 
         Ok(ModulationParams {
             spreading_factor,
@@ -306,8 +301,8 @@ where
         let val = (reg_val & 0b1111_1000) | opt;
         self.write_register(Register::RegDetectionOptimize, val).await?;
         self.write_register(Register::RegDetectionThreshold, thr).await?;
-        // Spreading Factor, Bandwidth, codingrate, ldro
 
+        // Spreading Factor, Bandwidth, codingrate, ldro
         C::set_modulation_params(self, mdltn_params).await?;
 
         Ok(())
