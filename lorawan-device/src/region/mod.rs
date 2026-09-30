@@ -21,6 +21,7 @@ pub use lorawan::types::DR;
     feature = "region-eu433",
     feature = "region-eu868",
     feature = "region-in865",
+    feature = "region-ru864",
     feature = "region-au915",
     feature = "region-us915"
 )))]
@@ -33,7 +34,8 @@ compile_error!("You must enable at least one region! eg: `region-eu868`, `region
     feature = "region-as923-4",
     feature = "region-eu433",
     feature = "region-eu868",
-    feature = "region-in865"
+    feature = "region-in865",
+    feature = "region-ru864"
 ))]
 mod dynamic_channel_plans;
 #[cfg(feature = "region-as923-1")]
@@ -50,6 +52,8 @@ pub(crate) use dynamic_channel_plans::EU433;
 pub(crate) use dynamic_channel_plans::EU868;
 #[cfg(feature = "region-in865")]
 pub(crate) use dynamic_channel_plans::IN865;
+#[cfg(feature = "region-ru864")]
+pub(crate) use dynamic_channel_plans::RU864;
 
 #[cfg(any(feature = "region-us915", feature = "region-au915"))]
 mod fixed_channel_plans;
@@ -96,7 +100,7 @@ pub struct Configuration {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-/// Regions supported by this crate: AS923_1, AS923_2, AS923_3, AS923_4, AU915, EU868, EU433, IN865, US915.
+/// Regions supported by this crate: AS923_1, AS923_2, AS923_3, AS923_4, AU915, EU868, EU433, IN865, RU864, US915.
 ///
 /// Each region is individually feature-gated (eg: `region-eu868`), however, by default, all regions are enabled.
 ///
@@ -117,6 +121,8 @@ pub enum Region {
     EU433,
     #[cfg(feature = "region-in865")]
     IN865,
+    #[cfg(feature = "region-ru864")]
+    RU864,
     #[cfg(feature = "region-us915")]
     US915,
 }
@@ -139,6 +145,8 @@ enum State {
     EU433(EU433),
     #[cfg(feature = "region-in865")]
     IN865(IN865),
+    #[cfg(feature = "region-ru864")]
+    RU864(RU864),
     #[cfg(feature = "region-us915")]
     US915(US915),
 }
@@ -162,6 +170,8 @@ impl State {
             Region::EU433 => State::EU433(EU433::new_eu433()),
             #[cfg(feature = "region-in865")]
             Region::IN865 => State::IN865(IN865::new_in865()),
+            #[cfg(feature = "region-ru864")]
+            Region::RU864 => State::RU864(RU864::new_ru864()),
             #[cfg(feature = "region-us915")]
             Region::US915 => State::US915(US915::default()),
         }
@@ -186,6 +196,8 @@ impl State {
             Self::EU868(_) => Region::EU868,
             #[cfg(feature = "region-in865")]
             Self::IN865(_) => Region::IN865,
+            #[cfg(feature = "region-ru864")]
+            Self::RU864(_) => Region::RU864,
             #[cfg(feature = "region-us915")]
             Self::US915(_) => Region::US915,
         }
@@ -231,6 +243,8 @@ macro_rules! mut_region_dispatch {
         State::EU433(state) => state.$t(),
         #[cfg(feature = "region-in865")]
         State::IN865(state) => state.$t(),
+        #[cfg(feature = "region-ru864")]
+        State::RU864(state) => state.$t(),
         #[cfg(feature = "region-us915")]
         State::US915(state) => state.0.$t(),
     }
@@ -253,6 +267,8 @@ macro_rules! mut_region_dispatch {
         State::EU433(state) => state.$t($($arg)*),
         #[cfg(feature = "region-in865")]
         State::IN865(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-ru864")]
+        State::RU864(state) => state.$t($($arg)*),
         #[cfg(feature = "region-us915")]
         State::US915(state) => state.0.$t($($arg)*),
     }
@@ -278,6 +294,8 @@ macro_rules! region_dispatch {
         State::EU433(state) => state.$t(),
         #[cfg(feature = "region-in865")]
         State::IN865(state) => state.$t(),
+        #[cfg(feature = "region-ru864")]
+        State::RU864(state) => state.$t(),
         #[cfg(feature = "region-us915")]
         State::US915(state) => state.0.$t(),
     }
@@ -300,6 +318,8 @@ macro_rules! region_dispatch {
         State::EU433(state) => state.$t($($arg)*),
         #[cfg(feature = "region-in865")]
         State::IN865(state) => state.$t($($arg)*),
+        #[cfg(feature = "region-ru864")]
+        State::RU864(state) => state.$t($($arg)*),
         #[cfg(feature = "region-us915")]
         State::US915(state) => state.0.$t($($arg)*),
     }
@@ -325,6 +345,8 @@ macro_rules! region_static_dispatch {
         State::EU433(_) => dynamic_channel_plans::EU433::$t(),
         #[cfg(feature = "region-in865")]
         State::IN865(_) => dynamic_channel_plans::IN865::$t(),
+        #[cfg(feature = "region-ru864")]
+        State::RU864(_) => dynamic_channel_plans::RU864::$t(),
         #[cfg(feature = "region-us915")]
         State::US915(_) => fixed_channel_plans::US915::$t(),
     }
@@ -347,6 +369,8 @@ macro_rules! region_static_dispatch {
         State::EU433(_) => dynamic_channel_plans::EU433::$t($($arg)*),
         #[cfg(feature = "region-in865")]
         State::IN865(_) => dynamic_channel_plans::IN865::$t($($arg)*),
+        #[cfg(feature = "region-ru864")]
+        State::RU864(_) => dynamic_channel_plans::RU864::$t($($arg)*),
         #[cfg(feature = "region-us915")]
         State::US915(_) => fixed_channel_plans::US915::$t($($arg)*),
     }
@@ -517,6 +541,8 @@ from_region!(AS923_3);
 from_region!(AS923_4);
 #[cfg(feature = "region-in865")]
 from_region!(IN865);
+#[cfg(feature = "region-ru864")]
+from_region!(RU864);
 #[cfg(feature = "region-au915")]
 from_region!(AU915);
 #[cfg(feature = "region-eu868")]
@@ -677,6 +703,45 @@ mod tests {
         assert_eq!(r.get_rx_datarate(DR::_5, 7, &Window::_1), DR::_7);
         assert_eq!(r.get_rx_datarate(DR::_7, 6, &Window::_1), DR::_7);
         assert_eq!(r.get_rx_datarate(DR::_7, 7, &Window::_1), DR::_7);
+    }
+
+    #[test]
+    #[cfg(feature = "region-ru864")]
+    fn test_dynamic_region_frequency_range_ru864() {
+        let r = Configuration::new(Region::RU864);
+        assert!(r.frequency_valid(864_000_000));
+        assert!(r.frequency_valid(868_900_000));
+        assert!(r.frequency_valid(870_000_000));
+
+        assert!(!r.frequency_valid(863_900_000));
+        assert!(!r.frequency_valid(870_000_001));
+    }
+
+    #[test]
+    #[cfg(feature = "region-ru864")]
+    fn test_rx1_dr_offset_ru864() {
+        let r = Configuration::new(Region::RU864);
+        assert_eq!(r.get_rx_datarate(DR::_0, 5, &Window::_1), DR::_0);
+        assert_eq!(r.get_rx_datarate(DR::_3, 2, &Window::_1), DR::_1);
+        assert_eq!(r.get_rx_datarate(DR::_5, 0, &Window::_1), DR::_5);
+        assert_eq!(r.get_rx_datarate(DR::_5, 5, &Window::_1), DR::_0);
+        // No LR-FHSS rates in this region, DR8 and up map to DR0
+        assert_eq!(r.get_rx_datarate(DR::_8, 0, &Window::_1), DR::_0);
+        // RX2 is DR0 on 869.1 MHz
+        assert_eq!(r.get_rx_datarate(DR::_5, 0, &Window::_2), DR::_0);
+        assert_eq!(r.get_rx2_frequency(), 869_100_000);
+        assert_eq!(r.rx1_dr_offset_validate(5), Some(5));
+        assert_eq!(r.rx1_dr_offset_validate(6), None);
+    }
+
+    #[test]
+    #[cfg(feature = "region-ru864")]
+    fn test_tx_power_ru864() {
+        let r = Configuration::new(Region::RU864);
+        // TXPower 0..7 is MaxEIRP (16 dBm) minus 2 dB per step
+        assert_eq!(r.check_tx_power(0), Some(Some(16)));
+        assert_eq!(r.check_tx_power(7), Some(Some(2)));
+        assert_eq!(r.check_tx_power(8), None);
     }
 
     #[test]
