@@ -15,6 +15,8 @@ pub(crate) mod eu433;
 pub(crate) mod eu868;
 #[cfg(feature = "region-in865")]
 mod in865;
+#[cfg(feature = "region-ru864")]
+mod ru864;
 
 #[cfg(feature = "region-as923-1")]
 pub(crate) use as923::AS923_1;
@@ -30,6 +32,8 @@ pub(crate) use eu433::EU433;
 pub(crate) use eu868::EU868;
 #[cfg(feature = "region-in865")]
 pub(crate) use in865::IN865;
+#[cfg(feature = "region-ru864")]
+pub(crate) use ru864::RU864;
 
 #[derive(Clone, Copy)]
 pub(crate) struct Channel {
@@ -431,5 +435,46 @@ mod tests {
         assert!(mask.is_enabled(0).unwrap());
         assert!(mask.is_enabled(1).unwrap());
         assert!(!mask.is_enabled(VALID_INDEX as usize).unwrap());
+    }
+}
+
+#[cfg(all(test, feature = "region-ru864"))]
+mod tests_ru864 {
+    use super::*;
+    use crate::mac::Frame;
+    use crate::region::{Configuration, Region};
+    use lorawan::parser::Frequency;
+
+    // RU864 has two join channels, fewer than the other dynamic regions.
+    #[test]
+    fn join_uses_only_default_channels() {
+        let mut config = Configuration::new(Region::RU864);
+        let (mut low, mut high) = (false, false);
+        for _ in 0..200 {
+            let (tx, _) = config.create_tx_config(&mut rand::rngs::OsRng, DR::_0, &Frame::Join);
+            match tx.rf.frequency {
+                868_900_000 => low = true,
+                869_100_000 => high = true,
+                f => panic!("join on {f} Hz"),
+            }
+        }
+        assert!(low && high);
+    }
+
+    // CFList type 0 channels follow the two default channels, at indices 2..=6.
+    #[test]
+    fn cf_list_adds_channels_after_defaults() {
+        let mut config = Configuration::new(Region::RU864);
+        let cf_list = [864_100_000, 864_300_000, 864_500_000, 864_700_000, 864_900_000];
+        config.process_join_accept(Some(&CfList::DynamicChannel(cf_list.map(Frequency::from_hz))));
+        let mut expected = vec![868_900_000, 869_100_000];
+        expected.extend_from_slice(&cf_list);
+        let mut seen = [false; 7];
+        for _ in 0..500 {
+            let (tx, _) = config.create_tx_config(&mut rand::rngs::OsRng, DR::_5, &Frame::Data);
+            let n = expected.iter().position(|&f| f == tx.rf.frequency);
+            seen[n.unwrap_or_else(|| panic!("uplink on {} Hz", tx.rf.frequency))] = true;
+        }
+        assert_eq!(seen, [true; 7]);
     }
 }

@@ -47,6 +47,7 @@ all-regions = [
     "region-eu433",
     "region-eu868",
     "region-in865",
+    "region-ru864",
     "region-us915",
 ]
 
@@ -87,5 +88,7 @@ region-eu433 = []
 region-eu868 = []
 ## Enable support for IN865 region (by default all regions are enabled).
 region-in865 = []
+## Enable support for RU864 region (by default all regions are enabled).
+region-ru864 = []
 ## Enable support for US915 region (by default all regions are enabled).
 region-us915 = []
