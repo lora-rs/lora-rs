@@ -11,7 +11,7 @@ exclude = [
     "examples/nrf52840",
     "examples/rp",
     "examples/stm32l0",
-    "examples/stm32wba",
+    "examples/stm32l4",
     "examples/stm32wl",
     "examples/stm32wle5cx",
 ]
