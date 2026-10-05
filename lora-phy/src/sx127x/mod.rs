@@ -42,16 +42,10 @@ fn pll_step_to_freq(pll_step: u32) -> u32 {
 
 // RSSI requires linearization when SNR >= 0
 // Section 3.5.5 - Note 3
-fn linearize_rssi(rssi: u8) -> i16 {
-    // Integer approximation for RSSI * 16.0 / 15.0
+fn linearize_rssi_quarter(rssi: u8) -> i16 {
+    // Integer approximation for RSSI * 16.0 / 15.0, in units of 0.25 dB
     // General formula for integer division with rounding:
     // x / d == floor((x + floor(d / 2)) / d), when d > 0
-    const DIVISOR: i16 = 15;
-    (rssi as i16 * 16 + (DIVISOR / 2)) / DIVISOR
-}
-
-/// `linearize_rssi` in units of 0.25 dB: RSSI * 64 / 15, rounded
-fn linearize_rssi_quarter(rssi: u8) -> i16 {
     const DIVISOR: i16 = 15;
     (rssi as i16 * 64 + (DIVISOR / 2)) / DIVISOR
 }
@@ -655,13 +649,14 @@ mod tests {
 
     #[test]
     fn test_rssi_linearization() {
-        const DELTA: f32 = 0.5;
+        // rounded to the nearest 0.25 dB, so never more than 0.125 dB off
+        const DELTA: f32 = 0.125;
         for offset in [SX1272_RSSI_OFFSET, SX1276_RSSI_OFFSET_LF, SX1276_RSSI_OFFSET_HF] {
             for rssi in 0..=u8::MAX {
                 let float_rssi = offset as f32 + rssi as f32 * 16.0 / 15.0;
-                let approx_rssi = offset + linearize_rssi(rssi);
-                let error = float_rssi - approx_rssi as f32;
-                assert!(error.abs() < DELTA);
+                let approx_rssi = (4 * offset + linearize_rssi_quarter(rssi)) as f32 / 4.0;
+                let error = float_rssi - approx_rssi;
+                assert!(error.abs() <= DELTA, "rssi {rssi}: {approx_rssi} vs {float_rssi}");
             }
         }
     }
