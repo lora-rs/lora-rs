@@ -347,10 +347,37 @@ async fn test_get_packet_status() {
     let mut reference = Context::new(fixture);
     let (_, c_status) = reference.get_lora_pkt_status();
 
-    // Byte streams and the decoded values both match the reference
+    // Byte streams and the whole-unit values both match the reference
     assert_eq!(sx1261.take_spi(), reference.inner);
-    assert_eq!(pkt_status.rssi, c_status.rssi_pkt_in_dbm as i16);
-    assert_eq!(pkt_status.snr, c_status.snr_pkt_in_db as i16);
+    assert_eq!(pkt_status.rssi.dbm(), c_status.rssi_pkt_in_dbm as i16);
+    assert_eq!(pkt_status.snr.db(), c_status.snr_pkt_in_db as i16);
+    // and the chip's own resolution is kept: -80 dBm, 5 dB
+    assert_eq!(pkt_status.rssi.quarter_dbm(), -320);
+    assert_eq!(pkt_status.snr.quarter_db(), 20);
+}
+
+#[tokio::test]
+async fn test_get_packet_status_half_db() {
+    // Odd raw values: rssi 179 = -89.5 dBm, snr 0xF9 = -7 = -1.75 dB, snr 10 = 2.5 dB
+    for (raw_rssi, raw_snr) in [(179u8, 0xF9u8), (179, 10), (0, 0x80), (255, 0x7F)] {
+        let mut sx1261 = get_sx126x();
+        sx1261.spi_mut().prime_read(&[0x14], &[0x00, raw_rssi, raw_snr, 0]);
+        let pkt_status = sx1261.get_rx_packet_status().await.unwrap();
+
+        let mut fixture = TestFixture::new();
+        fixture.prime_read(&[0x14, 0x00], &[raw_rssi, raw_snr, 0]);
+        let mut reference = Context::new(fixture);
+        let (_, c_status) = reference.get_lora_pkt_status();
+
+        assert_eq!(pkt_status.rssi.quarter_dbm(), -2 * raw_rssi as i16);
+        assert_eq!(pkt_status.snr.quarter_db(), raw_snr as i8 as i16);
+        assert_eq!(
+            pkt_status.rssi.dbm(),
+            c_status.rssi_pkt_in_dbm as i16,
+            "rssi raw {raw_rssi}"
+        );
+        assert_eq!(pkt_status.snr.db(), c_status.snr_pkt_in_db as i16, "snr raw {raw_snr}");
+    }
 }
 
 #[tokio::test]
@@ -581,8 +608,8 @@ async fn test_emulated_rx_end_to_end() {
     let mut buf = [0u8; 255];
     let (len, status) = lora.rx(&rx_pkt_params, &mut buf).await.unwrap();
     assert_eq!(&buf[..len as usize], b"ping");
-    assert_eq!(status.rssi, -80);
-    assert_eq!(status.snr, 5);
+    assert_eq!(status.rssi.dbm(), -80);
+    assert_eq!(status.snr.db(), 5);
 }
 
 #[tokio::test]

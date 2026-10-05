@@ -673,10 +673,9 @@ where
         if OpStatusErrorMask::is_error(read_status) {
             return Err(RadioError::OpError(read_status));
         }
-        // check this ???
-        let rssi = ((-(pkt_status[0] as i32)) >> 1) as i16;
-        let snr = (((pkt_status[1] as i8) + 2) >> 2) as i16;
-        let _signal_rssi = ((-(pkt_status[2] as i32)) >> 1) as i16; // unused currently
+        // RssiPkt = -raw / 2 dBm, SnrPkt = raw (signed) / 4 dB
+        let rssi = Rssi::from_quarter_dbm(-2 * pkt_status[0] as i16);
+        let snr = Snr::from_quarter_db(pkt_status[1] as i8 as i16);
 
         Ok(PacketStatus { rssi, snr })
     }

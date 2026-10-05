@@ -50,6 +50,12 @@ fn linearize_rssi(rssi: u8) -> i16 {
     (rssi as i16 * 16 + (DIVISOR / 2)) / DIVISOR
 }
 
+/// `linearize_rssi` in units of 0.25 dB: RSSI * 64 / 15, rounded
+fn linearize_rssi_quarter(rssi: u8) -> i16 {
+    const DIVISOR: i16 = 15;
+    (rssi as i16 * 64 + (DIVISOR / 2)) / DIVISOR
+}
+
 /// Configuration for SX127x-based boards
 pub struct Config<C: Sx127xVariant> {
     /// LoRa chip used on specific board
@@ -432,27 +438,22 @@ where
     }
 
     async fn get_rx_packet_status(&mut self) -> Result<PacketStatus, RadioError> {
-        let snr = {
-            let packet_snr = self.read_register(Register::RegPktSnrValue).await?;
-            packet_snr as i8 as i16 / 4
-        };
+        // RegPktSnrValue: SNR in 0.25 dB steps, two's complement
+        let snr_quarter_db = self.read_register(Register::RegPktSnrValue).await? as i8 as i16;
+        let packet_rssi = self.read_register(Register::RegPktRssiValue).await?;
+        let rssi_offset = C::rssi_offset(self).await?;
 
-        let rssi = {
-            let packet_rssi = self.read_register(Register::RegPktRssiValue).await?;
+        // Section 5.5.5: the 16/15 linearization applies to the raw packet
+        // RSSI in both branches (the reference driver and LoRaMac-node agree;
+        // only the negative-SNR term differs). Computed in 0.25 dB units, so
+        // the SNR term keeps its quarter-dB steps below 0 dB.
+        let snr_term = if snr_quarter_db < 0 { snr_quarter_db } else { 0 };
+        let rssi_quarter_dbm = 4 * rssi_offset + linearize_rssi_quarter(packet_rssi) + snr_term;
 
-            let rssi_offset = C::rssi_offset(self).await?;
-
-            // Section 5.5.5: the 16/15 linearization applies to the raw
-            // packet RSSI in both branches (the reference driver and
-            // LoRaMac-node agree; only the negative-SNR term differs)
-            if snr >= 0 {
-                rssi_offset + linearize_rssi(packet_rssi)
-            } else {
-                rssi_offset + linearize_rssi(packet_rssi) + snr
-            }
-        };
-
-        Ok(PacketStatus { rssi, snr })
+        Ok(PacketStatus {
+            rssi: Rssi::from_quarter_dbm(rssi_quarter_dbm),
+            snr: Snr::from_quarter_db(snr_quarter_db),
+        })
     }
 
     async fn get_rssi(&mut self) -> Result<i16, RadioError> {

@@ -600,8 +600,38 @@ async fn test_get_rx_packet_status() {
     let status = radio.get_rx_packet_status().await.unwrap();
 
     assert_eq!(radio.intf.spi, reference_radio.inner);
-    assert_eq!(status.rssi, c_status.rssi_pkt_in_dbm as i16);
-    assert_eq!(status.snr, c_status.snr_pkt_in_db as i16);
+    assert_eq!(status.rssi.dbm(), c_status.rssi_pkt_in_dbm as i16);
+    assert_eq!(status.snr.db(), c_status.snr_pkt_in_db as i16);
+    // the chip's own resolution: -40 dBm, 5 dB
+    assert_eq!(status.rssi.quarter_dbm(), -160);
+    assert_eq!(status.snr.quarter_db(), 20);
+}
+
+#[tokio::test]
+async fn test_get_rx_packet_status_half_db() {
+    // rssi 179 = -89.5 dBm; snr 0xF9 = -1.75 dB and 10 = 2.5 dB.
+    // Whole dBm keeps this crate's existing rounding (down, -90); the reference
+    // driver truncates -(raw >> 1) toward zero (-89), so for odd raw values the
+    // two have always differed by 1 dB. SNR matches the reference.
+    for (raw_rssi, raw_snr) in [(179u8, 0xF9u8), (179, 10), (0, 0x80), (255, 0x7F)] {
+        let mut reference_radio = reference();
+        reference_radio.inner.prime_read(&[0x02, 0x04], &[raw_rssi, raw_snr, 0]);
+        let (_, c_status) = reference_radio.get_lora_pkt_status();
+
+        let mut radio = get_lr1110();
+        radio.intf.spi.prime_read(&[0x02, 0x04], &[raw_rssi, raw_snr, 0]);
+        let status = radio.get_rx_packet_status().await.unwrap();
+
+        assert_eq!(status.rssi.quarter_dbm(), -2 * raw_rssi as i16);
+        assert_eq!(status.snr.quarter_db(), raw_snr as i8 as i16);
+        assert_eq!(
+            status.rssi.dbm(),
+            (-(raw_rssi as i32) >> 1) as i16,
+            "rssi raw {raw_rssi}"
+        );
+        assert!((status.rssi.dbm() - c_status.rssi_pkt_in_dbm as i16).abs() <= 1);
+        assert_eq!(status.snr.db(), c_status.snr_pkt_in_db as i16, "snr raw {raw_snr}");
+    }
 }
 
 #[tokio::test]

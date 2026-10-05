@@ -2406,10 +2406,9 @@ where
         let mut pkt_status = [0u8; 3];
         self.read_command(&cmd, &mut pkt_status).await?;
 
-        // RSSI = -pkt_status[0] / 2
-        let rssi = ((-(pkt_status[0] as i32)) >> 1) as i16;
-        // SNR = (pkt_status[1] + 2) / 4
-        let snr = (((pkt_status[1] as i8) + 2) >> 2) as i16;
+        // RssiPkt = -raw / 2 dBm, SnrPkt = raw (signed) / 4 dB
+        let rssi = Rssi::from_quarter_dbm(-2 * pkt_status[0] as i16);
+        let snr = Snr::from_quarter_db(pkt_status[1] as i8 as i16);
 
         Ok(PacketStatus { rssi, snr })
     }

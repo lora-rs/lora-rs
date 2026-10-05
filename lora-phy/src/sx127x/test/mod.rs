@@ -457,14 +457,16 @@ async fn test_packet_status_value_parity() {
     radio.spi_mut().set_reg(0x1A, 60);
     let status = radio.get_rx_packet_status().await.unwrap();
 
-    assert_eq!(status.snr, c_status.snr_pkt_in_db as i16);
+    assert_eq!(status.snr.quarter_db(), -24);
+    assert_eq!(status.snr.db(), c_status.snr_pkt_in_db as i16);
     // both linearize the raw RSSI, with different integer approximations of
-    // the same 16/15 correction: ours rounds (raw * 16 + 7) / 15, the
-    // reference computes raw + (raw >> 4) — at most 1 dB apart
+    // the same 16/15 correction: ours rounds (raw * 64 + 7) / 15 in quarter
+    // dB, the reference computes raw + (raw >> 4) in whole dB — at most 1 dB
+    // apart
     assert!(
-        (status.rssi - c_status.rssi_pkt_in_dbm as i16).abs() <= 1,
+        (status.rssi.dbm() - c_status.rssi_pkt_in_dbm as i16).abs() <= 1,
         "rssi {} vs reference {}",
-        status.rssi,
+        status.rssi.dbm(),
         c_status.rssi_pkt_in_dbm
     );
 }
@@ -601,9 +603,12 @@ async fn test_emulated_rx_end_to_end() {
     let mut buf = [0u8; 255];
     let (len, status) = lora.rx(&rx_pkt_params, &mut buf).await.unwrap();
     assert_eq!(&buf[..len as usize], b"ping");
-    // HF port offset -157, raw 100 linearized by 16/15: -157 + 107
-    assert_eq!(status.rssi, -50);
-    assert_eq!(status.snr, 5);
+    // HF port offset -157, raw 100 linearized by 16/15: -157 + 106.67 = -50.33 dBm.
+    // Quarter dB: 4 * -157 + round(100 * 64 / 15) = -201; whole dBm rounds down
+    // to -51 (the whole-dB path used to round the 16/15 term first: -50)
+    assert_eq!(status.rssi.quarter_dbm(), -201);
+    assert_eq!(status.rssi.dbm(), -51);
+    assert_eq!(status.snr.db(), 5);
 }
 
 #[tokio::test]
