@@ -160,7 +160,10 @@ where
     async fn rx_single(&mut self, buf: &mut [u8]) -> Result<RxStatus, Self::PhyError> {
         if let Some(rx_params) = &self.rx_pkt_params {
             match self.lora.rx(rx_params, buf).await {
-                Ok((len, q)) => Ok(RxStatus::Rx(len as usize, RxQuality::new(q.rssi, q.snr as i8))),
+                Ok((len, q)) => Ok(RxStatus::Rx(
+                    len as usize,
+                    RxQuality::new(q.rssi.dbm(), q.snr.db() as i8),
+                )),
                 // A frame that failed its header or payload CRC ends the
                 // window the same way silence does: the chip is back in
                 // standby and the stack moves on to the next window.
@@ -180,7 +183,7 @@ where
                     Ok((received_len, rx_pkt_status)) => {
                         return Ok((
                             received_len as usize,
-                            RxQuality::new(rx_pkt_status.rssi, rx_pkt_status.snr as i8), // downcast snr
+                            RxQuality::new(rx_pkt_status.rssi.dbm(), rx_pkt_status.snr.db() as i8), // downcast snr
                         ));
                     }
                     // Continuous receive keeps the chip armed after a frame

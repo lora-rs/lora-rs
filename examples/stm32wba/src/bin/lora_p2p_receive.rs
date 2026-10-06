@@ -160,7 +160,9 @@ async fn main(_spawner: Spawner) {
             Ok((received_len, packet_status)) => {
                 info!(
                     "RX SUCCESS - Received {} bytes | RSSI: {} dBm | SNR: {} dB",
-                    received_len, packet_status.rssi, packet_status.snr
+                    received_len,
+                    packet_status.rssi.dbm(),
+                    packet_status.snr.db()
                 );
 
                 // Print received data

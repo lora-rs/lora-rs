@@ -38,13 +38,62 @@ pub enum RadioError {
     RngUnsupported,
 }
 
-/// Status for a received packet
-#[derive(Clone, Copy)]
+/// Received signal strength in units of 0.25 dBm.
+///
+/// Holds what the chip reports without rounding: 0.5 dB steps on sx126x and lr1110, 1 dB steps
+/// on sx127x (0.25 dB below 0 dB SNR, where the SNR term enters the RSSI formula).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-#[allow(missing_docs)]
+pub struct Rssi(i16);
+
+impl Rssi {
+    /// Creates a value from units of 0.25 dBm.
+    pub const fn from_quarter_dbm(quarter_dbm: i16) -> Self {
+        Self(quarter_dbm)
+    }
+
+    /// RSSI in units of 0.25 dBm.
+    pub const fn quarter_dbm(self) -> i16 {
+        self.0
+    }
+
+    /// RSSI in whole dBm, rounded down (the value `PacketStatus::rssi` held before).
+    pub const fn dbm(self) -> i16 {
+        self.0 >> 2
+    }
+}
+
+/// Signal-to-noise ratio in units of 0.25 dB, as the chips report it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct Snr(i16);
+
+impl Snr {
+    /// Creates a value from units of 0.25 dB.
+    pub const fn from_quarter_db(quarter_db: i16) -> Self {
+        Self(quarter_db)
+    }
+
+    /// SNR in units of 0.25 dB.
+    pub const fn quarter_db(self) -> i16 {
+        self.0
+    }
+
+    /// SNR in whole dB, rounded to nearest with halves rounded up, as the Semtech sx126x and
+    /// lr11xx drivers do.
+    pub const fn db(self) -> i16 {
+        (self.0 + 2) >> 2
+    }
+}
+
+/// Status for a received packet
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct PacketStatus {
-    pub rssi: i16,
-    pub snr: i16,
+    /// Packet RSSI.
+    pub rssi: Rssi,
+    /// Packet SNR.
+    pub snr: Snr,
 }
 
 /// The state of the radio

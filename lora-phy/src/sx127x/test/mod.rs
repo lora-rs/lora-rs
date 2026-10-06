@@ -444,29 +444,37 @@ async fn test_get_rx_payload() {
 
 #[tokio::test]
 async fn test_packet_status_value_parity() {
-    // SNR -6 dB (raw = -24 as u8 = 0xE8), RSSI raw 60 @ 868.1 MHz (HF port)
-    let mut reference_radio = reference();
-    reference_radio.set_rf_freq(868_100_000);
-    reference_radio.spi_mut().set_reg(0x19, 0xE8); // RegPktSnrValue
-    reference_radio.spi_mut().set_reg(0x1A, 60); // RegPktRssiValue
-    let (_, c_status) = reference_radio.get_lora_pkt_status();
+    // RegPktSnrValue in 0.25 dB steps: 0xF9 = -1.75 dB, 0x0A = 2.5 dB, 0xE8 = -6 dB.
+    // The reference rounds SNR to nearest ((raw + 2) >> 2): -2, 3, -6. This
+    // crate used to truncate toward zero (raw / 4): -1, 2, -6.
+    for (raw_snr, quarter_db, db) in [(0xF9u8, -7i16, -2i16), (0x0A, 10, 3), (0xE8, -24, -6)] {
+        // RSSI raw 60 @ 868.1 MHz (HF port)
+        let mut reference_radio = reference();
+        reference_radio.set_rf_freq(868_100_000);
+        reference_radio.spi_mut().set_reg(0x19, raw_snr); // RegPktSnrValue
+        reference_radio.spi_mut().set_reg(0x1A, 60); // RegPktRssiValue
+        let (_, c_status) = reference_radio.get_lora_pkt_status();
 
-    let mut radio = get_sx1276();
-    radio.set_channel(868_100_000).await.unwrap();
-    radio.spi_mut().set_reg(0x19, 0xE8);
-    radio.spi_mut().set_reg(0x1A, 60);
-    let status = radio.get_rx_packet_status().await.unwrap();
+        let mut radio = get_sx1276();
+        radio.set_channel(868_100_000).await.unwrap();
+        radio.spi_mut().set_reg(0x19, raw_snr);
+        radio.spi_mut().set_reg(0x1A, 60);
+        let status = radio.get_rx_packet_status().await.unwrap();
 
-    assert_eq!(status.snr, c_status.snr_pkt_in_db as i16);
-    // both linearize the raw RSSI, with different integer approximations of
-    // the same 16/15 correction: ours rounds (raw * 16 + 7) / 15, the
-    // reference computes raw + (raw >> 4) — at most 1 dB apart
-    assert!(
-        (status.rssi - c_status.rssi_pkt_in_dbm as i16).abs() <= 1,
-        "rssi {} vs reference {}",
-        status.rssi,
-        c_status.rssi_pkt_in_dbm
-    );
+        assert_eq!(status.snr.quarter_db(), quarter_db);
+        assert_eq!(status.snr.db(), db);
+        assert_eq!(status.snr.db(), c_status.snr_pkt_in_db as i16, "snr raw {raw_snr:#04x}");
+        // both linearize the raw RSSI, with different integer approximations of
+        // the same 16/15 correction: ours rounds (raw * 64 + 7) / 15 in quarter
+        // dB, the reference computes raw + (raw >> 4) in whole dB. At most 1 dB
+        // apart
+        assert!(
+            (status.rssi.dbm() - c_status.rssi_pkt_in_dbm as i16).abs() <= 1,
+            "rssi {} vs reference {} (snr raw {raw_snr:#04x})",
+            status.rssi.dbm(),
+            c_status.rssi_pkt_in_dbm
+        );
+    }
 }
 
 #[tokio::test]
@@ -601,9 +609,12 @@ async fn test_emulated_rx_end_to_end() {
     let mut buf = [0u8; 255];
     let (len, status) = lora.rx(&rx_pkt_params, &mut buf).await.unwrap();
     assert_eq!(&buf[..len as usize], b"ping");
-    // HF port offset -157, raw 100 linearized by 16/15: -157 + 107
-    assert_eq!(status.rssi, -50);
-    assert_eq!(status.snr, 5);
+    // HF port offset -157, raw 100 linearized by 16/15: -157 + 106.67 = -50.33 dBm.
+    // Quarter dB: 4 * -157 + round(100 * 64 / 15) = -201; whole dBm rounds down
+    // to -51 (the whole-dB path used to round the 16/15 term first: -50)
+    assert_eq!(status.rssi.quarter_dbm(), -201);
+    assert_eq!(status.rssi.dbm(), -51);
+    assert_eq!(status.snr.db(), 5);
 }
 
 #[tokio::test]
