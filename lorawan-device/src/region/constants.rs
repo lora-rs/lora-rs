@@ -8,7 +8,8 @@ pub(crate) const JOIN_ACCEPT_DELAY2: u32 = 6000;
 pub(crate) const MAX_FCNT_GAP: usize = 16384;
 pub(crate) const ADR_ACK_LIMIT: usize = 64;
 pub(crate) const ADR_ACK_DELAY: usize = 32;
-pub(crate) const ACK_TIMEOUT: usize = 2; // random delay between 1 and 3 seconds
+pub(crate) const RETRANSMIT_TIMEOUT_MIN_MS: u32 = 1000;
+pub(crate) const RETRANSMIT_TIMEOUT_MAX_MS: u32 = 3000;
 
 // Although there are 16 possible slots, last one is not defined as Datarate
 pub(crate) const NUM_DATARATES: u8 = 15;
