@@ -187,6 +187,30 @@ where
     }
 }
 
+impl<R, T, const N: usize, const D: usize, S> Device<R, T, rng::Prng, N, D, S>
+where
+    R: radio::PhyRxTx + Timings,
+    T: radio::Timer,
+    S: NonVolatileStore,
+{
+    /// Create a [`Device`] backed by a non-volatile store, like [`restore`](Device::restore), but let
+    /// [`Device`] use an algorithmic PRNG seeded with `seed` instead of an external RNG.
+    ///
+    /// # ⚠️Warning⚠️
+    ///
+    /// This function must **always** be called with a new randomly generated seed! **Never** call this function more
+    /// than once using the same seed. Generate the seed using a true random number generator.
+    pub async fn restore_with_seed(
+        region: region::Configuration,
+        radio: R,
+        timer: T,
+        seed: u64,
+        store: S,
+    ) -> Result<Self, S::Error> {
+        Device::restore(region, radio, timer, rng::Prng::new(seed), store).await
+    }
+}
+
 impl<R, T, G, const N: usize, const D: usize> Device<R, T, G, N, D, NoNvm>
 where
     R: radio::PhyRxTx + Timings,
