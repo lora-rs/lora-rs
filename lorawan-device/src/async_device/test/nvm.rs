@@ -212,6 +212,35 @@ async fn failed_join_still_burns_a_durable_dev_nonce() {
 }
 
 #[tokio::test]
+async fn restore_with_seed_keeps_the_dev_nonce_counter() {
+    type SeededDevice =
+        crate::async_device::Device<TestRadio, TestTimer, crate::Prng, 512, 4, MockStore>;
+    let store = MockStore::default();
+    for expected in 1..=2 {
+        let pending = Arc::new(AtomicUsize::new(0));
+        let (radio_channel, mock_radio) = TestRadio::new(pending.clone());
+        let (timer_channel, mock_timer) = TestTimer::new(pending);
+        let region = region::US915::default();
+        let mut device = SeededDevice::restore_with_seed(
+            region.into(),
+            mock_radio,
+            mock_timer,
+            0x5EED,
+            store.clone(),
+        )
+        .await
+        .unwrap();
+        let task = tokio::spawn(async move { device.join(&get_otaa_credentials()).await });
+        timer_channel.fire_most_recent().await;
+        radio_channel.handle_timeout().await;
+        timer_channel.fire_most_recent().await;
+        radio_channel.handle_timeout().await;
+        assert!(matches!(task.await.unwrap(), Ok(JoinResponse::NoJoinAccept)));
+        assert_eq!(store.identity().dev_nonce, expected);
+    }
+}
+
+#[tokio::test]
 async fn dev_nonce_monotonic_across_power_loss() {
     const T: usize = 1;
     let store = MockStore::default();
