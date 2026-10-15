@@ -215,6 +215,29 @@ async fn exhausted_dev_nonce_refuses_to_join() {
     assert_eq!(store.identity().dev_nonce, u16::MAX);
 }
 
+#[tokio::test]
+async fn restore_with_seed_keeps_the_dev_nonce_counter() {
+    type SeededDevice = Device<MockStore, crate::Prng>;
+    let store = MockStore::default();
+    for expected in 1..=2 {
+        let pending = Arc::new(AtomicUsize::new(0));
+        let (radio, mock_radio) = TestRadio::new(pending.clone());
+        let (timer, mock_timer) = TestTimer::new(pending);
+        let region = region::US915::default();
+        let device = SeededDevice::restore_with_seed(
+            region.into(),
+            mock_radio,
+            mock_timer,
+            0x5EED,
+            store.clone(),
+        )
+        .await
+        .unwrap();
+        let mut net = Net::new(radio, timer, device).await;
+        net.join(ExchangeAction::none()).await.expect_no_join_accept();
+        assert_eq!(store.identity().dev_nonce, expected);
+    }
+}
 
 
 
