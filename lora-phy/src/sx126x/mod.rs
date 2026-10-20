@@ -98,6 +98,9 @@ where
             .await?;
 
         let number_of_registers = buffer[0];
+        if number_of_registers > MAX_NUMBER_REGS_IN_RETENTION {
+            return Err(RadioError::InvalidConfiguration);
+        }
         for i in 0..number_of_registers {
             if register.addr1() == buffer[(1 + (2 * i)) as usize] && register.addr2() == buffer[(2 + (2 * i)) as usize]
             {
