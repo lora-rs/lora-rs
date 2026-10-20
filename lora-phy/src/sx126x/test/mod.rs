@@ -9,7 +9,7 @@ use fixtures::{Delayer, TestFixture, get_sx126x, get_sx1262};
 use crate::LoRa;
 use crate::mod_params::{RadioError, RadioMode, RxMode};
 use crate::mod_traits::RadioKind;
-use crate::sx126x::{Sx126x, Sx1261};
+use crate::sx126x::{Register, Sx126x, Sx1261};
 use lora_modulation::{Bandwidth, CodingRate, SpreadingFactor};
 use smtc_modem_cores::sx126x::{
     Context, SleepCfg, sx126x_cad_exit_modes_e, sx126x_cad_params_t, sx126x_cad_symbs_e, sx126x_lora_bw_e,
@@ -733,6 +733,19 @@ async fn test_emulated_sleep_and_wake() {
         assert_eq!(m.tx_log.len(), 1);
         assert_eq!(m.tx_log[0].payload, b"wake");
     });
+}
+
+#[tokio::test]
+async fn test_init_rejects_impossible_retention_count() {
+    for count in [5, 0xFF] {
+        let chip = Chip::new();
+        chip.with_model(|m| m.registers.insert(Register::RetentionList as u16, count));
+        let got = get_emulated_sx1261(&chip).init_lora(0x3444).await;
+        assert!(
+            matches!(got, Err(RadioError::InvalidConfiguration)),
+            "count {count}: {got:?}"
+        );
+    }
 }
 
 #[tokio::test]
