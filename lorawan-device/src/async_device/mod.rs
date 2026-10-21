@@ -430,7 +430,11 @@ where
                         "Retransmitting confirmed frame; waiting {} ms before the next copy.",
                         timeout_ms
                     );
-                    self.retransmit_wait(timeout_ms).await?;
+                    // A downlink accepted during the wait (class C) ends the
+                    // retransmission cycle: the MAC has moved to the next FCntUp.
+                    if let Some(response) = self.retransmit_wait(timeout_ms).await? {
+                        return Ok(response.into());
+                    }
                     (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
                     tx_pending = true;
                 }
@@ -450,7 +454,9 @@ where
                             "No ACK received; waiting {} ms before the next uplink.",
                             timeout_ms
                         );
-                        self.retransmit_wait(timeout_ms).await?;
+                        if let Some(response) = self.retransmit_wait(timeout_ms).await? {
+                            return Ok(response.into());
+                        }
                     }
                     return Ok(response.into());
                 }
@@ -562,8 +568,12 @@ where
     }
 
     /// Wait out a RETRANSMIT_TIMEOUT. A class C device listens in RXC during
-    /// the wait; the radio must already be in RXC (see `window_complete`).
-    async fn retransmit_wait(&mut self, timeout_ms: u32) -> Result<(), Error<R::PhyError>> {
+    /// the wait (the radio must already be in RXC, see `window_complete`) and
+    /// returns early with the response of an accepted downlink.
+    async fn retransmit_wait(
+        &mut self,
+        timeout_ms: u32,
+    ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
         #[cfg(feature = "class-c")]
         if self.class_c {
             use futures::pin_mut;
@@ -589,7 +599,7 @@ where
                             q.snr(),
                             &rx_config.rf,
                         )?;
-                        let _ = Self::handle_mac_response(
+                        if let Some(response) = Self::handle_mac_response(
                             &mut self.radio_buffer,
                             &mut self.retransmit_buffer,
                             &mut self.mac,
@@ -598,16 +608,19 @@ where
                             mac_response,
                             Some(rx_config),
                         )
-                        .await?;
+                        .await?
+                        {
+                            return Ok(Some(response));
+                        }
                         maybe_timeout_fut = Some(timeout_fut);
                     }
                     RxcWindowResponse::Timeout(_) => break,
                 }
             }
-            return Ok(());
+            return Ok(None);
         }
         self.timer.delay_ms(u64::from(timeout_ms)).await;
-        Ok(())
+        Ok(None)
     }
 
     /// Attempt to receive data within RX1 and RX2 windows. This function will populate the
