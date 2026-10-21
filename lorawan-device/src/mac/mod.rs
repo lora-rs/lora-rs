@@ -10,6 +10,7 @@ use crate::{
 };
 use heapless::Vec;
 use lora_modulation::BaseBandModulationParams;
+use lorawan::maccommands::ChannelMask;
 use lorawan::maccommands::SerializableMacCommand;
 use lorawan::parser::DevAddr;
 use lorawan::types::DR;
@@ -489,6 +490,8 @@ impl Mac {
     /// `fcnt_up_checkpoint` is chosen by the device layer.
     pub(crate) fn snapshot_session(&self, fcnt_up_checkpoint: u32) -> Option<PersistentSession> {
         let session = self.get_session()?;
+        let mut channel_mask = [0u8; 9];
+        channel_mask.copy_from_slice(self.region.channel_mask_get().as_ref());
         Some(PersistentSession {
             nwkskey: session.nwkskey,
             appskey: session.appskey,
@@ -503,6 +506,7 @@ impl Mac {
             rx2_frequency: self.configuration.rx2_frequency,
             tx_power: self.configuration.tx_power,
             adr_enabled: self.configuration.adr_enabled,
+            channel_mask,
         })
     }
 
@@ -523,6 +527,10 @@ impl Mac {
         self.configuration.rx2_frequency = ps.rx2_frequency;
         self.configuration.tx_power = ps.tx_power;
         self.configuration.adr_enabled = ps.adr_enabled;
+        let channel_mask = ChannelMask::from(ps.channel_mask);
+        if self.region.channel_mask_validate(&channel_mask, Some(self.configuration.data_rate)) {
+            self.region.channel_mask_set(channel_mask);
+        }
         self.state = State::Joined(session);
     }
 
