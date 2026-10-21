@@ -1,12 +1,15 @@
 use super::*;
 use crate::async_device::radio::{PhyRxTx, RxConfig, RxStatus};
-use std::sync::Arc;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
 use tokio::{
     sync::{Mutex, mpsc},
     time,
 };
 impl TestRadio {
-    pub fn new() -> (RadioChannel, Self) {
+    pub fn new(pending: Arc<AtomicUsize>) -> (RadioChannel, Self) {
         let (tx, rx) = mpsc::channel(2);
         let last_rxconfig = Arc::new(Mutex::new(None));
         let last_uplink = Arc::new(Mutex::new(None));
@@ -15,8 +18,9 @@ impl TestRadio {
                 tx,
                 last_uplink: last_uplink.clone(),
                 last_rxconfig: last_rxconfig.clone(),
+                pending: pending.clone(),
             },
-            Self { rx, last_rxconfig, last_uplink, current_config: None, snr: 0 },
+            Self { rx, last_rxconfig, last_uplink, current_config: None, pending, snr: 0 },
         )
     }
 
@@ -44,6 +48,7 @@ pub struct TestRadio {
     last_rxconfig: Arc<Mutex<Option<RxConfig>>>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
     rx: mpsc::Receiver<Msg>,
+    pending: Arc<AtomicUsize>,
     snr: i8,
 }
 
@@ -82,6 +87,7 @@ impl PhyRxTx for TestRadio {
                 time::sleep(time::Duration::from_millis(5)).await;
                 if let Some(config) = &self.current_config {
                     let length = handler(last_uplink.clone(), config.rf, rx_buf);
+                    self.pending.fetch_sub(1, Ordering::SeqCst);
                     Ok((length, RxQuality::new(-80, self.snr)))
                 } else {
                     panic!("Trying to rx before settings config!")
@@ -100,6 +106,7 @@ impl PhyRxTx for TestRadio {
                 time::sleep(time::Duration::from_millis(5)).await;
                 if let Some(config) = &self.current_config {
                     let length = handler(last_uplink.clone(), config.rf, rx_buf);
+                    self.pending.fetch_sub(1, Ordering::SeqCst);
                     Ok(RxStatus::Rx(length, RxQuality::new(-80, self.snr)))
                 } else {
                     panic!("Trying to rx before settings config!")
@@ -123,11 +130,15 @@ pub struct RadioChannel {
     last_rxconfig: Arc<Mutex<Option<RxConfig>>>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
     tx: mpsc::Sender<Msg>,
+    pending: Arc<AtomicUsize>,
 }
 
 impl RadioChannel {
     pub async fn handle_rxtx(&self, handler: RxTxHandler) {
         tokio::time::sleep(time::Duration::from_millis(5)).await;
+        // Keep the frame counted until its handler has run, so the timer waits
+        // on this before firing.
+        self.pending.fetch_add(1, Ordering::SeqCst);
         self.tx.send(Msg::RxTx(handler)).await.unwrap();
     }
     pub async fn handle_timeout(&self) {
