@@ -131,7 +131,9 @@ impl State {
             State::WaitingForRx(s) => {
                 s.handle_event::<R, RNG, N, D>(mac, radio, rng, buf, retransmit_buf, event, dl)
             }
-            State::WaitingForRetransmitTimeout(s) => s.handle_event(event),
+            State::WaitingForRetransmitTimeout(s) => {
+                s.handle_event::<R, RNG, N>(mac, radio, rng, retransmit_buf, event)
+            }
         }
     }
 }
@@ -425,6 +427,22 @@ impl WaitingForRx {
         }
     }
 
+    /// Time at which the current RX window closes.
+    fn window_close_ms<R: radio::PhyRxTx + Timings>(&self, mac: &Mac, radio: &R) -> u32 {
+        match self.window {
+            Rx::_1(t) => {
+                let time_between_windows = mac.get_rx_delay(&self.frame, &Window::_2)
+                    - mac.get_rx_delay(&self.frame, &Window::_1);
+                if time_between_windows > radio.get_rx_window_duration_ms() {
+                    t + radio.get_rx_window_duration_ms()
+                } else {
+                    t + time_between_windows
+                }
+            }
+            Rx::_2(t) => t + radio.get_rx_window_duration_ms(),
+        }
+    }
+
     /// Handle the outcome of a completed RX window (or an early exit, eg: an
     /// oversized downlink): if the MAC wants to retransmit the current frame
     /// (NbTrans), re-arm the radio with the retained copy; otherwise complete
@@ -455,27 +473,27 @@ impl WaitingForRx {
                     _ => (State::WaitingForRx(self), Err(Error::UnexpectedRadioResponse.into())),
                 }
             }
+            // A confirmed repetition: wait RETRANSMIT_TIMEOUT before re-arming TX.
+            mac::Response::RetransmitConfirmed => {
+                let until =
+                    self.window_close_ms(mac, radio) + super::mac::retransmit_timeout_ms(rng);
+                (
+                    State::WaitingForRetransmitTimeout(WaitingForRetransmitTimeout {
+                        action: RetransmitTimeoutAction::Retransmit(self.frame),
+                    }),
+                    Ok(Response::TimeoutRequest(until)),
+                )
+            }
             // Not acknowledged: wait a random RETRANSMIT_TIMEOUT after the
             // RX window closes before allowing the next uplink. NoAck is
             // reported once the timeout fires.
             mac::Response::NoAck => {
-                // The window timestamp is its start, so anchor the timeout
-                // to the close, mirroring WaitingForRxWindow.
-                let window_close = match self.window {
-                    Rx::_1(t) => {
-                        let time_between_windows = mac.get_rx_delay(&self.frame, &Window::_2)
-                            - mac.get_rx_delay(&self.frame, &Window::_1);
-                        if time_between_windows > radio.get_rx_window_duration_ms() {
-                            t + radio.get_rx_window_duration_ms()
-                        } else {
-                            t + time_between_windows
-                        }
-                    }
-                    Rx::_2(t) => t + radio.get_rx_window_duration_ms(),
-                };
-                let until = window_close + super::mac::retransmit_timeout_ms(rng);
+                let until =
+                    self.window_close_ms(mac, radio) + super::mac::retransmit_timeout_ms(rng);
                 (
-                    State::WaitingForRetransmitTimeout(WaitingForRetransmitTimeout),
+                    State::WaitingForRetransmitTimeout(WaitingForRetransmitTimeout {
+                        action: RetransmitTimeoutAction::NoAck,
+                    }),
                     Ok(Response::TimeoutRequest(until)),
                 )
             }
@@ -519,17 +537,48 @@ impl WaitingForRx {
     }
 }
 
+/// What an elapsed RETRANSMIT_TIMEOUT authorizes.
 #[derive(Copy, Clone)]
-pub struct WaitingForRetransmitTimeout;
+enum RetransmitTimeoutAction {
+    /// Report the missing ACK.
+    NoAck,
+    /// Transmit the next copy.
+    Retransmit(Frame),
+}
+
+#[derive(Copy, Clone)]
+pub struct WaitingForRetransmitTimeout {
+    action: RetransmitTimeoutAction,
+}
 
 impl WaitingForRetransmitTimeout {
-    pub(crate) fn handle_event<R: radio::PhyRxTx>(
+    pub(crate) fn handle_event<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize>(
         self,
+        mac: &mut Mac,
+        radio: &mut R,
+        rng: &mut RNG,
+        retransmit_buf: &mut RadioBuffer<N>,
         event: Event<'_, R>,
     ) -> (State, Result<Response, super::Error<R>>) {
         match event {
-            // The RETRANSMIT_TIMEOUT elapsed: report the missing ACK.
-            Event::TimeoutFired => (State::Idle(Idle), Ok(Response::NoAck)),
+            Event::TimeoutFired => match self.action {
+                RetransmitTimeoutAction::NoAck => (State::Idle(Idle), Ok(Response::NoAck)),
+                RetransmitTimeoutAction::Retransmit(frame) => {
+                    // Re-select the channel; the frame itself is unchanged.
+                    let (tx, rx_windows) = mac.retransmit_config::<RNG>(rng);
+                    let event = radio::Event::TxRequest(tx, retransmit_buf.as_ref_for_read());
+                    match radio.handle_event(event) {
+                        Ok(radio::Response::Txing) => (
+                            State::SendingData(SendingData { frame, rx_windows }),
+                            Ok(Response::UplinkSending(mac.get_fcnt_up().unwrap())),
+                        ),
+                        Ok(radio::Response::TxDone(ms)) => {
+                            data_rxwindow1_timeout::<R, N>(frame, rx_windows, mac, radio, ms)
+                        }
+                        _ => (State::Idle(Idle), Err(Error::UnexpectedRadioResponse.into())),
+                    }
+                }
+            },
             Event::RadioEvent(_) => {
                 (self.into(), Err(Error::RadioEventWhileWaitingForRetransmitTimeout.into()))
             }

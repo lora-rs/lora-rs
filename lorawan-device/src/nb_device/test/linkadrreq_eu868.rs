@@ -330,15 +330,16 @@ fn eu868_linkadrreq_redundancy() {
     // (NbTrans = 3) with the same FCntUp.
     device.send(&[1, 2, 3], 3, false).unwrap();
     let mut transmissions = vec![device.get_radio().take_last_uplink().unwrap()];
-    let response = expire_rx_windows(&mut device); // -> retransmit
-    assert!(matches!(response, Response::TimeoutRequest(1000)));
-    transmissions.push(device.get_radio().take_last_uplink().unwrap());
-    let response = expire_rx_windows(&mut device); // -> retransmit
-    assert!(matches!(response, Response::TimeoutRequest(1000)));
-    transmissions.push(device.get_radio().take_last_uplink().unwrap());
-    let response = expire_rx_windows(&mut device); // -> retransmit timeout
-    // Unacknowledged confirmed uplink: a random RETRANSMIT_TIMEOUT (1..=3 s)
-    // after the RX2 window (closed at t = 2100) before NoAck is reported
+    for _ in 0..2 {
+        let response = expire_rx_windows(&mut device); // RX2 end -> retransmit timeout
+        // RETRANSMIT_TIMEOUT (1..=3 s) after RX2 closes at t = 2100
+        assert!(matches!(response, Response::TimeoutRequest(t) if (3100..=5100).contains(&t)));
+        let response = device.handle_event(Event::TimeoutFired).unwrap(); // retransmit timeout
+        // NbTrans allows one more transmission
+        assert!(matches!(response, Response::TimeoutRequest(1000)));
+        transmissions.push(device.get_radio().take_last_uplink().unwrap());
+    }
+    let response = expire_rx_windows(&mut device); // -> NoAck timeout
     assert!(matches!(response, Response::TimeoutRequest(t) if (3100..=5100).contains(&t)));
     let response = device.handle_event(Event::TimeoutFired).unwrap(); // retransmit timeout
     assert!(matches!(response, Response::NoAck));
