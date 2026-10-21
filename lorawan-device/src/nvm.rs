@@ -155,8 +155,6 @@ pub struct PersistentSession {
     pub fcnt_down: Option<u32>,
     /// Must equal `PersistentIdentity::join_epoch` or the session is stale.
     pub join_epoch: u32,
-    // Negotiated MAC state. Channel-plan state is not persisted yet; adding it is a
-    // schema version bump.
     pub data_rate: DR,
     pub rx1_delay: u32,
     pub rx1_dr_offset: u8,
@@ -164,6 +162,7 @@ pub struct PersistentSession {
     pub rx2_frequency: Option<u32>,
     pub tx_power: Option<u8>,
     pub adr_enabled: bool,
+    pub channel_mask: [u8; 9],
 }
 
 /// Reasons a stored blob was rejected. All are handled by treating the region as
@@ -186,9 +185,9 @@ pub enum DecodeError {
 const MAGIC: [u8; 4] = *b"LWNV";
 const HEADER_LEN: usize = 12;
 const IDENTITY_SCHEMA_VERSION: u8 = 1;
-const SESSION_SCHEMA_VERSION: u8 = 1;
+const SESSION_SCHEMA_VERSION: u8 = 2;
 const IDENTITY_PAYLOAD_LEN: usize = 10;
-const SESSION_PAYLOAD_LEN: usize = 62;
+const SESSION_PAYLOAD_LEN: usize = 71;
 /// Sentinel encoding of `last_join_nonce: None`; JoinNonce is a 3-byte field on the
 /// wire, so this value can never be a real nonce.
 const JOIN_NONCE_NONE: u32 = 0xFFFF_FFFF;
@@ -299,6 +298,7 @@ impl PersistentSession {
         p[59] = self.tx_power.unwrap_or(0xFF);
         p[60] = self.fcnt_down.is_some() as u8;
         p[61] = self.adr_enabled as u8;
+        p[62..71].copy_from_slice(&self.channel_mask);
         encode_blob(NvmRegion::Session, &p, out)
     }
 
@@ -312,6 +312,8 @@ impl PersistentSession {
         let mut appskey = [0u8; 16];
         appskey.copy_from_slice(&p[16..32]);
         let rx2_frequency = u32::from_le_bytes([p[55], p[56], p[57], p[58]]);
+        let mut channel_mask = [0u8; 9];
+        channel_mask.copy_from_slice(&p[62..71]);
         Ok(Self {
             nwkskey: NwkSKey::from(nwkskey),
             appskey: AppSKey::from(appskey),
@@ -326,6 +328,7 @@ impl PersistentSession {
             rx2_frequency: (rx2_frequency != 0).then_some(rx2_frequency),
             tx_power: (p[59] != 0xFF).then_some(p[59]),
             adr_enabled: p[61] != 0,
+            channel_mask,
         })
     }
 }
@@ -353,6 +356,7 @@ mod tests {
             rx2_frequency: Some(923_300_000),
             tx_power: None,
             adr_enabled: false,
+            channel_mask: [0x00, 0xFF, 0, 0, 0, 0, 0, 0, 0x02],
         }
     }
 
@@ -378,6 +382,14 @@ mod tests {
         let len = session().encode(&mut buf);
         assert_eq!(len, HEADER_LEN + SESSION_PAYLOAD_LEN);
         assert_eq!(PersistentSession::decode(&buf[..len]).unwrap(), session());
+    }
+
+    #[test]
+    fn previous_session_schema_rejected() {
+        let mut buf = [0u8; MAX_BLOB_LEN];
+        let len = session().encode(&mut buf);
+        buf[5] = SESSION_SCHEMA_VERSION - 1;
+        assert_eq!(PersistentSession::decode(&buf[..len]), Err(DecodeError::SchemaVersion));
     }
 
     #[test]
