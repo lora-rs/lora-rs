@@ -299,7 +299,12 @@ impl Session {
 
         if retransmit {
             self.retransmissions += 1;
-            return Response::Retransmit;
+            // Confirmed repetitions wait RETRANSMIT_TIMEOUT; unconfirmed ones do not.
+            return if self.confirmed {
+                Response::RetransmitConfirmed
+            } else {
+                Response::Retransmit
+            };
         }
 
         self.retransmissions = 0;

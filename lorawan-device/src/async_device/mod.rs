@@ -415,6 +415,17 @@ where
                     (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
                     tx_pending = true;
                 }
+                // Every repetition of a confirmed frame waits RETRANSMIT_TIMEOUT.
+                mac::Response::RetransmitConfirmed => {
+                    let timeout_ms = mac::retransmit_timeout_ms(&mut self.rng);
+                    debug!(
+                        "Retransmitting confirmed frame; waiting {} ms before the next copy.",
+                        timeout_ms
+                    );
+                    self.timer.delay_ms(u64::from(timeout_ms)).await;
+                    (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
+                    tx_pending = true;
+                }
                 // A certification answer was transmitted inside the RX window;
                 // it is a regular uplink, so run its RX windows (and NbTrans
                 // retransmissions) without transmitting again.

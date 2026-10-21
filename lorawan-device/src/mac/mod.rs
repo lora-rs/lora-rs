@@ -509,6 +509,9 @@ pub(crate) enum Response {
     /// Both RX windows expired without a downlink and NbTrans permits another
     /// transmission of the same frame (same FCntUp).
     Retransmit,
+    /// Like `Retransmit`, but the repetition waits RETRANSMIT_TIMEOUT first
+    /// (confirmed frame).
+    RetransmitConfirmed,
     LinkCheckReq,
     #[cfg(feature = "certification")]
     UplinkPrepared,
@@ -539,6 +542,7 @@ impl From<Response> for nb_device::Response {
             Response::RxComplete => nb_device::Response::RxComplete,
             // Handled internally by the nb_device state machine.
             Response::Retransmit => unimplemented!(),
+            Response::RetransmitConfirmed => unimplemented!(),
             Response::LinkCheckReq => unimplemented!(),
             #[cfg(feature = "certification")]
             Response::UplinkPrepared => unimplemented!(),
