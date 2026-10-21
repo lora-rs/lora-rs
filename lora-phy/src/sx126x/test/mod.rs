@@ -749,6 +749,35 @@ async fn test_init_rejects_impossible_retention_count() {
 }
 
 #[tokio::test]
+async fn test_retention_list_skips_register_already_present() {
+    // One entry, RxGain (0x08AC): adding it again must not rewrite the list.
+    const RETENTION_READ: [u8; 4] = [0x1D, 0x02, 0x9F, 0x00];
+    const RETENTION_WITH_RX_GAIN: [u8; 9] = [1, 0x08, 0xAC, 0, 0, 0, 0, 0, 0];
+
+    let mut sx1261 = get_sx126x();
+    sx1261.spi_mut().prime_read(&RETENTION_READ, &RETENTION_WITH_RX_GAIN);
+
+    assert_eq!(sx1261.add_register_to_retention_list(Register::RxGain).await, Ok(()));
+    assert!(sx1261.take_spi().writes().is_empty());
+}
+
+#[tokio::test]
+async fn test_retention_list_full_rejects_new_register() {
+    // Four entries, none of them TxModulation (0x0889).
+    const RETENTION_READ: [u8; 4] = [0x1D, 0x02, 0x9F, 0x00];
+    const RETENTION_FULL: [u8; 9] = [4, 0x08, 0xAC, 0x07, 0x36, 0x08, 0xE2, 0x08, 0xE5];
+
+    let mut sx1261 = get_sx126x();
+    sx1261.spi_mut().prime_read(&RETENTION_READ, &RETENTION_FULL);
+
+    assert_eq!(
+        sx1261.add_register_to_retention_list(Register::TxModulation).await,
+        Err(RadioError::InvalidConfiguration)
+    );
+    assert!(sx1261.take_spi().writes().is_empty());
+}
+
+#[tokio::test]
 async fn test_init_lora_composed() {
     // The whole init_lora sequence against the reference calls chained in
     // the same order. Writes-only comparison, same as the single sync-word
