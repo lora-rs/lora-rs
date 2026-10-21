@@ -427,20 +427,21 @@ impl WaitingForRx {
         }
     }
 
-    /// Time at which the current RX window closes.
-    fn window_close_ms<R: radio::PhyRxTx + Timings>(&self, mac: &Mac, radio: &R) -> u32 {
-        match self.window {
-            Rx::_1(t) => {
-                let time_between_windows = mac.get_rx_delay(&self.frame, &Window::_2)
-                    - mac.get_rx_delay(&self.frame, &Window::_1);
-                if time_between_windows > radio.get_rx_window_duration_ms() {
-                    t + radio.get_rx_window_duration_ms()
-                } else {
-                    t + time_between_windows
-                }
-            }
-            Rx::_2(t) => t + radio.get_rx_window_duration_ms(),
-        }
+    /// Wait out RETRANSMIT_TIMEOUT after RX2, where NoAck and
+    /// RetransmitConfirmed are produced.
+    fn wait_after_rx2<R: radio::PhyRxTx + Timings, RNG: RngCore>(
+        self,
+        action: RetransmitTimeoutAction,
+        radio: &R,
+        rng: &mut RNG,
+    ) -> (State, Result<Response, super::Error<R>>) {
+        let until = self.window.start_ms()
+            + radio.get_rx_window_duration_ms()
+            + super::mac::retransmit_timeout_ms(rng);
+        (
+            State::WaitingForRetransmitTimeout(WaitingForRetransmitTimeout { action }),
+            Ok(Response::TimeoutRequest(until)),
+        )
     }
 
     /// Handle the outcome of a completed RX window (or an early exit, eg: an
@@ -475,28 +476,11 @@ impl WaitingForRx {
             }
             // A confirmed repetition: wait RETRANSMIT_TIMEOUT before re-arming TX.
             mac::Response::RetransmitConfirmed => {
-                let until =
-                    self.window_close_ms(mac, radio) + super::mac::retransmit_timeout_ms(rng);
-                (
-                    State::WaitingForRetransmitTimeout(WaitingForRetransmitTimeout {
-                        action: RetransmitTimeoutAction::Retransmit(self.frame),
-                    }),
-                    Ok(Response::TimeoutRequest(until)),
-                )
+                self.wait_after_rx2(RetransmitTimeoutAction::Retransmit(self.frame), radio, rng)
             }
-            // Not acknowledged: wait a random RETRANSMIT_TIMEOUT after the
-            // RX window closes before allowing the next uplink. NoAck is
-            // reported once the timeout fires.
-            mac::Response::NoAck => {
-                let until =
-                    self.window_close_ms(mac, radio) + super::mac::retransmit_timeout_ms(rng);
-                (
-                    State::WaitingForRetransmitTimeout(WaitingForRetransmitTimeout {
-                        action: RetransmitTimeoutAction::NoAck,
-                    }),
-                    Ok(Response::TimeoutRequest(until)),
-                )
-            }
+            // NoAck: wait a random RETRANSMIT_TIMEOUT after RX2 closes, then
+            // report it.
+            mac::Response::NoAck => self.wait_after_rx2(RetransmitTimeoutAction::NoAck, radio, rng),
             // Any other type of update indicates we are done receiving.
             // Change to Idle
             r => (State::Idle(Idle), Ok(r.into())),
@@ -596,6 +580,15 @@ impl WaitingForRetransmitTimeout {
 enum Rx {
     _1(u32),
     _2(u32),
+}
+
+impl Rx {
+    /// Start of the window, in milliseconds.
+    fn start_ms(self) -> u32 {
+        match self {
+            Rx::_1(t) | Rx::_2(t) => t,
+        }
+    }
 }
 
 fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, const N: usize>(
