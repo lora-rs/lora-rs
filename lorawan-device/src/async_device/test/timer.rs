@@ -1,13 +1,20 @@
 use crate::async_device::radio::Timer;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::{Duration, Instant},
+};
 use tokio::sync::{Mutex, mpsc};
 
 impl TestTimer {
-    pub fn new() -> (TimerChannel, Self) {
+    pub fn new(pending: Arc<AtomicUsize>) -> (TimerChannel, Self) {
         let tx = Arc::new(Mutex::new(HashMap::new()));
         let armed_count = Arc::new(Mutex::new(0));
         (
-            TimerChannel { tx: tx.clone(), armed_count: armed_count.clone() },
+            TimerChannel { tx: tx.clone(), armed_count: armed_count.clone(), pending },
             Self { tx, armed_count },
         )
     }
@@ -45,11 +52,21 @@ impl Timer for TestTimer {
 /// A channel for the test fixture to trigger fires and to check calls.
 pub struct TimerChannel {
     armed_count: Arc<Mutex<usize>>,
+    pending: Arc<AtomicUsize>,
     tx: Arc<Mutex<HashMap<usize, mpsc::Sender<()>>>>,
 }
 
 impl TimerChannel {
     pub async fn fire_most_recent(&self) {
+        // Don't let the timeout overtake an injected frame.
+        let start = Instant::now();
+        while self.pending.load(Ordering::SeqCst) != 0 {
+            assert!(
+                start.elapsed() < Duration::from_secs(5),
+                "injected frame was not consumed before the timer fired"
+            );
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
         tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         let mut tx_map = self.tx.lock().await;
         let armed_count = *self.armed_count.lock().await;

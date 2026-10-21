@@ -6,14 +6,16 @@ use super::{Device, get_dev_addr, get_key, radio::*, region, timer::*};
 use crate::mac::Session;
 pub(crate) use crate::test_util::{Uplink, get_crypto, handle_data_uplink_with_link_adr_req};
 use crate::{AppSKey, NwkSKey};
+use std::sync::{Arc, atomic::AtomicUsize};
 
 fn default_session() -> Session {
     Session::new(NwkSKey::from(get_key()), AppSKey::from(get_key()), get_dev_addr())
 }
 
 pub fn session_with_region(region: region::Configuration) -> (RadioChannel, TimerChannel, Device) {
-    let (radio_channel, mock_radio) = TestRadio::new();
-    let (timer_channel, mock_timer) = TestTimer::new();
+    let pending = Arc::new(AtomicUsize::new(0));
+    let (radio_channel, mock_radio) = TestRadio::new(pending.clone());
+    let (timer_channel, mock_timer) = TestTimer::new(pending);
     let async_device = Device::new_with_session(
         region,
         mock_radio,
@@ -25,8 +27,9 @@ pub fn session_with_region(region: region::Configuration) -> (RadioChannel, Time
 }
 
 fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel, Device) {
-    let (radio_channel, mock_radio) = TestRadio::new();
-    let (timer_channel, mock_timer) = TestTimer::new();
+    let pending = Arc::new(AtomicUsize::new(0));
+    let (radio_channel, mock_radio) = TestRadio::new(pending.clone());
+    let (timer_channel, mock_timer) = TestTimer::new(pending);
     let region = region::US915::default();
     let async_device = Device::new_with_session(
         region.into(),
