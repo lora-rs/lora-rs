@@ -83,6 +83,14 @@ where
         matches!(&self.state, State::Idle(_)) && self.shared.mac.is_joined()
     }
 
+    /// Send data on a given port with the expected confirmation.
+    ///
+    /// The returned `Response` may be a `TimeoutRequest` that the application
+    /// must wait for before passing `Event::TimeoutFired` to `handle_event`.
+    ///
+    /// After the last confirmed attempt, the stack waits `RETRANSMIT_TIMEOUT`
+    /// before reporting `Response::NoAck`. The next uplink can start as soon as
+    /// `send` returns `NoAck`.
     pub fn send(&mut self, data: &[u8], fport: u8, confirmed: bool) -> Result<Response, Error<R>> {
         self.handle_event(Event::SendDataRequest(SendData { data, fport, confirmed }))
     }

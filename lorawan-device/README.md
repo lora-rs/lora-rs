@@ -27,8 +27,11 @@ Both stacks implement `NbTrans` automatic retransmission for uplinks. `NbTrans`
 defaults to 1 transmission and is set by the network with a `LinkADRReq`
 (LoRaWAN 1.0.4). With `NbTrans` > 1, an uplink that receives no downlink is
 repeated with the same `FCntUp`, up to `NbTrans` times. Confirmed uplinks wait
-`RETRANSMIT_TIMEOUT` before each repeat. ADR is enabled by default, which lets
-the network manage `NbTrans`. There is no application API to set it directly.
+`RETRANSMIT_TIMEOUT` before each repeat. After the last confirmed attempt, the
+stack waits `RETRANSMIT_TIMEOUT` before reporting `NoAck`. In Class C the wait
+is spent listening in receive-continuous mode, so downlinks are not missed. ADR
+is enabled by default, which lets the network manage `NbTrans`. There is no
+application API to set it directly.
 
 Failed joins, and confirmed uplinks that report `NoAck` after all `NbTrans`
 attempts, must still be retried by the application. See the examples for more.

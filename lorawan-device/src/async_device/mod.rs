@@ -378,6 +378,11 @@ where
     /// transmits (such as certification answer frames on FPort 224), which are
     /// followed by RX windows like any other uplink.
     ///
+    /// After the last confirmed attempt, `send` waits `RETRANSMIT_TIMEOUT` before
+    /// returning `SendResponse::NoAck`. In Class C mode the wait is spent listening
+    /// for downlinks, so the device is not deaf during the wait. The next uplink can
+    /// start as soon as `send` returns.
+    ///
     /// In Class C mode, it is possible to get one or more downlinks and `Reponse::DownlinkReceived`
     /// maybe not even be indicated. It is recommended to call `take_downlink` after `send` until
     /// it returns `None`.
