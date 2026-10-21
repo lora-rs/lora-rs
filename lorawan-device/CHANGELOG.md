@@ -15,6 +15,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
   after `ADR_ACK_LIMIT` missed downlinks, and data-rate backoff after
   `ADR_ACK_DELAY`. Controllable via `Device::set_adr` / `get_adr`.
 - Add RU864 region (`region-ru864` feature)
+- Add NbTrans automatic retransmission handling in `async_device` and
+  `nb_device`. Confirmed uplinks wait `RETRANSMIT_TIMEOUT` before each repeat
+  and before reporting `NoAck`, so `send()` returns later when no ACK arrives
 
 ## [v0.12.1]
 
