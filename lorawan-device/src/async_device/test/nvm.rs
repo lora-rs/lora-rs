@@ -394,6 +394,7 @@ async fn stale_or_corrupt_session_dropped_identity_kept() {
         rx2_frequency: None,
         tx_power: None,
         adr_enabled: true,
+        channel_mask: [0xFF; 9],
     };
     let n = stale.encode(&mut buf);
     store.put(NvmRegion::Session, &buf[..n]);
@@ -611,6 +612,7 @@ async fn restore_validates_rx2_data_rate_and_keeps_adr() {
         rx2_frequency: None,
         tx_power: None,
         adr_enabled: false,
+        channel_mask: [0xFF; 9],
     };
     let n = session.encode(&mut buf);
     store.put(NvmRegion::Session, &buf[..n]);
@@ -619,6 +621,56 @@ async fn restore_validates_rx2_data_rate_and_keeps_adr() {
     assert_eq!(device.mac.configuration.rx2_data_rate, None);
     assert_eq!(device.mac.configuration.data_rate, lorawan::types::DR::_2);
     assert!(!device.get_adr());
+}
+
+fn stored_session(channel_mask: [u8; 9]) -> MockStore {
+    let store = MockStore::default();
+    let identity = PersistentIdentity { dev_nonce: 1, last_join_nonce: Some(1), join_epoch: 1 };
+    let mut buf = [0u8; MAX_BLOB_LEN];
+    let n = identity.encode(&mut buf);
+    store.put(NvmRegion::Identity, &buf[..n]);
+    let session = PersistentSession {
+        nwkskey: crate::NwkSKey::from(get_key()),
+        appskey: crate::AppSKey::from(get_key()),
+        devaddr: crate::test_util::get_dev_addr(),
+        fcnt_up_checkpoint: 10,
+        fcnt_down: None,
+        join_epoch: 1,
+        data_rate: lorawan::types::DR::_0,
+        rx1_delay: 1000,
+        rx1_dr_offset: 0,
+        rx2_data_rate: None,
+        rx2_frequency: None,
+        tx_power: None,
+        adr_enabled: false,
+        channel_mask,
+    };
+    let n = session.encode(&mut buf);
+    store.put(NvmRegion::Session, &buf[..n]);
+    store
+}
+
+#[tokio::test]
+async fn restore_keeps_the_channel_mask() {
+    let subband_2 = [0x00, 0xFF, 0, 0, 0, 0, 0, 0, 0x02];
+    let store = stored_session(subband_2);
+    let (_radio, _timer, device) = restore(&store).await;
+    assert_eq!(device.mac.region.channel_mask_get().as_ref(), &subband_2);
+}
+
+#[tokio::test]
+async fn restore_ignores_a_channel_mask_without_usable_channels() {
+    let store = stored_session([0; 9]);
+    let (_radio, _timer, device) = restore(&store).await;
+    assert_eq!(device.mac.region.channel_mask_get().as_ref(), &[0xFF; 9]);
+}
+
+#[tokio::test]
+async fn persisted_session_carries_the_channel_mask() {
+    let store = MockStore::default();
+    let (_radio, _timer, mut device) = restore(&store).await;
+    assert!(matches!(device.join(&get_abp_credentials()).await, Ok(JoinResponse::JoinSuccess)));
+    assert_eq!(store.session().channel_mask, [0xFF; 9]);
 }
 
 /// A certification-port downlink that yields a MAC response other than
