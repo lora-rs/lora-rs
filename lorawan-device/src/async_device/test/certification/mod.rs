@@ -1,5 +1,6 @@
 //! LoRaWAN 1.0.4 Certification testcases
 //! Based on LoRaWAN 1.0.4 End Device Certification Test Specification v1.6.1
+use super::net;
 use super::util;
 use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
