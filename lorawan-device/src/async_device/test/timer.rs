@@ -3,30 +3,50 @@ use std::{
     collections::HashMap,
     sync::{
         Arc,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
 };
 use tokio::sync::{Mutex, mpsc};
 
+/// The kind of the most recently armed timer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TimerKind {
+    /// Armed by `Timer::at`: a receive window is about to open, so the
+    /// device will next read a radio event.
+    Window,
+    /// Armed by `Timer::delay_ms`: a retransmission wait; the device will
+    /// not read a radio event after this fire (it retransmits, or `send`
+    /// returns).
+    Delay,
+}
+
 impl TestTimer {
     pub fn new(pending: Arc<AtomicUsize>) -> (TimerChannel, Self) {
         let tx = Arc::new(Mutex::new(HashMap::new()));
         let armed_count = Arc::new(Mutex::new(0));
+        let kind = Arc::new(AtomicBool::new(true));
         (
-            TimerChannel { tx: tx.clone(), armed_count: armed_count.clone(), pending },
-            Self { tx, armed_count },
+            TimerChannel {
+                tx: tx.clone(),
+                armed_count: armed_count.clone(),
+                pending,
+                kind: kind.clone(),
+            },
+            Self { tx, armed_count, kind },
         )
     }
 }
 
 pub struct TestTimer {
     armed_count: Arc<Mutex<usize>>,
+    kind: Arc<AtomicBool>,
     tx: Arc<Mutex<HashMap<usize, mpsc::Sender<()>>>>,
 }
 
 impl TestTimer {
-    async fn create_channel_and_await(&mut self) {
+    async fn create_channel_and_await(&mut self, kind: TimerKind) {
+        self.kind.store(kind == TimerKind::Window, Ordering::SeqCst);
         let (tx, mut rx) = mpsc::channel(1);
         {
             *self.armed_count.lock().await += 1;
@@ -41,17 +61,18 @@ impl Timer for TestTimer {
     fn reset(&mut self) {}
 
     async fn at(&mut self, _millis: u64) {
-        self.create_channel_and_await().await;
+        self.create_channel_and_await(TimerKind::Window).await;
     }
 
     async fn delay_ms(&mut self, _millis: u64) {
-        self.create_channel_and_await().await;
+        self.create_channel_and_await(TimerKind::Delay).await;
     }
 }
 
 /// A channel for the test fixture to trigger fires and to check calls.
 pub struct TimerChannel {
     armed_count: Arc<Mutex<usize>>,
+    kind: Arc<AtomicBool>,
     pending: Arc<AtomicUsize>,
     tx: Arc<Mutex<HashMap<usize, mpsc::Sender<()>>>>,
 }
@@ -97,5 +118,14 @@ impl TimerChannel {
 
     pub async fn get_armed_count(&self) -> usize {
         *self.armed_count.lock().await
+    }
+
+    /// The kind of the most recently armed timer (see [`TimerKind`]).
+    pub fn last_timer_kind(&self) -> TimerKind {
+        if self.kind.load(Ordering::SeqCst) {
+            TimerKind::Window
+        } else {
+            TimerKind::Delay
+        }
     }
 }
