@@ -946,7 +946,7 @@ where
         }
         match response {
             mac::Response::NoUpdate => Ok(None),
-            mac::Response::LinkCheckReq => {
+            mac::Response::SendLinkCheckReq => {
                 let _ = mac.add_uplink(lorawan::maccommandcreator::LinkCheckReqCreator::new());
                 Ok(Some(mac.rx2_complete()))
             }

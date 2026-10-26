@@ -383,9 +383,9 @@ fn test_link_adr_ans() {
 }
 
 #[test]
-fn test_certification_link_check_req_is_ignored() {
+fn test_certification_link_check_req_queues_mac_command() {
     fn cp_link_check_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
-        build_cert_downlink(buf, "20", 1) // LinkCheckReq
+        build_cert_downlink(buf, "20", 1) // certification CP:LinkCheckReq
     }
 
     let mut device = test_device();
@@ -394,9 +394,26 @@ fn test_certification_link_check_req_is_ignored() {
     assert!(matches!(response, Response::RxComplete));
     assert!(device.ready_to_send_data());
 
-    // Nothing was queued for the next uplink.
+    // CP:LinkCheckReq asks for the regular MAC LinkCheckReq (CID 0x02).
     let session = device.get_session().expect("device is still joined");
-    assert!(session.uplink.mac_commands().is_empty());
+    assert_eq!(session.uplink.mac_commands(), &[0x02]);
+
+    // The next uplink carries it in FOpts.
+    let response = device.send(&[0; 1], 1, false).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+    let mut uplink = device.get_radio().take_last_uplink().unwrap();
+    let fcnt = match parser::parse(uplink.data_mut()) {
+        Ok(PhyPayload::Data(data)) => data.fhdr().fcnt() as u32,
+        _ => panic!("expected a data frame"),
+    };
+    let decrypted = DecryptedDataPayload::decrypt_in_place(
+        uplink.data_mut(),
+        Some(&get_crypto()),
+        Some(&get_crypto()),
+        fcnt,
+    )
+    .unwrap();
+    assert_eq!(decrypted.fhdr().f_opts(), [0x02]);
 }
 
 #[test]

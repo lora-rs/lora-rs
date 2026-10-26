@@ -656,7 +656,9 @@ pub(crate) enum Response {
     /// Like `Retransmit`, but the repetition waits RETRANSMIT_TIMEOUT first
     /// (confirmed frame).
     RetransmitConfirmed,
-    LinkCheckReq,
+    /// A certification command asked the device to send the regular MAC
+    /// `LinkCheckReq` on the next uplink.
+    SendLinkCheckReq,
     UplinkPrepared,
     DeviceEvent(certification::DeviceEvent),
     #[cfg(feature = "multicast")]
@@ -678,11 +680,18 @@ impl From<Response> for nb_device::Response {
                 warn!("nb_device: ignoring internally handled response");
                 nb_device::Response::RxComplete
             }
-            // TODO: handle certification responses once nb_device supports 1.0.4.
-            Response::LinkCheckReq => {
-                warn!("nb_device: ignoring LinkCheckReq");
+            // The certification protocol can request a regular MAC
+            // `LinkCheckReq`. The nb_device state machine handles that before
+            // this conversion; if it ever reaches here, ignore it.
+            Response::SendLinkCheckReq => {
+                warn!("nb_device: ignoring unexpected LinkCheckReq request");
                 nb_device::Response::RxComplete
             }
+            // The nb_device state machine handles the certification reset
+            // events itself. It has no application-driven uplink periodicity,
+            // so any remaining event is ignored.
+            // TODO: expose the certification periodicity change once nb_device
+            // has a use for it.
             Response::DeviceEvent(_) => {
                 warn!("nb_device: ignoring certification device event");
                 nb_device::Response::RxComplete

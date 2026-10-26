@@ -11,6 +11,8 @@ pub(crate) enum Response {
     DutJoinReq,
     DutResetReq,
     DeviceTimeReq,
+    /// The certification protocol asks the DUT to send the regular MAC
+    /// `LinkCheckReq` on its next uplink.
     LinkCheckReq,
     TxFramesCtrlReq(Option<bool>),
     TxPeriodicityChange(Option<u16>),

@@ -253,7 +253,7 @@ impl Session {
                                     return Response::DeviceEvent(DeviceEvent::ResetDevice);
                                 }
                                 LinkCheckReq => {
-                                    return Response::LinkCheckReq;
+                                    return Response::SendLinkCheckReq;
                                 }
                                 DeviceTimeReq => {
                                     self.uplink.add_mac_command(DeviceTimeReqCreator::new());

@@ -393,6 +393,23 @@ impl WaitingForRx {
                                     retransmit_buf,
                                 );
                             }
+                            if let mac::Response::SendLinkCheckReq = response {
+                                // The certification protocol asked for the
+                                // regular MAC LinkCheckReq: queue it for the
+                                // next uplink and close this RX cycle.
+                                let _ = mac.add_uplink(
+                                    lorawan::maccommandcreator::LinkCheckReqCreator::new(),
+                                );
+                                let response = mac.rx2_complete();
+                                return self.complete_or_retransmit(
+                                    response,
+                                    mac,
+                                    radio,
+                                    rng,
+                                    retransmit_buf,
+                                    handler,
+                                );
+                            }
                             self.complete_or_retransmit(
                                 response,
                                 mac,
