@@ -29,7 +29,31 @@ mod certification;
 #[cfg(feature = "multicast")]
 mod multicast;
 
-type Device = AsyncDevice<TestRadio, TestTimer, rand_core::OsRng, 512, 4>;
+#[derive(Clone, Copy)]
+pub(crate) struct TestHandler {
+    pub battery: u8,
+}
+
+impl TestHandler {
+    pub(crate) fn with_battery(battery: u8) -> Self {
+        Self { battery }
+    }
+}
+
+impl Default for TestHandler {
+    fn default() -> Self {
+        Self { battery: 255 }
+    }
+}
+
+impl crate::DeviceHandler for TestHandler {
+    fn battery_level(&self) -> u8 {
+        self.battery
+    }
+}
+
+type Device =
+    AsyncDevice<TestRadio, TestTimer, rand_core::OsRng, 512, 4, crate::nvm::NoNvm, TestHandler>;
 
 #[tokio::test]
 async fn test_join_rx1() {

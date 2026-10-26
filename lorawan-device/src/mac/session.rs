@@ -434,11 +434,8 @@ impl Session {
         while let Some(cmd) = cmd_iter.next() {
             match cmd {
                 DevStatusReq(..) => {
-                    // TODO: Battery information should come from device/application
-                    // Battery: (255 - unable to measure, 1..254 - battery level, 0 - external power source)
-                    // For now we just return dummy value of "255"
                     let mut cmd = DevStatusAnsCreator::new();
-                    let _ = cmd.set_battery(255).set_margin(snr);
+                    let _ = cmd.set_battery(configuration.battery).set_margin(snr);
                     self.uplink.add_mac_command(cmd);
                 }
                 DlChannelReq(payload) => {

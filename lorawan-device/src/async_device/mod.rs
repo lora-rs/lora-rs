@@ -11,6 +11,7 @@ use rand_core::RngCore;
 
 pub use crate::region::DR;
 use crate::{
+    DeviceHandler,
     nvm::{
         DEFAULT_FCNT_CHECKPOINT_MARGIN, MAX_BLOB_LEN, NoNvm, NonVolatileStore, NvmRegion,
         PersistentIdentity, PersistentSession,
@@ -73,13 +74,14 @@ use self::radio::RxStatus;
 /// 1.0.4 behavior: monotonic DevNonce, JoinNonce replay protection and session resume across
 /// power loss, along with the 1.0.4 certification protocol (`FPort` 224). The default [`NoNvm`]
 /// keeps the stack at LoRaWAN 1.0.2 with persistence and certification disabled.
-pub struct Device<R, T, G, const N: usize = 256, const D: usize = 1, S = NoNvm>
+pub struct Device<R, T, G, const N: usize = 256, const D: usize = 1, S = NoNvm, H = ()>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
     G: RngCore,
     S: NonVolatileStore,
 {
+    handler: H,
     radio: R,
     /// Access to provided (pseudo)-random number generator.
     pub rng: G,
@@ -236,11 +238,43 @@ where
         rng: G,
         session: Option<Session>,
     ) -> Self {
+        Self::new_with_session_and_handler((), region, radio, timer, rng, session)
+    }
+}
+
+impl<R, T, G, const N: usize, const D: usize, H> Device<R, T, G, N, D, NoNvm, H>
+where
+    R: radio::PhyRxTx + Timings,
+    T: radio::Timer,
+    G: RngCore,
+    H: DeviceHandler,
+{
+    /// Create a [`Device`] with application device hooks and no store.
+    pub fn new_with_handler(
+        handler: H,
+        region: region::Configuration,
+        radio: R,
+        timer: T,
+        rng: G,
+    ) -> Self {
+        Self::new_with_session_and_handler(handler, region, radio, timer, rng, None)
+    }
+
+    /// Create a [`Device`] with application device hooks and an optional [`Session`].
+    pub fn new_with_session_and_handler(
+        handler: H,
+        region: region::Configuration,
+        radio: R,
+        timer: T,
+        rng: G,
+        session: Option<Session>,
+    ) -> Self {
         let mut mac = Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN);
         if let Some(session) = session {
             mac.set_session(session);
         }
         Self {
+            handler,
             radio,
             rng,
             mac,
@@ -256,7 +290,7 @@ where
     }
 }
 
-impl<R, T, G, const N: usize, const D: usize, S> Device<R, T, G, N, D, S>
+impl<R, T, G, const N: usize, const D: usize, S> Device<R, T, G, N, D, S, ()>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
@@ -265,6 +299,27 @@ where
 {
     /// Create a [`Device`] backed by a non-volatile store, restoring any persisted state.
     /// This is the only constructor for LoRaWAN 1.0.4 operation.
+    pub async fn restore(
+        region: region::Configuration,
+        radio: R,
+        timer: T,
+        rng: G,
+        store: S,
+    ) -> Result<Self, S::Error> {
+        Self::restore_with_handler((), region, radio, timer, rng, store).await
+    }
+}
+
+impl<R, T, G, const N: usize, const D: usize, S, H> Device<R, T, G, N, D, S, H>
+where
+    R: radio::PhyRxTx + Timings,
+    T: radio::Timer,
+    G: RngCore,
+    S: NonVolatileStore,
+    H: DeviceHandler,
+{
+    /// Create a [`Device`] backed by a non-volatile store and application
+    /// device hooks, restoring any persisted state.
     ///
     /// A missing or corrupt identity blob means fresh join counters. A session blob is
     /// resumed only when intact and tied to the current identity epoch; otherwise it is
@@ -275,7 +330,8 @@ where
     /// identity blob restarts the DevNonce at 0, so stores must write that region
     /// atomically. The region configuration must match the one the persisted state was
     /// written under.
-    pub async fn restore(
+    pub async fn restore_with_handler(
+        handler: H,
         region: region::Configuration,
         radio: R,
         timer: T,
@@ -287,6 +343,7 @@ where
         let mut nvm = Persistence::new(store, 0);
         nvm.reload(&mut mac).await?;
         Ok(Self {
+            handler,
             radio,
             rng,
             mac,
@@ -684,6 +741,7 @@ where
                 RxcWindowResponse::Rx(sz, q, timeout_fut) => {
                     debug!("RXC window received {} bytes.", sz);
                     self.radio_buffer.set_pos(sz);
+                    self.mac.configuration.battery = self.handler.battery_level();
                     let mac_response = self.mac.handle_rxc::<N, D>(
                         &mut self.radio_buffer,
                         &mut self.downlink,
@@ -753,6 +811,7 @@ where
                     RxcWindowResponse::Rx(sz, q, timeout_fut) => {
                         debug!("RXC window received {} bytes.", sz);
                         self.radio_buffer.set_pos(sz);
+                        self.mac.configuration.battery = self.handler.battery_level();
                         let mac_response = self.mac.handle_rxc::<N, D>(
                             &mut self.radio_buffer,
                             &mut self.downlink,
@@ -948,6 +1007,7 @@ where
             match self.radio.rx_single(self.radio_buffer.as_mut()).await.map_err(Error::Radio)? {
                 RxStatus::Rx(s, q) => {
                     self.radio_buffer.set_pos(s);
+                    self.mac.configuration.battery = self.handler.battery_level();
                     let mac_response = self.mac.handle_rx::<N, D>(
                         &mut self.radio_buffer,
                         &mut self.downlink,
@@ -982,6 +1042,7 @@ where
                 self.radio.rx_continuous(self.radio_buffer.as_mut()).await.map_err(Error::Radio)?;
             self.radio_buffer.set_pos(sz);
             let fcnt_down = self.mac.get_fcnt_down();
+            self.mac.configuration.battery = self.handler.battery_level();
             let mac_response = self.mac.handle_rxc::<N, D>(
                 &mut self.radio_buffer,
                 &mut self.downlink,

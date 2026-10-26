@@ -17,12 +17,13 @@ type TimestampMs = u32;
 // TODO: Add LoRaWAN 1.0.4 and store support to the non-blocking device.
 // Until then, certification is enabled but unsupported responses are ignored
 // with a warning.
-pub struct Device<R, RNG, const N: usize, const D: usize = 1>
+pub struct Device<R, RNG, const N: usize, const D: usize = 1, H = ()>
 where
     R: PhyRxTx + Timings,
     RNG: RngCore,
 {
     state: State,
+    handler: H,
     shared: Shared<R, RNG, N, D>,
 }
 
@@ -32,11 +33,28 @@ where
     RNG: RngCore,
 {
     pub fn new(region: region::Configuration, radio: R, rng: RNG) -> Device<R, RNG, N, D> {
+        Self::new_with_handler((), region, radio, rng)
+    }
+}
+
+impl<R, RNG, const N: usize, const D: usize, H> Device<R, RNG, N, D, H>
+where
+    R: PhyRxTx + Timings,
+    RNG: RngCore,
+    H: DeviceHandler,
+{
+    pub fn new_with_handler(
+        handler: H,
+        region: region::Configuration,
+        radio: R,
+        rng: RNG,
+    ) -> Device<R, RNG, N, D, H> {
         let mut mac = Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN);
         // No store-backed 1.0.4 yet; ignore unsupported certification responses.
         mac.set_certification_enabled(true);
         Device {
             state: State::default(),
+            handler,
             shared: Shared {
                 radio,
                 rng,
@@ -122,6 +140,7 @@ where
     }
 
     pub fn handle_event(&mut self, event: Event<'_, R>) -> Result<Response, Error<R>> {
+        self.shared.mac.configuration.battery = self.handler.battery_level();
         let (new_state, result) = self.state.handle_event::<R, RNG, N, D>(
             &mut self.shared.mac,
             &mut self.shared.radio,

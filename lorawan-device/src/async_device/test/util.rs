@@ -1,4 +1,4 @@
-use super::{Device, get_dev_addr, get_key, radio::*, region, timer::*};
+use super::{Device, TestHandler, get_dev_addr, get_key, radio::*, region, timer::*};
 use crate::mac::Session;
 use crate::radio::RfConfig;
 use lorawan::creator::DataFrame;
@@ -13,10 +13,25 @@ fn default_session() -> Session {
 }
 
 pub fn session_with_region(region: region::Configuration) -> (RadioChannel, TimerChannel, Device) {
+    session_with_region_and_handler(region, TestHandler::default())
+}
+
+pub fn session_with_region_and_battery(
+    region: region::Configuration,
+    battery: u8,
+) -> (RadioChannel, TimerChannel, Device) {
+    session_with_region_and_handler(region, TestHandler::with_battery(battery))
+}
+
+pub fn session_with_region_and_handler(
+    region: region::Configuration,
+    handler: TestHandler,
+) -> (RadioChannel, TimerChannel, Device) {
     let pending = Arc::new(AtomicUsize::new(0));
     let (radio_channel, mock_radio) = TestRadio::new(pending.clone());
     let (timer_channel, mock_timer) = TestTimer::new(pending);
-    let mut async_device = Device::new_with_session(
+    let mut async_device = Device::new_with_session_and_handler(
+        handler,
         region,
         mock_radio,
         mock_timer,
@@ -32,7 +47,8 @@ fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel,
     let (radio_channel, mock_radio) = TestRadio::new(pending.clone());
     let (timer_channel, mock_timer) = TestTimer::new(pending);
     let region = region::US915::default();
-    let mut async_device = Device::new_with_session(
+    let mut async_device = Device::new_with_session_and_handler(
+        TestHandler::default(),
         region.into(),
         mock_radio,
         mock_timer,

@@ -91,6 +91,11 @@ pub struct Configuration {
     /// the network via LinkADRReq: 1..=15 transmissions per FCntUp. Defaults
     /// to 1 (no retransmission).
     pub(crate) nb_trans: u8,
+    /// Battery level reported in DevStatusAns:
+    /// - 0 - external power
+    /// - 1..=254 - battery level,
+    /// - 255 - unknown. Defaults to 255.
+    pub(crate) battery: u8,
 }
 
 pub(crate) struct Mac {
@@ -159,6 +164,7 @@ impl Mac {
                 tx_power: None,
                 adr_enabled: true,
                 nb_trans: 1,
+                battery: 255,
             },
             certification: certification::Certification::new(),
             pending_cert_rx: None,
@@ -183,11 +189,13 @@ impl Mac {
             None
         };
         let certification_enabled = self.certification.enabled();
+        let battery = self.configuration.battery;
         let max_power = self.board_eirp.max_power;
         let antenna_gain = self.board_eirp.antenna_gain;
         *self = Mac::new(self.region.clone(), max_power, antenna_gain);
         self.identity = identity;
         self.certification.set_enabled(certification_enabled);
+        self.configuration.battery = battery;
     }
 
     /// Prepare the radio buffer with transmitting a join request frame and provides the radio

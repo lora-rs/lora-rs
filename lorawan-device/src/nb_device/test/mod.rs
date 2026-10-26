@@ -25,9 +25,24 @@ fn build_cert_downlink(buf: &mut [u8], payload_in_hex: &str, fcnt: u16) -> usize
     finished.len()
 }
 
+/// Build a downlink with regular MAC commands in the FRMPayload (FPort 0).
+fn build_mac_downlink(buf: &mut [u8], payload_in_hex: &str, fcnt: u16) -> usize {
+    let payload = hex::decode(payload_in_hex).unwrap();
+    let frame = DataFrame {
+        frame_type: DataFrameType::UnconfirmedDown,
+        dev_addr: get_dev_addr(),
+        ack: true,
+        fcnt: fcnt.into(),
+        payload: Payload::MacCommands(&payload),
+        ..Default::default()
+    };
+    let finished = frame.build_into(buf, &get_crypto(), Some(&get_crypto())).unwrap();
+    finished.len()
+}
+
 /// Send an uplink and return the response to a downlink delivered in RX2.
-fn send_and_receive_cert(
-    device: &mut crate::nb_device::Device<TestRadio, rand_core::OsRng, 255>,
+fn send_and_receive_cert<H: crate::DeviceHandler>(
+    device: &mut crate::nb_device::Device<TestRadio, rand_core::OsRng, 255, 1, H>,
     handler: RxTxHandler,
 ) -> Response {
     let response = device.send(&[0; 1], 1, false).unwrap();
@@ -381,6 +396,21 @@ fn test_certification_link_check_req_is_ignored() {
     // Nothing was queued for the next uplink.
     let session = device.get_session().expect("device is still joined");
     assert!(session.uplink.mac_commands().is_empty());
+}
+
+#[test]
+fn test_certification_dev_status_req_uses_handler_battery() {
+    fn dev_status_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_mac_downlink(buf, "06", 1) // DevStatusReq
+    }
+
+    let mut device = test_device_with_handler(TestHandler::with_battery(170));
+    device.join(get_abp_credentials()).unwrap();
+    let response = send_and_receive_cert(&mut device, dev_status_req);
+    assert!(matches!(response, Response::DownlinkReceived(1)));
+
+    let session = device.get_session().expect("device is still joined");
+    assert_eq!(session.uplink.mac_commands(), &[0x06, 170, 0]);
 }
 
 #[test]

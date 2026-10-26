@@ -37,7 +37,7 @@ use super::{build_mac, build_packet, decrypt_uplink};
 /// Same scenario is used for all regions.
 async fn eu868_devstatusreq_test() {
     let (radio, timer, mut device) =
-        util::session_with_region(crate::region::EU868::new_eu868().into());
+        util::session_with_region_and_battery(crate::region::EU868::new_eu868().into(), 170);
     let send_await_complete = Arc::new(Mutex::new(false));
 
     device.radio.set_snr(-15);
@@ -63,8 +63,7 @@ async fn eu868_devstatusreq_test() {
         _ => panic!(),
     }
 
-    // TODO: Battery value is hardcoded to 255 in MAC for now
-    let expected_ans = [0x06, 255, device.radio.snr_scaled()];
+    let expected_ans = [0x06, 170, device.radio.snr_scaled()];
 
     // Check whether uplink has been populated with requested MAC:DevstatusAns command
     if let Some(session) = device.mac.get_session() {
