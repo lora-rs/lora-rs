@@ -263,7 +263,8 @@ fn test_device_time_ans() {
         DeviceTimeAns,
         DeviceTimeAnsPayload,
         5,
-        (seconds, 16909060),
+        (seconds, 67305985),
+        (fraction, 0x5),
         (nano_seconds, 0x5 * 3906250),
     );
 }

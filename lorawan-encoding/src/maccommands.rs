@@ -503,10 +503,15 @@ impl DlChannelAnsPayload<'_> {
 }
 
 impl DeviceTimeAnsPayload<'_> {
+    /// Seconds since the GPS epoch.
     pub fn seconds(&self) -> u32 {
-        u32::from_le_bytes([self.0[3], self.0[2], self.0[1], self.0[0]])
+        u32::from_le_bytes([self.0[0], self.0[1], self.0[2], self.0[3]])
     }
-    //raw value in 1/256 seconds
+    /// Sub-second part in 1/256 s.
+    pub fn fraction(&self) -> u8 {
+        self.0[4]
+    }
+    /// Sub-second part in nanoseconds.
     pub fn nano_seconds(&self) -> u32 {
         (self.0[4] as u32) * 3906250
     }
