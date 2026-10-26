@@ -24,6 +24,23 @@ fn build_cert_downlink(buf: &mut [u8], payload_in_hex: &str, fcnt: u16) -> usize
     let finished = frame.build_into(buf, &get_crypto(), Some(&get_crypto())).unwrap();
     finished.len()
 }
+
+/// Send an uplink and return the response to a downlink delivered in RX2.
+fn send_and_receive_cert(
+    device: &mut crate::nb_device::Device<TestRadio, rand_core::OsRng, 255>,
+    handler: RxTxHandler,
+) -> Response {
+    let response = device.send(&[0; 1], 1, false).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx1
+    assert!(matches!(response, Response::TimeoutRequest(1100)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // end Rx1
+    assert!(matches!(response, Response::TimeoutRequest(2000)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx2
+    assert!(matches!(response, Response::TimeoutRequest(2100)));
+    device.get_radio().set_rxtx_handler(handler);
+    device.handle_event(Event::RadioEvent(radio::Event::Phy(()))).unwrap()
+}
 #[test]
 fn test_join_rx1() {
     let mut device = test_device();
@@ -347,4 +364,36 @@ fn test_link_adr_ans() {
     // send a radio event to let the radio device indicate a packet was received
     let response = device.handle_event(Event::RadioEvent(radio::Event::Phy(()))).unwrap();
     assert!(matches!(response, Response::DownlinkReceived(1)));
+}
+
+#[test]
+fn test_certification_link_check_req_is_ignored() {
+    fn cp_link_check_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_cert_downlink(buf, "20", 1) // LinkCheckReq
+    }
+
+    let mut device = test_device();
+    device.join(get_abp_credentials()).unwrap();
+    let response = send_and_receive_cert(&mut device, cp_link_check_req);
+    assert!(matches!(response, Response::RxComplete));
+    assert!(device.ready_to_send_data());
+
+    // Nothing was queued for the next uplink.
+    let session = device.get_session().expect("device is still joined");
+    assert!(session.uplink.mac_commands().is_empty());
+}
+
+#[test]
+fn test_certification_dut_reset_req_is_ignored() {
+    fn cp_dut_reset_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_cert_downlink(buf, "01", 1) // DutResetReq
+    }
+
+    let mut device = test_device();
+    device.join(get_abp_credentials()).unwrap();
+    let response = send_and_receive_cert(&mut device, cp_dut_reset_req);
+    assert!(matches!(response, Response::RxComplete));
+    // The session survives.
+    assert!(device.get_session().is_some());
+    assert!(device.ready_to_send_data());
 }
