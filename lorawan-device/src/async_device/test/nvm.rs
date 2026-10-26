@@ -10,7 +10,6 @@ use crate::mac::{NetworkCredentials, Session};
 use crate::nvm::{
     MAX_BLOB_LEN, NonVolatileStoreSync, NvmRegion, PersistentIdentity, PersistentSession,
 };
-#[cfg(feature = "certification")]
 use crate::radio::RfConfig;
 use crate::test_util::{
     Uplink, get_abp_credentials, get_crypto, get_key, get_network_crypto, get_otaa_credentials,
@@ -675,7 +674,6 @@ async fn persisted_session_carries_the_channel_mask() {
 
 /// A certification-port downlink that yields a MAC response other than
 /// `DownlinkReceived` still advances FCntDown, which must be persisted.
-#[cfg(feature = "certification")]
 #[tokio::test]
 async fn certification_downlink_persists_fcnt_down() {
     let store = MockStore::default();
@@ -702,4 +700,41 @@ async fn certification_downlink_persists_fcnt_down() {
     let (_device, response) = task.await.unwrap();
     assert!(matches!(response, Ok(SendResponse::RxComplete)));
     assert_eq!(store.session().fcnt_down, Some(1));
+}
+
+/// `DutResetReq` simulates a power cycle: the 1.0.4 device resumes the session
+/// persisted in the store instead of unjoining.
+#[tokio::test]
+async fn dut_reset_resumes_the_persisted_session() {
+    use crate::nvm::DEFAULT_FCNT_CHECKPOINT_MARGIN;
+
+    let store = MockStore::default();
+    let (radio, timer, mut device) = restore(&store).await;
+    assert!(matches!(device.join(&get_abp_credentials()).await, Ok(JoinResponse::JoinSuccess)));
+
+    fn dut_reset_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        let frame = DataFrame {
+            frame_type: DataFrameType::UnconfirmedDown,
+            dev_addr: crate::test_util::get_dev_addr(),
+            fcnt: 1,
+            payload: Payload::Data { f_port: NonZeroU8::new(224).unwrap(), data: &[0x01] },
+            ..Default::default()
+        };
+        frame.build_into(buf, &get_crypto(), Some(&get_crypto())).unwrap().len()
+    }
+
+    let task = tokio::spawn(async move {
+        let r = device.send(&[1, 2, 3], 3, false).await;
+        (device, r)
+    });
+    // The reset produces no MAC response, so the send runs on to RX2.
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(dut_reset_req).await;
+    timer.fire_most_recent().await;
+    radio.handle_timeout().await;
+
+    let (mut device, response) = task.await.unwrap();
+    assert!(matches!(response, Ok(SendResponse::RxComplete)));
+    let session = device.get_session().expect("the persisted session is resumed");
+    assert!(session.fcnt_up >= DEFAULT_FCNT_CHECKPOINT_MARGIN);
 }

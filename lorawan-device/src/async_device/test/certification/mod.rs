@@ -1,6 +1,6 @@
 //! LoRaWAN 1.0.4 Certification testcases
 //! Based on LoRaWAN 1.0.4 End Device Certification Test Specification v1.6.1
-use super::util;
+use super::{Device, radio::RadioChannel, timer::TimerChannel, util};
 use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
 use crate::test_util::{Uplink, get_crypto, get_dev_addr};
@@ -225,4 +225,72 @@ async fn txframectrlreq_no_change() {
     if let Some(session) = device.mac.get_session() {
         assert_eq!(session.override_confirmed, Some(true));
     }
+}
+
+/// Drive one uplink and deliver a certification downlink in RX1. The command
+/// produces no MAC response, so the device keeps listening until RX2 times out.
+async fn exchange_with_certification_command(
+    mut device: Device,
+    radio: RadioChannel,
+    timer: TimerChannel,
+    handler: fn(Option<Uplink>, RfConfig, &mut [u8]) -> usize,
+) -> (Device, SendResponse) {
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        (device, response)
+    });
+
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(handler).await;
+    timer.fire_most_recent().await;
+    radio.handle_timeout().await;
+
+    let (device, response) = task.await.unwrap();
+    (device, response.expect("send failed"))
+}
+
+#[tokio::test]
+async fn dut_join_req_resets_the_mac() {
+    fn dut_join_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // DutJoinReq: reset the MAC layer and join again.
+        build_packet(buf, "02", 1)
+    }
+
+    let (radio, timer, device) = util::setup_with_session();
+    let (mut device, response) =
+        exchange_with_certification_command(device, radio, timer, dut_join_req).await;
+
+    assert!(matches!(response, SendResponse::RxComplete));
+    assert!(device.get_session().is_none());
+}
+
+#[tokio::test]
+async fn dut_reset_req_resets_the_device() {
+    fn dut_reset_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // DutResetReq: simulate a power cycle.
+        build_packet(buf, "01", 1)
+    }
+
+    let (radio, timer, device) = util::setup_with_session();
+    let (mut device, response) =
+        exchange_with_certification_command(device, radio, timer, dut_reset_req).await;
+
+    assert!(matches!(response, SendResponse::RxComplete));
+    // Without a store there is nothing to resume, so the device restarts unjoined.
+    assert!(device.get_session().is_none());
+}
+
+#[tokio::test]
+async fn tx_periodicity_change_overrides_the_uplink_period() {
+    fn tx_periodicity_5s(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // TxPeriodicityChangeReq with index 1: one uplink every 5 seconds.
+        build_packet(buf, "0601", 1)
+    }
+
+    let (radio, timer, device) = util::setup_with_session();
+    let (device, response) =
+        exchange_with_certification_command(device, radio, timer, tx_periodicity_5s).await;
+
+    assert!(matches!(response, SendResponse::RxComplete));
+    assert_eq!(device.get_override_periodicity(), Some(5));
 }

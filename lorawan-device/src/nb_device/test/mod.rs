@@ -1,5 +1,4 @@
 use super::*;
-#[cfg(feature = "certification")]
 mod linkadrreq_eu868;
 mod util;
 use crate::test_util::*;
@@ -12,7 +11,6 @@ use lorawan::creator::{DataFrame, Payload};
 use lorawan::parser::{self, DataFrameType, DecryptedDataPayload, PhyPayload};
 
 /// Build an FPort 224 certification downlink with the given payload bytes.
-#[cfg(feature = "certification")]
 fn build_cert_downlink(buf: &mut [u8], payload_in_hex: &str, fcnt: u16) -> usize {
     let payload = hex::decode(payload_in_hex).unwrap();
     let frame = DataFrame {
@@ -218,7 +216,6 @@ fn test_confirmed_uplink_with_ack_rx2() {
     assert!(matches!(response, Response::DownlinkReceived(0)));
 }
 
-#[cfg(feature = "certification")]
 #[test]
 fn test_certification_answer_uplink() {
     // An RxAppCntReq received in an RX window is answered with a regular
@@ -277,7 +274,6 @@ fn test_certification_answer_uplink() {
     assert_eq!(device.get_fcnt_up(), Some(2));
 }
 
-#[cfg(feature = "certification")]
 #[test]
 fn test_certification_answer_retransmission() {
     // A certification answer is retransmitted per NbTrans when its own RX

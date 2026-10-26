@@ -30,7 +30,6 @@ use crate::nb_device;
 
 pub(crate) mod uplink;
 
-#[cfg(feature = "certification")]
 pub(crate) mod certification;
 #[cfg(feature = "multicast")]
 pub(crate) mod multicast;
@@ -102,12 +101,10 @@ pub(crate) struct Mac {
     /// 1.0.4 join anti-replay counters; `None` keeps the 1.0.2 behavior (random
     /// DevNonce, no JoinNonce check). Set only when a persistent store backs them.
     identity: Option<PersistentIdentity>,
-    #[cfg(feature = "certification")]
     certification: certification::Certification,
     /// Actual TX duration and RX windows of the prepared certification answer
     /// uplink, stashed by the device after transmitting it, for the send loop
     /// which runs its RX windows and any NbTrans retransmissions.
-    #[cfg(feature = "certification")]
     pending_cert_rx: Option<(u32, RxWindows)>,
     #[cfg(feature = "multicast")]
     pub multicast: multicast::Multicast,
@@ -163,13 +160,34 @@ impl Mac {
                 adr_enabled: true,
                 nb_trans: 1,
             },
-            #[cfg(feature = "certification")]
             certification: certification::Certification::new(),
-            #[cfg(feature = "certification")]
             pending_cert_rx: None,
             #[cfg(feature = "multicast")]
             multicast: multicast::Multicast::new(),
         }
+    }
+
+    /// Enable LoRaWAN 1.0.4 certification protocol handling (FPort 224). Devices backed
+    /// by a non-volatile store enable it automatically.
+    pub(crate) fn set_certification_enabled(&mut self, enabled: bool) {
+        self.certification.set_enabled(enabled);
+    }
+
+    /// Reset all MAC state, keeping the board and region configuration. With
+    /// `keep_identity` the durable join counters survive; otherwise even the identity is
+    /// dropped, as for a power cycle followed by a store reload.
+    pub(crate) fn reset(&mut self, keep_identity: bool) {
+        let identity = if keep_identity {
+            self.identity
+        } else {
+            None
+        };
+        let certification_enabled = self.certification.enabled();
+        let max_power = self.board_eirp.max_power;
+        let antenna_gain = self.board_eirp.antenna_gain;
+        *self = Mac::new(self.region.clone(), max_power, antenna_gain);
+        self.identity = identity;
+        self.certification.set_enabled(certification_enabled);
     }
 
     /// Prepare the radio buffer with transmitting a join request frame and provides the radio
@@ -314,7 +332,6 @@ impl Mac {
     /// regular Class A uplink, so it is prepared exactly like a data uplink: NbTrans
     /// retransmission is armed and the RX windows are derived from the selected channel.
     /// Returns the TX configuration, the RX windows and the frame counter of the answer.
-    #[cfg(feature = "certification")]
     pub(crate) fn certification_setup_send<RNG: RngCore, const N: usize>(
         &mut self,
         rng: &mut RNG,
@@ -328,7 +345,6 @@ impl Mac {
 
     /// Stash the actual TX duration and RX windows of the transmitted
     /// certification answer; see [`take_pending_cert_rx`](Self::take_pending_cert_rx).
-    #[cfg(feature = "certification")]
     pub(crate) fn set_pending_cert_rx(&mut self, tx_duration_ms: u32, rx_windows: RxWindows) {
         self.pending_cert_rx = Some((tx_duration_ms, rx_windows));
     }
@@ -336,7 +352,6 @@ impl Mac {
     /// Take the TX duration and RX windows stashed by
     /// [`set_pending_cert_rx`](Self::set_pending_cert_rx). Only valid immediately
     /// after an `UplinkPrepared` response.
-    #[cfg(feature = "certification")]
     pub(crate) fn take_pending_cert_rx(&mut self) -> (u32, RxWindows) {
         self.pending_cert_rx.take().unwrap()
     }
@@ -371,7 +386,6 @@ impl Mac {
             State::Joined(session) => session.handle_rx::<N, D>(
                 &mut self.region,
                 &mut self.configuration,
-                #[cfg(feature = "certification")]
                 &mut self.certification,
                 #[cfg(feature = "multicast")]
                 &mut self.multicast,
@@ -413,7 +427,6 @@ impl Mac {
             State::Joined(session) => Ok(session.handle_rx::<N, D>(
                 &mut self.region,
                 &mut self.configuration,
-                #[cfg(feature = "certification")]
                 &mut self.certification,
                 #[cfg(feature = "multicast")]
                 &mut self.multicast,
@@ -611,21 +624,10 @@ pub(crate) enum Response {
     /// (confirmed frame).
     RetransmitConfirmed,
     LinkCheckReq,
-    #[cfg(feature = "certification")]
     UplinkPrepared,
-    #[cfg(feature = "certification")]
-    DeviceHandler(DeviceEvent),
+    DeviceEvent(certification::DeviceEvent),
     #[cfg(feature = "multicast")]
     Multicast(multicast::Response),
-}
-
-#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-#[derive(Debug)]
-#[cfg(feature = "certification")]
-pub(crate) enum DeviceEvent {
-    ResetDevice,
-    ResetMac,
-    TxPeriodicityChange { periodicity: Option<u16> },
 }
 
 impl From<Response> for nb_device::Response {
@@ -642,10 +644,8 @@ impl From<Response> for nb_device::Response {
             Response::Retransmit => unimplemented!(),
             Response::RetransmitConfirmed => unimplemented!(),
             Response::LinkCheckReq => unimplemented!(),
-            #[cfg(feature = "certification")]
             Response::UplinkPrepared => unimplemented!(),
-            #[cfg(feature = "certification")]
-            Response::DeviceHandler(_) => unimplemented!(),
+            Response::DeviceEvent(_) => unimplemented!(),
             #[cfg(feature = "multicast")]
             Response::Multicast(_) => unimplemented!(),
         }

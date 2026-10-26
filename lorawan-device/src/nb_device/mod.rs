@@ -14,6 +14,9 @@ mod test;
 
 type TimestampMs = u32;
 
+// TODO: Add LoRaWAN 1.0.4 and store support to the non-blocking device.
+// Until then, certification is enabled but unsupported responses are ignored
+// with a warning.
 pub struct Device<R, RNG, const N: usize, const D: usize = 1>
 where
     R: PhyRxTx + Timings,
@@ -29,6 +32,9 @@ where
     RNG: RngCore,
 {
     pub fn new(region: region::Configuration, radio: R, rng: RNG) -> Device<R, RNG, N, D> {
+        let mut mac = Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN);
+        // No store-backed 1.0.4 yet; ignore unsupported certification responses.
+        mac.set_certification_enabled(true);
         Device {
             state: State::default(),
             shared: Shared {
@@ -36,7 +42,7 @@ where
                 rng,
                 tx_buffer: RadioBuffer::new(),
                 retransmit_buffer: RadioBuffer::new(),
-                mac: Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN),
+                mac,
                 downlink: Vec::new(),
             },
         }

@@ -16,13 +16,31 @@ pub(crate) enum Response {
     UplinkPrepared,
 }
 
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[derive(Debug)]
+pub(crate) enum DeviceEvent {
+    ResetDevice,
+    ResetMac,
+    TxPeriodicityChange { periodicity: Option<u16> },
+}
+
 pub(crate) struct Certification {
     pending_uplink: Option<heapless::Vec<u8, 256>>,
+    enabled: bool,
 }
 
 impl Certification {
     pub fn new() -> Self {
-        Self { pending_uplink: None }
+        Self { pending_uplink: None, enabled: false }
+    }
+
+    /// Enable or disable LoRaWAN 1.0.4 certification support (FPort 224).
+    pub(crate) fn set_enabled(&mut self, enabled: bool) {
+        self.enabled = enabled;
+    }
+
+    pub(crate) const fn enabled(&self) -> bool {
+        self.enabled
     }
     pub(crate) fn handle_message(&mut self, data: &[u8], rx_app_cnt: u16) -> Response {
         use lorawan::certification::DownlinkDUTCommand::*;

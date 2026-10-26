@@ -71,8 +71,8 @@ use self::radio::RxStatus;
 ///
 /// S is a user-supplied [`NonVolatileStore`], set via [`Device::restore`]. It enables LoRaWAN
 /// 1.0.4 behavior: monotonic DevNonce, JoinNonce replay protection and session resume across
-/// power loss. The default [`NoNvm`] keeps the stack at LoRaWAN 1.0.2 with no persistence
-/// code compiled in.
+/// power loss, along with the 1.0.4 certification protocol (`FPort` 224). The default [`NoNvm`]
+/// keeps the stack at LoRaWAN 1.0.2 with persistence and certification disabled.
 pub struct Device<R, T, G, const N: usize = 256, const D: usize = 1, S = NoNvm>
 where
     R: radio::PhyRxTx + Timings,
@@ -92,6 +92,8 @@ where
     retransmit_buffer: RadioBuffer<N>,
     downlink: Vec<Downlink, D>,
     nvm: Persistence<S>,
+    /// Uplink periodicity requested through the certification protocol, in seconds.
+    override_periodicity: Option<u16>,
     #[cfg(feature = "class-c")]
     class_c: bool,
 }
@@ -247,6 +249,7 @@ where
             timer,
             downlink: Vec::new(),
             nvm: Persistence::new(NoNvm, 0),
+            override_periodicity: None,
             #[cfg(feature = "class-c")]
             class_c: false,
         }
@@ -277,25 +280,12 @@ where
         radio: R,
         timer: T,
         rng: G,
-        mut store: S,
+        store: S,
     ) -> Result<Self, S::Error> {
         let mut mac = Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN);
-        let mut fcnt_up_checkpoint = 0;
-        if S::PERSISTENT {
-            let mut buf = [0u8; MAX_BLOB_LEN];
-            let identity = match store.load(NvmRegion::Identity, &mut buf).await? {
-                Some(n) => PersistentIdentity::decode(&buf[..n]).unwrap_or_default(),
-                None => PersistentIdentity::default(),
-            };
-            if let Some(n) = store.load(NvmRegion::Session, &mut buf).await?
-                && let Ok(ps) = PersistentSession::decode(&buf[..n])
-                && ps.join_epoch == identity.join_epoch
-            {
-                fcnt_up_checkpoint = ps.fcnt_up_checkpoint;
-                mac.restore_session(&ps);
-            }
-            mac.set_identity(identity);
-        }
+        mac.set_certification_enabled(S::PERSISTENT);
+        let mut nvm = Persistence::new(store, 0);
+        nvm.reload(&mut mac).await?;
         Ok(Self {
             radio,
             rng,
@@ -304,7 +294,8 @@ where
             retransmit_buffer: RadioBuffer::new(),
             timer,
             downlink: Vec::new(),
-            nvm: Persistence::new(store, fcnt_up_checkpoint),
+            nvm,
+            override_periodicity: None,
             #[cfg(feature = "class-c")]
             class_c: false,
         })
@@ -321,6 +312,45 @@ where
     /// exact live counter, e.g. before a planned power-down. No-op without a store.
     pub async fn checkpoint(&mut self) -> Result<(), Error<R::PhyError>> {
         self.nvm.checkpoint(&self.mac).await
+    }
+
+    /// Reset the MAC layer, as requested by the certification protocol (`DutJoinReq`).
+    ///
+    /// The running session and negotiated MAC state are dropped, but the durable
+    /// join counters are kept. The application must join again; the next join
+    /// uses the next monotonic DevNonce.
+    pub fn reset_mac(&mut self) {
+        self.mac.reset(true);
+    }
+
+    /// Reset the device, as requested by the certification protocol (`DutResetReq`).
+    ///
+    /// This discards all RAM state and resumes the identity and session from the
+    /// non-volatile store, exactly like a power cycle. Without a store the device
+    /// restarts unjoined.
+    pub async fn reset_device(&mut self) -> Result<(), Error<R::PhyError>> {
+        self.mac.reset(false);
+        self.nvm.reload(&mut self.mac).await.map_err(|_| Error::Nvm)
+    }
+
+    /// Override the application's uplink periodicity, as requested by the
+    /// certification protocol (`TxPeriodicityChangeReq`). `None` restores the
+    /// application's default.
+    pub fn override_periodicity(&mut self, seconds: Option<u16>) {
+        self.override_periodicity = seconds;
+    }
+
+    /// Uplink periodicity in seconds requested through the certification protocol,
+    /// or `None` for the application's default.
+    pub fn get_override_periodicity(&self) -> Option<u16> {
+        self.override_periodicity
+    }
+
+    /// Enable certification protocol handling on test devices, which use [`NoNvm`]
+    /// and therefore have it disabled by default.
+    #[cfg(test)]
+    pub(crate) fn enable_certification(&mut self) {
+        self.mac.set_certification_enabled(true);
     }
 
     /// Enables Class C behavior. Note that Class C downlinks are not possible until a confirmed
@@ -565,11 +595,13 @@ where
                 // A certification answer was transmitted inside the RX window;
                 // it is a regular uplink, so run its RX windows (and NbTrans
                 // retransmissions) without transmitting again.
-                #[cfg(feature = "certification")]
                 mac::Response::UplinkPrepared => {
                     (ms, rx_windows) = self.mac.take_pending_cert_rx();
                     tx_pending = false;
                 }
+                // A certification reset dropped the session mid-flight. The uplink
+                // itself completed, but there is no session state left to report.
+                mac::Response::NoUpdate => break mac::Response::RxComplete,
                 response => {
                     // Wait for random RETRANSMIT_TIMEOUT before reporting a NoAck.
                     if matches!(response, mac::Response::NoAck) {
@@ -659,6 +691,7 @@ where
                         &rx_config.rf,
                     )?;
                     match Self::handle_mac_response(
+                        &mut self.override_periodicity,
                         &mut self.radio_buffer,
                         &mut self.retransmit_buffer,
                         &mut self.mac,
@@ -727,6 +760,7 @@ where
                             &rx_config.rf,
                         )?;
                         if let Some(response) = Self::handle_mac_response(
+                            &mut self.override_periodicity,
                             &mut self.radio_buffer,
                             &mut self.retransmit_buffer,
                             &mut self.mac,
@@ -822,6 +856,7 @@ where
     // Split borrows: the Class C listen loop holds a timer future across this call.
     #[allow(unused_variables, clippy::too_many_arguments)]
     async fn handle_mac_response(
+        periodicity_override: &mut Option<u16>,
         radio_buffer: &mut RadioBuffer<N>,
         retransmit_buffer: &mut RadioBuffer<N>,
         mac: &mut Mac,
@@ -834,12 +869,28 @@ where
         radio_buffer.clear();
         match response {
             mac::Response::NoUpdate => Ok(None),
-            #[cfg(feature = "certification")]
             mac::Response::LinkCheckReq => {
                 let _ = mac.add_uplink(lorawan::maccommandcreator::LinkCheckReqCreator::new());
                 Ok(Some(mac.rx2_complete()))
             }
-            #[cfg(feature = "certification")]
+            mac::Response::DeviceEvent(event) => match event {
+                mac::certification::DeviceEvent::ResetMac => {
+                    mac.reset(true);
+                    Ok(None)
+                }
+                mac::certification::DeviceEvent::ResetDevice => {
+                    // Simulate a power cycle: drop RAM state and resume from the store.
+                    // TODO: DutResetReq asks for an actual MCU reboot; the stack cannot
+                    // trigger that, so the application must be given a way to do it.
+                    mac.reset(false);
+                    nvm.reload(mac).await.map_err(|_| Error::Nvm)?;
+                    Ok(None)
+                }
+                mac::certification::DeviceEvent::TxPeriodicityChange { periodicity } => {
+                    *periodicity_override = periodicity;
+                    Ok(None)
+                }
+            },
             mac::Response::UplinkPrepared => {
                 let (tx_config, rx_windows, fcnt_up) =
                     mac.certification_setup_send::<G, N>(rng, radio_buffer)?;
@@ -904,6 +955,7 @@ where
                         rf_config,
                     );
                     Self::handle_mac_response(
+                        &mut self.override_periodicity,
                         &mut self.radio_buffer,
                         &mut self.retransmit_buffer,
                         &mut self.mac,
@@ -937,6 +989,7 @@ where
                 &rx_config.rf,
             )?;
             if let Some(response) = Self::handle_mac_response(
+                &mut self.override_periodicity,
                 &mut self.radio_buffer,
                 &mut self.retransmit_buffer,
                 &mut self.mac,
@@ -968,6 +1021,30 @@ struct Persistence<S> {
 impl<S: NonVolatileStore> Persistence<S> {
     fn new(store: S, fcnt_up_checkpoint: u32) -> Self {
         Self { store, fcnt_up_checkpoint, margin: DEFAULT_FCNT_CHECKPOINT_MARGIN }
+    }
+
+    /// Load the identity and session from the store into `mac`, replacing any current
+    /// state. Used both at boot and when the certification protocol requests a device
+    /// reset. No-op without a store.
+    async fn reload(&mut self, mac: &mut Mac) -> Result<(), S::Error> {
+        self.fcnt_up_checkpoint = 0;
+        if !S::PERSISTENT {
+            return Ok(());
+        }
+        let mut buf = [0u8; MAX_BLOB_LEN];
+        let identity = match self.store.load(NvmRegion::Identity, &mut buf).await? {
+            Some(n) => PersistentIdentity::decode(&buf[..n]).unwrap_or_default(),
+            None => PersistentIdentity::default(),
+        };
+        if let Some(n) = self.store.load(NvmRegion::Session, &mut buf).await?
+            && let Ok(ps) = PersistentSession::decode(&buf[..n])
+            && ps.join_epoch == identity.join_epoch
+        {
+            self.fcnt_up_checkpoint = ps.fcnt_up_checkpoint;
+            mac.restore_session(&ps);
+        }
+        mac.set_identity(identity);
+        Ok(())
     }
 
     /// Save a blob unless the store already holds identical bytes, sparing flash wear when

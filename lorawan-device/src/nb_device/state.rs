@@ -371,7 +371,6 @@ impl WaitingForRx {
                             }
                             let response =
                                 mac.handle_rx::<N, D>(buf, dl, quality.snr(), &self.rf_config);
-                            #[cfg(feature = "certification")]
                             if let mac::Response::UplinkPrepared = response {
                                 // Transmit the certification answer in place,
                                 // like a regular uplink.
@@ -490,7 +489,6 @@ impl WaitingForRx {
     /// Handle a certification request received in an RX window: the answer is a regular
     /// uplink, so prepare it exactly like a data uplink (arming NbTrans retransmission)
     /// and transmit it in place; it opens its own RX windows.
-    #[cfg(feature = "certification")]
     fn answer_certification_uplink<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize>(
         self,
         buf: &mut RadioBuffer<N>,

@@ -25,9 +25,6 @@ use lorawan::{
     types::DR,
 };
 
-#[cfg(feature = "certification")]
-use super::DeviceEvent;
-
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -48,10 +45,8 @@ pub struct Session {
     /// and consumed by `rx2_complete` to implement NbTrans retransmission.
     #[cfg_attr(feature = "serde", serde(default))]
     pub(crate) retransmissions: u8,
-    #[cfg(feature = "certification")]
     /// Whether to override confirmation bit for sent frames
     pub override_confirmed: Option<bool>,
-    #[cfg(feature = "certification")]
     /// Applicative downlink frame counter
     pub rx_app_cnt: u16,
 }
@@ -95,9 +90,7 @@ impl Session {
             retransmissions: 0,
             uplink: uplink::Uplink::default(),
 
-            #[cfg(feature = "certification")]
             override_confirmed: None,
-            #[cfg(feature = "certification")]
             rx_app_cnt: 0,
         }
     }
@@ -140,7 +133,7 @@ impl Session {
         &mut self,
         region: &mut region::Configuration,
         configuration: &mut super::Configuration,
-        #[cfg(feature = "certification")] certification: &mut super::certification::Certification,
+        certification: &mut super::certification::Certification,
         #[cfg(feature = "multicast")] multicast: &mut super::multicast::Multicast,
         rx: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
@@ -177,7 +170,6 @@ impl Session {
                 self.uplink.clear_mac_commands(false);
             }
 
-            #[cfg(feature = "certification")]
             {
                 // RxAppCnt counts applicative downlinks:
                 // - frames with FPort > 0
@@ -250,18 +242,15 @@ impl Session {
                     if let (Some(fport), FrmPayload::Data(data)) =
                         (decrypted.f_port(), decrypted.frm_payload())
                     {
-                        #[cfg(feature = "certification")]
-                        if certification.fport(fport) {
-                            use crate::mac::certification::Response::*;
+                        if certification.enabled() && certification.fport(fport) {
+                            use crate::mac::certification::{DeviceEvent, Response::*};
                             match certification.handle_message(data, self.rx_app_cnt) {
                                 AdrBitChange(adr) => {
                                     configuration.adr_enabled = adr;
                                 }
-                                DutJoinReq => {
-                                    return Response::DeviceHandler(DeviceEvent::ResetMac);
-                                }
+                                DutJoinReq => return Response::DeviceEvent(DeviceEvent::ResetMac),
                                 DutResetReq => {
-                                    return Response::DeviceHandler(DeviceEvent::ResetDevice);
+                                    return Response::DeviceEvent(DeviceEvent::ResetDevice);
                                 }
                                 LinkCheckReq => {
                                     return Response::LinkCheckReq;
@@ -273,7 +262,7 @@ impl Session {
                                     }
                                 }
                                 TxPeriodicityChange(periodicity) => {
-                                    return Response::DeviceHandler(
+                                    return Response::DeviceEvent(
                                         DeviceEvent::TxPeriodicityChange { periodicity },
                                     );
                                 }
@@ -384,7 +373,6 @@ impl Session {
             && next_lower_datarate(region, configuration.data_rate).is_some();
 
         self.confirmed = data.confirmed;
-        #[cfg(feature = "certification")]
         if let Some(v) = self.override_confirmed {
             self.confirmed = v;
         }
