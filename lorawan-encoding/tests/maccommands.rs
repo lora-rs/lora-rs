@@ -263,14 +263,14 @@ fn test_device_time_ans() {
         DeviceTimeAns,
         DeviceTimeAnsPayload,
         5,
-        (seconds, 16909060),
+        (seconds, 67305985),
+        (fraction, 0x5),
         (nano_seconds, 0x5 * 3906250),
     );
 }
 
 /// `1139322288` seconds since the GPS epoch is 2016-02-12 14:24:31 UTC.
 #[test]
-#[should_panic(expected = "DeviceTimeAns seconds must round-trip")]
 fn test_device_time_ans_roundtrip() {
     let mut creator = DeviceTimeAnsCreator::new();
     creator.set_seconds(1_139_322_288).set_nano_seconds(123456789).unwrap();
@@ -278,6 +278,7 @@ fn test_device_time_ans_roundtrip() {
 
     let parsed = DeviceTimeAnsPayload::new(&built[1..]).unwrap();
     assert_eq!(parsed.seconds(), 1_139_322_288, "DeviceTimeAns seconds must round-trip");
+    assert_eq!(parsed.fraction(), 31, "DeviceTimeAns fraction must round-trip");
     assert_eq!(parsed.nano_seconds(), 121_093_750, "DeviceTimeAns fraction must round-trip");
 }
 
