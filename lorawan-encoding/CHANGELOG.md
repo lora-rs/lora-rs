@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## Unreleased
 
+- Fix `DeviceTimeAns` seconds decoding: the four-byte GPS-epoch seconds field is
+  little-endian; add `fraction()` for the sub-second byte.
 - certification: add `SwitchClassReq` (CID 0x03)
 - certification: add `RegionalDutyCycleCtrlReq` (CID 0x05)
 - certification: add `DutFPort224DisableReq` (CID 0x7E)
