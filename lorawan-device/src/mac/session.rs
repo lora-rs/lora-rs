@@ -10,8 +10,8 @@ use core::num::NonZeroU8;
 use heapless::Vec;
 use lorawan::creator::{DataFrame, Payload};
 use lorawan::maccommandcreator::{
-    DevStatusAnsCreator, DlChannelAnsCreator, LinkADRAnsCreator, NewChannelAnsCreator,
-    RXParamSetupAnsCreator, RXTimingSetupAnsCreator,
+    DevStatusAnsCreator, DeviceTimeReqCreator, DlChannelAnsCreator, LinkADRAnsCreator,
+    NewChannelAnsCreator, RXParamSetupAnsCreator, RXTimingSetupAnsCreator,
 };
 use lorawan::maccommands::DownlinkMacCommand;
 use lorawan::maccommands::{MacCommands, parse_downlink_mac_commands};
@@ -255,6 +255,10 @@ impl Session {
                                 LinkCheckReq => {
                                     return Response::LinkCheckReq;
                                 }
+                                DeviceTimeReq => {
+                                    self.uplink.add_mac_command(DeviceTimeReqCreator::new());
+                                    return Response::NoUpdate;
+                                }
                                 TxFramesCtrlReq(ftype) => {
                                     // None is a no-op, allowing network to trigger uplinks
                                     if ftype.is_some() {
@@ -437,6 +441,13 @@ impl Session {
                     let mut cmd = DevStatusAnsCreator::new();
                     let _ = cmd.set_battery(configuration.battery).set_margin(snr);
                     self.uplink.add_mac_command(cmd);
+                }
+                DeviceTimeAns(payload) => {
+                    configuration.device_time = Some(crate::DeviceTime {
+                        seconds: payload.seconds(),
+                        fraction: payload.fraction(),
+                    });
+                    configuration.device_time_updated = true;
                 }
                 DlChannelReq(payload) => {
                     if region.has_fixed_channel_plan() {

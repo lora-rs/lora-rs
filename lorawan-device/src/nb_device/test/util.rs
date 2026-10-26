@@ -7,8 +7,8 @@ use crate::nb_device::{
 };
 use crate::test_util::*;
 use region::{Configuration, Region};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 pub fn test_device() -> Device<TestRadio, rand_core::OsRng, 255> {
     Device::new(Configuration::new(Region::US915), TestRadio::default(), rand::rngs::OsRng)
@@ -18,11 +18,20 @@ pub fn test_device() -> Device<TestRadio, rand_core::OsRng, 255> {
 pub struct TestHandler {
     pub battery: u8,
     pub reboots: Arc<AtomicUsize>,
+    pub last_device_time: Arc<Mutex<Option<crate::DeviceTime>>>,
 }
 
 impl TestHandler {
     pub fn with_battery(battery: u8) -> Self {
-        Self { battery, reboots: Arc::new(AtomicUsize::new(0)) }
+        Self {
+            battery,
+            reboots: Arc::new(AtomicUsize::new(0)),
+            last_device_time: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub fn last_device_time(&self) -> Option<crate::DeviceTime> {
+        *self.last_device_time.lock().unwrap()
     }
 }
 
@@ -39,6 +48,10 @@ impl crate::DeviceHandler for TestHandler {
 
     fn reboot(&mut self) {
         self.reboots.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn set_device_time(&mut self, time: crate::DeviceTime) {
+        *self.last_device_time.lock().unwrap() = Some(time);
     }
 }
 

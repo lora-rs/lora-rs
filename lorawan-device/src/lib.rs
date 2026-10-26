@@ -60,6 +60,16 @@ impl defmt::Format for Downlink {
     }
 }
 
+/// Network time received in a `DeviceTimeAns`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct DeviceTime {
+    /// Seconds since the GPS epoch (1980-01-06 00:00:00 UTC).
+    pub seconds: u32,
+    /// Sub-second part in 1/256 s.
+    pub fraction: u8,
+}
+
 /// Application hooks for the physical device.
 ///
 /// Implement this for the board/MCU type and pass it to
@@ -79,6 +89,11 @@ pub trait DeviceHandler {
     /// so the application can reboot the device (or MCU).
     /// The default does nothing.
     fn reboot(&mut self) {}
+
+    /// Called when a `DeviceTimeAns` is received, with the network time.
+    /// The application can use it to synchronize its RTC.
+    /// The default does nothing.
+    fn set_device_time(&mut self, _time: DeviceTime) {}
 }
 
 impl DeviceHandler for () {}

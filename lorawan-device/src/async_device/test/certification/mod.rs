@@ -284,6 +284,51 @@ async fn dut_reset_req_resets_the_device() {
 }
 
 #[tokio::test]
+async fn device_time_req_queues_a_mac_command() {
+    fn cp_device_time_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_packet(buf, "21", 1)
+    }
+
+    let (radio, timer, device) = util::setup_with_session();
+    let (mut device, response) =
+        exchange_with_certification_command(device, radio, timer, cp_device_time_req).await;
+
+    assert!(matches!(response, SendResponse::RxComplete));
+    let session = device.get_session().expect("device is still joined");
+    assert_eq!(session.uplink.mac_commands(), &[0x0D]);
+}
+
+#[tokio::test]
+async fn device_time_ans_is_stored_and_reported() {
+    fn dl_device_time_ans(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // DeviceTimeAns: seconds = 123456, fraction = 0x40 (1/4 s).
+        build_mac(buf, "0D40E2010040", 1)
+    }
+
+    let (radio, timer, mut device) = util::setup_with_session();
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 3, false).await;
+        (device, response)
+    });
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(dl_device_time_ans).await;
+
+    let (device, response) = task.await.unwrap();
+    assert!(matches!(response, Ok(SendResponse::DownlinkReceived(1))));
+    let expected = crate::DeviceTime { seconds: 123_456, fraction: 0x40 };
+    assert_eq!(device.get_device_time(), Some(expected));
+    assert_eq!(device.handler.last_device_time(), Some(expected));
+}
+
+#[tokio::test]
+async fn request_device_time_queues_a_mac_command() {
+    let (_radio, _timer, mut device) = util::setup_with_session();
+    device.request_device_time();
+    let session = device.get_session().expect("device is still joined");
+    assert_eq!(session.uplink.mac_commands(), &[0x0D]);
+}
+
+#[tokio::test]
 async fn tx_periodicity_change_overrides_the_uplink_period() {
     fn tx_periodicity_5s(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
         // TxPeriodicityChangeReq with index 1: one uplink every 5 seconds.

@@ -127,6 +127,18 @@ where
         self.shared.mac.get_session()
     }
 
+    /// Queue a `DeviceTimeReq` for the next uplink, asking the network for its time.
+    ///
+    /// Does nothing until the device has joined.
+    pub fn request_device_time(&mut self) {
+        self.shared.mac.request_device_time();
+    }
+
+    /// Get the most recent network time received in a `DeviceTimeAns`.
+    pub fn get_device_time(&self) -> Option<DeviceTime> {
+        self.shared.mac.get_device_time()
+    }
+
     pub fn set_session(&mut self, s: mac::Session) {
         self.shared.mac.set_session(s)
     }
@@ -152,6 +164,9 @@ where
             event,
         );
         self.state = new_state;
+        if let Some(time) = self.shared.mac.take_device_time_update() {
+            self.handler.set_device_time(time);
+        }
         result
     }
 }

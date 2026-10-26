@@ -10,6 +10,7 @@ pub(crate) enum Response {
     AdrBitChange(bool),
     DutJoinReq,
     DutResetReq,
+    DeviceTimeReq,
     LinkCheckReq,
     TxFramesCtrlReq(Option<bool>),
     TxPeriodicityChange(Option<u16>),
@@ -53,6 +54,7 @@ impl Certification {
                 // Device layer
                 DutJoinReq(..) => return Response::DutJoinReq,
                 DutResetReq(..) => return Response::DutResetReq,
+                DeviceTimeReq(..) => return Response::DeviceTimeReq,
                 TxPeriodicityChangeReq(payload) => {
                     if let Ok(periodicity) = payload.periodicity() {
                         return Response::TxPeriodicityChange(periodicity);

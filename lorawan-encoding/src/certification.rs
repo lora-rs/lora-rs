@@ -41,6 +41,10 @@ pub enum DownlinkDUTCommand<'a> {
     #[cmd(cid = 0x20, len = 0)]
     LinkCheckReq(LinkCheckReqPayload),
 
+    /// Requests the DUT to send a DeviceTimeReq MAC command.
+    #[cmd(cid = 0x21, len = 0)]
+    DeviceTimeReq(DeviceTimeReqPayload),
+
     /// Request to send firmware version, LoRaWAN version, and regional parameters version
     #[cmd(cid = 0x7f, len = 0)]
     DutVersionsReq(DutVersionsReqPayload),

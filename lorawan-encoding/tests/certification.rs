@@ -82,6 +82,13 @@ fn test_echopayload() {
 }
 
 #[test]
+fn test_device_time_req() {
+    let mut c = parse_downlink_dut_commands(&[0x21]);
+    assert!(matches!(c.next(), Some(Ok(DeviceTimeReq(_)))));
+    assert_eq!(c.next(), None);
+}
+
+#[test]
 fn test_echopayloadreq() {
     let data = [EchoIncPayloadReqPayload::cid(), 1];
     let mut c = parse_downlink_dut_commands(&data);

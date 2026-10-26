@@ -6,6 +6,7 @@ use crate::{
     test_util::*,
 };
 use std::sync::Arc;
+use std::sync::Mutex as StdMutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Mutex;
 
@@ -34,11 +35,20 @@ mod multicast;
 pub(crate) struct TestHandler {
     pub battery: u8,
     pub reboots: Arc<AtomicUsize>,
+    pub last_device_time: Arc<StdMutex<Option<crate::DeviceTime>>>,
 }
 
 impl TestHandler {
     pub(crate) fn with_battery(battery: u8) -> Self {
-        Self { battery, reboots: Arc::new(AtomicUsize::new(0)) }
+        Self {
+            battery,
+            reboots: Arc::new(AtomicUsize::new(0)),
+            last_device_time: Arc::new(StdMutex::new(None)),
+        }
+    }
+
+    pub(crate) fn last_device_time(&self) -> Option<crate::DeviceTime> {
+        *self.last_device_time.lock().unwrap()
     }
 }
 
@@ -55,6 +65,10 @@ impl crate::DeviceHandler for TestHandler {
 
     fn reboot(&mut self) {
         self.reboots.fetch_add(1, Ordering::SeqCst);
+    }
+
+    fn set_device_time(&mut self, time: crate::DeviceTime) {
+        *self.last_device_time.lock().unwrap() = Some(time);
     }
 }
 

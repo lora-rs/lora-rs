@@ -3,7 +3,7 @@
 //! decrypting from send and receive buffers.
 
 use crate::{
-    AppSKey, Downlink, NwkSKey,
+    AppSKey, DeviceTime, Downlink, NwkSKey,
     nvm::{PersistentIdentity, PersistentSession},
     radio::{self, RadioBuffer, RfConfig, RxConfig, RxMode},
     region,
@@ -96,6 +96,10 @@ pub struct Configuration {
     /// - 1..=254 - battery level,
     /// - 255 - unknown. Defaults to 255.
     pub(crate) battery: u8,
+    /// Most recent network time received in a `DeviceTimeAns`.
+    pub(crate) device_time: Option<DeviceTime>,
+    /// Set when `device_time` changes, until the device notifies its handler.
+    pub(crate) device_time_updated: bool,
 }
 
 pub(crate) struct Mac {
@@ -165,6 +169,8 @@ impl Mac {
                 adr_enabled: true,
                 nb_trans: 1,
                 battery: 255,
+                device_time: None,
+                device_time_updated: false,
             },
             certification: certification::Certification::new(),
             pending_cert_rx: None,
@@ -314,6 +320,25 @@ impl Mac {
             State::Unjoined => Err(Error::NotJoined),
         };
         Ok(())
+    }
+
+    /// Queue a `DeviceTimeReq` for the next uplink.
+    pub(crate) fn request_device_time(&mut self) {
+        let _ = self.add_uplink(lorawan::maccommandcreator::DeviceTimeReqCreator::new());
+    }
+
+    /// Most recent network time received in a `DeviceTimeAns`.
+    pub(crate) fn get_device_time(&self) -> Option<DeviceTime> {
+        self.configuration.device_time
+    }
+
+    /// Take a newly received `DeviceTimeAns` value, if the handler was not notified yet.
+    pub(crate) fn take_device_time_update(&mut self) -> Option<DeviceTime> {
+        if !self.configuration.device_time_updated {
+            return None;
+        }
+        self.configuration.device_time_updated = false;
+        self.configuration.device_time
     }
 
     #[cfg(feature = "multicast")]

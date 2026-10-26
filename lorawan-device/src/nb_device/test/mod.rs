@@ -415,6 +415,45 @@ fn test_certification_dev_status_req_uses_handler_battery() {
 }
 
 #[test]
+fn test_certification_device_time_req_queues_mac_command() {
+    fn cp_device_time_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_cert_downlink(buf, "21", 1) // DeviceTimeReq
+    }
+
+    let mut device = test_device_with_handler(TestHandler::default());
+    device.join(get_abp_credentials()).unwrap();
+    let response = send_and_receive_cert(&mut device, cp_device_time_req);
+    assert!(matches!(response, Response::NoUpdate));
+    let session = device.get_session().expect("device is still joined");
+    assert_eq!(session.uplink.mac_commands(), &[0x0D]);
+}
+
+#[test]
+fn test_device_time_ans_is_stored_and_reported() {
+    fn dl_device_time_ans(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // DeviceTimeAns: seconds = 123456, fraction = 0x40 (1/4 s).
+        build_mac_downlink(buf, "0D40E2010040", 1)
+    }
+
+    let mut device = test_device_with_handler(TestHandler::default());
+    device.join(get_abp_credentials()).unwrap();
+    let response = send_and_receive_cert(&mut device, dl_device_time_ans);
+    assert!(matches!(response, Response::DownlinkReceived(1)));
+    let expected = crate::DeviceTime { seconds: 123_456, fraction: 0x40 };
+    assert_eq!(device.get_device_time(), Some(expected));
+    assert_eq!(device.handler.last_device_time(), Some(expected));
+}
+
+#[test]
+fn test_request_device_time_queues_mac_command() {
+    let mut device = test_device_with_handler(TestHandler::default());
+    device.join(get_abp_credentials()).unwrap();
+    device.request_device_time();
+    let session = device.get_session().expect("device is still joined");
+    assert_eq!(session.uplink.mac_commands(), &[0x0D]);
+}
+
+#[test]
 fn test_certification_dut_join_req_resets_the_mac() {
     fn cp_dut_join_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
         build_cert_downlink(buf, "02", 1) // DutJoinReq

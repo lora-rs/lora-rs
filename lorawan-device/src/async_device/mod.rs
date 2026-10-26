@@ -11,7 +11,7 @@ use rand_core::RngCore;
 
 pub use crate::region::DR;
 use crate::{
-    DeviceHandler,
+    DeviceHandler, DeviceTime,
     nvm::{
         DEFAULT_FCNT_CHECKPOINT_MARGIN, MAX_BLOB_LEN, NoNvm, NonVolatileStore, NvmRegion,
         PersistentIdentity, PersistentSession,
@@ -488,6 +488,18 @@ where
         &self.mac.region
     }
 
+    /// Queue a `DeviceTimeReq` for the next uplink, asking the network for its time.
+    ///
+    /// Does nothing until the device has joined.
+    pub fn request_device_time(&mut self) {
+        self.mac.request_device_time();
+    }
+
+    /// Get the most recent network time received in a `DeviceTimeAns`.
+    pub fn get_device_time(&self) -> Option<DeviceTime> {
+        self.mac.get_device_time()
+    }
+
     pub fn get_radio(&mut self) -> &R {
         &self.radio
     }
@@ -929,6 +941,9 @@ where
         rx_config: Option<RxConfig>,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
         radio_buffer.clear();
+        if let Some(time) = mac.take_device_time_update() {
+            handler.set_device_time(time);
+        }
         match response {
             mac::Response::NoUpdate => Ok(None),
             mac::Response::LinkCheckReq => {

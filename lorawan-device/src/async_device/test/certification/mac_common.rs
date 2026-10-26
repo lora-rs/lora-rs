@@ -5,6 +5,7 @@
 //! * DevStatusReq (2.5.1)
 //! * RXTimingSetupReq (2.5.5)
 //! * LinkCheckReq (2.5.7)
+//! * DeviceTimeReq (2.5.10)
 //! * RxAppCnt (certification protocol)
 //!
 //! Region-specific tests (in separate files):
@@ -16,7 +17,6 @@
 //! * TXParamSetupReq (2.5.6)
 //! * LinkADRReq (2.5.8)
 //! * DutyCycleReq (2.5.9)
-//! * DeviceTimeReq (2.5.10)
 use super::util;
 use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
