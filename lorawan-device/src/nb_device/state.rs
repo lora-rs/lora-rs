@@ -112,6 +112,7 @@ impl State {
         RNG: RngCore,
         const N: usize,
         const D: usize,
+        H: crate::DeviceHandler,
     >(
         self,
         mac: &mut Mac,
@@ -120,6 +121,7 @@ impl State {
         buf: &mut RadioBuffer<N>,
         retransmit_buf: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
+        handler: &mut H,
         event: Event<'_, R>,
     ) -> (Self, Result<Response, super::Error<R>>) {
         match self {
@@ -128,9 +130,16 @@ impl State {
             }
             State::SendingData(s) => s.handle_event::<R, N>(mac, radio, event),
             State::WaitingForRxWindow(s) => s.handle_event::<R, N>(mac, radio, event),
-            State::WaitingForRx(s) => {
-                s.handle_event::<R, RNG, N, D>(mac, radio, rng, buf, retransmit_buf, event, dl)
-            }
+            State::WaitingForRx(s) => s.handle_event::<R, RNG, N, D, H>(
+                mac,
+                radio,
+                rng,
+                buf,
+                retransmit_buf,
+                handler,
+                event,
+                dl,
+            ),
             State::WaitingForRetransmitTimeout(s) => {
                 s.handle_event::<R, RNG, N>(mac, radio, rng, retransmit_buf, event)
             }
@@ -342,6 +351,7 @@ impl WaitingForRx {
         RNG: RngCore,
         const N: usize,
         const D: usize,
+        H: crate::DeviceHandler,
     >(
         self,
         mac: &mut Mac,
@@ -349,6 +359,7 @@ impl WaitingForRx {
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
         retransmit_buf: &mut RadioBuffer<N>,
+        handler: &mut H,
         event: Event<'_, R>,
         dl: &mut Vec<Downlink, D>,
     ) -> (State, Result<Response, super::Error<R>>) {
@@ -382,7 +393,14 @@ impl WaitingForRx {
                                     retransmit_buf,
                                 );
                             }
-                            self.complete_or_retransmit(response, mac, radio, rng, retransmit_buf)
+                            self.complete_or_retransmit(
+                                response,
+                                mac,
+                                radio,
+                                rng,
+                                retransmit_buf,
+                                handler,
+                            )
                         }
                         _ => (State::WaitingForRx(self), Ok(Response::NoUpdate)),
                     },
@@ -413,7 +431,14 @@ impl WaitingForRx {
                     // the frame while NbTrans allows it
                     Rx::_2(_) => {
                         let response = mac.rx2_complete();
-                        self.complete_or_retransmit(response, mac, radio, rng, retransmit_buf)
+                        self.complete_or_retransmit(
+                            response,
+                            mac,
+                            radio,
+                            rng,
+                            retransmit_buf,
+                            handler,
+                        )
                     }
                 }
             }
@@ -447,15 +472,35 @@ impl WaitingForRx {
     /// oversized downlink): if the MAC wants to retransmit the current frame
     /// (NbTrans), re-arm the radio with the retained copy; otherwise complete
     /// the uplink cycle.
-    fn complete_or_retransmit<R: radio::PhyRxTx + Timings, RNG: RngCore, const N: usize>(
+    fn complete_or_retransmit<
+        R: radio::PhyRxTx + Timings,
+        RNG: RngCore,
+        const N: usize,
+        H: crate::DeviceHandler,
+    >(
         self,
         response: mac::Response,
         mac: &mut Mac,
         radio: &mut R,
         rng: &mut RNG,
         retransmit_buf: &mut RadioBuffer<N>,
+        handler: &mut H,
     ) -> (State, Result<Response, super::Error<R>>) {
         match response {
+            mac::Response::DeviceEvent(event) => match event {
+                mac::certification::DeviceEvent::ResetMac => {
+                    mac.reset(true);
+                    (State::Idle(Idle), Ok(Response::RxComplete))
+                }
+                mac::certification::DeviceEvent::ResetDevice => {
+                    // No store-backed 1.0.4 yet: drop the session and ask the
+                    // application to reboot.
+                    mac.reset(false);
+                    handler.reboot();
+                    (State::Idle(Idle), Ok(Response::RxComplete))
+                }
+                other => (State::Idle(Idle), Ok(mac::Response::DeviceEvent(other).into())),
+            },
             mac::Response::Retransmit => {
                 // Re-run the normal channel selection so retransmissions hop
                 // frequencies as usual; the frame itself (and its FCntUp) is

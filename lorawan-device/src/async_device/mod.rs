@@ -756,6 +756,7 @@ where
                         &mut self.radio,
                         &mut self.rng,
                         &mut self.nvm,
+                        &mut self.handler,
                         mac_response,
                         Some(rx_config),
                     )
@@ -826,6 +827,7 @@ where
                             &mut self.radio,
                             &mut self.rng,
                             &mut self.nvm,
+                            &mut self.handler,
                             mac_response,
                             Some(rx_config),
                         )
@@ -922,6 +924,7 @@ where
         radio: &mut R,
         rng: &mut G,
         nvm: &mut Persistence<S>,
+        handler: &mut H,
         response: mac::Response,
         rx_config: Option<RxConfig>,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
@@ -938,11 +941,14 @@ where
                     Ok(None)
                 }
                 mac::certification::DeviceEvent::ResetDevice => {
-                    // Simulate a power cycle: drop RAM state and resume from the store.
-                    // TODO: DutResetReq asks for an actual MCU reboot; the stack cannot
-                    // trigger that, so the application must be given a way to do it.
+                    // Reset the stack to its post-power-cycle state,
+                    // then ask the application to reboot the MCU.
+                    //
+                    // The stack-side reset still applies when `reboot`
+                    // is a no-op or deferred.
                     mac.reset(false);
                     nvm.reload(mac).await.map_err(|_| Error::Nvm)?;
+                    handler.reboot();
                     Ok(None)
                 }
                 mac::certification::DeviceEvent::TxPeriodicityChange { periodicity } => {
@@ -1022,6 +1028,7 @@ where
                         &mut self.radio,
                         &mut self.rng,
                         &mut self.nvm,
+                        &mut self.handler,
                         mac_response,
                         None,
                     )
@@ -1057,6 +1064,7 @@ where
                 &mut self.radio,
                 &mut self.rng,
                 &mut self.nvm,
+                &mut self.handler,
                 mac_response,
                 Some(rx_config),
             )

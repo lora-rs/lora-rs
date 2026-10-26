@@ -141,13 +141,14 @@ where
 
     pub fn handle_event(&mut self, event: Event<'_, R>) -> Result<Response, Error<R>> {
         self.shared.mac.configuration.battery = self.handler.battery_level();
-        let (new_state, result) = self.state.handle_event::<R, RNG, N, D>(
+        let (new_state, result) = self.state.handle_event::<R, RNG, N, D, H>(
             &mut self.shared.mac,
             &mut self.shared.radio,
             &mut self.shared.rng,
             &mut self.shared.tx_buffer,
             &mut self.shared.retransmit_buffer,
             &mut self.shared.downlink,
+            &mut self.handler,
             event,
         );
         self.state = new_state;

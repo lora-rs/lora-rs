@@ -6,6 +6,7 @@ use crate::{
     test_util::*,
 };
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::Mutex;
 
 mod timer;
@@ -29,26 +30,31 @@ mod certification;
 #[cfg(feature = "multicast")]
 mod multicast;
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub(crate) struct TestHandler {
     pub battery: u8,
+    pub reboots: Arc<AtomicUsize>,
 }
 
 impl TestHandler {
     pub(crate) fn with_battery(battery: u8) -> Self {
-        Self { battery }
+        Self { battery, reboots: Arc::new(AtomicUsize::new(0)) }
     }
 }
 
 impl Default for TestHandler {
     fn default() -> Self {
-        Self { battery: 255 }
+        Self::with_battery(255)
     }
 }
 
 impl crate::DeviceHandler for TestHandler {
     fn battery_level(&self) -> u8 {
         self.battery
+    }
+
+    fn reboot(&mut self) {
+        self.reboots.fetch_add(1, Ordering::SeqCst);
     }
 }
 

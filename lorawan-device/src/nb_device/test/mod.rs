@@ -9,6 +9,7 @@ use crate::radio::RfConfig;
 use core::num::NonZeroU8;
 use lorawan::creator::{DataFrame, Payload};
 use lorawan::parser::{self, DataFrameType, DecryptedDataPayload, PhyPayload};
+use std::sync::atomic::Ordering;
 
 /// Build an FPort 224 certification downlink with the given payload bytes.
 fn build_cert_downlink(buf: &mut [u8], payload_in_hex: &str, fcnt: u16) -> usize {
@@ -414,16 +415,29 @@ fn test_certification_dev_status_req_uses_handler_battery() {
 }
 
 #[test]
-fn test_certification_dut_reset_req_is_ignored() {
+fn test_certification_dut_join_req_resets_the_mac() {
+    fn cp_dut_join_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_cert_downlink(buf, "02", 1) // DutJoinReq
+    }
+
+    let mut device = test_device_with_handler(TestHandler::default());
+    device.join(get_abp_credentials()).unwrap();
+    let response = send_and_receive_cert(&mut device, cp_dut_join_req);
+    assert!(matches!(response, Response::RxComplete));
+    assert!(device.get_session().is_none());
+    assert_eq!(device.handler.reboots.load(Ordering::SeqCst), 0);
+}
+
+#[test]
+fn test_certification_dut_reset_req_resets_the_mac_and_reboots() {
     fn cp_dut_reset_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
         build_cert_downlink(buf, "01", 1) // DutResetReq
     }
 
-    let mut device = test_device();
+    let mut device = test_device_with_handler(TestHandler::default());
     device.join(get_abp_credentials()).unwrap();
     let response = send_and_receive_cert(&mut device, cp_dut_reset_req);
     assert!(matches!(response, Response::RxComplete));
-    // The session survives.
-    assert!(device.get_session().is_some());
-    assert!(device.ready_to_send_data());
+    assert!(device.get_session().is_none());
+    assert_eq!(device.handler.reboots.load(Ordering::SeqCst), 1);
 }

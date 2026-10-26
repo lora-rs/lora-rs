@@ -10,6 +10,7 @@ use lorawan::keys::Crypto;
 use lorawan::parser::{self, DataFrameType, DecryptedDataPayload, PhyPayload};
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use tokio::sync::Mutex;
 
 mod mac_common;
@@ -262,6 +263,7 @@ async fn dut_join_req_resets_the_mac() {
 
     assert!(matches!(response, SendResponse::RxComplete));
     assert!(device.get_session().is_none());
+    assert_eq!(device.handler.reboots.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -278,6 +280,7 @@ async fn dut_reset_req_resets_the_device() {
     assert!(matches!(response, SendResponse::RxComplete));
     // Without a store there is nothing to resume, so the device restarts unjoined.
     assert!(device.get_session().is_none());
+    assert_eq!(device.handler.reboots.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

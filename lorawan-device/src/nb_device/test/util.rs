@@ -7,31 +7,38 @@ use crate::nb_device::{
 };
 use crate::test_util::*;
 use region::{Configuration, Region};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub fn test_device() -> Device<TestRadio, rand_core::OsRng, 255> {
     Device::new(Configuration::new(Region::US915), TestRadio::default(), rand::rngs::OsRng)
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct TestHandler {
     pub battery: u8,
+    pub reboots: Arc<AtomicUsize>,
 }
 
 impl TestHandler {
     pub fn with_battery(battery: u8) -> Self {
-        Self { battery }
+        Self { battery, reboots: Arc::new(AtomicUsize::new(0)) }
     }
 }
 
 impl Default for TestHandler {
     fn default() -> Self {
-        Self { battery: 255 }
+        Self::with_battery(255)
     }
 }
 
 impl crate::DeviceHandler for TestHandler {
     fn battery_level(&self) -> u8 {
         self.battery
+    }
+
+    fn reboot(&mut self) {
+        self.reboots.fetch_add(1, Ordering::SeqCst);
     }
 }
 

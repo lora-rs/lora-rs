@@ -74,6 +74,11 @@ pub trait DeviceHandler {
     fn battery_level(&self) -> u8 {
         255
     }
+
+    /// Called after the stack has handled a `DutResetReq` and reset its state,
+    /// so the application can reboot the device (or MCU).
+    /// The default does nothing.
+    fn reboot(&mut self) {}
 }
 
 impl DeviceHandler for () {}
