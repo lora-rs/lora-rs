@@ -13,6 +13,8 @@ use timer::TestTimer;
 mod radio;
 use radio::TestRadio;
 
+mod net;
+
 mod util;
 pub(crate) use util::{setup, setup_with_session};
 
