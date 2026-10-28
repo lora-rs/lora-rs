@@ -39,6 +39,8 @@ impl TestRadio {
 #[derive(Debug)]
 enum Msg {
     RxTx(RxTxHandler),
+    /// A pre-built downlink frame, delivered as-is.
+    Frame(std::vec::Vec<u8>),
     Timeout,
     /// The radio reports a receive error, the way lora-phy's adapter does
     /// for a frame whose header or payload CRC failed.
@@ -98,6 +100,15 @@ impl PhyRxTx for TestRadio {
                     panic!("Trying to rx before settings config!")
                 }
             }
+            Msg::Frame(frame) => {
+                if frame.len() > rx_buf.len() {
+                    panic!("injected frame does not fit the rx buffer");
+                }
+                let len = frame.len();
+                rx_buf[..len].copy_from_slice(&frame);
+                self.pending.fetch_sub(1, Ordering::SeqCst);
+                Ok((len, RxQuality::new(-80, self.snr)))
+            }
             Msg::Timeout => Err("Unexpected Timeout"),
             Msg::PhyError(e) => Err(e),
         }
@@ -116,6 +127,14 @@ impl PhyRxTx for TestRadio {
                 } else {
                     panic!("Trying to rx before settings config!")
                 }
+            }
+            Msg::Frame(frame) => {
+                if frame.len() > rx_buf.len() {
+                    panic!("injected frame does not fit the rx buffer");
+                }
+                rx_buf[..frame.len()].copy_from_slice(&frame);
+                self.pending.fetch_sub(1, Ordering::SeqCst);
+                Ok(RxStatus::Rx(frame.len(), RxQuality::new(-80, self.snr)))
             }
             Msg::Timeout => Ok(RxStatus::RxTimeout),
             Msg::PhyError(e) => Err(e),
@@ -146,6 +165,12 @@ impl RadioChannel {
         // on this before firing.
         self.pending.fetch_add(1, Ordering::SeqCst);
         self.tx.send(Msg::RxTx(handler)).await.unwrap();
+    }
+    /// Deliver a pre-built downlink frame as-is (no handler).
+    pub async fn handle_frame(&self, frame: std::vec::Vec<u8>) {
+        tokio::time::sleep(time::Duration::from_millis(5)).await;
+        self.pending.fetch_add(1, Ordering::SeqCst);
+        self.tx.send(Msg::Frame(frame)).await.unwrap();
     }
     pub async fn handle_timeout(&self) {
         tokio::time::sleep(time::Duration::from_millis(5)).await;
