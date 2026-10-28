@@ -13,14 +13,16 @@ impl TestRadio {
         let (tx, rx) = mpsc::channel(2);
         let last_rxconfig = Arc::new(Mutex::new(None));
         let last_uplink = Arc::new(Mutex::new(None));
+        let uplinks = Arc::new(Mutex::new(std::vec::Vec::new()));
         (
             RadioChannel {
                 tx,
                 last_uplink: last_uplink.clone(),
                 last_rxconfig: last_rxconfig.clone(),
+                uplinks: uplinks.clone(),
                 pending: pending.clone(),
             },
-            Self { rx, last_rxconfig, last_uplink, current_config: None, pending, snr: 0 },
+            Self { rx, last_rxconfig, last_uplink, uplinks, current_config: None, pending, snr: 0 },
         )
     }
 
@@ -47,6 +49,7 @@ pub struct TestRadio {
     current_config: Option<RxConfig>,
     last_rxconfig: Arc<Mutex<Option<RxConfig>>>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
+    uplinks: Arc<Mutex<std::vec::Vec<Uplink>>>,
     rx: mpsc::Receiver<Msg>,
     pending: Arc<AtomicUsize>,
     snr: i8,
@@ -61,9 +64,11 @@ impl PhyRxTx for TestRadio {
 
     async fn tx(&mut self, config: TxConfig, buffer: &[u8]) -> Result<u32, Self::PhyError> {
         let length = buffer.len();
+        let uplink = Uplink::new(buffer, config).map_err(|_| "Parse error")?;
+        self.uplinks.lock().await.push(uplink.clone());
         // stash the uplink, to be consumed by channel or by rx handler
         let mut last_uplink = self.last_uplink.lock().await;
-        *last_uplink = Some(Uplink::new(buffer, config).map_err(|_| "Parse error")?);
+        *last_uplink = Some(uplink);
         Ok(length as u32)
     }
 
@@ -129,6 +134,7 @@ pub struct RadioChannel {
     #[allow(unused)]
     last_rxconfig: Arc<Mutex<Option<RxConfig>>>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
+    uplinks: Arc<Mutex<std::vec::Vec<Uplink>>>,
     tx: mpsc::Sender<Msg>,
     pending: Arc<AtomicUsize>,
 }
@@ -158,5 +164,10 @@ impl RadioChannel {
     pub async fn get_last_uplink(&self) -> Uplink {
         let uplink = self.last_uplink.lock().await;
         uplink.clone().unwrap()
+    }
+
+    /// Take the uplinks transmitted since the last call, in order.
+    pub async fn take_uplinks(&self) -> std::vec::Vec<Uplink> {
+        self.uplinks.lock().await.drain(..).collect()
     }
 }
