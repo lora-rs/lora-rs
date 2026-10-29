@@ -6,6 +6,7 @@ use crate::radio::RfConfig;
 use crate::test_util::{Uplink, get_crypto, get_dev_addr};
 use core::num::NonZeroU8;
 use lorawan::creator::{DataFrame, Payload};
+use lorawan::keys::Crypto;
 use lorawan::parser::{self, DataFrameType, DecryptedDataPayload, PhyPayload};
 
 use std::sync::Arc;
@@ -15,6 +16,7 @@ mod mac_common;
 
 mod dlchannelreq_eu868;
 mod linkadrreq_eu868;
+mod mac_in_app_payload_and_fopts;
 mod mac_priority;
 mod newchannelreq_eu868;
 mod oversized_payload_eu868;
@@ -84,6 +86,67 @@ fn build_mac(buf: &mut [u8], payload_in_hex: &str, fcnt: u16) -> usize {
 /// Build certification protocol packet (fport = 224)
 fn build_packet(buf: &mut [u8], payload_in_hex: &str, fcnt: u16) -> usize {
     _build(buf, payload_in_hex, fcnt, 224)
+}
+
+/// Build an invalid downlink which carries MAC commands both in the FOpts
+/// field, and in the FRMPayload of a FPort = 0 frame.
+fn build_mac_in_fopts_and_frmpayload(
+    buf: &mut [u8],
+    fopts_in_hex: &str,
+    payload_in_hex: &str,
+    fcnt: u32,
+    confirmed: bool,
+) -> usize {
+    let fopts = hex::decode(fopts_in_hex).unwrap();
+    let macs = hex::decode(payload_in_hex).unwrap();
+    assert!(fopts.len() <= 15);
+    let crypto = get_crypto();
+
+    let fhdr_len = 7 + fopts.len();
+    let fport_at = 1 + fhdr_len;
+    let payload_at = fport_at + 1;
+    let payload_end = payload_at + macs.len();
+    let total = payload_end + 4;
+    let out = &mut buf[..total];
+
+    out[0] = if confirmed {
+        0xa0
+    } else {
+        0x60
+    }; // (Un)ConfirmedDataDown
+    out[1..5].copy_from_slice(get_dev_addr().as_wire_bytes());
+    out[5] = fopts.len() as u8;
+    out[6..8].copy_from_slice(&(fcnt as u16).to_le_bytes());
+    out[8..8 + fopts.len()].copy_from_slice(&fopts);
+    out[fport_at] = 0;
+    out[payload_at..payload_end].copy_from_slice(&macs);
+
+    // Encrypt the FPort 0 FRMPayload with the NwkSKey
+    let mut a = [0u8; 16];
+    a[0] = 0x01;
+    a[5] = (out[0] & 0x20) >> 5;
+    a[6..10].copy_from_slice(&out[1..5]);
+    a[10..14].copy_from_slice(&fcnt.to_le_bytes());
+    for (i, block) in out[payload_at..payload_end].chunks_mut(16).enumerate() {
+        a[15] = (i + 1) as u8;
+        let mut s = a;
+        crypto.encrypt_block(&mut s);
+        for (byte, keystream) in block.iter_mut().zip(s) {
+            *byte ^= keystream;
+        }
+    }
+
+    // MIC over MHDR | FHDR | FPort | FRMPayload
+    let mut b0 = [0u8; 16];
+    b0[0] = 0x49;
+    b0[5] = (out[0] & 0x20) >> 5;
+    b0[6..10].copy_from_slice(&out[1..5]);
+    b0[10..14].copy_from_slice(&fcnt.to_le_bytes());
+    b0[15] = payload_end as u8;
+    let mic = crypto.calculate_mic(&b0, &out[..payload_end]);
+    out[payload_end..total].copy_from_slice(&mic);
+
+    total
 }
 
 #[tokio::test]
