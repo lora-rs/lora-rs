@@ -119,13 +119,11 @@ async fn assert_both_fields_frame_discarded(confirmed: bool) {
 }
 
 #[tokio::test]
-#[should_panic]
 async fn eu868_unconfirmed_mac_in_app_payload_and_fopts_discarded() {
     assert_both_fields_frame_discarded(false).await;
 }
 
 #[tokio::test]
-#[should_panic]
 async fn eu868_confirmed_mac_in_app_payload_and_fopts_discarded() {
     assert_both_fields_frame_discarded(true).await;
 }
