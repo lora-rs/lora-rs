@@ -156,6 +156,15 @@ impl Session {
                 }
             }
 
+            // MAC commands may not be in both FOpts and the FPort 0 FRMPayload.
+            // Drop these invalid frames without any processing.
+            if !encrypted_data.fhdr().f_opts().is_empty() && encrypted_data.f_port() == Some(0) {
+                debug!(
+                    "Dropping frame with MAC commands in both FOpts and the FPort 0 FRMPayload."
+                );
+                return Response::NoUpdate;
+            }
+
             // If ignore_mac is false, we're dealing with Class A downlink and
             // therefore can clear uplinks which need to be retained for acknowledgment
             if !ignore_mac {
