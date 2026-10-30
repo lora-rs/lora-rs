@@ -27,7 +27,10 @@ impl Net {
         // Uplinks the device transmitted before the network took over (eg
         // the one that enabled class C) belong to no exchange.
         radio.take_uplinks().await;
-        Self { radio, timer, device: Some(device), fcnt_down: 0 }
+        // Continue the session's downlink counter: a repeated FCntDown is a
+        // replay and the device drops the frame.
+        let fcnt_down = device.mac.get_session().and_then(|s| s.fcnt_down()).map_or(0, |f| f + 1);
+        Self { radio, timer, device: Some(device), fcnt_down }
     }
 
     /// The device under test.
@@ -325,5 +328,19 @@ mod tests {
         let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::none()).await;
         r.expect_rx_complete();
         assert_eq!(r.uplinks().len(), 1);
+    }
+
+    #[cfg(feature = "class-c")]
+    #[tokio::test]
+    async fn exchange_continues_the_session_fcnt_down() {
+        // The class C helper already delivered FCntDown 0.
+        let (radio, timer, device) = util::setup_with_session_class_c().await;
+        assert_eq!(device.mac.get_session().unwrap().fcnt_down(), Some(0));
+        let mut net = Net::new(radio, timer, device).await;
+        // LinkADRReq, NbTrans = 1
+        let r =
+            net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx1(Pkt::mac("0350070001"))).await;
+        r.expect_downlink_received();
+        assert_eq!(r.fcnt_down(), Some(1));
     }
 }
