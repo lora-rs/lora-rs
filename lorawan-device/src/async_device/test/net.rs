@@ -2,6 +2,10 @@
 //!
 //! `Net` wraps the radio channel, the timer channel and the device under
 //! test, like a network and its radio would.
+//!
+//! Class C devices work too: their RXC listens select the radio against
+//! the timer, so a timer fire with no radio event queued resolves on its
+//! own. The harness only delivers downlinks in RX1/RX2 windows, not in RXC.
 
 use super::{
     Device,
@@ -383,6 +387,20 @@ mod tests {
         let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::none()).await;
         r.expect_rx_complete();
         assert_eq!(r.uplinks().len(), 1);
+    }
+
+    #[cfg(feature = "class-c")]
+    #[tokio::test]
+    async fn exchange_class_c_confirmed_no_ack() {
+        let (radio, timer, mut device) = util::setup_with_session_class_c().await;
+        device.mac.configuration.nb_trans = 3;
+        let mut net = Net::new(radio, timer, device).await;
+        // Each RETRANSMIT_TIMEOUT wait is spent listening in RXC.
+        let r = net.exchange(&[1, 2, 3], 3, true, ExchangeAction::none()).await;
+        r.expect_no_ack();
+        assert_eq!(r.uplinks().len(), 3);
+        assert_eq!(r.uplink(0).data(), r.uplink(1).data());
+        assert_eq!(r.uplink(1).data(), r.uplink(2).data());
     }
 
     #[cfg(feature = "class-c")]
