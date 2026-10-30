@@ -591,3 +591,36 @@ async fn eu868_linkadrreq_redundancy() {
     assert_eq!(config.tx_power, Some(16)); // EU868 maximum EIRP
     assert_eq!(config.nb_trans, 1);
 }
+
+#[tokio::test]
+#[should_panic(expected = "LinkADRAns must report the channel mask as not accepted")]
+/// A LinkADRReq with the RFU ChMaskCntl value 7 must be rejected.
+async fn eu868_linkadrreq_rfu_chmaskcntl_is_rejected() {
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 1, false).await;
+        (device, response)
+    });
+
+    timer.fire_most_recent().await;
+    fn tcl(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // LinkADRReq(DR5, TXPower MAX, ChMask 0700, ChMaskCntl = 7)
+        build_downlink(buf, DataFrameType::UnconfirmedDown, false, 0, "0350070071", 1)
+    }
+    radio.handle_rxtx(tcl).await;
+
+    let (device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(1)) => {}
+        _ => panic!("expected DownlinkReceived, got {response:?}"),
+    }
+
+    let session = device.mac.get_session().unwrap();
+    assert_eq!(
+        session.uplink.mac_commands(),
+        [0x03, 0x06],
+        "LinkADRAns must report the channel mask as not accepted"
+    );
+}
