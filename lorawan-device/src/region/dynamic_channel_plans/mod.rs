@@ -38,7 +38,7 @@ pub(crate) use ru864::RU864;
 #[derive(Clone, Copy)]
 pub(crate) struct Channel {
     frequency: u32,
-    _datarates: DataRateRange,
+    datarates: DataRateRange,
     dl_frequency: Option<u32>,
 }
 
@@ -49,7 +49,12 @@ impl Channel {
     }
 
     fn new_with_dr(f: u32, dr: DataRateRange) -> Self {
-        Self { frequency: f, _datarates: dr, dl_frequency: None }
+        Self { frequency: f, datarates: dr, dl_frequency: None }
+    }
+
+    fn supports(&self, dr: DR) -> bool {
+        let dr = dr as u8;
+        (self.datarates.min_data_rate()..=self.datarates.max_data_rate()).contains(&dr)
     }
 
     fn rx1_frequency(&self) -> u32 {
@@ -177,16 +182,14 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         Some(())
     }
 
-    fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, _dr: Option<DR>) -> bool {
-        // TODO: We should also check whether DR and txpower for all(?) channels is valid
+    fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, dr: Option<DR>) -> bool {
+        let Some(dr) = dr else {
+            return false;
+        };
         (0..NUM_CHANNELS_DYNAMIC).any(|i| {
-            if channel_mask.is_enabled(i as usize).unwrap() {
-                self.channels[i as usize].is_some()
-            } else {
-                false
-            }
+            channel_mask.is_enabled(i as usize).unwrap()
+                && self.channels[i as usize].is_some_and(|channel| channel.supports(dr))
         })
-        // (2..9).all(|i| channel_mask.get_index(i) == 0)
     }
 
     /// Re-enable the default channels. Channels added with
@@ -231,9 +234,10 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
             }
             Frame::Data => {
                 let mut eligible = 0u128;
-                // TODO: exclude channels that do not support the current data rate.
                 for (index, channel) in self.channels.iter().enumerate() {
-                    if self.channel_mask.is_enabled(index).unwrap() && channel.is_some() {
+                    if self.channel_mask.is_enabled(index).unwrap()
+                        && channel.as_ref().is_some_and(|ch| ch.supports(datarate))
+                    {
                         eligible |= 1u128 << index;
                     }
                 }
@@ -517,7 +521,6 @@ mod tests {
     /// LCTT TP_A_EU868_ED_MAC_104_BV_006, "Checking channel usage 12 to 15":
     /// a channel whose DrRange excludes the current DR must not be selected.
     #[test]
-    #[should_panic(expected = "channel 3 only supports DR5")]
     fn data_rate_restricted_channel_is_not_selected() {
         let mut config = Configuration::new(Region::EU868);
         let dr = Some(DataRateRange::new_range(DR::_5, DR::_5));
@@ -596,7 +599,7 @@ mod tests {
         let before = match &config.state {
             crate::region::State::EU868(plan) => {
                 let channel = plan.channels[VALID_INDEX as usize].unwrap();
-                (channel.frequency, channel._datarates, channel.dl_frequency)
+                (channel.frequency, channel.datarates, channel.dl_frequency)
             }
             _ => unreachable!(),
         };
@@ -612,7 +615,7 @@ mod tests {
         let after = match &config.state {
             crate::region::State::EU868(plan) => {
                 let channel = plan.channels[VALID_INDEX as usize].unwrap();
-                (channel.frequency, channel._datarates, channel.dl_frequency)
+                (channel.frequency, channel.datarates, channel.dl_frequency)
             }
             _ => unreachable!(),
         };
