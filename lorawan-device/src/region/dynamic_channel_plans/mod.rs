@@ -514,6 +514,8 @@ mod tests {
         assert!(seen.iter().all(|&used| used));
     }
 
+    /// LCTT TP_A_EU868_ED_MAC_104_BV_006, "Checking channel usage 12 to 15":
+    /// a channel whose DrRange excludes the current DR must not be selected.
     #[test]
     #[should_panic(expected = "channel 3 only supports DR5")]
     fn data_rate_restricted_channel_is_not_selected() {
