@@ -353,8 +353,10 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
 #[cfg(all(test, feature = "region-eu868"))]
 mod tests {
     use super::*;
+    use crate::mac::Frame;
     use crate::region::{Configuration, Region};
     use lorawan::parser::Frequency;
+    use rand_core::RngCore;
 
     // A valid EU868 channel frequency (863..=870 MHz), used to reach the indexing paths.
     const VALID_FREQ: u32 = 868_100_000;
@@ -510,6 +512,19 @@ mod tests {
             seen[index] = true;
         }
         assert!(seen.iter().all(|&used| used));
+    }
+
+    #[test]
+    #[should_panic(expected = "channel 3 only supports DR5")]
+    fn data_rate_restricted_channel_is_not_selected() {
+        let mut config = Configuration::new(Region::EU868);
+        let dr = Some(DataRateRange::new_range(DR::_5, DR::_5));
+        assert_eq!(config.handle_new_channel(3, 867_100_000, dr), (true, true));
+
+        // Force the first channel selection to channel 3.
+        let mut rng = SeqRng(3);
+        let (tx, _) = config.create_tx_config(&mut rng, DR::_2, &Frame::Data);
+        assert_ne!(tx.rf.frequency, 867_100_000, "channel 3 only supports DR5");
     }
 
     // NewChannelReq carries a raw u8 channel index. Indices beyond the channel plan
