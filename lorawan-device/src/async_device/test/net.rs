@@ -23,7 +23,10 @@ pub struct Net {
 }
 
 impl Net {
-    pub fn new(radio: RadioChannel, timer: TimerChannel, device: Device) -> Self {
+    pub async fn new(radio: RadioChannel, timer: TimerChannel, device: Device) -> Self {
+        // Uplinks the device transmitted before the network took over (eg
+        // the one that enabled class C) belong to no exchange.
+        radio.take_uplinks().await;
         Self { radio, timer, device: Some(device), fcnt_down: 0 }
     }
 
@@ -280,7 +283,7 @@ mod tests {
     #[tokio::test]
     async fn exchange_delivers_downlink_in_rx1() {
         let (radio, timer, device) = util::session_with_region(region::EU868::new_eu868().into());
-        let mut net = Net::new(radio, timer, device);
+        let mut net = Net::new(radio, timer, device).await;
         // LinkADRReq, NbTrans = 2
         let r =
             net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx1(Pkt::mac("0350070002"))).await;
@@ -293,7 +296,7 @@ mod tests {
     #[tokio::test]
     async fn exchange_no_downlink() {
         let (radio, timer, device) = util::session_with_region(region::EU868::new_eu868().into());
-        let mut net = Net::new(radio, timer, device);
+        let mut net = Net::new(radio, timer, device).await;
         let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::none()).await;
         r.expect_rx_complete();
         assert_eq!(r.fcnt_down(), None);
@@ -303,7 +306,7 @@ mod tests {
     #[tokio::test]
     async fn exchange_downlink_in_rx2() {
         let (radio, timer, device) = util::session_with_region(region::EU868::new_eu868().into());
-        let mut net = Net::new(radio, timer, device);
+        let mut net = Net::new(radio, timer, device).await;
         let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx2(Pkt::cp_cmd("09"))).await;
         // The RxAppCntAns is a regular uplink with its own (silent) RX
         // windows, then RxComplete.
@@ -311,5 +314,16 @@ mod tests {
         assert_eq!(r.fcnt_down(), Some(0));
         // the send uplink plus the certification answer
         assert_eq!(r.uplinks().len(), 2);
+    }
+
+    #[cfg(feature = "class-c")]
+    #[tokio::test]
+    async fn exchange_ignores_uplinks_sent_before_the_network_took_over() {
+        // The class C helper sends one uplink of its own to enable class C.
+        let (radio, timer, device) = util::setup_with_session_class_c().await;
+        let mut net = Net::new(radio, timer, device).await;
+        let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::none()).await;
+        r.expect_rx_complete();
+        assert_eq!(r.uplinks().len(), 1);
     }
 }

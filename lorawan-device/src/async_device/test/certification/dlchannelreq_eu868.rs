@@ -11,7 +11,7 @@ use net::{ExchangeAction, Net, Pkt};
 async fn eu868_dlchannelreq() {
     let (radio, timer, device) =
         util::session_with_region(crate::region::EU868::new_eu868().into());
-    let mut net = Net::new(radio, timer, device);
+    let mut net = Net::new(radio, timer, device).await;
 
     // Step 1: send uplink, TCL responds with MAC:DlChannelReq
     // (channel_index=0, frequency=868300000)
