@@ -247,7 +247,16 @@ impl Session {
                         #[cfg(feature = "certification")]
                         if certification.fport(fport) {
                             use crate::mac::certification::Response::*;
-                            match certification.handle_message(data, self.rx_app_cnt) {
+                            let max_mac_payload_len = region.get_max_payload_length(
+                                configuration.data_rate,
+                                false,
+                                false,
+                            );
+                            match certification.handle_message(
+                                data,
+                                self.rx_app_cnt,
+                                max_mac_payload_len,
+                            ) {
                                 AdrBitChange(adr) => {
                                     configuration.adr_enabled = adr;
                                 }
@@ -746,7 +755,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "oversized EchoPayloadAns must be discarded")]
     fn certification_discards_oversized_echo_payload() {
         let mut mac = eu868_mac();
         mac.set_session(session());
