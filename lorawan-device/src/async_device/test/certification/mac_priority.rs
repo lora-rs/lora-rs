@@ -11,7 +11,7 @@ use super::{build_mac, decrypt_uplink, packet_with_mac, util};
 use crate::async_device::SendResponse;
 use crate::radio::RfConfig;
 use crate::test_util::Uplink;
-use lorawan::maccommands::parse_uplink_mac_commands;
+use lorawan::maccommands::{UplinkMacCommand, parse_uplink_mac_commands};
 use lorawan::parser::FrmPayload;
 
 use std::sync::Arc;
@@ -167,4 +167,76 @@ async fn eu868_mac_truncation() {
     assert_eq!(dl.frm_payload(), FrmPayload::Data(&[0x02, 0x02, 0x03]));
 }
 
-// TODO: Step 7... (non-truncated payload)
+#[tokio::test]
+#[should_panic(expected = "both LinkADRAns and RXParamSetupAns must be sent")]
+async fn eu868_mac_non_truncated_payload() {
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+
+    // Step 3: trigger an uplink and set DR5 (SF7BW125).
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 1, false).await;
+        (device, response)
+    });
+
+    timer.fire_most_recent().await;
+    fn tcl_3(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_mac(buf, "0350070001", 1)
+    }
+    radio.handle_rxtx(tcl_3).await;
+
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(1)) => {}
+        _ => panic!(),
+    }
+
+    // Step 4: trigger an uplink and send many MAC commands in one block.
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 2, false).await;
+        (device, response)
+    });
+
+    timer.fire_most_recent().await;
+    fn tcl_4(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_mac(buf, "060500d2ad840606060606060606060606060606060350070001", 2)
+    }
+    radio.handle_rxtx(tcl_4).await;
+
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(2)) => {}
+        _ => panic!(),
+    }
+
+    // The next uplink must carry answers for both LinkADRReq and
+    // RXParamSetupReq. They do not fit in FOpts together with all the
+    // DevStatusAns answers, so they must not be truncated away.
+    let task = tokio::spawn(async move {
+        let response = device.send(&[], 3, false).await;
+        (device, response)
+    });
+
+    timer.fire_most_recent().await;
+    let mut uplink = radio.get_last_uplink().await;
+    let dl = decrypt_uplink(&mut uplink);
+    let mut answers: heapless::Vec<u8, 256> = heapless::Vec::new();
+    answers.extend_from_slice(dl.fhdr().f_opts()).unwrap();
+    if let FrmPayload::MacCommands(data) = dl.frm_payload() {
+        answers.extend_from_slice(data).unwrap();
+    }
+
+    let (mut has_link_adr_ans, mut has_rx_param_setup_ans) = (false, false);
+    for command in parse_uplink_mac_commands(&answers) {
+        match command.unwrap() {
+            UplinkMacCommand::LinkADRAns(..) => has_link_adr_ans = true,
+            UplinkMacCommand::RXParamSetupAns(..) => has_rx_param_setup_ans = true,
+            _ => {}
+        }
+    }
+    task.abort();
+    assert!(
+        has_link_adr_ans && has_rx_param_setup_ans,
+        "both LinkADRAns and RXParamSetupAns must be sent"
+    );
+}
