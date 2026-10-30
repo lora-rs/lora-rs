@@ -10,6 +10,7 @@ use crate::radio::RfConfig;
 use crate::test_util::Uplink;
 
 use lorawan::maccommands::parse_uplink_mac_commands;
+use lorawan::types::DR;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -174,5 +175,77 @@ async fn newchannelreq_e868() {
         assert_eq!(session.uplink.mac_commands(), [0x07, 0x03]);
         let channel_mask = device.mac.region.channel_mask_get();
         assert_eq!(channel_mask.is_enabled(0xf), Ok(false))
+    }
+}
+
+#[tokio::test]
+#[should_panic(expected = "DR5-only channel 3 selected at DR2")]
+/// A channel whose data-rate range excludes the current DR must not be selected.
+async fn dr_restricted_channel_not_selected_eu868() {
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+
+    // Step 1: add channel 3 (867.1 MHz) with DR5 only.
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 1, false).await;
+        (device, response)
+    });
+    timer.fire_most_recent().await;
+    fn add_channel_3(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // NewChannelReq(ChIndex=3, Freq=867100000, DrRange=55)
+        build_mac(buf, "0703184f8455", 1)
+    }
+    radio.handle_rxtx(add_channel_3).await;
+
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(1)) => {}
+        _ => panic!("expected DownlinkReceived, got {response:?}"),
+    }
+    assert!(device.mac.region.channel_mask_get().is_enabled(3).unwrap());
+
+    // Step 2: switch to DR2 with ChMask FFFF.
+    let task = tokio::spawn(async move {
+        let response = device.send(&[1, 2, 3], 2, false).await;
+        (device, response)
+    });
+    timer.fire_most_recent().await;
+    fn set_dr2(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        // LinkADRReq(DR2, TXPower MAX, ChMask FFFF, Redundancy 01)
+        build_mac(buf, "0320ffff01", 2)
+    }
+    radio.handle_rxtx(set_dr2).await;
+
+    let (mut device, response) = task.await.unwrap();
+    match response {
+        Ok(SendResponse::DownlinkReceived(2)) => {}
+        _ => panic!("expected DownlinkReceived, got {response:?}"),
+    }
+    assert_eq!(device.mac.configuration.data_rate, DR::_2);
+
+    // Step 3: channel 3 only supports DR5, so it must never be selected at DR2.
+    for _ in 0..40 {
+        let task = tokio::spawn(async move {
+            let response = device.send(&[1, 2, 3], 1, false).await;
+            (device, response)
+        });
+        timer.fire_most_recent().await; // RX1 start
+        radio.handle_timeout().await; // RX1 end
+        timer.fire_most_recent().await; // RX2 start
+        radio.handle_timeout().await; // RX2 end
+
+        let (next_device, response) = task.await.unwrap();
+        device = next_device;
+        match response {
+            Ok(SendResponse::RxComplete) => {}
+            _ => panic!("expected RxComplete, got {response:?}"),
+        }
+
+        let uplink = radio.get_last_uplink().await;
+        let frequency = uplink.tx_config().rf.frequency;
+        assert!(
+            matches!(frequency, 868_100_000 | 868_300_000 | 868_500_000),
+            "DR5-only channel 3 selected at DR2 ({frequency} Hz)"
+        );
     }
 }
