@@ -593,7 +593,6 @@ async fn eu868_linkadrreq_redundancy() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "LinkADRAns must report the channel mask as not accepted")]
 /// A LinkADRReq with the RFU ChMaskCntl value 7 must be rejected.
 async fn eu868_linkadrreq_rfu_chmaskcntl_is_rejected() {
     let (radio, timer, mut device) =

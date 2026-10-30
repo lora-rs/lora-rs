@@ -433,6 +433,7 @@ impl Session {
     ) {
         use DownlinkMacCommand::*;
         let mut channel_mask = region.channel_mask_get();
+        let mut channel_mask_valid = true;
         // The iterator is fused after the first malformed command, so this
         // processes the leading well-formed prefix of the stream.
         let mut cmd_iter = cmds.filter_map(Result::ok).peekable();
@@ -472,12 +473,16 @@ impl Session {
                     // commands.
                     num_adrreq += 1;
 
-                    // TODO: Validate that input is not RFU
-                    let _ = region.channel_mask_update(
-                        &mut channel_mask,
-                        payload.redundancy().channel_mask_control(),
-                        payload.channel_mask(),
-                    );
+                    if region
+                        .channel_mask_update(
+                            &mut channel_mask,
+                            payload.redundancy().channel_mask_control(),
+                            payload.channel_mask(),
+                        )
+                        .is_none()
+                    {
+                        channel_mask_valid = false;
+                    }
 
                     // Check whether LinkADRReq commands continue...
                     if let Some(LinkADRReq(..)) = cmd_iter.peek() {
@@ -508,7 +513,8 @@ impl Session {
                     // transmissions as-is.
                     let nb_trans = payload.redundancy().number_of_transmissions().max(1);
 
-                    let cm_ack = region.channel_mask_validate(&channel_mask, dr);
+                    let cm_ack =
+                        channel_mask_valid && region.channel_mask_validate(&channel_mask, dr);
                     if cm_ack && let (Some(dr), Some(pw)) = (dr, pw) {
                         configuration.data_rate = dr;
                         configuration.tx_power = pw;
@@ -524,6 +530,8 @@ impl Session {
                         self.uplink.add_mac_command(cmd);
                     }
                     num_adrreq = 0;
+                    channel_mask_valid = true;
+                    channel_mask = region.channel_mask_get();
                 }
                 LinkCheckAns(..) => {
                     /* TODO: Payload contents are not consumed/handled
