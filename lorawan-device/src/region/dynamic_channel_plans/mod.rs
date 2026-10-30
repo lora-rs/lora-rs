@@ -439,6 +439,44 @@ mod tests {
         assert_eq!(config.handle_new_channel(VALID_INDEX, VALID_FREQ, dr), (true, true));
     }
 
+    // The region's default channels come back without changing a
+    // dynamically configured channel.
+    #[test]
+    fn enable_default_channels_keeps_dynamic_channel_configuration() {
+        let mut config = Configuration::new(Region::EU868);
+        let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));
+        assert_eq!(config.handle_new_channel(VALID_INDEX, VALID_FREQ, dr), (true, true));
+
+        let before = match &config.state {
+            crate::region::State::EU868(plan) => {
+                let channel = plan.channels[VALID_INDEX as usize].unwrap();
+                (channel.frequency, channel._datarates, channel.dl_frequency)
+            }
+            _ => unreachable!(),
+        };
+        assert!(config.channel_mask_get().is_enabled(VALID_INDEX as usize).unwrap());
+
+        let mut mask = config.channel_mask_get();
+        mask.set_channel(0, false);
+        mask.set_channel(1, false);
+        config.channel_mask_set(mask);
+
+        config.enable_default_channels();
+
+        let after = match &config.state {
+            crate::region::State::EU868(plan) => {
+                let channel = plan.channels[VALID_INDEX as usize].unwrap();
+                (channel.frequency, channel._datarates, channel.dl_frequency)
+            }
+            _ => unreachable!(),
+        };
+        assert_eq!(after, before);
+        let mask = config.channel_mask_get();
+        assert!(mask.is_enabled(0).unwrap());
+        assert!(mask.is_enabled(1).unwrap());
+        assert!(mask.is_enabled(VALID_INDEX as usize).unwrap());
+    }
+
     // The region's default channels come back; a channel added with
     // NewChannelReq is not a default and stays off.
     #[test]
