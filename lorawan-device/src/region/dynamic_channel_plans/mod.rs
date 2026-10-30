@@ -355,10 +355,31 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
 mod tests {
     use super::*;
     use crate::region::{Configuration, Region};
+    use lorawan::parser::Frequency;
 
     // A valid EU868 channel frequency (863..=870 MHz), used to reach the indexing paths.
     const VALID_FREQ: u32 = 868_100_000;
     const VALID_INDEX: u8 = 5;
+
+    #[test]
+    #[should_panic(expected = "CFList channel must be enabled")]
+    fn cf_list_enables_channel_mask_bit() {
+        let mut config = Configuration::new(Region::EU868);
+        let mut mask = config.channel_mask_get();
+        mask.set_channel(3, false);
+        config.channel_mask_set(mask);
+
+        // CFList type 0: five additional channel frequencies.
+        config.process_join_accept(Some(&CfList::DynamicChannel([
+            Frequency::from_hz(867_700_000),
+            Frequency::from_hz(0),
+            Frequency::from_hz(0),
+            Frequency::from_hz(0),
+            Frequency::from_hz(0),
+        ])));
+
+        assert!(config.channel_mask_get().is_enabled(3).unwrap(), "CFList channel must be enabled");
+    }
 
     // NewChannelReq carries a raw u8 channel index. Indices beyond the channel plan
     // (NUM_CHANNELS_DYNAMIC) must be rejected, not used to index self.channels.
