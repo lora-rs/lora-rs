@@ -328,19 +328,25 @@ impl Session {
         if configuration.adr_enabled {
             self.adr_ack_cnt = self.adr_ack_cnt.saturating_add(1);
             // After ADR_ACK_LIMIT + N*ADR_ACK_DELAY uplinks without a downlink,
-            // step down the data rate to try to regain connectivity.
+            // raise TX power and then step down the data rate to try to regain
+            // connectivity.
             if self.adr_ack_cnt >= (ADR_ACK_LIMIT + ADR_ACK_DELAY) as u32 {
                 let past_limit = self.adr_ack_cnt - ADR_ACK_LIMIT as u32;
                 if past_limit.is_multiple_of(ADR_ACK_DELAY as u32) {
-                    match next_lower_datarate(region, configuration.data_rate) {
-                        Some(dr) => configuration.data_rate = dr,
-                        // At the default data rate, the backoff step re-enables
-                        // the region's default channels and resets NbTrans to 1
-                        // so a device left in a silent network stops
-                        // retransmitting every frame.
-                        None => {
-                            region.enable_default_channels();
-                            configuration.nb_trans = 1;
+                    if past_limit == ADR_ACK_DELAY as u32 {
+                        // First backoff step: raise TX power to the maximum.
+                        configuration.tx_power = region.check_tx_power(0).flatten();
+                    } else {
+                        match next_lower_datarate(region, configuration.data_rate) {
+                            Some(dr) => configuration.data_rate = dr,
+                            // At the default data rate, the backoff step re-enables
+                            // the region's default channels and resets NbTrans to 1
+                            // so a device left in a silent network stops
+                            // retransmitting every frame.
+                            None => {
+                                region.enable_default_channels();
+                                configuration.nb_trans = 1;
+                            }
                         }
                     }
                 }
@@ -372,10 +378,9 @@ impl Session {
 
         let adr = configuration.adr_enabled;
         // ADRACKReq asks the network for a downlink so ADR can keep working.
-        // It is not set when already at the lowest usable data rate.
-        let adr_ack_req = adr
-            && self.adr_ack_cnt >= ADR_ACK_LIMIT as u32
-            && next_lower_datarate(region, configuration.data_rate).is_some();
+        // It stays set until a downlink is received, including at the lowest
+        // data rate.
+        let adr_ack_req = adr && self.adr_ack_cnt >= ADR_ACK_LIMIT as u32;
 
         self.confirmed = data.confirmed;
         #[cfg(feature = "certification")]
@@ -764,9 +769,17 @@ mod tests {
         let mut session = session();
         session.adr_ack_cnt = (super::ADR_ACK_LIMIT + super::ADR_ACK_DELAY - 1) as u32;
 
+        // First backoff step only raises TX power.
         session.rx2_complete(&mut mac.configuration, &mut mac.region);
+        assert_eq!(mac.configuration.data_rate, DR::_5);
+
+        // Next backoff step lowers the data rate.
+        for _ in 0..super::ADR_ACK_DELAY {
+            session.rx2_complete(&mut mac.configuration, &mut mac.region);
+        }
         assert_eq!(mac.configuration.data_rate, DR::_4);
 
+        // Each further ADR_ACK_DELAY lowers the data rate again.
         for _ in 0..super::ADR_ACK_DELAY {
             session.rx2_complete(&mut mac.configuration, &mut mac.region);
         }
@@ -774,7 +787,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "ADR backoff must raise TX power before lowering the data rate")]
     fn adr_backoff_raises_tx_power_before_lowering_data_rate() {
         let mut mac = eu868_mac();
         mac.configuration.data_rate = DR::_5;
@@ -808,8 +820,16 @@ mod tests {
         let mut session = session();
         session.adr_ack_cnt = (super::ADR_ACK_LIMIT + super::ADR_ACK_DELAY - 1) as u32;
 
-        // First backoff step: the data rate drops to DR0, NbTrans untouched.
+        // First backoff step raises TX power, leaving the data rate and
+        // NbTrans untouched.
         session.rx2_complete(&mut mac.configuration, &mut mac.region);
+        assert_eq!(mac.configuration.data_rate, DR::_1);
+        assert_eq!(mac.configuration.nb_trans, 5);
+
+        // Next backoff step lowers the data rate to DR0, NbTrans untouched.
+        for _ in 0..super::ADR_ACK_DELAY {
+            session.rx2_complete(&mut mac.configuration, &mut mac.region);
+        }
         assert_eq!(mac.configuration.data_rate, DR::_0);
         assert_eq!(mac.configuration.nb_trans, 5);
 
@@ -833,23 +853,29 @@ mod tests {
         mac.region.channel_mask_set(mask);
         session.adr_ack_cnt = (super::ADR_ACK_LIMIT + super::ADR_ACK_DELAY - 1) as u32;
 
-        // Backoff step at the lowest data rate re-enables the channel.
+        // First backoff step only raises TX power.
         session.rx2_complete(&mut mac.configuration, &mut mac.region);
+        let mask = mac.region.channel_mask_get();
+        assert!(!mask.is_enabled(1).unwrap());
 
+        // Next backoff step at the lowest data rate re-enables the channel.
+        for _ in 0..super::ADR_ACK_DELAY {
+            session.rx2_complete(&mut mac.configuration, &mut mac.region);
+        }
         let mask = mac.region.channel_mask_get();
         assert!(mask.is_enabled(1).unwrap());
     }
 
     #[test]
-    fn adr_ack_req_stops_at_lowest_supported_datarate() {
+    fn adr_ack_req_stays_set_at_lowest_supported_datarate() {
         let mut mac = eu868_mac();
         mac.configuration.data_rate = DR::_0;
         let mut session = session();
-        session.adr_ack_cnt = super::ADR_ACK_LIMIT as u32;
+        session.adr_ack_cnt = (super::ADR_ACK_LIMIT + super::ADR_ACK_DELAY) as u32;
 
         let fctrl = uplink_fctrl(&mut session, &mac);
         assert!(fctrl.adr());
-        assert!(!fctrl.adr_ack_req());
+        assert!(fctrl.adr_ack_req());
     }
 
     /// A deterministic RNG returning consecutive u32 values so tests can
