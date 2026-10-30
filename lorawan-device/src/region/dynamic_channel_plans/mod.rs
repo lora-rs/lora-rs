@@ -383,6 +383,63 @@ mod tests {
         assert!(config.channel_mask_get().is_enabled(3).unwrap(), "CFList channel must be enabled");
     }
 
+    struct SeqRng(u32);
+
+    impl RngCore for SeqRng {
+        fn next_u32(&mut self) -> u32 {
+            let value = self.0 % 4;
+            self.0 += 1;
+            value
+        }
+        fn next_u64(&mut self) -> u64 {
+            self.next_u32() as u64
+        }
+        fn fill_bytes(&mut self, dest: &mut [u8]) {
+            for byte in dest {
+                *byte = self.next_u32() as u8;
+            }
+        }
+        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+            self.fill_bytes(dest);
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "all enabled channels must be used before reuse")]
+    fn data_frames_cover_enabled_channels_before_reuse() {
+        let mut config = Configuration::new(Region::EU868);
+        let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));
+        for (offset, freq) in
+            [867_100_000, 867_300_000, 867_500_000, 867_700_000].into_iter().enumerate()
+        {
+            let index = 3 + offset as u8;
+            assert_eq!(config.handle_new_channel(index, freq, dr), (true, true));
+        }
+
+        let mut rng = SeqRng(0);
+        let mut seen = [false; 7];
+        for packet in 0..7 {
+            let (tx, _) = config.create_tx_config(&mut rng, DR::_5, &Frame::Data);
+            let index = match tx.rf.frequency {
+                868_100_000 => 0,
+                868_300_000 => 1,
+                868_500_000 => 2,
+                867_100_000 => 3,
+                867_300_000 => 4,
+                867_500_000 => 5,
+                867_700_000 => 6,
+                freq => panic!("unexpected frequency {freq}"),
+            };
+            assert!(
+                !seen[index],
+                "all enabled channels must be used before reuse (packet {packet})"
+            );
+            seen[index] = true;
+        }
+        assert!(seen.iter().all(|&used| used));
+    }
+
     // NewChannelReq carries a raw u8 channel index. Indices beyond the channel plan
     // (NUM_CHANNELS_DYNAMIC) must be rejected, not used to index self.channels.
     #[test]
