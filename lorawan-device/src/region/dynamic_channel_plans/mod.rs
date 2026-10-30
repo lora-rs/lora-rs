@@ -122,8 +122,10 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
                     // unused channels are set to 0
                     if value == 0 {
                         self.channels[index] = None;
+                        self.channel_mask.set_channel(index, false);
                     } else {
                         self.channels[index] = Some(Channel::new(value, DR::_0, DR::_5));
+                        self.channel_mask.set_channel(index, true);
                     }
                 }
             }
@@ -362,7 +364,6 @@ mod tests {
     const VALID_INDEX: u8 = 5;
 
     #[test]
-    #[should_panic(expected = "CFList channel must be enabled")]
     fn cf_list_enables_channel_mask_bit() {
         let mut config = Configuration::new(Region::EU868);
         let mut mask = config.channel_mask_get();
