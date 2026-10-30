@@ -45,7 +45,6 @@ fn handle_join_request_with_cflist(
 }
 
 #[tokio::test]
-#[should_panic(expected = "the CFList channel must be enabled after the join")]
 async fn eu868_join_accept_cflist_enables_channel() {
     let (radio, timer, mut device) =
         util::session_with_region(crate::region::EU868::new_eu868().into());
