@@ -179,7 +179,6 @@ async fn newchannelreq_e868() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "DR5-only channel 3 selected at DR2")]
 /// A channel whose data-rate range excludes the current DR must not be selected.
 async fn dr_restricted_channel_not_selected_eu868() {
     let (radio, timer, mut device) =
