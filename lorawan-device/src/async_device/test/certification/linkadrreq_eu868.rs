@@ -53,7 +53,7 @@ fn assert_data_uplink(uplink: &Uplink, fcnt: u32, confirmed: bool, ack: bool, fo
 async fn eu868_linkadrreq_redundancy() {
     let (radio, timer, device) =
         util::session_with_region(crate::region::EU868::new_eu868().into());
-    let mut net = Net::new(radio, timer, device);
+    let mut net = Net::new(radio, timer, device).await;
 
     // LinkADRReq used throughout: CID 0x03, DRTP 0x50 (DataRate = DR5 =
     // Max125kHzDR, TXPower = 0 = maximum), ChMask [0x07, 0x00] (ChMaskCntl =

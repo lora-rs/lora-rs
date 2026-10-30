@@ -14,7 +14,7 @@ use lorawan::maccommands::parse_uplink_mac_commands;
 async fn newchannelreq_readonly_default_eu868() {
     let (radio, timer, device) =
         util::session_with_region(crate::region::EU868::new_eu868().into());
-    let mut net = Net::new(radio, timer, device);
+    let mut net = Net::new(radio, timer, device).await;
 
     // Step 1: attempt to add/modify read-only channels
     let r = net
@@ -55,7 +55,7 @@ async fn newchannelreq_readonly_default_eu868() {
 async fn newchannelreq_e868() {
     let (radio, timer, device) =
         util::session_with_region(crate::region::EU868::new_eu868().into());
-    let mut net = Net::new(radio, timer, device);
+    let mut net = Net::new(radio, timer, device).await;
 
     // Step 1: send uplink, TCL responds with LinkADRReq
     let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("0350070001"))).await;
