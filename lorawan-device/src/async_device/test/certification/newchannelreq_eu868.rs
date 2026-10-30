@@ -91,7 +91,6 @@ async fn newchannelreq_e868() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "DR5-only channel 3 selected at DR2")]
 /// LCTT TP_A_EU868_ED_MAC_104_BV_006, "Checking channel usage 12 to 15":
 /// a channel whose data-rate range excludes the current DR must not be selected.
 async fn dr_restricted_channel_not_selected_eu868() {
