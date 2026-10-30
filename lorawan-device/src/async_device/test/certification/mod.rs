@@ -15,6 +15,7 @@ use tokio::sync::Mutex;
 mod mac_common;
 
 mod dlchannelreq_eu868;
+mod join_cflist_eu868;
 mod linkadrreq_eu868;
 mod mac_in_app_payload_and_fopts;
 mod mac_priority;
