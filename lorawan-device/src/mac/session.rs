@@ -365,7 +365,6 @@ impl Session {
         data: &SendData<'_>,
         tx_buffer: &mut RadioBuffer<N>,
         configuration: &super::Configuration,
-        region: &region::Configuration,
     ) -> FcntUp {
         tx_buffer.clear();
         let fcnt = self.fcnt_up;
@@ -669,7 +668,6 @@ mod tests {
             &SendData { data: &[], fport: 1, confirmed: false },
             &mut tx,
             &mac.configuration,
-            &mac.region,
         );
         EncryptedDataPayload::parse(tx.as_mut_for_read()).unwrap().fhdr().fctrl()
     }
@@ -1067,7 +1065,6 @@ mod tests {
             &SendData { data: &[], fport: 0, confirmed: false },
             &mut tx,
             &mac.configuration,
-            &mac.region,
         );
 
         let bytes = tx.as_mut_for_read();
