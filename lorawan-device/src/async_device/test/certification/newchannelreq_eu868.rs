@@ -8,6 +8,7 @@ use super::{net, util};
 use net::{ExchangeAction, Net, Pkt};
 
 use lorawan::maccommands::parse_uplink_mac_commands;
+use lorawan::types::DR;
 
 #[tokio::test]
 /// NewChannelReq: Add/remove read-only default channels
@@ -87,4 +88,36 @@ async fn newchannelreq_e868() {
     // Check whether channel was removed (channel disabled in ChannelMask)
     let channel_mask = mac.region.channel_mask_get();
     assert_eq!(channel_mask.is_enabled(0xf), Ok(false));
+}
+
+#[tokio::test]
+#[should_panic(expected = "DR5-only channel 3 selected at DR2")]
+/// LCTT TP_A_EU868_ED_MAC_104_BV_006, "Checking channel usage 12 to 15":
+/// a channel whose data-rate range excludes the current DR must not be selected.
+async fn dr_restricted_channel_not_selected_eu868() {
+    let (radio, timer, device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let mut net = Net::new(radio, timer, device).await;
+
+    // Step 1: add channel 3 (867.1 MHz) with DR5 only.
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("0703184f8455"))).await;
+    r.expect_downlink_received();
+    assert!(net.device().mac.region.channel_mask_get().is_enabled(3).unwrap());
+
+    // Step 2: switch to DR2 with ChMask FFFF.
+    let r = net.exchange(&[1, 2, 3], 2, false, ExchangeAction::rx1(Pkt::mac("0320ffff01"))).await;
+    r.expect_downlink_received();
+    assert_eq!(net.device().mac.configuration.data_rate, DR::_2);
+
+    // Step 3: channel 3 only supports DR5, so it must never be selected at DR2.
+    for _ in 0..40 {
+        let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+        r.expect_rx_complete();
+
+        let frequency = r.uplink(0).tx_config().rf.frequency;
+        assert!(
+            matches!(frequency, 868_100_000 | 868_300_000 | 868_500_000),
+            "DR5-only channel 3 selected at DR2 ({frequency} Hz)"
+        );
+    }
 }
