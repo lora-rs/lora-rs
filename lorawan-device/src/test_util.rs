@@ -43,13 +43,13 @@ impl Uplink {
         &mut self.data
     }
 
-    /// The raw frame bytes.
-    pub fn tx_config(&self) -> &TxConfig {
-        &self.tx_config
-    }
-
     pub fn data(&self) -> &[u8] {
         &self.data
+    }
+
+    /// The transmission configuration used for this uplink.
+    pub fn tx_config(&self) -> &TxConfig {
+        &self.tx_config
     }
 }
 
