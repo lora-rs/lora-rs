@@ -7,7 +7,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex, mpsc, watch};
 
 /// The kind of the most recently armed timer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -24,12 +24,12 @@ pub enum TimerKind {
 impl TestTimer {
     pub fn new(pending: Arc<AtomicUsize>) -> (TimerChannel, Self) {
         let tx = Arc::new(Mutex::new(HashMap::new()));
-        let armed_count = Arc::new(Mutex::new(0));
+        let (armed_count, armed_count_rx) = watch::channel(0);
         let kind = Arc::new(AtomicBool::new(true));
         (
             TimerChannel {
                 tx: tx.clone(),
-                armed_count: armed_count.clone(),
+                armed_count: armed_count_rx,
                 pending,
                 kind: kind.clone(),
             },
@@ -39,7 +39,7 @@ impl TestTimer {
 }
 
 pub struct TestTimer {
-    armed_count: Arc<Mutex<usize>>,
+    armed_count: watch::Sender<usize>,
     kind: Arc<AtomicBool>,
     tx: Arc<Mutex<HashMap<usize, mpsc::Sender<()>>>>,
 }
@@ -49,9 +49,12 @@ impl TestTimer {
         self.kind.store(kind == TimerKind::Window, Ordering::SeqCst);
         let (tx, mut rx) = mpsc::channel(1);
         {
-            *self.armed_count.lock().await += 1;
             let mut tx_map = self.tx.lock().await;
-            tx_map.insert(*self.armed_count.lock().await, tx);
+            // The map holds the timer before the count announces it.
+            self.armed_count.send_modify(|count| {
+                *count += 1;
+                tx_map.insert(*count, tx);
+            });
         }
         rx.recv().await;
     }
@@ -71,7 +74,7 @@ impl Timer for TestTimer {
 
 /// A channel for the test fixture to trigger fires and to check calls.
 pub struct TimerChannel {
-    armed_count: Arc<Mutex<usize>>,
+    armed_count: watch::Receiver<usize>,
     kind: Arc<AtomicBool>,
     pending: Arc<AtomicUsize>,
     tx: Arc<Mutex<HashMap<usize, mpsc::Sender<()>>>>,
@@ -90,7 +93,7 @@ impl TimerChannel {
         }
         tokio::time::sleep(tokio::time::Duration::from_millis(5)).await;
         let mut tx_map = self.tx.lock().await;
-        let armed_count = *self.armed_count.lock().await;
+        let armed_count = *self.armed_count.borrow();
         let tx = tx_map.remove(&armed_count).unwrap();
         tx.send(()).await.unwrap();
     }
@@ -100,10 +103,15 @@ impl TimerChannel {
     /// earlier test event (eg: a retransmission after an RX window) so the
     /// test does not race the device task.
     pub async fn fire_when_armed(&self, count: usize) {
-        while self.get_armed_count().await < count {
-            tokio::time::sleep(tokio::time::Duration::from_millis(1)).await;
-        }
+        self.wait_armed(count).await;
         self.fire_most_recent().await;
+    }
+
+    /// Wait until at least `count` timers have been armed; returns the
+    /// count at that point.
+    pub async fn wait_armed(&self, count: usize) -> usize {
+        let mut armed_count = self.armed_count.clone();
+        *armed_count.wait_for(|c| *c >= count).await.expect("test timer dropped")
     }
 
     #[allow(unused)]
@@ -117,7 +125,7 @@ impl TimerChannel {
     }
 
     pub async fn get_armed_count(&self) -> usize {
-        *self.armed_count.lock().await
+        *self.armed_count.borrow()
     }
 
     /// The kind of the most recently armed timer (see [`TimerKind`]).
