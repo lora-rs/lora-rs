@@ -774,6 +774,33 @@ mod tests {
     }
 
     #[test]
+    #[should_panic(expected = "ADR backoff must raise TX power before lowering the data rate")]
+    fn adr_backoff_raises_tx_power_before_lowering_data_rate() {
+        let mut mac = eu868_mac();
+        mac.configuration.data_rate = DR::_5;
+        mac.configuration.tx_power = mac.region.check_tx_power(1).flatten();
+
+        let mut session = session();
+        session.adr_ack_cnt = (super::ADR_ACK_LIMIT + super::ADR_ACK_DELAY - 1) as u32;
+
+        // The first ADR_ACK_DELAY after the limit only raises TX power.
+        session.rx2_complete(&mut mac.configuration, &mut mac.region);
+        assert_eq!(
+            mac.configuration.data_rate,
+            DR::_5,
+            "ADR backoff must raise TX power before lowering the data rate"
+        );
+        assert_eq!(mac.configuration.tx_power, mac.region.check_tx_power(0).flatten());
+
+        // The next ADR_ACK_DELAY lowers the data rate.
+        for _ in 0..super::ADR_ACK_DELAY {
+            session.rx2_complete(&mut mac.configuration, &mut mac.region);
+        }
+        assert_eq!(mac.configuration.data_rate, DR::_4);
+        assert_eq!(mac.configuration.tx_power, mac.region.check_tx_power(0).flatten());
+    }
+
+    #[test]
     fn adr_backoff_resets_nb_trans_at_lowest_datarate() {
         let mut mac = eu868_mac();
         mac.configuration.data_rate = DR::_1;
