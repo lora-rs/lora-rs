@@ -249,3 +249,23 @@ async fn eu868_linkadrreq_redundancy() {
     assert_eq!(config.tx_power, Some(16)); // EU868 maximum EIRP
     assert_eq!(config.nb_trans, 1);
 }
+
+#[tokio::test]
+#[should_panic(expected = "LinkADRAns must report the channel mask as not accepted")]
+/// A LinkADRReq with the RFU ChMaskCntl value 7 must be rejected.
+async fn eu868_linkadrreq_rfu_chmaskcntl_is_rejected() {
+    let (radio, timer, device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let mut net = Net::new(radio, timer, device).await;
+
+    // LinkADRReq(DR5, TXPower MAX, ChMask 0700, ChMaskCntl = 7)
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("0350070071"))).await;
+    r.expect_downlink_received();
+
+    let session = net.device().mac.get_session().unwrap();
+    assert_eq!(
+        session.uplink.mac_commands(),
+        [0x03, 0x06],
+        "LinkADRAns must report the channel mask as not accepted"
+    );
+}
