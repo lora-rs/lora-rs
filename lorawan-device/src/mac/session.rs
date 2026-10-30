@@ -713,6 +713,59 @@ mod tests {
         mac.handle_rx::<256, 1>(&mut rx, &mut dl, 10, &rf_config)
     }
 
+    /// Feed an encrypted downlink with an application payload on `fport` into
+    /// a Mac with the standard test session, returning the Mac's response.
+    fn handle_downlink_on_port(mac: &mut Mac, fport: u8, data: &[u8], fcnt: u32) -> Response {
+        let mut rx: RadioBuffer<256> = RadioBuffer::new();
+        let mut buf = [0u8; 256];
+        let nwk_crypto = DefaultCrypto::new(NwkSKey::from([2; 16]).inner());
+        let app_crypto = DefaultCrypto::new(AppSKey::from([1; 16]).inner());
+        let frame = DataFrame {
+            frame_type: DataFrameType::UnconfirmedDown,
+            dev_addr: DevAddr::from_value(1),
+            fcnt,
+            f_opts: &[],
+            payload: Payload::Data { f_port: NonZeroU8::new(fport).unwrap(), data },
+            ..Default::default()
+        };
+        let packet = frame.build_into(&mut buf, &nwk_crypto, Some(&app_crypto)).unwrap();
+        rx.extend_from_slice(packet).unwrap();
+
+        let dr = mac.region.get_datarate(5).unwrap();
+        let rf_config = RfConfig {
+            frequency: 868_100_000,
+            bb: BaseBandModulationParams::new(
+                dr.spreading_factor,
+                dr.bandwidth,
+                mac.region.get_coding_rate(),
+            ),
+            max_payload_len: 255,
+        };
+        let mut dl: heapless::Vec<Downlink, 1> = heapless::Vec::new();
+        mac.handle_rx::<256, 1>(&mut rx, &mut dl, 10, &rf_config)
+    }
+
+    #[test]
+    #[should_panic(expected = "oversized EchoPayloadAns must be discarded")]
+    fn certification_discards_oversized_echo_payload() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+
+        for (fcnt, dr, data_len) in [(0, DR::_0, 51usize), (1, DR::_3, 115usize)] {
+            mac.configuration.data_rate = dr;
+            let mut payload: heapless::Vec<u8, 256> = heapless::Vec::new();
+            payload.push(0x08).unwrap();
+            for _ in 0..data_len {
+                payload.push(0x01).unwrap();
+            }
+            let response = handle_downlink_on_port(&mut mac, 224, &payload, fcnt);
+            assert!(
+                matches!(response, Response::NoUpdate),
+                "oversized EchoPayloadAns must be discarded"
+            );
+        }
+    }
+
     #[test]
     fn link_adr_req_sets_nb_trans() {
         let mut mac = eu868_mac();
