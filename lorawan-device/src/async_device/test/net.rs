@@ -322,6 +322,7 @@ mod tests {
         assert_eq!(r.uplinks().len(), 1);
     }
 
+    #[cfg(feature = "certification")]
     #[tokio::test]
     async fn exchange_downlink_in_rx2() {
         let (radio, timer, device) = util::session_with_region(region::EU868::new_eu868().into());
