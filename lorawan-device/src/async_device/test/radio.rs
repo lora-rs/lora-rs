@@ -26,6 +26,14 @@ impl TestRadio {
         )
     }
 
+    /// Copy a pre-built downlink frame into the rx buffer.
+    fn inject(&self, frame: &[u8], rx_buf: &mut [u8]) -> (usize, RxQuality) {
+        assert!(frame.len() <= rx_buf.len(), "injected frame does not fit the rx buffer");
+        rx_buf[..frame.len()].copy_from_slice(frame);
+        self.pending.fetch_sub(1, Ordering::SeqCst);
+        (frame.len(), RxQuality::new(-80, self.snr))
+    }
+
     pub fn set_snr(&mut self, snr: i8) {
         self.snr = snr
     }
@@ -100,15 +108,7 @@ impl PhyRxTx for TestRadio {
                     panic!("Trying to rx before settings config!")
                 }
             }
-            Msg::Frame(frame) => {
-                if frame.len() > rx_buf.len() {
-                    panic!("injected frame does not fit the rx buffer");
-                }
-                let len = frame.len();
-                rx_buf[..len].copy_from_slice(&frame);
-                self.pending.fetch_sub(1, Ordering::SeqCst);
-                Ok((len, RxQuality::new(-80, self.snr)))
-            }
+            Msg::Frame(frame) => Ok(self.inject(&frame, rx_buf)),
             Msg::Timeout => Err("Unexpected Timeout"),
             Msg::PhyError(e) => Err(e),
         }
@@ -129,12 +129,8 @@ impl PhyRxTx for TestRadio {
                 }
             }
             Msg::Frame(frame) => {
-                if frame.len() > rx_buf.len() {
-                    panic!("injected frame does not fit the rx buffer");
-                }
-                rx_buf[..frame.len()].copy_from_slice(&frame);
-                self.pending.fetch_sub(1, Ordering::SeqCst);
-                Ok(RxStatus::Rx(frame.len(), RxQuality::new(-80, self.snr)))
+                let (len, quality) = self.inject(&frame, rx_buf);
+                Ok(RxStatus::Rx(len, quality))
             }
             Msg::Timeout => Ok(RxStatus::RxTimeout),
             Msg::PhyError(e) => Err(e),

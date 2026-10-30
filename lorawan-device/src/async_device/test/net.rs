@@ -141,14 +141,13 @@ window={window} last={last} armed={armed}"
 pub struct Pkt {
     frame_type: DataFrameType,
     ack: bool,
-    f_opts: Option<Vec<u8>>,
     /// (fport, payload); fport 0 means MAC commands in FRMPayload.
     payload: Option<(u8, Vec<u8>)>,
 }
 
 impl Pkt {
     fn new(payload: Option<(u8, Vec<u8>)>) -> Self {
-        Self { frame_type: DataFrameType::UnconfirmedDown, ack: false, f_opts: None, payload }
+        Self { frame_type: DataFrameType::UnconfirmedDown, ack: false, payload }
     }
 
     /// MAC commands in FRMPayload (FPort 0).
@@ -180,7 +179,6 @@ impl Pkt {
             dev_addr: get_dev_addr(),
             ack: self.ack,
             fcnt: fcnt_down,
-            f_opts: self.f_opts.as_deref().unwrap_or_default(),
             payload: match &self.payload {
                 Some((0, data)) => Payload::MacCommands(data),
                 Some((fport, data)) => {
