@@ -56,17 +56,13 @@ impl Net {
         mut action: ExchangeAction,
     ) -> ExchangeResult {
         let data = data.to_vec(); // the spawned task owns the payload
-        let baseline = self.timer.get_armed_count().await;
+        let mut last = self.timer.get_armed_count().await;
         let device = self.device.take().expect("device not in use");
-        let done = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let done_flag = done.clone();
-        let task = tokio::spawn(async move {
+        let mut task = tokio::spawn(async move {
             let mut device = device;
             let response = device.send(&data, fport, confirmed).await;
-            done_flag.store(true, std::sync::atomic::Ordering::SeqCst);
             (device, response)
         });
-        let is_done = || done.load(std::sync::atomic::Ordering::SeqCst);
 
         // Drive the radio:
         // a) wait for the device to arm a timer (a rx window or a retransmission wait)
@@ -77,29 +73,23 @@ impl Net {
         // A retransmission wait is not followed by a radio read, so no
         // radio event is sent for it.
         // Repeat until `send` returns.
-        let mut last = baseline;
         let mut window = 0;
         let mut fcnt_down = None;
-        loop {
-            let mut armed = self.timer.get_armed_count().await;
-            let wait_start = std::time::Instant::now();
-            while armed == last && !is_done() {
-                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
-                if wait_start.elapsed() > std::time::Duration::from_secs(5) {
-                    panic!(
-                        "exchange stuck: waiting for a timer arm or send to finish; \
-window={window} last={last} armed={armed}"
-                    );
+        let (device, response) = loop {
+            let step = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                tokio::select! {
+                    joined = &mut task => Step::Done(Box::new(joined.expect("device task panicked"))),
+                    armed = self.timer.wait_armed(last + 1) => Step::Armed(armed),
                 }
-                if is_done() {
-                    break;
-                }
-                armed = self.timer.get_armed_count().await;
+            })
+            .await
+            .unwrap_or_else(|_| {
+                panic!("exchange stuck: waiting for a timer arm or send to finish; window={window} last={last}")
+            });
+            match step {
+                Step::Done(outcome) => break *outcome,
+                Step::Armed(armed) => last = armed,
             }
-            if is_done() {
-                break;
-            }
-            last = armed;
             // Read the kind before firing:
             // firing wakes the device, this can arm the next timer and
             // overwrite the kind.
@@ -120,9 +110,8 @@ window={window} last={last} armed={armed}"
             } else {
                 self.radio.handle_timeout().await;
             }
-        }
+        };
 
-        let (device, response) = task.await.expect("device task panicked");
         if let Some(w) = action.first_pending() {
             panic!(
                 "scripted downlink for window {w} was never delivered: the exchange ended after {window} windows"
@@ -132,6 +121,14 @@ window={window} last={last} armed={armed}"
         self.device = Some(device);
         ExchangeResult { response, uplinks, fcnt_down }
     }
+}
+
+/// One step of the exchange loop.
+enum Step {
+    /// `send` returned.
+    Done(Box<(Device, Result<SendResponse, Error<&'static str>>)>),
+    /// The device armed a timer; the armed count so far.
+    Armed(usize),
 }
 
 /// A downlink to be delivered by the network.
