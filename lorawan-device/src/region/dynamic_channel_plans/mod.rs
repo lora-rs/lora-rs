@@ -72,16 +72,25 @@ pub(crate) struct DynamicChannelPlan<R: DynamicChannelRegion> {
 }
 
 impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
-    fn new(freq_fn: fn(u32) -> bool) -> Self {
+    fn default_channels() -> ChannelPlan {
         let mut channels = [None; NUM_CHANNELS_DYNAMIC as usize];
         R::init_channels(&mut channels);
+        channels
+    }
 
+    fn new(freq_fn: fn(u32) -> bool) -> Self {
         Self {
-            channels,
+            channels: Self::default_channels(),
             channel_mask: Default::default(),
             _dynamic_channel_region: Default::default(),
             frequency_valid: freq_fn,
         }
+    }
+
+    /// Set or remove a channel and keep its mask bit in sync.
+    fn set_channel(&mut self, index: usize, channel: Option<Channel>) {
+        self.channels[index] = channel;
+        self.channel_mask.set_channel(index, channel.is_some());
     }
 
     fn get_random_in_range<RNG: RngCore>(&self, rng: &mut RNG) -> usize {
@@ -120,13 +129,8 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
                     let index = R::NUM_JOIN_CHANNELS as usize + n;
                     let value = freq.hz();
                     // unused channels are set to 0
-                    if value == 0 {
-                        self.channels[index] = None;
-                        self.channel_mask.set_channel(index, false);
-                    } else {
-                        self.channels[index] = Some(Channel::new(value, DR::_0, DR::_5));
-                        self.channel_mask.set_channel(index, true);
-                    }
+                    let channel = (value != 0).then(|| Channel::new(value, DR::_0, DR::_5));
+                    self.set_channel(index, channel);
                 }
             }
             // Type 1
@@ -201,8 +205,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
     /// NewChannelReq are kept as they are, as required by the ADR
     /// backoff procedure.
     fn enable_default_channels(&mut self) {
-        let mut default = [None; NUM_CHANNELS_DYNAMIC as usize];
-        R::init_channels(&mut default);
+        let default = Self::default_channels();
         for (i, channel) in default.iter().enumerate() {
             if channel.is_some() {
                 self.channel_mask.set_channel(i, true);
@@ -320,8 +323,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         }
         // Disable channel if frequency is 0
         if freq == 0 {
-            self.channels[index as usize] = None;
-            self.channel_mask.set_channel(index as usize, false);
+            self.set_channel(index as usize, None);
             return (true, true);
         }
         let freq_valid = self.frequency_valid(freq);
@@ -336,8 +338,7 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
                     .all(|c| (R::datarates()[c as usize]).is_some());
 
             if freq_valid && dr_supported {
-                self.channels[index as usize] = Some(Channel::new_with_dr(freq, r));
-                self.channel_mask.set_channel(index as usize, true);
+                self.set_channel(index as usize, Some(Channel::new_with_dr(freq, r)));
             }
             return (freq_valid, dr_supported);
         }
