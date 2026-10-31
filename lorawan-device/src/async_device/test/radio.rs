@@ -13,14 +13,16 @@ impl TestRadio {
         let (tx, rx) = mpsc::channel(2);
         let last_rxconfig = Arc::new(Mutex::new(None));
         let last_uplink = Arc::new(Mutex::new(None));
+        let uplinks = Arc::new(Mutex::new(std::vec::Vec::new()));
         (
             RadioChannel {
                 tx,
                 last_uplink: last_uplink.clone(),
                 last_rxconfig: last_rxconfig.clone(),
+                uplinks: uplinks.clone(),
                 pending: pending.clone(),
             },
-            Self { rx, last_rxconfig, last_uplink, current_config: None, pending, snr: 0 },
+            Self { rx, last_rxconfig, last_uplink, uplinks, current_config: None, pending, snr: 0 },
         )
     }
 
@@ -37,6 +39,8 @@ impl TestRadio {
 #[derive(Debug)]
 enum Msg {
     RxTx(RxTxHandler),
+    /// A pre-built downlink frame, delivered as-is.
+    Frame(std::vec::Vec<u8>),
     Timeout,
     /// The radio reports a receive error, the way lora-phy's adapter does
     /// for a frame whose header or payload CRC failed.
@@ -47,6 +51,7 @@ pub struct TestRadio {
     current_config: Option<RxConfig>,
     last_rxconfig: Arc<Mutex<Option<RxConfig>>>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
+    uplinks: Arc<Mutex<std::vec::Vec<Uplink>>>,
     rx: mpsc::Receiver<Msg>,
     pending: Arc<AtomicUsize>,
     snr: i8,
@@ -61,9 +66,11 @@ impl PhyRxTx for TestRadio {
 
     async fn tx(&mut self, config: TxConfig, buffer: &[u8]) -> Result<u32, Self::PhyError> {
         let length = buffer.len();
+        let uplink = Uplink::new(buffer, config).map_err(|_| "Parse error")?;
+        self.uplinks.lock().await.push(uplink.clone());
         // stash the uplink, to be consumed by channel or by rx handler
         let mut last_uplink = self.last_uplink.lock().await;
-        *last_uplink = Some(Uplink::new(buffer, config).map_err(|_| "Parse error")?);
+        *last_uplink = Some(uplink);
         Ok(length as u32)
     }
 
@@ -93,6 +100,15 @@ impl PhyRxTx for TestRadio {
                     panic!("Trying to rx before settings config!")
                 }
             }
+            Msg::Frame(frame) => {
+                if frame.len() > rx_buf.len() {
+                    panic!("injected frame does not fit the rx buffer");
+                }
+                let len = frame.len();
+                rx_buf[..len].copy_from_slice(&frame);
+                self.pending.fetch_sub(1, Ordering::SeqCst);
+                Ok((len, RxQuality::new(-80, self.snr)))
+            }
             Msg::Timeout => Err("Unexpected Timeout"),
             Msg::PhyError(e) => Err(e),
         }
@@ -112,6 +128,14 @@ impl PhyRxTx for TestRadio {
                     panic!("Trying to rx before settings config!")
                 }
             }
+            Msg::Frame(frame) => {
+                if frame.len() > rx_buf.len() {
+                    panic!("injected frame does not fit the rx buffer");
+                }
+                rx_buf[..frame.len()].copy_from_slice(&frame);
+                self.pending.fetch_sub(1, Ordering::SeqCst);
+                Ok(RxStatus::Rx(frame.len(), RxQuality::new(-80, self.snr)))
+            }
             Msg::Timeout => Ok(RxStatus::RxTimeout),
             Msg::PhyError(e) => Err(e),
         }
@@ -129,6 +153,7 @@ pub struct RadioChannel {
     #[allow(unused)]
     last_rxconfig: Arc<Mutex<Option<RxConfig>>>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
+    uplinks: Arc<Mutex<std::vec::Vec<Uplink>>>,
     tx: mpsc::Sender<Msg>,
     pending: Arc<AtomicUsize>,
 }
@@ -140,6 +165,12 @@ impl RadioChannel {
         // on this before firing.
         self.pending.fetch_add(1, Ordering::SeqCst);
         self.tx.send(Msg::RxTx(handler)).await.unwrap();
+    }
+    /// Deliver a pre-built downlink frame as-is (no handler).
+    pub async fn handle_frame(&self, frame: std::vec::Vec<u8>) {
+        tokio::time::sleep(time::Duration::from_millis(5)).await;
+        self.pending.fetch_add(1, Ordering::SeqCst);
+        self.tx.send(Msg::Frame(frame)).await.unwrap();
     }
     pub async fn handle_timeout(&self) {
         tokio::time::sleep(time::Duration::from_millis(5)).await;
@@ -158,5 +189,10 @@ impl RadioChannel {
     pub async fn get_last_uplink(&self) -> Uplink {
         let uplink = self.last_uplink.lock().await;
         uplink.clone().unwrap()
+    }
+
+    /// Take the uplinks transmitted since the last call, in order.
+    pub async fn take_uplinks(&self) -> std::vec::Vec<Uplink> {
+        self.uplinks.lock().await.drain(..).collect()
     }
 }
