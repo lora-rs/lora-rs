@@ -1175,12 +1175,7 @@ where
         Ok(irq_flags)
     }
 
-    fn interpret_irq_flags(
-        &mut self,
-        irq_flags: u32,
-        radio_mode: RadioMode,
-        cad_activity_detected: Option<&mut bool>,
-    ) -> Result<Option<IrqState>, RadioError> {
+    fn interpret_irq_flags(&mut self, irq_flags: u32, radio_mode: RadioMode) -> Result<Option<IrqState>, RadioError> {
         debug!(
             "process_irq: irq_flags = 0x{:08x} in radio mode {}",
             irq_flags, radio_mode
@@ -1221,10 +1216,11 @@ where
             }
             RadioMode::ChannelActivityDetection => {
                 if IrqMask::CadDone.is_set(irq_flags) {
-                    if let Some(detected) = cad_activity_detected {
-                        *detected = IrqMask::CadDetected.is_set(irq_flags);
-                    }
-                    return Ok(Some(IrqState::Done));
+                    return Ok(Some(if IrqMask::CadDetected.is_set(irq_flags) {
+                        IrqState::CadDetected
+                    } else {
+                        IrqState::Done
+                    }));
                 }
             }
             RadioMode::Sleep | RadioMode::Standby | RadioMode::Listen => {
@@ -2498,13 +2494,9 @@ where
         self.intf.iv.await_irq().await
     }
 
-    async fn get_irq_state(
-        &mut self,
-        radio_mode: RadioMode,
-        cad_activity_detected: Option<&mut bool>,
-    ) -> Result<Option<IrqState>, RadioError> {
+    async fn get_irq_state(&mut self, radio_mode: RadioMode) -> Result<Option<IrqState>, RadioError> {
         let irq_flags = self.get_irq_flags().await?;
-        self.interpret_irq_flags(irq_flags, radio_mode, cad_activity_detected)
+        self.interpret_irq_flags(irq_flags, radio_mode)
     }
 
     async fn clear_irq_status(&mut self) -> Result<(), RadioError> {
@@ -2514,7 +2506,6 @@ where
     async fn process_irq_event(
         &mut self,
         radio_mode: RadioMode,
-        cad_activity_detected: Option<&mut bool>,
         clear_interrupts: bool,
     ) -> Result<Option<IrqState>, RadioError> {
         let irq_flags = self.get_irq_flags().await?;
@@ -2529,7 +2520,7 @@ where
             self.clear_irq_flags(irq_flags).await?;
         }
 
-        self.interpret_irq_flags(irq_flags, radio_mode, cad_activity_detected)
+        self.interpret_irq_flags(irq_flags, radio_mode)
     }
 }
 

@@ -400,10 +400,7 @@ async fn test_get_irq_status() {
     use crate::mod_traits::IrqState;
     let mut sx1261 = get_sx126x();
     sx1261.spi_mut().prime_read(&[0x12], &[0x00, 0x00, 0x01]); // TxDone
-    let state = sx1261
-        .process_irq_event(RadioMode::Transmit, None, false)
-        .await
-        .unwrap();
+    let state = sx1261.process_irq_event(RadioMode::Transmit, false).await.unwrap();
     assert!(matches!(state, Some(IrqState::Done)));
 
     let mut fixture = TestFixture::new();
