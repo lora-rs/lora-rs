@@ -68,8 +68,12 @@ where
     }
 
     async fn await_irq(&mut self) -> Result<(), RadioError> {
-        // Clear pending interrupts before enabling IRQ
+        // Drop anything left over from an interrupt nobody was awaiting (a
+        // cancelled operation whose IRQ fired afterwards): both the NVIC
+        // pending bit and the latched signal, or the next wait returns at
+        // once with no event behind it.
         NVIC::unpend(pac::Interrupt::SUBGHZ_RADIO);
+        IRQ_SIGNAL.reset();
         unsafe { interrupt::SUBGHZ_RADIO.enable() };
         IRQ_SIGNAL.wait().await;
         Ok(())
