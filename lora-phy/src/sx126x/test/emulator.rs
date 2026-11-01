@@ -73,6 +73,13 @@ pub struct ChipModel {
     /// once rather than queued for the next SetRx.
     rx_continuous: bool,
     pub cad_activity: bool,
+    /// Hold the CAD result back until `Chip::finish_cad` instead of raising
+    /// it from SetCAD, so a test can act while the CAD is "in flight".
+    pub hold_cad: bool,
+    cad_pending: bool,
+    /// Number of times `await_irq` returns at once with nothing behind it,
+    /// the way a latched interrupt signal from an earlier operation does.
+    pub spurious_irq_wakes: u8,
     pub pending_rx: Option<PendingRx>,
     pub tx_log: Vec<TxRecord>,
 }
@@ -92,6 +99,9 @@ impl ChipModel {
             rx_len: 0,
             rx_continuous: false,
             cad_activity: false,
+            hold_cad: false,
+            cad_pending: false,
+            spurious_irq_wakes: 0,
             pending_rx: None,
             tx_log: vec![],
         }
@@ -99,6 +109,14 @@ impl ChipModel {
 
     fn raise_irq(&mut self, irq: u16) {
         self.irq_status |= irq & self.irq_mask;
+    }
+
+    fn raise_cad_done(&mut self) {
+        if self.cad_activity {
+            self.raise_irq(IRQ_CAD_DONE | IRQ_CAD_DETECTED);
+        } else {
+            self.raise_irq(IRQ_CAD_DONE);
+        }
     }
 
     /// Land a packet on the chip: buffer, shadow registers, IRQ flags.
@@ -219,10 +237,10 @@ impl ChipModel {
                 self.reg_read(REG_RSSI_SHADOW),
             ],
             Some(OpCode::SetCAD) => {
-                if self.cad_activity {
-                    self.raise_irq(IRQ_CAD_DONE | IRQ_CAD_DETECTED);
+                if self.hold_cad {
+                    self.cad_pending = true;
                 } else {
-                    self.raise_irq(IRQ_CAD_DONE);
+                    self.raise_cad_done();
                 }
                 vec![]
             }
@@ -245,6 +263,14 @@ pub struct Chip(Arc<Mutex<ChipModel>>);
 impl Chip {
     pub fn new() -> Self {
         Chip(Arc::new(Mutex::new(ChipModel::new())))
+    }
+
+    /// Complete a CAD that `hold_cad` kept in flight.
+    pub fn finish_cad(&self) {
+        let mut m = self.0.lock().unwrap();
+        assert!(m.cad_pending, "finish_cad without a CAD in flight");
+        m.cad_pending = false;
+        m.raise_cad_done();
     }
 
     pub fn inject_rx(&self, payload: &[u8], rssi_dbm: i16, snr_db: i16) {
@@ -333,6 +359,16 @@ impl InterfaceVariant for FakeIv {
         Ok(())
     }
     async fn await_irq(&mut self) -> Result<(), RadioError> {
+        let spurious = self.0.with_model(|m| {
+            let s = m.spurious_irq_wakes > 0;
+            if s {
+                m.spurious_irq_wakes -= 1;
+            }
+            s
+        });
+        if spurious {
+            return Ok(());
+        }
         for _ in 0..1000 {
             if self.0.with_model(|m| m.irq_status & m.dio1_mask != 0) {
                 return Ok(());

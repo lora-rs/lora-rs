@@ -838,6 +838,38 @@ async fn test_emulated_cad_end_to_end() {
     ));
 }
 
+/// A wake-up with no CAD flag behind it must not end the CAD. On STM32WL an
+/// interrupt that fires after its awaiting operation was cancelled stays
+/// latched and ends the next wait at once (lora-rs/lora-rs#418); the driver
+/// has to go back to waiting and hand back the chip's real result.
+#[tokio::test]
+async fn test_emulated_cad_rides_through_spurious_wake() {
+    let chip = Chip::new();
+    let mut lora = LoRa::new(get_emulated_sx1261(&chip), true, Delayer).await.unwrap();
+    let mdltn_params = modulation(&mut lora);
+
+    chip.with_model(|m| {
+        m.cad_activity = true;
+        m.hold_cad = true;
+        m.spurious_irq_wakes = 1;
+    });
+    // The result lands once the driver is back waiting on the IRQ line
+    let later = chip.clone();
+    tokio::spawn(async move {
+        for _ in 0..20 {
+            tokio::task::yield_now().await;
+        }
+        later.finish_cad();
+    });
+
+    lora.prepare_for_cad(&mdltn_params).await.unwrap();
+    assert!(lora.cad(&mdltn_params).await.unwrap());
+    chip.with_model(|m| {
+        assert_eq!(m.spurious_irq_wakes, 0, "the spurious wake was never consumed");
+        assert_eq!(m.mode, Mode::Standby);
+    });
+}
+
 #[tokio::test]
 async fn test_emulated_rx_single_timeout() {
     let chip = Chip::new();

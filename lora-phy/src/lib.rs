@@ -453,27 +453,32 @@ where
     pub async fn cad(&mut self, mdltn_params: &ModulationParams) -> Result<bool, RadioError> {
         if self.radio_mode == RadioMode::ChannelActivityDetection {
             self.radio_kind.do_cad(mdltn_params).await?;
-            self.wait_for_irq().await?;
             let mut cad_activity_detected = false;
-            match self
-                .radio_kind
-                .process_irq_event(self.radio_mode, Some(&mut cad_activity_detected), true)
-                .await
-            {
-                Ok(Some(IrqState::Done)) => {
-                    // CAD_ONLY exit returns the chip to STDBY_RC on its own; sync
-                    // radio_mode so the next operation starts from a known state.
-                    self.radio_kind.set_standby().await?;
-                    self.radio_mode = RadioMode::Standby;
-                    Ok(cad_activity_detected)
+            loop {
+                self.wait_for_irq().await?;
+                match self
+                    .radio_kind
+                    .process_irq_event(self.radio_mode, Some(&mut cad_activity_detected), true)
+                    .await
+                {
+                    Ok(Some(IrqState::Done)) => {
+                        // CAD_ONLY exit returns the chip to STDBY_RC on its own; sync
+                        // radio_mode so the next operation starts from a known state.
+                        self.radio_kind.set_standby().await?;
+                        self.radio_mode = RadioMode::Standby;
+                        return Ok(cad_activity_detected);
+                    }
+                    // A wake-up without CadDone (a stale interrupt left over from
+                    // an earlier operation, for instance) is not a result: keep
+                    // waiting for the chip, as tx() and complete_rx() do.
+                    Ok(None | Some(IrqState::PreambleReceived)) => continue,
+                    Err(err) => {
+                        self.radio_kind.ensure_ready(self.radio_mode).await?;
+                        self.radio_kind.set_standby().await?;
+                        self.radio_mode = RadioMode::Standby;
+                        return Err(err);
+                    }
                 }
-                Err(err) => {
-                    self.radio_kind.ensure_ready(self.radio_mode).await?;
-                    self.radio_kind.set_standby().await?;
-                    self.radio_mode = RadioMode::Standby;
-                    Err(err)
-                }
-                Ok(_) => unreachable!(),
             }
         } else {
             Err(RadioError::InvalidRadioMode)
