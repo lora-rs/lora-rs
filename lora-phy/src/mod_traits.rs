@@ -27,6 +27,9 @@ pub enum IrqState {
     PreambleReceived,
     /// Runs the loop until the operation is fully complete
     Done,
+    /// The channel activity detection finished and found activity
+    /// (`Done` is a CAD that finished on a quiet channel)
+    CadDetected,
 }
 
 /// Functions implemented for a specific kind of LoRa chip, called internally by the outward facing
@@ -150,16 +153,11 @@ pub trait RadioKind {
     async fn process_irq_event(
         &mut self,
         radio_mode: RadioMode,
-        cad_activity_detected: Option<&mut bool>,
         clear_interrupts: bool,
     ) -> Result<Option<IrqState>, RadioError>;
 
     /// Get IRQ state
-    async fn get_irq_state(
-        &mut self,
-        radio_mode: RadioMode,
-        cad_activity_detected: Option<&mut bool>,
-    ) -> Result<Option<IrqState>, RadioError>;
+    async fn get_irq_state(&mut self, radio_mode: RadioMode) -> Result<Option<IrqState>, RadioError>;
     /// Clear IRQ status
     async fn clear_irq_status(&mut self) -> Result<(), RadioError>;
 }
