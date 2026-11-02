@@ -143,12 +143,10 @@ async fn eu868_mac_truncation() {
         _ => panic!(),
     }
 
-    // Check that outgoing payload is truncated to 5 commands
-    // LinkADRAns is not sent in the response as it must be truncated due to
-    // payload size restrictions.
+    // All answers are queued. Truncation happens when the uplink is built.
     if let Some(session) = device.mac.get_session() {
         let data = session.uplink.mac_commands();
-        assert_eq!(parse_uplink_mac_commands(data).count(), 5);
+        assert_eq!(parse_uplink_mac_commands(data).count(), 18);
     }
 
     let complete = send_await_complete.clone();
@@ -164,11 +162,24 @@ async fn eu868_mac_truncation() {
 
     let mut uplink = radio.get_last_uplink().await;
     let dl = decrypt_uplink(&mut uplink);
-    assert_eq!(dl.frm_payload(), FrmPayload::Data(&[0x02, 0x02, 0x03]));
+    let FrmPayload::MacCommands(answers) = dl.frm_payload() else {
+        panic!("expected MAC answers in FPort 0");
+    };
+    let (mut count, mut has_link_adr_ans, mut has_rx_param_setup_ans) = (0, false, false);
+    for command in parse_uplink_mac_commands(answers) {
+        count += 1;
+        match command.unwrap() {
+            UplinkMacCommand::LinkADRAns(..) => has_link_adr_ans = true,
+            UplinkMacCommand::RXParamSetupAns(..) => has_rx_param_setup_ans = true,
+            _ => {}
+        }
+    }
+    assert_eq!(count, 17);
+    assert!(!has_link_adr_ans, "LinkADRAns must be truncated");
+    assert!(has_rx_param_setup_ans);
 }
 
 #[tokio::test]
-#[should_panic(expected = "both LinkADRAns and RXParamSetupAns must be sent")]
 async fn eu868_mac_non_truncated_payload() {
     let (radio, timer, mut device) =
         util::session_with_region(crate::region::EU868::new_eu868().into());
