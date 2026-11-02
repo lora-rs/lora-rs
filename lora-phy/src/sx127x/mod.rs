@@ -542,33 +542,33 @@ where
         let irq_flags = self.read_register(Register::RegIrqFlags).await?;
         match radio_mode {
             RadioMode::Transmit => {
-                if (irq_flags & IrqMask::TxDone.value()) == IrqMask::TxDone.value() {
+                if IrqMask::TxDone.is_set(irq_flags) {
                     debug!("TxDone in radio mode {}", radio_mode);
                     return Ok(Some(IrqState::Done));
                 }
             }
             RadioMode::Receive(RxMode::Continuous | RxMode::Single(_) | RxMode::SingleMs(_)) => {
-                if (irq_flags & IrqMask::RxDone.value()) == IrqMask::RxDone.value() {
-                    if IrqMask::CRCError.is_set_in(irq_flags) {
+                if IrqMask::RxDone.is_set(irq_flags) {
+                    if IrqMask::CRCError.is_set(irq_flags) {
                         debug!("RxDone with CRCError in radio mode {}", radio_mode);
                         return Err(RadioError::CrcError);
                     }
                     debug!("RxDone in radio mode {}", radio_mode);
                     return Ok(Some(IrqState::Done));
                 }
-                if (irq_flags & IrqMask::RxTimeout.value()) == IrqMask::RxTimeout.value() {
+                if IrqMask::RxTimeout.is_set(irq_flags) {
                     debug!("RxTimeout in radio mode {}", radio_mode);
                     return Err(RadioError::ReceiveTimeout);
                 }
-                if IrqMask::HeaderValid.is_set_in(irq_flags) {
+                if IrqMask::HeaderValid.is_set(irq_flags) {
                     debug!("HeaderValid in radio mode {}", radio_mode);
                     return Ok(Some(IrqState::PreambleReceived));
                 }
             }
             RadioMode::ChannelActivityDetection => {
-                if (irq_flags & IrqMask::CADDone.value()) == IrqMask::CADDone.value() {
+                if IrqMask::CADDone.is_set(irq_flags) {
                     debug!("CADDone in radio mode {}", radio_mode);
-                    return Ok(Some(if IrqMask::CADActivityDetected.is_set_in(irq_flags) {
+                    return Ok(Some(if IrqMask::CADActivityDetected.is_set(irq_flags) {
                         IrqState::CadDetected
                     } else {
                         IrqState::Done
