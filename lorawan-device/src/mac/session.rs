@@ -724,6 +724,7 @@ mod tests {
 
     /// Feed an encrypted downlink with an application payload on `fport` into
     /// a Mac with the standard test session, returning the Mac's response.
+    #[cfg(feature = "certification")]
     fn handle_downlink_on_port(mac: &mut Mac, fport: u8, data: &[u8], fcnt: u32) -> Response {
         let mut rx: RadioBuffer<256> = RadioBuffer::new();
         let mut buf = [0u8; 256];
@@ -754,6 +755,7 @@ mod tests {
         mac.handle_rx::<256, 1>(&mut rx, &mut dl, 10, &rf_config)
     }
 
+    #[cfg(feature = "certification")]
     #[test]
     fn certification_discards_oversized_echo_payload() {
         let mut mac = eu868_mac();
