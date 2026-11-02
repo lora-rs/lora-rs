@@ -67,6 +67,7 @@ type ChannelPlan = [Option<Channel>; NUM_CHANNELS_DYNAMIC as usize];
 pub(crate) struct DynamicChannelPlan<R: DynamicChannelRegion> {
     channels: ChannelPlan,
     channel_mask: ChannelMask<9>,
+    channel_selector: ChannelSelector,
     _dynamic_channel_region: PhantomData<R>,
     frequency_valid: fn(u32) -> bool,
 }
@@ -82,6 +83,7 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
         Self {
             channels: Self::default_channels(),
             channel_mask: Default::default(),
+            channel_selector: Default::default(),
             _dynamic_channel_region: Default::default(),
             frequency_valid: freq_fn,
         }
@@ -91,20 +93,6 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
     fn set_channel(&mut self, index: usize, channel: Option<Channel>) {
         self.channels[index] = channel;
         self.channel_mask.set_channel(index, channel.is_some());
-    }
-
-    fn get_random_in_range<RNG: RngCore>(&self, rng: &mut RNG) -> usize {
-        // SAFETY: We will always have at least number of join channels, therefore
-        // unwrap is safe to use.
-        let range = self.channels.iter().rposition(|&x| x.is_some()).unwrap() + 1;
-        let cm = if range > 16 {
-            0b11111
-        } else if range > 8 {
-            0b1111
-        } else {
-            0b111
-        };
-        (rng.next_u32() as usize) & cm
     }
 
     pub fn get_max_payload_length(datarate: DR, repeater_compatible: bool, dwell_time: bool) -> u8 {
@@ -242,19 +230,23 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
                 }
             }
             Frame::Data => {
-                let mut channel = self.get_random_in_range(rng);
-                loop {
-                    if self.channel_mask.is_enabled(channel).unwrap()
-                        && let Some(ch) = self.channels[channel]
-                    {
-                        return TxChannel {
-                            datarate: R::datarates()[datarate as usize].clone().unwrap(),
-                            dr: datarate,
-                            frequency: ch.ul_frequency(),
-                            rx1_frequency: ch.rx1_frequency(),
-                        };
+                let mut eligible = 0u128;
+                // TODO: exclude channels that do not support the current data rate.
+                for (index, channel) in self.channels.iter().enumerate() {
+                    if self.channel_mask.is_enabled(index).unwrap() && channel.is_some() {
+                        eligible |= 1u128 << index;
                     }
-                    channel = self.get_random_in_range(rng)
+                }
+                let index = self
+                    .channel_selector
+                    .select(rng, eligible)
+                    .expect("at least one enabled channel");
+                let ch = self.channels[index].unwrap();
+                TxChannel {
+                    datarate: R::datarates()[datarate as usize].clone().unwrap(),
+                    dr: datarate,
+                    frequency: ch.ul_frequency(),
+                    rx1_frequency: ch.rx1_frequency(),
                 }
             }
         }
@@ -406,7 +398,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "all enabled channels must be used before reuse")]
     fn data_frames_cover_enabled_channels_before_reuse() {
         let mut config = Configuration::new(Region::EU868);
         let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));

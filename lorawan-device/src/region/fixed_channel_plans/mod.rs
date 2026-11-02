@@ -41,6 +41,7 @@ impl From<Subband> for usize {
 #[derive(Clone)]
 pub(crate) struct FixedChannelPlan<F: FixedChannelRegion> {
     channel_mask: ChannelMask<9>,
+    channel_selector: ChannelSelector,
     _fixed_channel_region: PhantomData<F>,
     join_channels: JoinChannels,
 
@@ -51,6 +52,7 @@ impl<F: FixedChannelRegion> FixedChannelPlan<F> {
     pub fn new(freq_fn: fn(u32) -> bool) -> Self {
         Self {
             channel_mask: Default::default(),
+            channel_selector: Default::default(),
             _fixed_channel_region: Default::default(),
             join_channels: Default::default(),
             frequency_valid: freq_fn,
@@ -215,21 +217,20 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
                     // from. If the datarate bandwidth is 500 kHz, we must use
                     // channels 64..=71. Else, we must use 0-63
                     let bandwidth = F::datarates()[datarate as usize].as_ref().unwrap().bandwidth;
-                    if bandwidth == Bandwidth::_500KHz {
-                        let mut channel = (rng.next_u32() & 0b111) as u8;
-                        // keep selecting a random channel until we find one that is enabled
-                        while !self.channel_mask.is_enabled((channel + 64).into()).unwrap() {
-                            channel = (rng.next_u32() & 0b111) as u8;
-                        }
-                        (datarate, 64 + channel)
+                    let (start, end) = if bandwidth == Bandwidth::_500KHz {
+                        (64, 72)
                     } else {
-                        let mut channel = (rng.next_u32() & 0b111111) as u8;
-                        // keep selecting a random channel until we find one that is enabled
-                        while !self.channel_mask.is_enabled(channel.into()).unwrap() {
-                            channel = (rng.next_u32() & 0b111111) as u8;
-                        }
-                        (datarate, channel)
-                    }
+                        (0, 64)
+                    };
+                    let eligible = (start..end)
+                        .filter(|&channel| self.channel_mask.is_enabled(channel).unwrap())
+                        .fold(0u128, |mask, channel| mask | (1u128 << channel));
+                    let channel = self
+                        .channel_selector
+                        .select(rng, eligible)
+                        .expect("at least one enabled channel for the data rate")
+                        as u8;
+                    (datarate, channel)
                 }
             }
         };
