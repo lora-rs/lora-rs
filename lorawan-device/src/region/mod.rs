@@ -13,6 +13,45 @@ use constants::*;
 // For backward compatibility
 pub use lorawan::types::DR;
 
+/// Pseudo-random channel selection that covers every eligible channel once
+/// before reusing one.
+#[derive(Clone, Default)]
+pub(crate) struct ChannelSelector {
+    eligible: u128,
+    used: u128,
+}
+
+impl ChannelSelector {
+    /// Select a channel from `eligible`. The cycle restarts when the eligible
+    /// set changes or after every eligible channel has been used.
+    // TODO: Duty-cycle restrictions
+    pub(crate) fn select<RNG: RngCore>(&mut self, rng: &mut RNG, eligible: u128) -> Option<usize> {
+        if eligible == 0 {
+            return None;
+        }
+        if eligible != self.eligible {
+            self.eligible = eligible;
+            self.used = 0;
+        }
+
+        let mut available = eligible & !self.used;
+        if available == 0 {
+            self.used = 0;
+            available = eligible;
+        }
+
+        let mut pick = (rng.next_u32() as usize) % available.count_ones() as usize;
+        let mut remaining = available;
+        while pick > 0 {
+            remaining &= remaining - 1;
+            pick -= 1;
+        }
+        let index = remaining.trailing_zeros() as usize;
+        self.used |= 1u128 << index;
+        Some(index)
+    }
+}
+
 #[cfg(not(any(
     feature = "region-as923-1",
     feature = "region-as923-2",
@@ -615,6 +654,28 @@ pub(crate) trait RegionHandler {
 mod tests {
     use super::*;
 
+    struct CyclingRng(u32);
+
+    impl RngCore for CyclingRng {
+        fn next_u32(&mut self) -> u32 {
+            let value = self.0 % 4;
+            self.0 += 1;
+            value
+        }
+        fn next_u64(&mut self) -> u64 {
+            self.next_u32() as u64
+        }
+        fn fill_bytes(&mut self, dest: &mut [u8]) {
+            for byte in dest {
+                *byte = self.next_u32() as u8;
+            }
+        }
+        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+            self.fill_bytes(dest);
+            Ok(())
+        }
+    }
+
     #[test]
     #[cfg(feature = "region-as923-1")]
     fn test_rx1_dr_offset_as923() {
@@ -813,6 +874,32 @@ mod tests {
         for ch in 0..72 {
             assert_eq!(with_rfu.is_enabled(ch).unwrap(), without_rfu.is_enabled(ch).unwrap());
         }
+    }
+
+    #[test]
+    #[cfg(feature = "region-us915")]
+    fn test_us915_data_frames_cover_enabled_channels_before_reuse() {
+        let mut config = Configuration::new(Region::US915);
+        let mut mask = ChannelMask::<9>::default();
+        for bank in 0..9 {
+            mask.set_bank(bank, 0);
+        }
+        for channel in 0..5 {
+            mask.set_channel(channel, true);
+        }
+        config.channel_mask_set(mask);
+
+        let mut rng = CyclingRng(0);
+        let mut seen = [None; 5];
+        for packet in 0..5 {
+            let (tx, _) = config.create_tx_config(&mut rng, DR::_0, &Frame::Data);
+            assert!(
+                !seen.contains(&Some(tx.rf.frequency)),
+                "all enabled channels must be used before reuse (packet {packet})"
+            );
+            seen[packet] = Some(tx.rf.frequency);
+        }
+        assert!(seen.iter().all(Option::is_some));
     }
 
     #[test]
