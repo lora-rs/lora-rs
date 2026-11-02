@@ -253,9 +253,8 @@ impl LnaGain {
     }
 }
 
-/// PA DAC configuration - sx1276+
+/// PA DAC configuration
 #[derive(Clone, Copy)]
-#[allow(dead_code)]
 pub enum PaDac {
     _20DbmOn = 0x87,
     _20DbmOff = 0x84,
@@ -267,12 +266,12 @@ impl PaDac {
     }
 }
 
-/// PA configuration - sx1276+
+/// PA configuration
 #[derive(Clone, Copy)]
-#[allow(dead_code)]
 pub enum PaConfig {
     PaBoost = 0x80,
-    MaxPower7NoPaBoost = 0x70,
+    RfoMaxPower7 = 0x70,
+    RfoMaxPower0 = 0x00,
 }
 
 impl PaConfig {

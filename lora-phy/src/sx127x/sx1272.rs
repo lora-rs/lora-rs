@@ -1,7 +1,9 @@
 use crate::mod_params::{ModulationParams, PacketParams, RadioError};
 use crate::mod_traits::InterfaceVariant;
 use crate::sx127x::Sx127x;
-use crate::sx127x::radio_kind_params::{RampTime, Register, Sx127xVariant, coding_rate_value, spreading_factor_value};
+use crate::sx127x::radio_kind_params::{
+    PaConfig, PaDac, RampTime, Register, Sx127xVariant, coding_rate_value, spreading_factor_value,
+};
 use embedded_hal_async::spi::SpiDevice;
 use lora_modulation::Bandwidth;
 
@@ -55,19 +57,29 @@ impl Sx127xVariant for Sx1272 {
             if p_out > 17 {
                 // PA_BOOST out: +5 .. +20 dBm
                 let val = (p_out.clamp(5, 20) - 5) as u8 & 0x0f;
-                radio.write_register(Register::RegPaConfig, (1 << 7) | val).await?;
-                radio.write_register(Register::RegPaDacSX1272, 0x87).await?;
+                radio
+                    .write_register(Register::RegPaConfig, PaConfig::PaBoost.value() | val)
+                    .await?;
+                radio
+                    .write_register(Register::RegPaDacSX1272, PaDac::_20DbmOn.value())
+                    .await?;
             } else {
                 // PA_BOOST out: +2 .. +17 dBm
                 let val = (p_out.clamp(2, 17) - 2) as u8 & 0x0f;
-                radio.write_register(Register::RegPaConfig, (1 << 7) | val).await?;
-                radio.write_register(Register::RegPaDacSX1272, 0x84).await?;
+                radio
+                    .write_register(Register::RegPaConfig, PaConfig::PaBoost.value() | val)
+                    .await?;
+                radio
+                    .write_register(Register::RegPaDacSX1272, PaDac::_20DbmOff.value())
+                    .await?;
             }
         } else {
             // RFO out: -1 to +14 dBm
             let val = (p_out.clamp(-1, 14) + 1) as u8 & 0x0f;
             radio.write_register(Register::RegPaConfig, val).await?;
-            radio.write_register(Register::RegPaDacSX1272, 0x84).await?;
+            radio
+                .write_register(Register::RegPaDacSX1272, PaDac::_20DbmOff.value())
+                .await?;
         }
 
         Ok(())

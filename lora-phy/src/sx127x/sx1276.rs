@@ -84,9 +84,9 @@ impl Sx127xVariant for Sx1276 {
             // MaxPower=7 for negative targets, casting a negative OutputPower
             // to u8 and corrupting the register (PA_BOOST bit included).
             let (max_power, output_power) = if txp > 0 {
-                (PaConfig::MaxPower7NoPaBoost.value(), txp)
+                (PaConfig::RfoMaxPower7.value(), txp)
             } else {
-                (0x00, txp + 4)
+                (PaConfig::RfoMaxPower0.value(), txp + 4)
             };
 
             radio.write_register(pa_reg, PaDac::_20DbmOff.value()).await?;
