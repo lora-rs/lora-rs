@@ -118,6 +118,16 @@ where
         self.write_register(Register::RegOcp, ocp_trim.value()).await
     }
 
+    // Configure the LNA gain for RX and CAD
+    async fn set_lna_gain(&mut self) -> Result<(), RadioError> {
+        let lna_gain = if self.config.rx_boost {
+            LnaGain::G1.boosted_value()
+        } else {
+            LnaGain::G1.value()
+        };
+        self.write_register(Register::RegLna, lna_gain).await
+    }
+
     #[cfg(test)]
     fn take_spi(self) -> SPI {
         self.intf.spi
@@ -382,12 +392,7 @@ where
 
         self.set_lora_symbol_num_timeout(num_symbols).await?;
 
-        let lna_gain = if self.config.rx_boost {
-            LnaGain::G1.boosted_value()
-        } else {
-            LnaGain::G1.value()
-        };
-        self.write_register(Register::RegLna, lna_gain).await?;
+        self.set_lna_gain().await?;
 
         self.write_register(Register::RegFifoAddrPtr, 0x00u8).await?;
 
@@ -453,11 +458,7 @@ where
     async fn do_cad(&mut self, _mdltn_params: &ModulationParams) -> Result<(), RadioError> {
         self.intf.iv.enable_rf_switch_rx().await?;
 
-        let mut lna_gain_final = LnaGain::G1.value();
-        if self.config.rx_boost {
-            lna_gain_final = LnaGain::G1.boosted_value();
-        }
-        self.write_register(Register::RegLna, lna_gain_final).await?;
+        self.set_lna_gain().await?;
 
         self.write_register(Register::RegOpMode, LoRaMode::Cad.value()).await
     }
