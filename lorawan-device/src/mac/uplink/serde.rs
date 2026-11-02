@@ -1,18 +1,50 @@
-use crate::mac::uplink::Uplink;
-use lorawan::packet_length::phy::mac::fhdr::FOPTS_MAX_LEN;
+use crate::mac::uplink::{MAX_MAC_COMMAND_LEN, Uplink};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[cfg(feature = "serde")]
 impl Serialize for Uplink {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         use serde::ser::SerializeStruct;
-        let mut state = serializer.serialize_struct("Uplink", 3)?;
+        let mut state = serializer.serialize_struct("Uplink", 2)?;
         state.serialize_field("confirmed", &self.confirmed)?;
-        state.serialize_field("pending_len", &(self.pending.len() as u8))?;
-        let mut full_array = [0u8; FOPTS_MAX_LEN];
-        full_array[..self.pending.len()].copy_from_slice(&self.pending);
-        state.serialize_field("pending_data", &full_array)?;
+        state.serialize_field("pending_data", self.pending.as_slice())?;
         state.end()
+    }
+}
+
+#[cfg(feature = "serde")]
+struct PendingData(heapless::Vec<u8, MAX_MAC_COMMAND_LEN>);
+
+#[cfg(feature = "serde")]
+impl<'de> Deserialize<'de> for PendingData {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct PendingDataVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for PendingDataVisitor {
+            type Value = PendingData;
+
+            fn expecting(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                formatter.write_str("a sequence of MAC command bytes")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> Result<PendingData, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut data = heapless::Vec::new();
+                while let Some(byte) = seq.next_element::<u8>()? {
+                    data.push(byte).map_err(|_| {
+                        serde::de::Error::custom("pending_data exceeds maximum size")
+                    })?;
+                }
+                Ok(PendingData(data))
+            }
+        }
+
+        deserializer.deserialize_seq(PendingDataVisitor)
     }
 }
 
@@ -29,7 +61,6 @@ impl<'de> Deserialize<'de> for Uplink {
         #[serde(field_identifier, rename_all = "snake_case")]
         enum Field {
             Confirmed,
-            PendingLen,
             PendingData,
         }
 
@@ -47,8 +78,7 @@ impl<'de> Deserialize<'de> for Uplink {
                 V: MapAccess<'de>,
             {
                 let mut confirmed: Option<bool> = None;
-                let mut pending_len: Option<u8> = None;
-                let mut pending_data: Option<[u8; FOPTS_MAX_LEN]> = None;
+                let mut pending_data: Option<PendingData> = None;
 
                 while let Some(key) = map.next_key::<Field>()? {
                     match key {
@@ -57,12 +87,6 @@ impl<'de> Deserialize<'de> for Uplink {
                                 return Err(de::Error::duplicate_field("confirmed"));
                             }
                             confirmed = Some(map.next_value()?);
-                        }
-                        Field::PendingLen => {
-                            if pending_len.is_some() {
-                                return Err(de::Error::duplicate_field("pending_len"));
-                            }
-                            pending_len = Some(map.next_value()?);
                         }
                         Field::PendingData => {
                             if pending_data.is_some() {
@@ -74,35 +98,21 @@ impl<'de> Deserialize<'de> for Uplink {
                 }
 
                 let confirmed = confirmed.ok_or_else(|| de::Error::missing_field("confirmed"))?;
-                let pending_len =
-                    pending_len.ok_or_else(|| de::Error::missing_field("pending_len"))?;
                 let pending_data =
                     pending_data.ok_or_else(|| de::Error::missing_field("pending_data"))?;
 
-                if pending_len as usize > FOPTS_MAX_LEN {
-                    return Err(de::Error::custom("pending_len exceeds maximum size"));
-                }
-
-                let mut pending = heapless::Vec::new();
-                pending
-                    .extend_from_slice(&pending_data[..pending_len as usize])
-                    .map_err(|_| de::Error::custom("failed to create heapless::Vec"))?;
-
-                Ok(Uplink { pending, confirmed })
+                Ok(Uplink { pending: pending_data.0, confirmed })
             }
         }
 
-        deserializer.deserialize_struct(
-            "Uplink",
-            &["confirmed", "pending_len", "pending_data"],
-            UplinkVisitor,
-        )
+        deserializer.deserialize_struct("Uplink", &["confirmed", "pending_data"], UplinkVisitor)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lorawan::packet_length::phy::mac::fhdr::FOPTS_MAX_LEN;
 
     #[test]
     fn test_serde_empty_uplink() {
@@ -135,5 +145,16 @@ mod tests {
         let decoded: Uplink = serde_json::from_str(&json).unwrap();
         assert!(!decoded.confirms_downlink());
         assert_eq!(decoded.mac_commands(), &max_data);
+    }
+
+    #[test]
+    fn test_serde_large_pending() {
+        let mut uplink = Uplink::default();
+        let data = [42u8; 64];
+        uplink.pending.extend_from_slice(&data).unwrap();
+
+        let json = serde_json::to_string(&uplink).unwrap();
+        let decoded: Uplink = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded.mac_commands(), &data);
     }
 }
