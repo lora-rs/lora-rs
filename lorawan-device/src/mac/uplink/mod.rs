@@ -1,13 +1,15 @@
 use lorawan::maccommands::parse_uplink_mac_commands;
 use lorawan::maccommands::{SerializableMacCommand, UplinkMacCommand};
-use lorawan::packet_length::phy::mac::fhdr::FOPTS_MAX_LEN;
 
 #[cfg(feature = "serde")]
 mod serde;
 
+/// Maximum size of the pending MAC command buffer.
+pub(crate) const MAX_MAC_COMMAND_LEN: usize = 255;
+
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct Uplink {
-    pending: heapless::Vec<u8, FOPTS_MAX_LEN>,
+    pending: heapless::Vec<u8, MAX_MAC_COMMAND_LEN>,
     confirmed: bool,
 }
 
@@ -22,8 +24,8 @@ impl Uplink {
         self.confirmed
     }
     pub fn add_mac_command<M: SerializableMacCommand>(&mut self, cmd: M) {
-        // Check that there's still enough room for MAC commands
-        if self.pending.len() + cmd.payload_len() < FOPTS_MAX_LEN {
+        // Check that there's still enough room for the CID and payload.
+        if self.pending.len() + cmd.payload_len() < MAX_MAC_COMMAND_LEN {
             let _ = self.pending.push(cmd.cid());
             self.pending.extend_from_slice(cmd.payload_bytes()).unwrap();
         }
@@ -32,8 +34,8 @@ impl Uplink {
         // Certain commands have to be retained until their acknowledgment is confirmed
         if retain_acks {
             use UplinkMacCommand::*;
-            let mut data: heapless::Vec<u8, FOPTS_MAX_LEN> = heapless::Vec::new();
-            let _: heapless::Vec<_, FOPTS_MAX_LEN> = parse_uplink_mac_commands(&self.pending)
+            let mut data: heapless::Vec<u8, MAX_MAC_COMMAND_LEN> = heapless::Vec::new();
+            let _: heapless::Vec<_, MAX_MAC_COMMAND_LEN> = parse_uplink_mac_commands(&self.pending)
                 .filter_map(Result::ok)
                 .filter(|cmd| {
                     matches!(cmd, DlChannelAns(_) | RXParamSetupAns(_) | RXTimingSetupAns(_))

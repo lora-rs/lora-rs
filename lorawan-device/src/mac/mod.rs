@@ -199,9 +199,16 @@ impl Mac {
         buf: &mut RadioBuffer<N>,
         send_data: &SendData<'_>,
     ) -> Result<(radio::TxConfig, RxWindows, FcntUp)> {
+        let max_mac_payload_len =
+            self.region.get_max_payload_length(self.configuration.data_rate, false, false);
         let fcnt = match &mut self.state {
             State::Joined(session) => {
-                let fcnt = session.prepare_buffer::<N>(send_data, buf, &self.configuration);
+                let fcnt = session.prepare_buffer::<N>(
+                    send_data,
+                    buf,
+                    &self.configuration,
+                    max_mac_payload_len,
+                );
                 // Uplinks prepared here (data uplinks and certification answers)
                 // participate in NbTrans retransmission; multicast setup uplinks
                 // do not.
@@ -260,16 +267,20 @@ impl Mac {
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
     ) -> Result<(radio::TxConfig, FcntUp)> {
-        self.multicast.setup_send::<N>(&mut self.state, buf, &self.configuration).map(|fcnt_up| {
-            // No RX windows follow this uplink; the caller re-arms the RXC window.
-            let (mut tx_config, _) =
-                self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
-            tx_config.adjust_power(
-                self.configuration.tx_power.unwrap_or(self.board_eirp.max_power),
-                self.board_eirp.antenna_gain,
-            );
-            (tx_config, fcnt_up)
-        })
+        let max_mac_payload_len =
+            self.region.get_max_payload_length(self.configuration.data_rate, false, false);
+        self.multicast
+            .setup_send::<N>(&mut self.state, buf, &self.configuration, max_mac_payload_len)
+            .map(|fcnt_up| {
+                // No RX windows follow this uplink; the caller re-arms the RXC window.
+                let (mut tx_config, _) =
+                    self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
+                tx_config.adjust_power(
+                    self.configuration.tx_power.unwrap_or(self.board_eirp.max_power),
+                    self.board_eirp.antenna_gain,
+                );
+                (tx_config, fcnt_up)
+            })
     }
 
     /// Prepare the pending certification uplink for transmission. A certification answer is a

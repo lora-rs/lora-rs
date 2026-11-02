@@ -14,21 +14,27 @@ use lorawan::maccommandcreator::{
     RXParamSetupAnsCreator, RXTimingSetupAnsCreator,
 };
 use lorawan::maccommands::DownlinkMacCommand;
-use lorawan::maccommands::{MacCommands, parse_downlink_mac_commands};
+use lorawan::maccommands::{
+    MacCommands, SerializableMacCommand, parse_downlink_mac_commands, parse_uplink_mac_commands,
+};
 use lorawan::parser::{
     DataFrameType, DecryptedDataPayload, DecryptedJoinAcceptPayload, DevAddr, EncryptedDataPayload,
     FrmPayload,
 };
 use lorawan::{
     default_crypto::DefaultCrypto,
-    packet_length::phy::{MHDR_LEN, MIC_LEN},
+    packet_length::phy::{
+        MHDR_LEN, MIC_LEN,
+        mac::{
+            FPORT_LEN,
+            fhdr::{FHDR_MIN_LEN, FOPTS_MAX_LEN},
+        },
+    },
     types::DR,
 };
 
 #[cfg(feature = "certification")]
 use super::DeviceEvent;
-#[cfg(feature = "certification")]
-use lorawan::packet_length::phy::mac::{FPORT_LEN, fhdr::FHDR_MIN_LEN};
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
@@ -383,6 +389,7 @@ impl Session {
         data: &SendData<'_>,
         tx_buffer: &mut RadioBuffer<N>,
         configuration: &super::Configuration,
+        max_mac_payload_len: u8,
     ) -> FcntUp {
         tx_buffer.clear();
         let fcnt = self.fcnt_up;
@@ -405,17 +412,25 @@ impl Session {
             self.confirmed = v;
         }
 
-        // FPort 0 sends the queued MAC commands as the FRMPayload (encrypted
-        // with the NwkSKey) with FOpts left empty; the spec forbids
-        // application data on port 0. Any other port piggybacks the queued
-        // commands in FOpts.
+        // MAC answers take priority over application data. If they fit in
+        // FOpts, keep the application payload. Otherwise send them in FPort 0
+        // and truncate only at the current data rate's maximum payload.
+        let max_frm_payload =
+            max_mac_payload_len.saturating_sub(FHDR_MIN_LEN as u8 + FPORT_LEN as u8) as usize;
+        let mac_commands = self.uplink.mac_commands();
+        let mac_commands_len = mac_commands_prefix_len(mac_commands, max_frm_payload);
         let (f_opts, payload) = match NonZeroU8::new(data.fport) {
-            Some(f_port) => (self.uplink.mac_commands(), Payload::Data { f_port, data: data.data }),
+            Some(f_port)
+                if mac_commands.len() <= FOPTS_MAX_LEN && mac_commands.len() <= max_frm_payload =>
+            {
+                (mac_commands, Payload::Data { f_port, data: data.data })
+            }
+            Some(_) => (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len])),
             None => {
                 if !data.data.is_empty() {
                     panic!("Error assembling packet! Data payload with fport 0 not allowed");
                 }
-                (&[][..], Payload::MacCommands(self.uplink.mac_commands()))
+                (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
             }
         };
         let frame = DataFrame {
@@ -615,6 +630,22 @@ impl Session {
     }
 }
 
+/// Length of the longest prefix of complete MAC commands that fits in `max_len`.
+fn mac_commands_prefix_len(data: &[u8], max_len: usize) -> usize {
+    let mut len = 0;
+    for command in parse_uplink_mac_commands(data) {
+        let Ok(command) = command else {
+            break;
+        };
+        let command_len = 1 + command.payload_bytes().len();
+        if len + command_len > max_len {
+            break;
+        }
+        len += command_len;
+    }
+    len
+}
+
 /// Next lower region-supported data rate, if any.
 fn next_lower_datarate(region: &region::Configuration, current: DR) -> Option<DR> {
     let current = current as u8;
@@ -682,10 +713,13 @@ mod tests {
 
     fn uplink_fctrl(session: &mut Session, mac: &Mac) -> lorawan::parser::FCtrl {
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        let max_mac_payload_len =
+            mac.region.get_max_payload_length(mac.configuration.data_rate, false, false);
         session.prepare_buffer::<256>(
             &SendData { data: &[], fport: 1, confirmed: false },
             &mut tx,
             &mac.configuration,
+            max_mac_payload_len,
         );
         EncryptedDataPayload::parse(tx.as_mut_for_read()).unwrap().fhdr().fctrl()
     }
@@ -1188,10 +1222,13 @@ mod tests {
 
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
         let mac = Mac::new(region::Configuration::new(region::Region::EU868), 14, 0);
+        let max_mac_payload_len =
+            mac.region.get_max_payload_length(mac.configuration.data_rate, false, false);
         session.prepare_buffer::<256>(
             &SendData { data: &[], fport: 0, confirmed: false },
             &mut tx,
             &mac.configuration,
+            max_mac_payload_len,
         );
 
         let bytes = tx.as_mut_for_read();
