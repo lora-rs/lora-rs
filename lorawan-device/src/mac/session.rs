@@ -27,6 +27,8 @@ use lorawan::{
 
 #[cfg(feature = "certification")]
 use super::DeviceEvent;
+#[cfg(feature = "certification")]
+use lorawan::packet_length::phy::mac::{FPORT_LEN, fhdr::FHDR_MIN_LEN};
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
@@ -247,15 +249,22 @@ impl Session {
                         #[cfg(feature = "certification")]
                         if certification.fport(fport) {
                             use crate::mac::certification::Response::*;
-                            let max_mac_payload_len = region.get_max_payload_length(
+                            // The answer goes out as a regular uplink and carries
+                            // the MAC answers queued above in FOpts, so only
+                            // what the current DR leaves after the FHDR, FOpts
+                            // and FPort is available for it.
+                            let max_frm_payload_len = (region.get_max_payload_length(
                                 configuration.data_rate,
                                 false,
                                 false,
-                            );
+                            ) as usize)
+                                .saturating_sub(
+                                    FHDR_MIN_LEN + self.uplink.mac_commands().len() + FPORT_LEN,
+                                );
                             match certification.handle_message(
                                 data,
                                 self.rx_app_cnt,
-                                max_mac_payload_len,
+                                max_frm_payload_len,
                             ) {
                                 AdrBitChange(adr) => {
                                     configuration.adr_enabled = adr;
@@ -726,6 +735,18 @@ mod tests {
     /// a Mac with the standard test session, returning the Mac's response.
     #[cfg(feature = "certification")]
     fn handle_downlink_on_port(mac: &mut Mac, fport: u8, data: &[u8], fcnt: u32) -> Response {
+        handle_downlink_on_port_with_fopts(mac, &[], fport, data, fcnt)
+    }
+
+    /// As [`handle_downlink_on_port`], with MAC commands in the FHDR FOpts.
+    #[cfg(feature = "certification")]
+    fn handle_downlink_on_port_with_fopts(
+        mac: &mut Mac,
+        f_opts: &[u8],
+        fport: u8,
+        data: &[u8],
+        fcnt: u32,
+    ) -> Response {
         let mut rx: RadioBuffer<256> = RadioBuffer::new();
         let mut buf = [0u8; 256];
         let nwk_crypto = DefaultCrypto::new(NwkSKey::from([2; 16]).inner());
@@ -734,7 +755,7 @@ mod tests {
             frame_type: DataFrameType::UnconfirmedDown,
             dev_addr: DevAddr::from_value(1),
             fcnt,
-            f_opts: &[],
+            f_opts,
             payload: Payload::Data { f_port: NonZeroU8::new(fport).unwrap(), data },
             ..Default::default()
         };
@@ -774,6 +795,40 @@ mod tests {
                 "oversized EchoPayloadAns must be discarded"
             );
         }
+    }
+
+    /// An answer that exactly fills the FRMPayload room of the current DR
+    /// still goes out, and the queued MAC answers it carries in FOpts count
+    /// against that room.
+    #[cfg(feature = "certification")]
+    #[test]
+    fn certification_echo_answer_fits_with_fopts() {
+        use lorawan::packet_length::phy::{MHDR_LEN, MIC_LEN};
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+        mac.configuration.data_rate = DR::_0;
+        let max_phy = MHDR_LEN + 59 + MIC_LEN;
+
+        // 50 echoed bytes: answer is 51 bytes, exactly N for DR0 with no FOpts
+        let mut payload: heapless::Vec<u8, 256> = heapless::Vec::new();
+        payload.push(0x08).unwrap();
+        for _ in 0..50 {
+            payload.push(0x01).unwrap();
+        }
+        let response = handle_downlink_on_port(&mut mac, 224, &payload, 0);
+        assert!(matches!(response, Response::UplinkPrepared));
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        mac.certification_setup_send::<_, 256>(&mut SeqRng(0), &mut tx).unwrap();
+        assert_eq!(tx.as_mut_for_read().len(), max_phy);
+
+        // Same echo with a DevStatusReq in the downlink's FOpts: the 3-byte
+        // DevStatusAns rides along in the answer's FOpts, so the echo no
+        // longer fits and is dropped.
+        let response = handle_downlink_on_port_with_fopts(&mut mac, &[0x06], 224, &payload, 1);
+        assert!(
+            matches!(response, Response::NoUpdate),
+            "echo answer plus FOpts exceeds DR0 payload"
+        );
     }
 
     #[test]
