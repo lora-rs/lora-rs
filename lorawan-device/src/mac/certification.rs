@@ -1,5 +1,4 @@
 use lorawan::certification::parse_downlink_dut_commands;
-use lorawan::packet_length::phy::mac::{FPORT_LEN, fhdr::FHDR_MIN_LEN};
 
 /// Certification protocol uses `fport = 224`
 pub(crate) const CERTIFICATION_PORT: u8 = 224;
@@ -29,7 +28,7 @@ impl Certification {
         &mut self,
         data: &[u8],
         rx_app_cnt: u16,
-        max_mac_payload_len: u8,
+        max_frm_payload_len: usize,
     ) -> Response {
         use lorawan::certification::DownlinkDUTCommand::*;
         let messages = parse_downlink_dut_commands(data);
@@ -68,8 +67,8 @@ impl Certification {
                     ans.payload(payload.payload());
                     buf.extend_from_slice(ans.build()).unwrap();
                     // The answer is a regular uplink. Drop it if it would
-                    // exceed the maximum MAC payload of the current DR.
-                    if buf.len() + FHDR_MIN_LEN + FPORT_LEN > max_mac_payload_len as usize {
+                    // exceed what the current DR leaves for the FRMPayload.
+                    if buf.len() > max_frm_payload_len {
                         return Response::NoUpdate;
                     }
                     self.pending_uplink = Some(buf);
