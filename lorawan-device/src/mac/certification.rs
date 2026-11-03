@@ -62,15 +62,21 @@ impl Certification {
                     return Response::UplinkPrepared;
                 }
                 EchoIncPayloadReq(payload) => {
-                    let mut buf: heapless::Vec<u8, 256> = heapless::Vec::new();
-                    let mut ans = lorawan::certification::EchoIncPayloadAnsCreator::new();
-                    ans.payload(payload.payload());
-                    buf.extend_from_slice(ans.build()).unwrap();
-                    // The answer is a regular uplink. Drop it if it would
-                    // exceed what the current DR leaves for the FRMPayload.
-                    if buf.len() > max_frm_payload_len {
+                    let data = payload.payload();
+                    let max_data_len = max_frm_payload_len
+                        .saturating_sub(1)
+                        .min(lorawan::certification::EchoIncPayloadAnsCreator::max_payload_len());
+                    let data = &data[..data.len().min(max_data_len)];
+                    if data.is_empty() {
                         return Response::NoUpdate;
                     }
+
+                    let mut buf: heapless::Vec<u8, 256> = heapless::Vec::new();
+                    let mut ans = lorawan::certification::EchoIncPayloadAnsCreator::new();
+                    ans.payload(data);
+                    buf.extend_from_slice(ans.build()).unwrap();
+                    // The answer is a regular uplink. Clip it to what the
+                    // current DR leaves for the FRMPayload.
                     self.pending_uplink = Some(buf);
                     return Response::UplinkPrepared;
                 }

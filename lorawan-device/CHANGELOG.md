@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## Unreleased
 
-- certification: drop an EchoIncPayloadAns that would not fit the current data rate's maximum payload, counting the MAC answers it carries in FOpts
+- certification: clip an EchoIncPayloadAns to the current data rate's maximum payload, counting the MAC answers it carries in FOpts
 - Move to Rust edition 2024 (requires Rust 1.85+)
 - Add per-datarate receive-window timing to the async radio interface
 - Deprecate NewSKey in favor of more commonly used NwkSKey
