@@ -778,7 +778,8 @@ mod tests {
 
     #[cfg(feature = "certification")]
     #[test]
-    fn certification_discards_oversized_echo_payload() {
+    fn certification_clips_oversized_echo_payload() {
+        use lorawan::packet_length::phy::{MHDR_LEN, MIC_LEN};
         let mut mac = eu868_mac();
         mac.set_session(session());
 
@@ -791,9 +792,14 @@ mod tests {
             }
             let response = handle_downlink_on_port(&mut mac, 224, &payload, fcnt);
             assert!(
-                matches!(response, Response::NoUpdate),
-                "oversized EchoPayloadAns must be discarded"
+                matches!(response, Response::UplinkPrepared),
+                "oversized EchoPayloadAns must be clipped"
             );
+
+            let max_mac = mac.region.get_max_payload_length(dr, false, false) as usize;
+            let mut tx: RadioBuffer<256> = RadioBuffer::new();
+            mac.certification_setup_send::<_, 256>(&mut SeqRng(0), &mut tx).unwrap();
+            assert_eq!(tx.as_mut_for_read().len(), MHDR_LEN + max_mac + MIC_LEN);
         }
     }
 
@@ -822,13 +828,16 @@ mod tests {
         assert_eq!(tx.as_mut_for_read().len(), max_phy);
 
         // Same echo with a DevStatusReq in the downlink's FOpts: the 3-byte
-        // DevStatusAns rides along in the answer's FOpts, so the echo no
-        // longer fits and is dropped.
+        // DevStatusAns rides along in the answer's FOpts, so the echo is
+        // clipped to keep the frame within the DR0 payload limit.
         let response = handle_downlink_on_port_with_fopts(&mut mac, &[0x06], 224, &payload, 1);
         assert!(
-            matches!(response, Response::NoUpdate),
-            "echo answer plus FOpts exceeds DR0 payload"
+            matches!(response, Response::UplinkPrepared),
+            "echo answer must be clipped to leave room for FOpts"
         );
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        mac.certification_setup_send::<_, 256>(&mut SeqRng(0), &mut tx).unwrap();
+        assert_eq!(tx.as_mut_for_read().len(), max_phy);
     }
 
     #[test]
