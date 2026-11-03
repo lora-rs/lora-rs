@@ -62,6 +62,7 @@ impl<'de> Deserialize<'de> for Uplink {
         enum Field {
             Confirmed,
             PendingData,
+            PendingLen,
         }
 
         struct UplinkVisitor;
@@ -79,6 +80,7 @@ impl<'de> Deserialize<'de> for Uplink {
             {
                 let mut confirmed: Option<bool> = None;
                 let mut pending_data: Option<PendingData> = None;
+                let mut pending_len: Option<u8> = None;
 
                 while let Some(key) = map.next_key::<Field>()? {
                     match key {
@@ -94,6 +96,14 @@ impl<'de> Deserialize<'de> for Uplink {
                             }
                             pending_data = Some(map.next_value()?);
                         }
+                        // Older sessions serialized a fixed-size pending_data
+                        // array and stored the used length separately.
+                        Field::PendingLen => {
+                            if pending_len.is_some() {
+                                return Err(de::Error::duplicate_field("pending_len"));
+                            }
+                            pending_len = Some(map.next_value()?);
+                        }
                     }
                 }
 
@@ -101,7 +111,21 @@ impl<'de> Deserialize<'de> for Uplink {
                 let pending_data =
                     pending_data.ok_or_else(|| de::Error::missing_field("pending_data"))?;
 
-                Ok(Uplink { pending: pending_data.0, confirmed })
+                let pending = if let Some(pending_len) = pending_len {
+                    let len = pending_len as usize;
+                    if len > pending_data.0.len() {
+                        return Err(de::Error::custom("pending_len exceeds pending_data length"));
+                    }
+                    let mut pending = heapless::Vec::new();
+                    pending
+                        .extend_from_slice(&pending_data.0[..len])
+                        .map_err(|_| de::Error::custom("failed to create heapless::Vec"))?;
+                    pending
+                } else {
+                    pending_data.0
+                };
+
+                Ok(Uplink { pending, confirmed })
             }
         }
 
@@ -145,6 +169,14 @@ mod tests {
         let decoded: Uplink = serde_json::from_str(&json).unwrap();
         assert!(!decoded.confirms_downlink());
         assert_eq!(decoded.mac_commands(), &max_data);
+    }
+
+    #[test]
+    fn test_serde_legacy_pending_len() {
+        let json =
+            r#"{"confirmed":false,"pending_len":3,"pending_data":[1,2,3,0,0,0,0,0,0,0,0,0,0,0,0]}"#;
+        let decoded: Uplink = serde_json::from_str(json).unwrap();
+        assert_eq!(decoded.mac_commands(), &[1, 2, 3]);
     }
 
     #[test]
