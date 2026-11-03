@@ -68,6 +68,7 @@ pub(crate) struct DynamicChannelPlan<R: DynamicChannelRegion> {
     channels: ChannelPlan,
     channel_mask: ChannelMask<9>,
     channel_selector: ChannelSelector,
+    join_channel_selector: ChannelSelector,
     _dynamic_channel_region: PhantomData<R>,
     frequency_valid: fn(u32) -> bool,
 }
@@ -84,6 +85,7 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
             channels: Self::default_channels(),
             channel_mask: Default::default(),
             channel_selector: Default::default(),
+            join_channel_selector: Default::default(),
             _dynamic_channel_region: Default::default(),
             frequency_valid: freq_fn,
         }
@@ -213,15 +215,15 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
     ) -> TxChannel {
         match frame {
             Frame::Join => {
-                // There are at most 3 join channels in dynamic regions,
-                // keep sampling until we get a valid channel.
-                let mut index = (rng.next_u32() & 0b11) as u8;
-                while index >= R::NUM_JOIN_CHANNELS {
-                    index = (rng.next_u32() & 0b11) as u8;
-                }
+                let eligible =
+                    (0..R::NUM_JOIN_CHANNELS).fold(0u128, |mask, index| mask | (1u128 << index));
+                let index = self
+                    .join_channel_selector
+                    .select(rng, eligible)
+                    .expect("at least one join channel");
 
                 // SAFETY: Join channels SHALL be always present
-                let channel = self.channels[index as usize].unwrap();
+                let channel = self.channels[index].unwrap();
                 TxChannel {
                     datarate: R::datarates()[datarate as usize].clone().unwrap(),
                     dr: datarate,
