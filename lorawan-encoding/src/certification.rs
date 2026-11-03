@@ -174,6 +174,10 @@ impl EchoIncPayloadAnsCreator {
     pub const fn cid(&self) -> u8 {
         EchoIncPayloadAnsPayload::cid()
     }
+    /// Maximum number of echoed data bytes, excluding the CID.
+    pub const fn max_payload_len() -> usize {
+        EchoIncPayloadAnsPayload::max_len()
+    }
     /// Get the length including CID.
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
