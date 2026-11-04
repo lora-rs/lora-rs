@@ -62,6 +62,9 @@ pub struct Session {
     #[cfg(feature = "certification")]
     /// Applicative downlink frame counter
     pub rx_app_cnt: u16,
+    /// Whether the last prepared uplink dropped non-empty application data.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub(crate) app_payload_dropped: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -107,6 +110,7 @@ impl Session {
             override_confirmed: None,
             #[cfg(feature = "certification")]
             rx_app_cnt: 0,
+            app_payload_dropped: false,
         }
     }
 
@@ -419,15 +423,20 @@ impl Session {
             max_mac_payload_len.saturating_sub(FHDR_MIN_LEN as u8 + FPORT_LEN as u8) as usize;
         let mac_commands = self.uplink.mac_commands();
         let mac_commands_len = mac_commands_prefix_len(mac_commands, max_frm_payload);
+        self.app_payload_dropped = false;
         let (f_opts, payload) = match NonZeroU8::new(data.fport) {
             Some(f_port)
                 if mac_commands.len() <= FOPTS_MAX_LEN && mac_commands.len() <= max_frm_payload =>
             {
                 (mac_commands, Payload::Data { f_port, data: data.data })
             }
-            Some(_) => (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len])),
+            Some(_) => {
+                self.app_payload_dropped = !data.data.is_empty();
+                (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
+            }
             None => {
                 if !data.data.is_empty() {
+                    // TODO: Return a proper Error instead of panicking.
                     panic!("Error assembling packet! Data payload with fport 0 not allowed");
                 }
                 (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
@@ -455,10 +464,18 @@ impl Session {
                 tx_buffer.clear();
                 tx_buffer.extend_from_slice(packet).unwrap();
             }
+            // TODO: Return a proper Error instead of panicking.
             Err(e) => panic!("Error assembling packet! {:?} ", e),
         }
         self.uplink.clear_mac_commands(true);
         fcnt
+    }
+
+    /// Whether the last prepared uplink dropped non-empty application data.
+    pub(crate) fn take_payload_dropped(&mut self) -> bool {
+        let dropped = self.app_payload_dropped;
+        self.app_payload_dropped = false;
+        dropped
     }
 
     fn handle_downlink_macs(
@@ -1062,6 +1079,30 @@ mod tests {
             self.fill_bytes(bytes);
             Ok(())
         }
+    }
+
+    #[test]
+    fn prepare_buffer_reports_dropped_application_payload() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+        let configuration = mac.configuration;
+        let max_mac_payload_len =
+            mac.region.get_max_payload_length(configuration.data_rate, false, false);
+        let session = mac.get_session_mut().unwrap();
+        for _ in 0..8 {
+            session.uplink.add_mac_command(LinkADRAnsCreator::new());
+        }
+
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        session.prepare_buffer::<256>(
+            &SendData { data: &[1, 2, 3], fport: 1, confirmed: false },
+            &mut tx,
+            &configuration,
+            max_mac_payload_len,
+        );
+
+        assert!(session.take_payload_dropped());
+        assert!(!session.take_payload_dropped());
     }
 
     #[test]
