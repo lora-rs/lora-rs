@@ -1106,6 +1106,27 @@ mod tests {
     }
 
     #[test]
+    fn send_reports_dropped_application_payload() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+        for _ in 0..8 {
+            mac.get_session_mut().unwrap().uplink.add_mac_command(LinkADRAnsCreator::new());
+        }
+
+        let mut rng = SeqRng(0);
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        mac.send::<SeqRng, 256>(
+            &mut rng,
+            &mut tx,
+            &SendData { data: &[1, 2, 3], fport: 1, confirmed: false },
+        )
+        .unwrap();
+
+        assert!(mac.take_payload_dropped());
+        assert!(!mac.take_payload_dropped());
+    }
+
+    #[test]
     fn retransmission_reselects_channel() {
         let mut mac = eu868_mac();
         mac.set_session(session());
