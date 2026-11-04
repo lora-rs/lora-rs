@@ -425,9 +425,9 @@ impl Session {
         let mac_commands_len = mac_commands_prefix_len(mac_commands, max_frm_payload);
         self.app_payload_dropped = false;
         let (f_opts, payload) = match NonZeroU8::new(data.fport) {
-            Some(f_port)
-                if mac_commands.len() <= FOPTS_MAX_LEN && mac_commands.len() <= max_frm_payload =>
-            {
+            // Keep the application payload only when the queued MAC answers
+            // fit in FOpts and within the current data rate's payload limit.
+            Some(f_port) if mac_commands.len() <= FOPTS_MAX_LEN.min(max_frm_payload) => {
                 (mac_commands, Payload::Data { f_port, data: data.data })
             }
             Some(_) => {
