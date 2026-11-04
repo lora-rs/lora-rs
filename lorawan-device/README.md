@@ -10,11 +10,12 @@ required.
 Note: The `lorawan-radio` feature in the `lora-phy` crate provides `LorawanRadio` as an async implementation of
 `radio::PhyRxTx`.
 
-Both stacks share a dependency on the internal module, `mac` where LoRaWAN 1.0.x is approximately implemented:
+Both stacks share a dependency on the internal module, `mac` where LoRaWAN 1.0.4 is approximately implemented:
 
 - Class A device behavior
-- Class C device behavior (async only, enabled by default with the `class-c` feature)
+- Class C device behavior (async only, available with the `class-c` feature)
 - `NbTrans` automatic uplink retransmission, controlled by the network via `LinkADRReq`
+- ADR is supported and enabled by default
 - Over-the-Air Activation (OTAA) and Activation by Personalization (ABP)
 - CFList is supported for fixed and dynamic channel plans
 - Regional support for AS923_1, AS923_2, AS923_3, AS923_4, AU915, EU868, EU433, IN865, RU864, US915 with following caveats:
@@ -24,17 +25,31 @@ Both stacks share a dependency on the internal module, `mac` where LoRaWAN 1.0.x
 are gated behind the "experimental" feature.
 
 Both stacks implement `NbTrans` automatic retransmission for uplinks. `NbTrans`
-defaults to 1 transmission and is set by the network with a `LinkADRReq`
-(LoRaWAN 1.0.4). With `NbTrans` > 1, an uplink that receives no downlink is
-repeated with the same `FCntUp`, up to `NbTrans` times. Confirmed uplinks wait
-`RETRANSMIT_TIMEOUT` before each repeat. After the last confirmed attempt, the
-stack waits `RETRANSMIT_TIMEOUT` before reporting `NoAck`. In Class C the wait
-is spent listening in receive-continuous mode, so downlinks are not missed. ADR
-is enabled by default, which lets the network manage `NbTrans`. There is no
-application API to set it directly.
+defaults to 1 transmission and is managed by the network with `LinkADRReq`.
+With `NbTrans` > 1, an uplink that receives no downlink is repeated with the
+same `FCntUp`, up to `NbTrans` transmissions. Confirmed uplinks wait
+`RETRANSMIT_TIMEOUT` (random delay between 1-3 seconds) before each repeat and
+before reporting `NoAck` after the last attempt. For Class C, the wait is spent
+listening in continuous receive mode.
 
 Failed joins, and confirmed uplinks that report `NoAck` after all `NbTrans`
-attempts, must still be retried by the application. See the examples for more.
+attempts, must still be retried by the application.
+
+When pending MAC answers do not fit in FOpts, they are sent automatically in
+FPort 0 and the application payload is dropped. Call
+`device.take_payload_dropped()` after `device.send()` to handle these cases if
+required:
+
+```rust,ignore
+let payload = [..];
+let response = device.send(&payload, 1, false).await?;
+
+if device.take_payload_dropped() {
+    // Handle the case where application data was dropped.
+}
+```
+
+See the examples for more.
 
 Please see [examples](https://github.com/lora-rs/lora-rs/tree/main/examples) for usage.
 
