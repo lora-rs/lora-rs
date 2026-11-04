@@ -81,6 +81,8 @@ where
     /// bit and MAC commands) after the radio buffer is reused for reception.
     retransmit_buffer: RadioBuffer<N>,
     downlink: Vec<Downlink, D>,
+    /// Whether the last prepared uplink dropped non-empty application data.
+    payload_dropped: bool,
     #[cfg(feature = "class-c")]
     class_c: bool,
 }
@@ -208,6 +210,7 @@ where
             retransmit_buffer: RadioBuffer::new(),
             timer,
             downlink: Vec::new(),
+            payload_dropped: false,
             #[cfg(feature = "class-c")]
             class_c: false,
         }
@@ -398,6 +401,7 @@ where
             &mut self.radio_buffer,
             &SendData { data, fport, confirmed },
         )?;
+        self.payload_dropped = self.mac.take_payload_dropped();
         // Retain a copy of the built frame for potential NbTrans retransmissions
         self.retransmit_buffer.clear();
         self.retransmit_buffer.extend_from_slice(self.radio_buffer.as_ref_for_read()).unwrap();
@@ -469,6 +473,13 @@ where
     /// data. If no downlink data is available, `None` is returned.
     pub fn take_downlink(&mut self) -> Option<Downlink> {
         self.downlink.pop()
+    }
+
+    /// Whether the last prepared uplink dropped non-empty application data.
+    pub fn take_payload_dropped(&mut self) -> bool {
+        let dropped = self.payload_dropped;
+        self.payload_dropped = false;
+        dropped
     }
 
     async fn window_complete(&mut self) -> Result<(), Error<R::PhyError>> {
