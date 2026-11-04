@@ -62,6 +62,21 @@ fn test_join_rx2() {
 }
 
 #[test]
+fn test_send_reports_dropped_payload() {
+    use lorawan::maccommandcreator::LinkADRAnsCreator;
+    let mut device = test_device();
+    device.join(get_abp_credentials()).unwrap();
+    let session = device.shared.mac.get_session_mut().unwrap();
+    for _ in 0..8 {
+        session.uplink.add_mac_command(LinkADRAnsCreator::new());
+    }
+    let response = device.send(&[1, 2, 3], 1, false).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+    assert!(device.take_payload_dropped());
+    assert!(!device.take_payload_dropped());
+}
+
+#[test]
 fn test_unconfirmed_uplink_no_downlink() {
     let mut device = test_device();
     device.join(get_abp_credentials()).unwrap();

@@ -126,6 +126,7 @@ where
     }
 
     pub fn handle_event(&mut self, event: Event<'_, R>) -> Result<Response, Error<R>> {
+        let send_request = matches!(&event, Event::SendDataRequest(_));
         let (new_state, result) = self.state.handle_event::<R, RNG, N, D>(
             &mut self.shared.mac,
             &mut self.shared.radio,
@@ -136,7 +137,7 @@ where
             event,
         );
         self.state = new_state;
-        if matches!(&result, Ok(Response::UplinkSending(_))) {
+        if send_request {
             self.payload_dropped = self.shared.mac.take_payload_dropped();
         }
         result
