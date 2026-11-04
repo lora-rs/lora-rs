@@ -1,6 +1,7 @@
 //! This example runs on the RAK4631 WisBlock, which has an nRF52840 MCU and Semtech Sx126x radio.
 //! Other nrf/sx126x combinations may work with appropriate pin modifications.
-//! It demonstrates LoRaWAN join functionality.
+//! It demonstrates LoRaWAN join and periodic uplink functionality, including
+//! reporting when pending MAC answers displaced the application payload.
 #![no_std]
 #![no_main]
 
@@ -100,6 +101,21 @@ async fn main(_spawner: Spawner) {
 
     info!("LoRaWAN network joined!");
 
-    #[cfg(feature = "teleprobe")]
-    cortex_m::asm::bkpt();
+    let mut counter = 1u32;
+    loop {
+        let data = counter.to_be_bytes();
+        info!("Sending uplink {}", counter);
+        let result = device.send(&data, 1, false).await;
+        info!("Uplink result: {:?}", result);
+        if device.take_payload_dropped() {
+            warn!("Application payload was dropped because pending MAC answers did not fit in FOpts");
+        }
+
+        // Halt after the first uplink so teleprobe exercises the send path.
+        #[cfg(feature = "teleprobe")]
+        cortex_m::asm::bkpt();
+
+        counter = counter.wrapping_add(1);
+        Timer::after(Duration::from_secs(30)).await;
+    }
 }
