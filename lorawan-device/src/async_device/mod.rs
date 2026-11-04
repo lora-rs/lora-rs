@@ -370,8 +370,8 @@ where
     /// data is copied into the provided byte slice.
     ///
     /// The returned future completes when the data have been sent successfully and downlink data,
-    /// if any, is available by calling take_downlink. Response::DownlinkReceived indicates a
-    /// downlink is available.
+    /// if any, is available by calling [`take_downlink`](Self::take_downlink).
+    /// Response::DownlinkReceived indicates a downlink is available.
     ///
     /// When the network has set NbTrans > 1 via LinkADRReq (LoRaWAN 1.0.4), a frame that
     /// receives no downlink in RX1/RX2 is retransmitted automatically with the same FCntUp,
@@ -387,8 +387,13 @@ where
     /// start as soon as `send` returns.
     ///
     /// In Class C mode, it is possible to get one or more downlinks and `Reponse::DownlinkReceived`
-    /// maybe not even be indicated. It is recommended to call `take_downlink` after `send` until
-    /// it returns `None`.
+    /// maybe not even be indicated. It is recommended to call [`take_downlink`](Self::take_downlink)
+    /// after `send` until it returns `None`.
+    ///
+    /// If pending MAC answers do not fit in FOpts, they are sent automatically in
+    /// FPort 0 and the application payload is dropped. Call
+    /// [`take_payload_dropped`](Self::take_payload_dropped) after `send` to check
+    /// whether non-empty application data was dropped.
     pub async fn send(
         &mut self,
         data: &[u8],
@@ -475,7 +480,11 @@ where
         self.downlink.pop()
     }
 
-    /// Whether the last prepared uplink dropped non-empty application data.
+    /// Return whether the last prepared uplink dropped non-empty application
+    /// data, and clear the status.
+    ///
+    /// Application data is dropped when pending MAC answers do not fit in FOpts
+    /// and are sent automatically in FPort 0 instead.
     pub fn take_payload_dropped(&mut self) -> bool {
         let dropped = self.payload_dropped;
         self.payload_dropped = false;

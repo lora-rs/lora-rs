@@ -7,6 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 ## Unreleased
 
 - certification: clip an EchoIncPayloadAns to the current data rate's maximum payload, counting the MAC answers it carries in FOpts
+- Add `device.take_payload_dropped()` which signals the application to handle cases where pending MAC answers do not fit in FOpts, are sent automatically in FPort 0, and the application payload is dropped
 - Move to Rust edition 2024 (requires Rust 1.85+)
 - Add per-datarate receive-window timing to the async radio interface
 - Deprecate NewSKey in favor of more commonly used NwkSKey
