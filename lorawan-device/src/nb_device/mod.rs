@@ -20,6 +20,8 @@ where
     RNG: RngCore,
 {
     state: State,
+    /// Whether the last prepared uplink dropped non-empty application data.
+    payload_dropped: bool,
     shared: Shared<R, RNG, N, D>,
 }
 
@@ -31,6 +33,7 @@ where
     pub fn new(region: region::Configuration, radio: R, rng: RNG) -> Device<R, RNG, N, D> {
         Device {
             state: State::default(),
+            payload_dropped: false,
             shared: Shared {
                 radio,
                 rng,
@@ -115,6 +118,13 @@ where
         self.shared.downlink.pop()
     }
 
+    /// Whether the last prepared uplink dropped non-empty application data.
+    pub fn take_payload_dropped(&mut self) -> bool {
+        let dropped = self.payload_dropped;
+        self.payload_dropped = false;
+        dropped
+    }
+
     pub fn handle_event(&mut self, event: Event<'_, R>) -> Result<Response, Error<R>> {
         let (new_state, result) = self.state.handle_event::<R, RNG, N, D>(
             &mut self.shared.mac,
@@ -126,6 +136,9 @@ where
             event,
         );
         self.state = new_state;
+        if matches!(&result, Ok(Response::UplinkSending(_))) {
+            self.payload_dropped = self.shared.mac.take_payload_dropped();
+        }
         result
     }
 }

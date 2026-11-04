@@ -191,6 +191,11 @@ impl Mac {
         self.state = State::Joined(session);
     }
 
+    // TODO: Wire this to the session's dropped-payload status.
+    pub(crate) fn take_payload_dropped(&mut self) -> bool {
+        false
+    }
+
     /// Prepare the radio buffer for transmitting a data frame and provide the radio configuration
     /// for the transmission. Returns an error if the device is not joined.
     pub(crate) fn send<RNG: RngCore, const N: usize>(
