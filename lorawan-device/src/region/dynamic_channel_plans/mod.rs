@@ -441,6 +441,27 @@ mod tests {
     }
 
     #[test]
+    fn disabling_last_unused_channel_restarts_remaining_coverage() {
+        let mut config = Configuration::new(Region::EU868);
+        let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));
+        assert_eq!(config.handle_new_channel(3, 867_100_000, dr), (true, true));
+
+        let mut rng = ZeroRng;
+        for freq in [868_100_000, 868_300_000, 868_500_000] {
+            let (tx, _) = config.create_tx_config(&mut rng, DR::_5, &Frame::Data);
+            assert_eq!(tx.rf.frequency, freq);
+        }
+
+        // Disable the only channel that has not been used yet.
+        assert_eq!(config.handle_new_channel(3, 0, None), (true, true));
+
+        // Every remaining channel is already used, so the reduced set wraps
+        // and starts a new cycle at channel 0.
+        let (tx, _) = config.create_tx_config(&mut rng, DR::_5, &Frame::Data);
+        assert_eq!(tx.rf.frequency, 868_100_000);
+    }
+
+    #[test]
     fn data_frames_cover_enabled_channels_before_reuse() {
         let mut config = Configuration::new(Region::EU868);
         let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));
