@@ -435,7 +435,7 @@ fn parse_variant_fields(input: &syn::Type) -> syn::Result<Payload> {
 }
 
 /// Handler for `#[cmd(cid = ..., len = ...)]` attribute
-fn attr_handle_cmd(attr: &syn::Attribute) -> syn::Result<Option<(u8, Option<u8>)>> {
+fn attr_handle_cmd(attr: &syn::Attribute) -> syn::Result<(u8, Option<u8>)> {
     let nested = attr
         .parse_args_with(syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated)
         .map_err(|err| syn::Error::new_spanned(attr, err))?;
@@ -485,7 +485,7 @@ fn attr_handle_cmd(attr: &syn::Attribute) -> syn::Result<Option<(u8, Option<u8>)
 
     let cid = cid.ok_or_else(|| syn::Error::new_spanned(attr, "missing `cid = <integer>`"))?;
 
-    Ok(Some((cid, len)))
+    Ok((cid, len))
 }
 
 /// Collect supported attributes for enum members into [`Attributes`]:
@@ -499,7 +499,7 @@ fn parse_variant_attrs(input: &[syn::Attribute]) -> syn::Result<Attributes> {
             if attrs.is_some() {
                 return Err(syn::Error::new_spanned(attr, "duplicate `cmd` attribute"));
             }
-            attrs = attr_handle_cmd(attr)?;
+            attrs = Some(attr_handle_cmd(attr)?);
             continue;
         }
         // Docstrings
