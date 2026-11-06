@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, Span};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use syn::{Data, DeriveInput, Fields, Meta, PathArguments, parse_macro_input};
 
@@ -21,12 +21,19 @@ struct Attributes {
 #[proc_macro_derive(CommandHandler, attributes(cmd))]
 pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
+    match expand_command_handler(input) {
+        Ok(tokens) => tokens.into(),
+        Err(err) => err.to_compile_error().into(),
+    }
+}
+
+fn expand_command_handler(input: DeriveInput) -> syn::Result<TokenStream> {
     let handler = &input.ident;
     let (handler_lt, _ty, _where) = input.generics.split_for_impl();
     let handler_lifetimes =
         input.generics.lifetimes().map(|lt| lt.lifetime.clone()).collect::<Vec<_>>();
-    if handler_lifetimes.len() > 1 {
-        panic!("Multiple lifetimes for this enum are unsupported!");
+    if let Some(extra) = handler_lifetimes.get(1) {
+        return Err(syn::Error::new_spanned(extra, "only one lifetime parameter is supported"));
     }
 
     // Parse enum members into list of (Command, Payload, Attributes) tuples
@@ -304,7 +311,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
     };
 
     // Generate the final implementations
-    quote! {
+    Ok(quote! {
         #impl_command_set
 
         impl #handler_lt #handler #handler_lt {
@@ -380,7 +387,7 @@ pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::Tok
             }
         }
     }
-    .into()
+    .into())
 }
 
 // Parse enum variant argument into `[Payload]` objects
@@ -507,4 +514,22 @@ fn parse_enum_members(input: &DeriveInput) -> Vec<(Ident, Payload, Attributes)> 
         _ => panic!("Unsupported!"),
     };
     items
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use syn::parse_quote;
+
+    #[test]
+    fn rejects_multiple_lifetimes() {
+        let input: DeriveInput = parse_quote! {
+            enum Command<'a, 'b> {
+                A(Payload<'a>),
+            }
+        };
+
+        let error = expand_command_handler(input).unwrap_err();
+        assert_eq!(error.to_string(), "only one lifetime parameter is supported");
+    }
 }
