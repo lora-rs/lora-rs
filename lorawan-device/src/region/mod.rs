@@ -676,6 +676,43 @@ mod tests {
         }
     }
 
+    struct ZeroRng;
+
+    impl RngCore for ZeroRng {
+        fn next_u32(&mut self) -> u32 {
+            0
+        }
+        fn next_u64(&mut self) -> u64 {
+            0
+        }
+        fn fill_bytes(&mut self, dest: &mut [u8]) {
+            dest.fill(0);
+        }
+        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+            self.fill_bytes(dest);
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "channel 0 was reused before the low set completed")]
+    fn disjoint_eligible_sets_keep_independent_coverage() {
+        let mut selector = ChannelSelector::default();
+        let mut rng = ZeroRng;
+        let low = 0b1111;
+        let high = 0b1111_0000;
+
+        assert_eq!(selector.select(&mut rng, low), Some(0));
+        assert_eq!(selector.select(&mut rng, low), Some(1));
+        assert_eq!(selector.select(&mut rng, high), Some(4));
+        assert_eq!(
+            selector.select(&mut rng, low),
+            Some(2),
+            "channel 0 was reused before the low set completed"
+        );
+        assert_eq!(selector.select(&mut rng, high), Some(5));
+    }
+
     #[test]
     #[cfg(feature = "region-as923-1")]
     fn test_rx1_dr_offset_as923() {
