@@ -386,8 +386,7 @@ fn expand_command_handler(input: DeriveInput) -> syn::Result<TokenStream> {
                 self.len() - 1
             }
         }
-    }
-    .into())
+    })
 }
 
 // Parse enum variant argument into `[Payload]` objects
