@@ -399,6 +399,48 @@ mod tests {
         }
     }
 
+    struct ZeroRng;
+
+    impl RngCore for ZeroRng {
+        fn next_u32(&mut self) -> u32 {
+            0
+        }
+        fn next_u64(&mut self) -> u64 {
+            0
+        }
+        fn fill_bytes(&mut self, dest: &mut [u8]) {
+            dest.fill(0);
+        }
+        fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
+            self.fill_bytes(dest);
+            Ok(())
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "disabling a channel must not reset coverage")]
+    fn disabling_channel_keeps_coverage_for_enabled_channels() {
+        let mut config = Configuration::new(Region::EU868);
+        let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));
+        assert_eq!(config.handle_new_channel(3, 867_100_000, dr), (true, true));
+        assert_eq!(config.handle_new_channel(4, 867_300_000, dr), (true, true));
+
+        let mut rng = ZeroRng;
+        let (tx, _) = config.create_tx_config(&mut rng, DR::_5, &Frame::Data);
+        assert_eq!(tx.rf.frequency, 868_100_000);
+        let (tx, _) = config.create_tx_config(&mut rng, DR::_5, &Frame::Data);
+        assert_eq!(tx.rf.frequency, 868_300_000);
+
+        // A NewChannelReq with frequency 0 disables the channel.
+        assert_eq!(config.handle_new_channel(3, 0, None), (true, true));
+
+        // Disabling a channel must not reset coverage of the remaining channels.
+        let (tx, _) = config.create_tx_config(&mut rng, DR::_5, &Frame::Data);
+        assert_eq!(tx.rf.frequency, 868_500_000, "disabling a channel must not reset coverage");
+        let (tx, _) = config.create_tx_config(&mut rng, DR::_5, &Frame::Data);
+        assert_eq!(tx.rf.frequency, 867_300_000);
+    }
+
     #[test]
     fn data_frames_cover_enabled_channels_before_reuse() {
         let mut config = Configuration::new(Region::EU868);
