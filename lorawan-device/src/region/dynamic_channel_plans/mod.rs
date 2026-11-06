@@ -418,7 +418,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "disabling a channel must not reset coverage")]
     fn disabling_channel_keeps_coverage_for_enabled_channels() {
         let mut config = Configuration::new(Region::EU868);
         let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));

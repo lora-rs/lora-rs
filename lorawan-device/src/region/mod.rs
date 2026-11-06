@@ -17,26 +17,21 @@ pub use lorawan::types::DR;
 /// before reusing one.
 #[derive(Clone, Default)]
 pub(crate) struct ChannelSelector {
-    eligible: u128,
     used: u128,
 }
 
 impl ChannelSelector {
-    /// Select a channel from `eligible`. The cycle restarts when the eligible
-    /// set changes or after every eligible channel has been used.
+    /// Select a channel from `eligible`. The cycle restarts only after every
+    /// channel in the current eligible set has been used.
     // TODO: Duty-cycle restrictions
     pub(crate) fn select<RNG: RngCore>(&mut self, rng: &mut RNG, eligible: u128) -> Option<usize> {
         if eligible == 0 {
             return None;
         }
-        if eligible != self.eligible {
-            self.eligible = eligible;
-            self.used = 0;
-        }
 
         let mut available = eligible & !self.used;
         if available == 0 {
-            self.used = 0;
+            self.used &= !eligible;
             available = eligible;
         }
 
@@ -695,7 +690,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "channel 0 was reused before the low set completed")]
     fn disjoint_eligible_sets_keep_independent_coverage() {
         let mut selector = ChannelSelector::default();
         let mut rng = ZeroRng;
