@@ -609,6 +609,47 @@ mod tests {
         assert!(mask.is_enabled(1).unwrap());
         assert!(!mask.is_enabled(VALID_INDEX as usize).unwrap());
     }
+
+    #[test]
+    #[should_panic(expected = "ChMaskCntl 6 must enable only defined channels")]
+    fn chmaskcntl6_enables_only_defined_channels() {
+        let mut config = Configuration::new(Region::EU868);
+        let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));
+        assert_eq!(config.handle_new_channel(3, 867_100_000, dr), (true, true));
+
+        let mut mask = ChannelMask::<9>::default();
+        let ch_mask = ChannelMask::<2>::new(&[0x00, 0x00]).unwrap();
+        assert!(config.channel_mask_update(&mut mask, 6, ch_mask).is_some());
+
+        for channel in 0..4 {
+            assert!(mask.is_enabled(channel).unwrap(), "defined channel {channel} must be enabled");
+        }
+        assert!(!mask.is_enabled(4).unwrap(), "ChMaskCntl 6 must enable only defined channels");
+    }
+
+    #[test]
+    #[should_panic(expected = "ChMaskCntl 1 must be rejected")]
+    fn chmaskcntl_accepts_only_0_and_6() {
+        let config = Configuration::new(Region::EU868);
+        let ch_mask = ChannelMask::<2>::new(&[0xFF, 0xFF]).unwrap();
+        let mut mask = ChannelMask::<9>::default();
+
+        assert!(config.channel_mask_update(&mut mask, 0, ch_mask.clone()).is_some());
+        assert!(config.channel_mask_update(&mut mask, 6, ch_mask.clone()).is_some());
+
+        for ctl in 1..=5 {
+            assert!(
+                config.channel_mask_update(&mut mask, ctl, ch_mask.clone()).is_none(),
+                "ChMaskCntl {ctl} must be rejected"
+            );
+        }
+        for ctl in 7..=u8::MAX {
+            assert!(
+                config.channel_mask_update(&mut mask, ctl, ch_mask.clone()).is_none(),
+                "ChMaskCntl {ctl} must be rejected"
+            );
+        }
+    }
 }
 
 #[cfg(all(test, feature = "region-ru864"))]
