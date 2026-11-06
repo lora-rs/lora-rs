@@ -15,7 +15,7 @@ impl Payload {
 
 struct Attributes {
     doc: Vec<syn::Attribute>,
-    attrs: Option<(syn::Expr, Option<syn::Expr>)>,
+    attrs: Option<(u8, Option<u8>)>,
 }
 
 #[proc_macro_derive(CommandHandler, attributes(cmd))]
@@ -232,7 +232,7 @@ fn expand_command_handler(input: DeriveInput) -> syn::Result<TokenStream> {
 
                         /// Maximum length of payload without the CID.
                         pub const fn max_len() -> usize {
-                            #len
+                            #len as usize
                         }
 
                         /// Actual length of payload without the CID.
@@ -436,51 +436,71 @@ fn parse_variant_fields(input: &syn::Type) -> syn::Result<Payload> {
 }
 
 /// Handler for `#[cmd(cid = ..., len = ...)]` attribute
-fn attr_handle_cmd(attr: &syn::Attribute) -> Option<(syn::Expr, Option<syn::Expr>)> {
-    // TODO: Figure out how to convert cid/len values to u8
-    // TODO: Raise errors on missing cid/len as these are required?
+fn attr_handle_cmd(attr: &syn::Attribute) -> syn::Result<Option<(u8, Option<u8>)>> {
+    let nested = attr
+        .parse_args_with(syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated)
+        .map_err(|err| syn::Error::new_spanned(attr, err))?;
+
     let mut cid = None;
     let mut len = None;
-    if let Ok(nested) =
-        attr.parse_args_with(syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated)
-    {
-        for meta in nested {
-            match meta {
-                Meta::Path(_) => unimplemented!("Meta::Path is not supported!"),
-                Meta::List(_) => unimplemented!("Meta::List is not supported!"),
-                Meta::NameValue(v) => {
-                    if let Some(id) = v.path.get_ident() {
-                        match id.to_string().as_str() {
-                            "cid" => {
-                                cid = Some(v.value);
-                            }
-                            "len" => {
-                                len = Some(v.value);
-                            }
-                            &_ => {
-                                panic!("Invalid argument: {}", id);
-                            }
-                        }
-                    } else {
-                        panic!("Missing ident?");
-                    }
+
+    for meta in nested {
+        let Meta::NameValue(entry) = meta else {
+            return Err(syn::Error::new_spanned(
+                meta,
+                "expected `cid = <integer>` or `len = <integer>`",
+            ));
+        };
+
+        let Some(key) = entry.path.get_ident() else {
+            return Err(syn::Error::new_spanned(&entry.path, "expected `cid` or `len`"));
+        };
+
+        let value = match &entry.value {
+            syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Int(lit), .. }) => {
+                lit.base10_parse::<u8>().map_err(|err| syn::Error::new_spanned(lit, err))?
+            }
+            other => {
+                return Err(syn::Error::new_spanned(other, "expected an integer literal"));
+            }
+        };
+
+        match key.to_string().as_str() {
+            "cid" => {
+                if cid.is_some() {
+                    return Err(syn::Error::new_spanned(key, "duplicate `cid`"));
                 }
+                cid = Some(value);
+            }
+            "len" => {
+                if len.is_some() {
+                    return Err(syn::Error::new_spanned(key, "duplicate `len`"));
+                }
+                len = Some(value);
+            }
+            _ => {
+                return Err(syn::Error::new_spanned(key, "expected `cid` or `len`"));
             }
         }
     }
-    // Return cid with optional len
-    cid.map(|cid| (cid, len))
+
+    let cid = cid.ok_or_else(|| syn::Error::new_spanned(attr, "missing `cid = <integer>`"))?;
+
+    Ok(Some((cid, len)))
 }
 
 /// Collect supported attributes for enum members into [`Attributes`]:
 /// * docstring
 /// * `cmd(..)` - used to specify size and CID for payload
-fn parse_variant_attrs(input: &Vec<syn::Attribute>) -> Attributes {
+fn parse_variant_attrs(input: &[syn::Attribute]) -> syn::Result<Attributes> {
     let mut doc = Vec::new();
-    let mut attrs: Option<(syn::Expr, Option<syn::Expr>)> = None;
+    let mut attrs = None;
     for attr in input {
         if attr.path().is_ident("cmd") {
-            attrs = attr_handle_cmd(attr);
+            if attrs.is_some() {
+                return Err(syn::Error::new_spanned(attr, "duplicate `cmd` attribute"));
+            }
+            attrs = attr_handle_cmd(attr)?;
             continue;
         }
         // Docstrings
@@ -489,7 +509,7 @@ fn parse_variant_attrs(input: &Vec<syn::Attribute>) -> Attributes {
             continue;
         }
     }
-    Attributes { doc, attrs }
+    Ok(Attributes { doc, attrs })
 }
 
 // Parse enum variant into list of (Variant, Payload, Attributes) tuples.
@@ -530,7 +550,7 @@ fn parse_enum_members(input: &DeriveInput) -> syn::Result<Vec<(Ident, Payload, A
         }
 
         let payload = parse_variant_fields(&fields.unnamed[0].ty)?;
-        items.push((elem.ident.clone(), payload, parse_variant_attrs(&elem.attrs)));
+        items.push((elem.ident.clone(), payload, parse_variant_attrs(&elem.attrs)?));
     }
 
     Ok(items)
@@ -576,5 +596,54 @@ mod tests {
         };
 
         assert_eq!(error_for(input), "only a lifetime argument is supported");
+    }
+
+    #[test]
+    fn rejects_missing_cid() {
+        let input: DeriveInput = parse_quote! {
+            enum Command<'a> {
+                #[cmd(len = 2)]
+                A(Payload<'a>),
+            }
+        };
+
+        assert_eq!(error_for(input), "missing `cid = <integer>`");
+    }
+
+    #[test]
+    fn rejects_unknown_cmd_argument() {
+        let input: DeriveInput = parse_quote! {
+            enum Command<'a> {
+                #[cmd(cid = 1, size = 2)]
+                A(Payload<'a>),
+            }
+        };
+
+        assert_eq!(error_for(input), "expected `cid` or `len`");
+    }
+
+    #[test]
+    fn rejects_non_integer_cmd_argument() {
+        let input: DeriveInput = parse_quote! {
+            enum Command<'a> {
+                #[cmd(cid = value)]
+                A(Payload<'a>),
+            }
+        };
+
+        assert_eq!(error_for(input), "expected an integer literal");
+    }
+
+    #[test]
+    fn rejects_duplicate_cmd_attribute() {
+        let input: DeriveInput = parse_quote! {
+            enum Command<'a> {
+                #[cmd(cid = 1)]
+                #[cmd(cid = 2)]
+                A(Payload<'a>),
+            }
+        };
+
+        assert_eq!(error_for(input), "duplicate `cmd` attribute");
     }
 }
