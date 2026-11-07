@@ -14,15 +14,26 @@ impl TestRadio {
         let last_rxconfig = Arc::new(Mutex::new(None));
         let last_uplink = Arc::new(Mutex::new(None));
         let uplinks = Arc::new(Mutex::new(std::vec::Vec::new()));
+        let window_configs = Arc::new(Mutex::new(std::vec::Vec::new()));
         (
             RadioChannel {
                 tx,
                 last_uplink: last_uplink.clone(),
                 last_rxconfig: last_rxconfig.clone(),
                 uplinks: uplinks.clone(),
+                window_configs: window_configs.clone(),
                 pending: pending.clone(),
             },
-            Self { rx, last_rxconfig, last_uplink, uplinks, current_config: None, pending, snr: 0 },
+            Self {
+                rx,
+                last_rxconfig,
+                last_uplink,
+                uplinks,
+                window_configs,
+                current_config: None,
+                pending,
+                snr: 0,
+            },
         )
     }
 
@@ -60,6 +71,8 @@ pub struct TestRadio {
     last_rxconfig: Arc<Mutex<Option<RxConfig>>>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
     uplinks: Arc<Mutex<std::vec::Vec<Uplink>>>,
+    /// The configuration of every single-shot receive (one per RX window).
+    window_configs: Arc<Mutex<std::vec::Vec<RxConfig>>>,
     rx: mpsc::Receiver<Msg>,
     pending: Arc<AtomicUsize>,
     snr: i8,
@@ -115,6 +128,7 @@ impl PhyRxTx for TestRadio {
     }
     async fn rx_single(&mut self, rx_buf: &mut [u8]) -> Result<RxStatus, Self::PhyError> {
         let msg = self.rx.recv().await.unwrap();
+        self.window_configs.lock().await.push(self.current_config.expect("rx before setup_rx"));
         match msg {
             Msg::RxTx(handler) => {
                 let last_uplink = self.last_uplink.lock().await;
@@ -150,6 +164,7 @@ pub struct RadioChannel {
     last_rxconfig: Arc<Mutex<Option<RxConfig>>>,
     last_uplink: Arc<Mutex<Option<Uplink>>>,
     uplinks: Arc<Mutex<std::vec::Vec<Uplink>>>,
+    window_configs: Arc<Mutex<std::vec::Vec<RxConfig>>>,
     tx: mpsc::Sender<Msg>,
     pending: Arc<AtomicUsize>,
 }
@@ -190,5 +205,23 @@ impl RadioChannel {
     /// Take the uplinks transmitted since the last call, in order.
     pub async fn take_uplinks(&self) -> std::vec::Vec<Uplink> {
         self.uplinks.lock().await.drain(..).collect()
+    }
+
+    /// Take the configuration of every RX window opened since the last call,
+    /// in order.
+    pub async fn take_window_configs(&self) -> std::vec::Vec<RxConfig> {
+        self.window_configs.lock().await.drain(..).collect()
+    }
+
+    /// Wait until every injected frame has been consumed by the device.
+    pub async fn wait_consumed(&self) {
+        let start = time::Instant::now();
+        while self.pending.load(Ordering::SeqCst) != 0 {
+            assert!(
+                start.elapsed() < time::Duration::from_secs(5),
+                "injected frame was not consumed by the device"
+            );
+            time::sleep(time::Duration::from_millis(1)).await;
+        }
     }
 }
