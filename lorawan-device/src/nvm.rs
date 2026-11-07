@@ -9,8 +9,8 @@
 //! keep its anti-replay state.
 //!
 //! Two regions are stored, split because their write rates differ by orders of magnitude:
-//! - [`NvmRegion::Identity`]: DevNonce/JoinNonce counters. Written around joins only,
-//!   never reset for the life of the device.
+//! - [`NvmRegion::Identity`]: DevNonce/JoinNonce counters. Written around joins and
+//!   on an explicit session clear, never reset for the life of the device.
 //! - [`NvmRegion::Session`]: session keys, frame counters and negotiated MAC state.
 //!   Written on join, on accepted downlinks, and when the uplink counter reaches its
 //!   checkpoint.
@@ -126,7 +126,8 @@ impl NonVolatileStoreSync for NoNvm {
     }
 }
 
-/// Durable join anti-replay state. Written around joins only, never reset.
+/// Durable join anti-replay state. Written around joins and on a session clear, never
+/// reset.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub struct PersistentIdentity {
@@ -138,7 +139,8 @@ pub struct PersistentIdentity {
     /// the strongest check that never rejects a compliant server. `None` until the first
     /// successful join.
     pub last_join_nonce: Option<u32>,
-    /// Bumps on each successful join; ties a session blob to this identity.
+    /// Bumps on each successful join and on an explicit session clear; ties a session
+    /// blob to this identity. A blob from an older epoch is never resumed.
     pub join_epoch: u32,
 }
 

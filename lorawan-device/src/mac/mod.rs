@@ -507,6 +507,19 @@ impl Mac {
         self.identity.as_ref()
     }
 
+    /// Drop the session and every negotiated MAC parameter, keeping the region, the
+    /// board limits and the join identity. The identity's epoch advances, so a session
+    /// blob persisted before this call no longer matches it and will not be resumed.
+    pub(crate) fn clear_session(&mut self) {
+        let identity = self.identity.map(|mut identity| {
+            identity.join_epoch = identity.join_epoch.wrapping_add(1);
+            identity
+        });
+        let BoardEirp { max_power, antenna_gain } = self.board_eirp;
+        *self = Mac::new(self.region.clone(), max_power, antenna_gain);
+        self.identity = identity;
+    }
+
     /// Snapshot the active session and negotiated MAC state for persistence.
     /// `fcnt_up_checkpoint` is chosen by the device layer.
     pub(crate) fn snapshot_session(&self, fcnt_up_checkpoint: u32) -> Option<PersistentSession> {

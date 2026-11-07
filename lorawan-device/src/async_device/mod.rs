@@ -327,6 +327,18 @@ where
         self.nvm.checkpoint(&self.mac).await
     }
 
+    /// Leave the network: drop the active session and make sure it does not resume
+    /// after a reboot. The device is unjoined afterwards and its MAC parameters return
+    /// to the region defaults, as on a device that has never joined. The join identity
+    /// is kept, so the next OTAA join still uses the monotonic DevNonce. Intended for
+    /// a product that wants a fresh join on demand: a button on the board, a factory
+    /// reset, a test harness between runs. Without a store only the live session is
+    /// dropped.
+    pub async fn clear_session(&mut self) -> Result<(), Error<R::PhyError>> {
+        self.mac.clear_session();
+        self.nvm.persist_identity(&self.mac).await
+    }
+
     /// Enables Class C behavior. Note that Class C downlinks are not possible until a confirmed
     /// uplink is sent to the LNS.
     #[cfg(feature = "class-c")]

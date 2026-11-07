@@ -373,6 +373,74 @@ async fn session_resumes_after_power_loss() {
 }
 
 #[tokio::test]
+async fn clear_session_leaves_the_network_and_keeps_the_identity() {
+    const T: usize = 7;
+    let store = MockStore::default();
+    let (radio, timer, mut device) = restore(&store).await;
+
+    // Join (DevNonce 0, epoch 1), raise the data rate, send once.
+    let task = tokio::spawn(async move {
+        let r = device.join(&get_otaa_credentials()).await;
+        (device, r)
+    });
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(join_accept::<T, 1, 0>).await;
+    let (mut device, response) = task.await.unwrap();
+    assert!(matches!(response, Ok(JoinResponse::JoinSuccess)));
+    device.set_datarate(lorawan::types::DR::_3);
+    let mut device = send_no_downlink(&radio, &timer, device).await;
+    assert_eq!(store.identity().join_epoch, 1);
+    let identity_saves = store.saves(NvmRegion::Identity);
+
+    // Clearing drops the live session, resets MAC parameters and advances the epoch in
+    // the store; the DevNonce counter is untouched.
+    device.clear_session().await.unwrap();
+    assert!(device.get_session().is_none());
+    assert_eq!(device.get_datarate(), device.get_region().get_default_datarate());
+    assert_eq!(store.saves(NvmRegion::Identity), identity_saves + 1);
+    assert_eq!(store.identity().join_epoch, 2);
+    assert_eq!(store.identity().dev_nonce, 1);
+    assert_eq!(store.session().join_epoch, 1, "the old session blob is simply stale");
+    assert!(matches!(
+        device.send(&[1, 2, 3], 3, false).await,
+        Err(crate::async_device::Error::Mac(crate::mac::Error::NotJoined))
+    ));
+
+    // A reboot does not bring the old session back, and the next join continues the
+    // monotonic DevNonce at 1.
+    let (radio, timer, mut device) = restore(&store).await;
+    assert!(device.get_session().is_none(), "cleared session must not resume");
+    let task = tokio::spawn(async move {
+        let r = device.join(&get_otaa_credentials()).await;
+        (device, r)
+    });
+    timer.fire_most_recent().await;
+    radio.handle_rxtx(join_accept::<T, 2, 1>).await;
+    let (mut device, response) = task.await.unwrap();
+    assert!(matches!(response, Ok(JoinResponse::JoinSuccess)));
+    let keys = format!("{:?}", device.get_session().unwrap().get_session_keys().unwrap());
+    assert_eq!(store.identity().join_epoch, 3);
+    assert_eq!(store.session().join_epoch, 3);
+
+    // The new session persists and resumes like any other.
+    let (_radio, _timer, mut device) = restore(&store).await;
+    let resumed = device.get_session().expect("new session must resume");
+    assert_eq!(format!("{:?}", resumed.get_session_keys().unwrap()), keys);
+}
+
+#[tokio::test]
+async fn clear_session_without_a_store_drops_the_live_session() {
+    let (_radio, _timer, mut device) = super::setup_with_session();
+    assert!(device.get_session().is_some());
+    device.clear_session().await.unwrap();
+    assert!(device.get_session().is_none());
+    assert!(matches!(
+        device.send(&[1, 2, 3], 3, false).await,
+        Err(crate::async_device::Error::Mac(crate::mac::Error::NotJoined))
+    ));
+}
+
+#[tokio::test]
 async fn stale_or_corrupt_session_dropped_identity_kept() {
     // Session blob from an older join epoch: identity survives, session does not.
     let store = MockStore::default();
