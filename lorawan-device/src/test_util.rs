@@ -195,37 +195,6 @@ pub fn handle_data_uplink_with_link_adr_req<const FCNT_UP: u16, const FCNT_DOWN:
     }
 }
 
-/// Handle join request and respond with a JoinAccept built with the wrong key, so its MIC is
-/// invalid. Sets RxDelay and DLSettings so tests can verify a rejected accept changes nothing.
-pub fn handle_join_request_bad_mic(
-    uplink: Option<Uplink>,
-    _config: RfConfig,
-    rx_buffer: &mut [u8],
-) -> usize {
-    if let Some(mut uplink) = uplink {
-        if let Ok(PhyPayload::JoinRequest(join_request)) = parser::parse(uplink.data_mut()) {
-            assert!(join_request.validate_mic(&get_crypto()));
-            let accept = JoinAccept {
-                join_nonce: JoinNonce::from_wire_bytes([1; 3]),
-                net_id: NetId::from_wire_bytes([1; 3]),
-                dev_addr: get_dev_addr(),
-                dl_settings: DLSettings::new(0x2A),
-                rx_delay: 3,
-                c_f_list: None,
-            };
-            let wrong_key = [1; 16];
-            let finished = accept
-                .build_into(rx_buffer, &DefaultNetworkCrypto::new(&wrong_key.into()))
-                .unwrap();
-            finished.len()
-        } else {
-            panic!("Did not parse join request from uplink");
-        }
-    } else {
-        panic!("No uplink passed to handle_join_request_bad_mic");
-    }
-}
-
 fn link_adr_req_with_bank_ctrl(cm: u16) -> LinkADRReqCreator {
     // prepare a confirmed downlink
     let mut adr_req = LinkADRReqCreator::new();
