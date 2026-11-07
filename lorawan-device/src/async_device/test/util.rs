@@ -1,12 +1,13 @@
-use crate::radio::RfConfig;
-use lorawan::creator::DataFrame;
-use lorawan::parser::{self, DataFrameType, DecryptedDataPayload, PhyPayload};
+use lorawan::parser::{self, DecryptedDataPayload, PhyPayload};
 
 use super::{Device, get_dev_addr, get_key, radio::*, region, timer::*};
 use crate::mac::Session;
-pub(crate) use crate::test_util::{Uplink, get_crypto, handle_data_uplink_with_link_adr_req};
+use crate::test_util::{Uplink, get_crypto};
 use crate::{AppSKey, NwkSKey};
 use std::sync::{Arc, atomic::AtomicUsize};
+
+#[cfg(feature = "class-c")]
+use super::net::{ExchangeAction, Net, Pkt};
 
 fn default_session() -> Session {
     Session::new(NwkSKey::from(get_key()), AppSKey::from(get_key()), get_dev_addr())
@@ -45,67 +46,47 @@ pub fn setup_with_session() -> (RadioChannel, TimerChannel, Device) {
     setup_internal(Some(default_session()))
 }
 
-/// Handle an uplink and respond with two LinkAdrReq on Port 0
-pub fn handle_class_c_uplink_after_join(
-    uplink: Option<Uplink>,
-    _config: RfConfig,
-    rx_buffer: &mut [u8],
-) -> usize {
-    if let Some(mut uplink) = uplink {
-        let bytes = uplink.data_mut();
-        let fcnt = match parser::parse(&*bytes) {
-            Ok(PhyPayload::Data(data)) => {
-                let fcnt = data.fhdr().fcnt() as u32;
-                assert!(data.validate_mic(&get_crypto(), fcnt));
-                fcnt
-            }
-            _ => panic!("Did not decode PhyPayload::Data!"),
-        };
-        let decrypted = DecryptedDataPayload::decrypt_in_place(
-            bytes,
-            Some(&get_crypto()),
-            Some(&get_crypto()),
-            fcnt,
-        )
-        .unwrap();
-        assert_eq!(decrypted.fhdr().fcnt(), 0);
-        // Respond with an empty downlink with the ack bit set
-        let frame = DataFrame {
-            frame_type: DataFrameType::UnconfirmedDown,
-            dev_addr: get_dev_addr(),
-            ack: true,
-            ..Default::default()
-        };
-        let finished = frame.build_into(rx_buffer, &get_crypto(), Some(&get_crypto())).unwrap();
-        finished.len()
-    } else {
-        panic!("No uplink passed to handle_class_c_uplink_after_join");
-    }
+/// Parses the uplink, checks the MIC, and decrypts it in place, allowing
+/// access to payload contents
+pub fn decrypt_uplink(uplink: &mut Uplink) -> DecryptedDataPayload<'_> {
+    let bytes = uplink.data_mut();
+    let fcnt = match parser::parse(&*bytes) {
+        Ok(PhyPayload::Data(data)) => {
+            let fcnt = data.fhdr().fcnt() as u32;
+            assert!(data.validate_mic(&get_crypto(), fcnt));
+            fcnt
+        }
+        _ => panic!("expected a data frame"),
+    };
+    DecryptedDataPayload::decrypt_in_place(bytes, Some(&get_crypto()), Some(&get_crypto()), fcnt)
+        .unwrap()
 }
 
+/// The FCntUp of an uplink.
+pub fn uplink_fcnt(uplink: &Uplink) -> u32 {
+    decrypt_uplink(&mut uplink.clone()).fhdr().fcnt().into()
+}
+
+/// Check the uplink is a JoinRequest for the test credentials.
+pub fn assert_join_request(uplink: &Uplink) {
+    let mut uplink = uplink.clone();
+    let Ok(PhyPayload::JoinRequest(join_request)) = parser::parse(uplink.data_mut()) else {
+        panic!("expected a JoinRequest");
+    };
+    assert!(join_request.validate_mic(&get_crypto()), "JoinRequest MIC");
+}
+
+/// A class C device (US915) whose first uplink has been acknowledged, so
+/// the RXC listen is active: the network has used FCntDown 0.
 #[cfg(feature = "class-c")]
-pub async fn setup_with_session_class_c() -> (RadioChannel, TimerChannel, Device) {
-    let (radio, timer, mut async_device) = setup_with_session();
-    async_device.enable_class_c();
-    // Run the device
-    let task = tokio::spawn(async move {
-        let response = async_device.send(&[3, 2, 1], 3, false).await;
-        (async_device, response)
-    });
-    // timeout the first sends RX windows which enables class C
-    timer.fire_most_recent().await;
-    radio.handle_rxtx(handle_class_c_uplink_after_join).await;
-
-    let (device, response) = task.await.unwrap();
-
-    use super::SendResponse;
-    match response {
-        Ok(SendResponse::DownlinkReceived(0)) => (),
-        _ => {
-            panic!()
-        }
-    }
-    (radio, timer, device)
+pub async fn setup_with_session_class_c() -> Net {
+    let (radio, timer, mut device) = setup_with_session();
+    device.enable_class_c();
+    let mut net = Net::new(radio, timer, device).await;
+    let r = net.exchange(&[3, 2, 1], 3, false, ExchangeAction::rx1(Pkt::empty().ack())).await;
+    r.expect_downlink_received();
+    assert_eq!(r.fcnt_down(), Some(0));
+    net
 }
 
 pub fn setup() -> (RadioChannel, TimerChannel, Device) {
