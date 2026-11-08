@@ -506,22 +506,33 @@ fn parse_variant_attrs(input: &Vec<syn::Attribute>) -> Attributes {
 // }
 // ```
 fn parse_enum_members(input: &DeriveInput) -> syn::Result<Vec<(Ident, Payload, Attributes)>> {
-    let mut items = vec![];
-    match input.data {
-        Data::Enum(ref item) => {
-            for elem in item.variants.clone() {
-                if elem.fields.len() != 1 {
-                    panic!("Expecting single argument for {}", elem.ident)
-                }
-                let payload = match elem.fields {
-                    Fields::Unnamed(f) => parse_variant_fields(&f.unnamed.get(0).unwrap().ty)?,
-                    Fields::Named(_) | Fields::Unit => panic!("Unsupported!"),
-                };
-                items.push((elem.ident.clone(), payload, parse_variant_attrs(&elem.attrs)));
-            }
-        }
-        _ => panic!("Unsupported!"),
+    let Data::Enum(item) = &input.data else {
+        return Err(syn::Error::new_spanned(
+            &input.ident,
+            "CommandHandler can only be derived for enums",
+        ));
     };
+
+    let mut items = Vec::new();
+    for elem in &item.variants {
+        let Fields::Unnamed(fields) = &elem.fields else {
+            return Err(syn::Error::new_spanned(
+                &elem.fields,
+                "expected exactly one unnamed payload field",
+            ));
+        };
+
+        if fields.unnamed.len() != 1 {
+            return Err(syn::Error::new_spanned(
+                &elem.fields,
+                "expected exactly one unnamed payload field",
+            ));
+        }
+
+        let payload = parse_variant_fields(&fields.unnamed[0].ty)?;
+        items.push((elem.ident.clone(), payload, parse_variant_attrs(&elem.attrs)));
+    }
+
     Ok(items)
 }
 
@@ -543,6 +554,17 @@ mod tests {
         };
 
         assert_eq!(error_for(input), "only one lifetime parameter is supported");
+    }
+
+    #[test]
+    fn rejects_named_payload_fields() {
+        let input: DeriveInput = parse_quote! {
+            enum Command {
+                A { data: Payload },
+            }
+        };
+
+        assert_eq!(error_for(input), "expected exactly one unnamed payload field");
     }
 
     #[test]
