@@ -13,9 +13,24 @@ impl Payload {
     }
 }
 
+enum CmdShape {
+    ZeroLength,
+    Fixed { len: u8, lifetime: syn::Lifetime },
+    Variable { lifetime: syn::Lifetime },
+}
+
+struct Command {
+    variant: Ident,
+    payload: Ident,
+    cid: u8,
+    shape: CmdShape,
+    doc: Vec<syn::Attribute>,
+}
+
 struct Attributes {
     doc: Vec<syn::Attribute>,
-    attrs: Option<(u8, Option<u8>)>,
+    cid: u8,
+    len: Option<u8>,
 }
 
 #[proc_macro_derive(CommandHandler, attributes(cmd))]
@@ -51,11 +66,20 @@ fn expand_command_handler(input: DeriveInput) -> syn::Result<TokenStream> {
     let mut creator_enum_build = Vec::new();
     let mut creator_enum_impl_cid = Vec::new();
 
-    for (n, payload, attributes) in members {
-        let n = n.clone();
-        let t = &payload.name;
-        let lt = &payload.lifetime;
-        let doc = &attributes.doc;
+    for command in members {
+        let n = &command.variant;
+        let t = &command.payload;
+        let lt = match &command.shape {
+            CmdShape::ZeroLength => None,
+            CmdShape::Fixed { lifetime, .. } | CmdShape::Variable { lifetime } => Some(lifetime),
+        };
+        let len_opt = match &command.shape {
+            CmdShape::ZeroLength => Some(0),
+            CmdShape::Fixed { len, .. } => Some(*len),
+            CmdShape::Variable { .. } => None,
+        };
+        let attrs = Some((command.cid, len_opt));
+        let doc = &command.doc;
         let creator = Ident::new(&format!("{}Creator", n), Span::call_site());
 
         // ...len()
@@ -77,7 +101,7 @@ fn expand_command_handler(input: DeriveInput) -> syn::Result<TokenStream> {
         // Truncation and unknown CIDs are reported instead of silently
         // ending the stream, and payload len() helpers are never invoked on
         // an empty slice.
-        if let Some((ref cid, ref len_opt)) = attributes.attrs {
+        if let Some((ref cid, ref len_opt)) = attrs {
             match len_opt {
                 Some(_) => {
                     impl_parse_one.push(quote! {
@@ -124,7 +148,7 @@ fn expand_command_handler(input: DeriveInput) -> syn::Result<TokenStream> {
         });
 
         // Generate definition and common implementation for payloads
-        if let Some((ref cid, ref len_opt)) = attributes.attrs {
+        if let Some((ref cid, ref len_opt)) = attrs {
             // Payloads with len > 0 (which have lifetime). Includes variable and fixed length payloads.
             if let Some(lt) = lt {
                 payload_struct_impls.push(quote! {
@@ -491,7 +515,7 @@ fn attr_handle_cmd(attr: &syn::Attribute) -> syn::Result<(u8, Option<u8>)> {
 /// Collect supported attributes for enum members into [`Attributes`]:
 /// * docstring
 /// * `cmd(..)` - used to specify size and CID for payload
-fn parse_variant_attrs(input: &[syn::Attribute]) -> syn::Result<Attributes> {
+fn parse_variant_attrs(variant: &Ident, input: &[syn::Attribute]) -> syn::Result<Attributes> {
     let mut doc = Vec::new();
     let mut attrs = None;
     for attr in input {
@@ -508,26 +532,9 @@ fn parse_variant_attrs(input: &[syn::Attribute]) -> syn::Result<Attributes> {
             continue;
         }
     }
-    Ok(Attributes { doc, attrs })
-}
-
-fn validate_payload_shape(payload: &Payload, attrs: &Attributes) -> syn::Result<()> {
-    let Some((_, len)) = attrs.attrs else {
-        return Err(syn::Error::new_spanned(&payload.name, "missing `#[cmd(...)]` attribute"));
-    };
-
-    match (len, payload.lifetime.is_some()) {
-        (Some(0), _) => Ok(()),
-        (Some(_), false) => Err(syn::Error::new_spanned(
-            &payload.name,
-            "fixed-length payload must have a lifetime parameter",
-        )),
-        (None, false) => Err(syn::Error::new_spanned(
-            &payload.name,
-            "variable-length payload must have a lifetime parameter or use `len = 0`",
-        )),
-        _ => Ok(()),
-    }
+    let (cid, len) =
+        attrs.ok_or_else(|| syn::Error::new_spanned(variant, "missing `#[cmd(...)]` attribute"))?;
+    Ok(Attributes { doc, cid, len })
 }
 
 // Parse enum variant into list of (Variant, Payload, Attributes) tuples.
@@ -543,7 +550,7 @@ fn validate_payload_shape(payload: &Payload, attrs: &Attributes) -> syn::Result<
 //   VarB(B<'a>),   # (VarB, Payload { name: B, lifetime: Some(a) }, Attributes)
 // }
 // ```
-fn parse_enum_members(input: &DeriveInput) -> syn::Result<Vec<(Ident, Payload, Attributes)>> {
+fn parse_enum_members(input: &DeriveInput) -> syn::Result<Vec<Command>> {
     let Data::Enum(item) = &input.data else {
         return Err(syn::Error::new_spanned(
             &input.ident,
@@ -568,9 +575,31 @@ fn parse_enum_members(input: &DeriveInput) -> syn::Result<Vec<(Ident, Payload, A
         }
 
         let payload = parse_variant_fields(&fields.unnamed[0].ty)?;
-        let attributes = parse_variant_attrs(&elem.attrs)?;
-        validate_payload_shape(&payload, &attributes)?;
-        items.push((elem.ident.clone(), payload, attributes));
+        let attributes = parse_variant_attrs(&elem.ident, &elem.attrs)?;
+        let shape = match (attributes.len, payload.lifetime) {
+            (Some(0), _) => CmdShape::ZeroLength,
+            (Some(len), Some(lifetime)) => CmdShape::Fixed { len, lifetime },
+            (None, Some(lifetime)) => CmdShape::Variable { lifetime },
+            (Some(_), None) => {
+                return Err(syn::Error::new_spanned(
+                    &payload.name,
+                    "fixed-length payload must have a lifetime parameter",
+                ));
+            }
+            (None, None) => {
+                return Err(syn::Error::new_spanned(
+                    &payload.name,
+                    "variable-length payload must have a lifetime parameter or use `len = 0`",
+                ));
+            }
+        };
+        items.push(Command {
+            variant: elem.ident.clone(),
+            payload: payload.name,
+            cid: attributes.cid,
+            shape,
+            doc: attributes.doc,
+        });
     }
 
     Ok(items)
