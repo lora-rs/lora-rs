@@ -33,6 +33,40 @@ struct Attributes {
     len: Option<u8>,
 }
 
+fn slice_payload_definition(
+    payload: &Ident,
+    lifetime: &syn::Lifetime,
+    cid: u8,
+    doc: &[syn::Attribute],
+) -> TokenStream {
+    quote! {
+        #[derive(Debug, PartialEq, Eq)]
+        #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+        #( #doc )*
+        pub struct #payload <#lifetime> (pub(crate) &#lifetime [u8]);
+
+        impl<#lifetime> #payload<#lifetime> {
+            /// Payload CID.
+            pub const fn cid() -> u8 {
+                #cid
+            }
+
+            /// Constructs a new instance of the MAC command from the provided data,
+            /// without verifying the data length.
+            ///
+            /// Improper use of this method could lead to panic during runtime!
+            pub fn new_from_raw(data: &#lifetime [u8]) -> #payload<#lifetime> {
+                #payload(data)
+            }
+
+            /// Reference to the payload.
+            pub fn bytes(&self) -> &[u8] {
+                self.0
+            }
+        }
+    }
+}
+
 #[proc_macro_derive(CommandHandler, attributes(cmd))]
 pub fn derive_command_handler(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -176,35 +210,9 @@ fn expand_command_handler(input: DeriveInput) -> syn::Result<TokenStream> {
                 });
             }
             CmdShape::Fixed { len, lifetime } => {
-                let lt = lifetime;
+                payload_struct_impls.push(slice_payload_definition(t, lifetime, cid, doc));
                 payload_struct_impls.push(quote! {
-                    #[derive(Debug, PartialEq, Eq)]
-                    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-                    #( #doc )*
-                    pub struct #t <#lt> (pub(crate) &#lt [u8]);
-
-                    impl<#lt> #t<#lt> {
-                        /// Payload CID.
-                        pub const fn cid() -> u8 {
-                            #cid
-                        }
-
-                        /// Constructs a new instance of the MAC command from the provided data,
-                        /// without verifying the data length.
-                        ///
-                        /// Improper use of this method could lead to panic during runtime!
-                        pub fn new_from_raw(data: &#lt [u8]) -> #t<#lt> {
-                            #t(data)
-                        }
-
-                        /// Reference to the payload.
-                        pub fn bytes(&self) -> &[u8] {
-                            self.0
-                        }
-                    }
-                });
-                payload_struct_impls.push(quote! {
-                    impl<#lt> #t<#lt> {
+                    impl<#lifetime> #t<#lifetime> {
                         /// Creates a new instance of the MAC command if there is enough data.
                         pub fn new(data: &#lifetime [u8]) -> Result<#t<#lifetime>, Error> {
                             if data.len() != Self::max_len() {
@@ -228,33 +236,7 @@ fn expand_command_handler(input: DeriveInput) -> syn::Result<TokenStream> {
                 });
             }
             CmdShape::Variable { lifetime } => {
-                let lt = lifetime;
-                payload_struct_impls.push(quote! {
-                    #[derive(Debug, PartialEq, Eq)]
-                    #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
-                    #( #doc )*
-                    pub struct #t <#lt> (pub(crate) &#lt [u8]);
-
-                    impl<#lt> #t<#lt> {
-                        /// Payload CID.
-                        pub const fn cid() -> u8 {
-                            #cid
-                        }
-
-                        /// Constructs a new instance of the MAC command from the provided data,
-                        /// without verifying the data length.
-                        ///
-                        /// Improper use of this method could lead to panic during runtime!
-                        pub fn new_from_raw(data: &#lt [u8]) -> #t<#lt> {
-                            #t(data)
-                        }
-
-                        /// Reference to the payload.
-                        pub fn bytes(&self) -> &[u8] {
-                            self.0
-                        }
-                    }
-                });
+                payload_struct_impls.push(slice_payload_definition(t, lifetime, cid, doc));
             }
         }
 
