@@ -85,7 +85,6 @@ fn expand_command_handler(input: DeriveInput) -> syn::Result<TokenStream> {
         return Err(syn::Error::new_spanned(extra, "only one lifetime parameter is supported"));
     }
 
-    // Parse enum members into list of (Command, Payload, Attributes) tuples
     let members = parse_enum_members(&input)?;
     let mut impl_len = Vec::new();
     let mut impl_bytes = Vec::new();
@@ -522,17 +521,17 @@ fn parse_variant_attrs(variant: &Ident, input: &[syn::Attribute]) -> syn::Result
     Ok(Attributes { doc, cid, len })
 }
 
-// Parse enum variant into list of (Variant, Payload, Attributes) tuples.
+// Parse enum variants into a list of [`Command`]s.
 // For example:
 // ```
 // enum Foo<'a> {
 //   /// Field documentation.
-//   #[cmd(cid=0x1, len=1)]
-//   Var(A),        # (VarA, Payload { name: A, lifetime: None }, Attributes)
+//   #[cmd(cid=0x1, len=0)]
+//   Var(A),        # Command { variant: Var, payload: A, cid: 1, shape: ZeroLength, .. }
 //   /// Field documentation...
 //   /// ...continued.
 //   #[cmd(cid=0x2, len=5)]
-//   VarB(B<'a>),   # (VarB, Payload { name: B, lifetime: Some(a) }, Attributes)
+//   VarB(B<'a>),   # Command { variant: VarB, payload: B, cid: 2, shape: Fixed { len: 5, .. }, .. }
 // }
 // ```
 fn parse_enum_members(input: &DeriveInput) -> syn::Result<Vec<Command>> {
