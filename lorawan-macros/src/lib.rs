@@ -562,7 +562,13 @@ fn parse_enum_members(input: &DeriveInput) -> syn::Result<Vec<Command>> {
         let payload = parse_variant_fields(&fields.unnamed[0].ty)?;
         let attributes = parse_variant_attrs(&elem.ident, &elem.attrs)?;
         let shape = match (attributes.len, payload.lifetime) {
-            (Some(0), _) => CmdShape::ZeroLength,
+            (Some(0), None) => CmdShape::ZeroLength,
+            (Some(0), Some(lifetime)) => {
+                return Err(syn::Error::new_spanned(
+                    lifetime,
+                    "zero-length payload must not have a lifetime parameter",
+                ));
+            }
             (Some(len), Some(lifetime)) => CmdShape::Fixed { len, lifetime },
             (None, Some(lifetime)) => CmdShape::Variable { lifetime },
             (Some(_), None) => {
@@ -691,6 +697,18 @@ mod tests {
         };
 
         assert_eq!(error_for(input), "fixed-length payload must have a lifetime parameter");
+    }
+
+    #[test]
+    fn rejects_zero_length_payload_with_lifetime() {
+        let input: DeriveInput = parse_quote! {
+            enum Command<'a> {
+                #[cmd(cid = 1, len = 0)]
+                A(Payload<'a>),
+            }
+        };
+
+        assert_eq!(error_for(input), "zero-length payload must not have a lifetime parameter");
     }
 
     #[test]
