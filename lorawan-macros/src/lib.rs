@@ -37,7 +37,7 @@ fn expand_command_handler(input: DeriveInput) -> syn::Result<TokenStream> {
     }
 
     // Parse enum members into list of (Command, Payload, Attributes) tuples
-    let members = parse_enum_members(&input);
+    let members = parse_enum_members(&input)?;
     let mut impl_len = Vec::new();
     let mut impl_bytes = Vec::new();
     let mut impl_cid = Vec::new();
@@ -399,30 +399,39 @@ fn expand_command_handler(input: DeriveInput) -> syn::Result<TokenStream> {
 //   FieldB(B<'a>), # Payload { name: B, lifetime: a }
 // }
 // ```
-fn parse_variant_fields(input: &syn::Type) -> Payload {
-    match input {
-        syn::Type::Path(p) => {
-            if p.path.segments.len() != 1 {
-                unimplemented!();
+fn parse_variant_fields(input: &syn::Type) -> syn::Result<Payload> {
+    let syn::Type::Path(path) = input else {
+        return Err(syn::Error::new_spanned(input, "expected a payload type"));
+    };
+
+    if path.path.segments.len() != 1 {
+        return Err(syn::Error::new_spanned(&path.path, "expected a single payload type path"));
+    }
+
+    let segment = &path.path.segments[0];
+
+    match &segment.arguments {
+        PathArguments::AngleBracketed(args) => {
+            if args.args.len() != 1 {
+                return Err(syn::Error::new_spanned(
+                    args,
+                    "expected exactly one lifetime argument",
+                ));
             }
-            let syn::PathSegment { ident: var, arguments } = &p.path.segments[0];
-            match arguments {
-                PathArguments::AngleBracketed(e) => {
-                    if e.args.len() != 1 {
-                        panic!("Only single argument is supported!");
-                    }
-                    match &e.args[0] {
-                        syn::GenericArgument::Lifetime(lt) => {
-                            Payload::new(var.clone(), Some(lt.clone()))
-                        }
-                        _ => todo!("???"),
-                    }
+
+            match &args.args[0] {
+                syn::GenericArgument::Lifetime(lifetime) => {
+                    Ok(Payload::new(segment.ident.clone(), Some(lifetime.clone())))
                 }
-                PathArguments::None => Payload::new(var.clone(), None),
-                PathArguments::Parenthesized(_) => todo!("syn::PathArguments::None"),
+                other => {
+                    Err(syn::Error::new_spanned(other, "only a lifetime argument is supported"))
+                }
             }
         }
-        _ => unimplemented!(),
+        PathArguments::None => Ok(Payload::new(segment.ident.clone(), None)),
+        PathArguments::Parenthesized(args) => {
+            Err(syn::Error::new_spanned(args, "parenthesized payload types are not supported"))
+        }
     }
 }
 
@@ -496,7 +505,7 @@ fn parse_variant_attrs(input: &Vec<syn::Attribute>) -> Attributes {
 //   VarB(B<'a>),   # (VarB, Payload { name: B, lifetime: Some(a) }, Attributes)
 // }
 // ```
-fn parse_enum_members(input: &DeriveInput) -> Vec<(Ident, Payload, Attributes)> {
+fn parse_enum_members(input: &DeriveInput) -> syn::Result<Vec<(Ident, Payload, Attributes)>> {
     let mut items = vec![];
     match input.data {
         Data::Enum(ref item) => {
@@ -505,7 +514,7 @@ fn parse_enum_members(input: &DeriveInput) -> Vec<(Ident, Payload, Attributes)> 
                     panic!("Expecting single argument for {}", elem.ident)
                 }
                 let payload = match elem.fields {
-                    Fields::Unnamed(f) => parse_variant_fields(&f.unnamed.get(0).unwrap().ty),
+                    Fields::Unnamed(f) => parse_variant_fields(&f.unnamed.get(0).unwrap().ty)?,
                     Fields::Named(_) | Fields::Unit => panic!("Unsupported!"),
                 };
                 items.push((elem.ident.clone(), payload, parse_variant_attrs(&elem.attrs)));
@@ -513,13 +522,17 @@ fn parse_enum_members(input: &DeriveInput) -> Vec<(Ident, Payload, Attributes)> 
         }
         _ => panic!("Unsupported!"),
     };
-    items
+    Ok(items)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use syn::parse_quote;
+
+    fn error_for(input: DeriveInput) -> String {
+        expand_command_handler(input).unwrap_err().to_string()
+    }
 
     #[test]
     fn rejects_multiple_lifetimes() {
@@ -529,7 +542,17 @@ mod tests {
             }
         };
 
-        let error = expand_command_handler(input).unwrap_err();
-        assert_eq!(error.to_string(), "only one lifetime parameter is supported");
+        assert_eq!(error_for(input), "only one lifetime parameter is supported");
+    }
+
+    #[test]
+    fn rejects_non_lifetime_payload_arguments() {
+        let input: DeriveInput = parse_quote! {
+            enum Command {
+                A(Payload<u8>),
+            }
+        };
+
+        assert_eq!(error_for(input), "only a lifetime argument is supported");
     }
 }
