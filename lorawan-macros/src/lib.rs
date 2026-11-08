@@ -547,7 +547,7 @@ fn parse_enum_members(input: &DeriveInput) -> syn::Result<Vec<Command>> {
     for elem in &item.variants {
         let Fields::Unnamed(fields) = &elem.fields else {
             return Err(syn::Error::new_spanned(
-                &elem.fields,
+                &elem.ident,
                 "expected exactly one unnamed payload field",
             ));
         };
