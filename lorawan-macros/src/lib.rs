@@ -445,8 +445,7 @@ fn parse_variant_fields(input: &syn::Type) -> syn::Result<Payload> {
 /// Handler for `#[cmd(cid = ..., len = ...)]` attribute
 fn attr_handle_cmd(attr: &syn::Attribute) -> syn::Result<(u8, Option<u8>)> {
     let nested = attr
-        .parse_args_with(syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated)
-        .map_err(|err| syn::Error::new_spanned(attr, err))?;
+        .parse_args_with(syn::punctuated::Punctuated::<Meta, syn::Token![,]>::parse_terminated)?;
 
     let mut cid = None;
     let mut len = None;
