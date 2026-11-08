@@ -511,6 +511,25 @@ fn parse_variant_attrs(input: &[syn::Attribute]) -> syn::Result<Attributes> {
     Ok(Attributes { doc, attrs })
 }
 
+fn validate_payload_shape(payload: &Payload, attrs: &Attributes) -> syn::Result<()> {
+    let Some((_, len)) = attrs.attrs else {
+        return Err(syn::Error::new_spanned(&payload.name, "missing `#[cmd(...)]` attribute"));
+    };
+
+    match (len, payload.lifetime.is_some()) {
+        (Some(0), _) => Ok(()),
+        (Some(_), false) => Err(syn::Error::new_spanned(
+            &payload.name,
+            "fixed-length payload must have a lifetime parameter",
+        )),
+        (None, false) => Err(syn::Error::new_spanned(
+            &payload.name,
+            "variable-length payload must have a lifetime parameter or use `len = 0`",
+        )),
+        _ => Ok(()),
+    }
+}
+
 // Parse enum variant into list of (Variant, Payload, Attributes) tuples.
 // For example:
 // ```
@@ -549,7 +568,9 @@ fn parse_enum_members(input: &DeriveInput) -> syn::Result<Vec<(Ident, Payload, A
         }
 
         let payload = parse_variant_fields(&fields.unnamed[0].ty)?;
-        items.push((elem.ident.clone(), payload, parse_variant_attrs(&elem.attrs)?));
+        let attributes = parse_variant_attrs(&elem.attrs)?;
+        validate_payload_shape(&payload, &attributes)?;
+        items.push((elem.ident.clone(), payload, attributes));
     }
 
     Ok(items)
@@ -644,5 +665,32 @@ mod tests {
         };
 
         assert_eq!(error_for(input), "duplicate `cmd` attribute");
+    }
+
+    #[test]
+    fn rejects_fixed_length_payload_without_lifetime() {
+        let input: DeriveInput = parse_quote! {
+            enum Command {
+                #[cmd(cid = 1, len = 2)]
+                A(Payload),
+            }
+        };
+
+        assert_eq!(error_for(input), "fixed-length payload must have a lifetime parameter");
+    }
+
+    #[test]
+    fn rejects_variable_length_payload_without_lifetime() {
+        let input: DeriveInput = parse_quote! {
+            enum Command {
+                #[cmd(cid = 1)]
+                A(Payload),
+            }
+        };
+
+        assert_eq!(
+            error_for(input),
+            "variable-length payload must have a lifetime parameter or use `len = 0`"
+        );
     }
 }
