@@ -10,7 +10,8 @@ required.
 Note: The `lorawan-radio` feature in the `lora-phy` crate provides `LorawanRadio` as an async implementation of
 `radio::PhyRxTx`.
 
-Both stacks share a dependency on the internal module, `mac` where LoRaWAN 1.0.4 is approximately implemented:
+Both stacks share a dependency on the internal module, `mac` where LoRaWAN 1.0.4 is approximately implemented.
+The regional parameter implementation currently targets RP002 1.0.3.
 
 - Class A device behavior
 - Class C device behavior (async only, available with the `class-c` feature)

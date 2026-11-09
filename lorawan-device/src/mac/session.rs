@@ -903,9 +903,9 @@ mod tests {
     fn link_adr_req_sets_nb_trans() {
         let mut mac = eu868_mac();
         mac.set_session(session());
-        // LinkADRReq: DR 5, TxPower 0, CMControl 5 (per-bank) with bank 0
-        // enabled, NbTrans 2 (=> 2 transmissions)
-        let f_opts = [0x03, 0x50, 0x01, 0x00, 0x52];
+        // LinkADRReq: DR 5, TxPower 0, ChMaskCntl 0 with channel 0 enabled,
+        // NbTrans 2 (=> 2 transmissions)
+        let f_opts = [0x03, 0x50, 0x01, 0x00, 0x02];
 
         let response = handle_downlink_with_fopts(&mut mac, &f_opts);
         assert!(matches!(response, Response::DownlinkReceived(0)));
@@ -918,7 +918,7 @@ mod tests {
         mac.set_session(session());
         mac.configuration.nb_trans = 3;
         // Same command as above but with NbTrans 0: use the default of 1
-        let f_opts = [0x03, 0x50, 0x01, 0x00, 0x50];
+        let f_opts = [0x03, 0x50, 0x01, 0x00, 0x00];
 
         let response = handle_downlink_with_fopts(&mut mac, &f_opts);
         assert!(matches!(response, Response::DownlinkReceived(0)));
