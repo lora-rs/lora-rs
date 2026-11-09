@@ -147,32 +147,19 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
         ch_mask: ChannelMask<2>,
     ) -> Option<()> {
         match ch_mask_ctl {
-            0..=4 => {
-                let base_index = ch_mask_ctl as usize * 2;
-                channel_mask.set_bank(base_index, ch_mask.get_index(0));
-                channel_mask.set_bank(base_index + 1, ch_mask.get_index(1));
-            }
-            5 => {
-                let ch_mask: u16 =
-                    ch_mask.get_index(0) as u16 | ((ch_mask.get_index(1) as u16) << 8);
-                channel_mask.set_bank(0, ((ch_mask & 0b1) * 0xFF) as u8);
-                channel_mask.set_bank(1, ((ch_mask & 0b10) * 0xFF) as u8);
-                channel_mask.set_bank(2, ((ch_mask & 0b100) * 0xFF) as u8);
-                channel_mask.set_bank(3, ((ch_mask & 0b1000) * 0xFF) as u8);
-                channel_mask.set_bank(4, ((ch_mask & 0b10000) * 0xFF) as u8);
-                channel_mask.set_bank(5, ((ch_mask & 0b100000) * 0xFF) as u8);
-                channel_mask.set_bank(6, ((ch_mask & 0b1000000) * 0xFF) as u8);
-                channel_mask.set_bank(7, ((ch_mask & 0b10000000) * 0xFF) as u8);
-                channel_mask.set_bank(8, ((ch_mask & 0b100000000) * 0xFF) as u8);
+            0 => {
+                channel_mask.set_bank(0, ch_mask.get_index(0));
+                channel_mask.set_bank(1, ch_mask.get_index(1));
             }
             6 => {
-                // all channels on
-                for i in 0..8 {
-                    channel_mask.set_bank(i, 0xFF);
+                // All channels on: enable every channel that is currently
+                // defined, independently of the ChMask field.
+                for (index, channel) in self.channels.iter().enumerate() {
+                    channel_mask.set_channel(index, channel.is_some());
                 }
             }
             _ => {
-                // RFU
+                // RFU for dynamic channel plans.
                 return None;
             }
         }
@@ -611,7 +598,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "ChMaskCntl 6 must enable only defined channels")]
     fn chmaskcntl6_enables_only_defined_channels() {
         let mut config = Configuration::new(Region::EU868);
         let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));
@@ -628,7 +614,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "ChMaskCntl 1 must be rejected")]
     fn chmaskcntl_accepts_only_0_and_6() {
         let config = Configuration::new(Region::EU868);
         let ch_mask = ChannelMask::<2>::new(&[0xFF, 0xFF]).unwrap();
