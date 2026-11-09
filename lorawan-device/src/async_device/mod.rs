@@ -297,6 +297,22 @@ where
         })
     }
 
+    /// Close FPort 224 for good, as the certification protocol's DutFPort224DisableReq
+    /// does over the air: certification downlinks become ordinary application data. With
+    /// a store the closed port survives reboots.
+    #[cfg(feature = "certification")]
+    pub async fn disable_certification(&mut self) -> Result<(), Error<R::PhyError>> {
+        self.mac.disable_certification();
+        persist_identity(&mut self.store, &self.mac).await
+    }
+
+    /// Whether FPort 224 downlinks are processed as certification commands. True on a
+    /// fresh device.
+    #[cfg(feature = "certification")]
+    pub fn certification_enabled(&self) -> bool {
+        self.mac.certification_enabled()
+    }
+
     /// Enables Class C behavior. Note that Class C downlinks are not possible until a confirmed
     /// uplink is sent to the LNS.
     #[cfg(feature = "class-c")]
@@ -648,6 +664,7 @@ where
                         &mut self.mac,
                         &mut self.radio,
                         &mut self.rng,
+                        &mut self.store,
                         mac_response,
                         Some(rx_config),
                     )
@@ -715,6 +732,7 @@ where
                             &mut self.mac,
                             &mut self.radio,
                             &mut self.rng,
+                            &mut self.store,
                             mac_response,
                             Some(rx_config),
                         )
@@ -801,19 +819,28 @@ where
     }
 
     /// Helper function to handle MAC responses and perform common actions
-    #[allow(unused_variables)]
+    // Split borrows: the Class C listen loop holds a timer future across this call.
+    #[allow(unused_variables, clippy::too_many_arguments)]
     async fn handle_mac_response(
         radio_buffer: &mut RadioBuffer<N>,
         retransmit_buffer: &mut RadioBuffer<N>,
         mac: &mut Mac,
         radio: &mut R,
         rng: &mut G,
+        store: &mut S,
         response: mac::Response,
         rx_config: Option<RxConfig>,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
         radio_buffer.clear();
         match response {
             mac::Response::NoUpdate => Ok(None),
+            #[cfg(feature = "certification")]
+            response @ mac::Response::DeviceHandler(_) => {
+                // The MAC may have closed FPort 224, which lives in the identity blob
+                // and must be durable before the application acts on the event.
+                persist_identity(store, mac).await?;
+                Ok(Some(response))
+            }
             #[cfg(feature = "certification")]
             mac::Response::LinkCheckReq => {
                 let _ = mac.add_uplink(lorawan::maccommandcreator::LinkCheckReqCreator::new());
@@ -887,6 +914,7 @@ where
                         &mut self.mac,
                         &mut self.radio,
                         &mut self.rng,
+                        &mut self.store,
                         mac_response,
                         None,
                     )
@@ -918,6 +946,7 @@ where
                 &mut self.mac,
                 &mut self.radio,
                 &mut self.rng,
+                &mut self.store,
                 mac_response,
                 Some(rx_config),
             )

@@ -13,6 +13,9 @@ use std::convert::Infallible;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
 
+#[cfg(feature = "certification")]
+use crate::test_util::get_abp_credentials;
+
 /// A stored JoinNonce.
 fn nonce(n: u32) -> Option<JoinNonce> {
     Some(JoinNonce::from_value(n))
@@ -239,7 +242,107 @@ async fn restore_with_seed_keeps_the_dev_nonce_counter() {
     }
 }
 
+#[cfg(feature = "certification")]
+#[tokio::test]
+async fn closed_certification_port_survives_a_reboot() {
+    let store = MockStore::default();
+    let mut net = restore(&store).await;
+    assert!(matches!(
+        net.device().join(&get_abp_credentials()).await,
+        Ok(JoinResponse::JoinSuccess)
+    ));
+    assert!(net.device().certification_enabled());
+    net.device().disable_certification().await.unwrap();
+    assert!(!net.device().certification_enabled());
+    assert!(store.identity().fport224_disabled);
+    // Closing it again changes nothing, so nothing is written.
+    let saves = store.saves();
+    net.device().disable_certification().await.unwrap();
+    assert_eq!(store.saves(), saves);
+    drop(net);
 
+    let mut net = restore(&store).await;
+    assert!(!net.device().certification_enabled());
+    assert!(matches!(
+        net.device().join(&get_abp_credentials()).await,
+        Ok(JoinResponse::JoinSuccess)
+    ));
+
+    // A LinkCheckReq on FPort 224 is plain application data now and reaches the
+    // application as a downlink.
+    let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx1(Pkt::cp_cmd("20"))).await;
+    r.expect_downlink_received();
+    let downlink = net.device().take_downlink().expect("delivered to the application");
+    assert_eq!(downlink.fport, 224);
+    assert_eq!(downlink.data.as_slice(), &[0x20]);
+}
+
+/// Closing the port over the air reaches the application as a reset event only after
+/// the identity is in the store. The async device has no application-side handler for
+/// these events yet, so the response path is driven directly.
+#[cfg(feature = "certification")]
+#[tokio::test]
+async fn port_disable_persists_before_the_reset_event() {
+    use crate::mac::{DeviceEvent, Response};
+    use crate::radio::RfConfig;
+    use core::num::NonZeroU8;
+    use lora_modulation::BaseBandModulationParams;
+    use lorawan::creator::{DataFrame, Payload};
+    use lorawan::parser::DataFrameType;
+
+    let store = MockStore::default();
+    let mut net = restore(&store).await;
+    let device = net.device();
+    assert!(matches!(device.join(&get_abp_credentials()).await, Ok(JoinResponse::JoinSuccess)));
+    assert_eq!(store.saves(), 0);
+
+    let frame = DataFrame {
+        frame_type: DataFrameType::UnconfirmedDown,
+        dev_addr: crate::test_util::get_dev_addr(),
+        fcnt: 1,
+        payload: Payload::Data { f_port: NonZeroU8::new(224).unwrap(), data: &[0x7E] },
+        ..Default::default()
+    };
+    let mut buf = [0u8; 256];
+    let len = frame.build_into(&mut buf, &get_crypto(), Some(&get_crypto())).unwrap().len();
+    device.radio_buffer.clear();
+    device.radio_buffer.extend_from_slice(&buf[..len]).unwrap();
+    let dr = device.mac.region.get_datarate(8).unwrap();
+    let rf_config = RfConfig {
+        frequency: 923_300_000,
+        bb: BaseBandModulationParams::new(
+            dr.spreading_factor,
+            dr.bandwidth,
+            device.mac.region.get_coding_rate(),
+        ),
+        max_payload_len: 255,
+    };
+    let response = device.mac.handle_rx::<512, 4>(
+        &mut device.radio_buffer,
+        &mut device.downlink,
+        10,
+        &rf_config,
+    );
+    assert!(matches!(response, Response::DeviceHandler(DeviceEvent::ResetDevice)));
+    assert!(!device.certification_enabled());
+    assert_eq!(store.saves(), 0, "not yet persisted");
+
+    let passed_on = Device::handle_mac_response(
+        &mut device.radio_buffer,
+        &mut device.retransmit_buffer,
+        &mut device.mac,
+        &mut device.radio,
+        &mut device.rng,
+        &mut device.store,
+        response,
+        None,
+    )
+    .await
+    .unwrap();
+    assert!(matches!(passed_on, Some(Response::DeviceHandler(DeviceEvent::ResetDevice))));
+    assert_eq!(store.saves(), 1);
+    assert!(store.identity().fport224_disabled);
+}
 
 #[tokio::test]
 async fn join_request_still_checks_out_without_a_store() {

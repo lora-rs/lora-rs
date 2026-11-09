@@ -285,6 +285,9 @@ impl Session {
                                 DutResetReq => {
                                     return Response::DeviceHandler(DeviceEvent::ResetDevice);
                                 }
+                                DutFPort224DisableReq => {
+                                    return Response::DeviceHandler(DeviceEvent::DisableFPort224);
+                                }
                                 LinkCheckReq => {
                                     return Response::LinkCheckReq;
                                 }
@@ -851,6 +854,35 @@ mod tests {
             let mut tx: RadioBuffer<256> = RadioBuffer::new();
             mac.certification_setup_send::<_, 256>(&mut SeqRng(0), &mut tx).unwrap();
             assert_eq!(tx.as_mut_for_read().len(), MHDR_LEN + max_mac + MIC_LEN);
+        }
+    }
+
+    #[cfg(feature = "certification")]
+    #[test]
+    fn dut_fport224_disable_closes_the_port_for_good() {
+        use crate::mac::DeviceEvent;
+        use crate::nvm::PersistentIdentity;
+        for with_identity in [true, false] {
+            let mut mac = eu868_mac();
+            if with_identity {
+                mac.set_identity(PersistentIdentity::default());
+            }
+            mac.set_session(session());
+            assert!(mac.certification_enabled());
+
+            // Closing the port counts as a DutResetReq; the session itself is untouched.
+            let response = handle_downlink_on_port(&mut mac, 224, &[0x7E], 0);
+            assert!(matches!(response, Response::DeviceHandler(DeviceEvent::ResetDevice)));
+            assert!(!mac.certification_enabled());
+            assert!(mac.get_session().is_some());
+            if with_identity {
+                assert!(mac.identity().unwrap().fport224_disabled);
+            }
+
+            // FPort 224 is ordinary application data now: an echo request gets no
+            // answer and is delivered as a downlink.
+            let response = handle_downlink_on_port(&mut mac, 224, &[0x08, 1, 2, 3], 1);
+            assert!(matches!(response, Response::DownlinkReceived(1)));
         }
     }
 
