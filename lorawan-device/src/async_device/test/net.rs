@@ -15,6 +15,7 @@ use super::{
     timer::{TimerChannel, TimerKind},
 };
 use crate::async_device::{Error, JoinResponse, SendResponse, radio::RxConfig};
+use crate::nvm::{NoNvm, NonVolatileStoreSync};
 use crate::test_util::{Uplink, get_dev_addr, get_key, get_network_crypto, get_otaa_credentials};
 use crate::{AppSKey, NwkSKey};
 use core::num::NonZeroU8;
@@ -22,6 +23,7 @@ use lorawan::creator::{DataFrame, JoinAccept, Payload};
 use lorawan::default_crypto::{DefaultCrypto, DefaultNetworkCrypto};
 use lorawan::parser::{CfList, DataFrameType, JoinNonce, NetId};
 use lorawan::types::DLSettings;
+use rand_core::{OsRng, RngCore};
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -34,10 +36,13 @@ use crate::async_device::ListenResponse;
 /// declares the exchange stuck.
 const STUCK: Duration = Duration::from_secs(5);
 
-pub struct Net {
+/// `S` is the device's store and `G` its RNG. The bounds are what spawning the device
+/// onto a task needs: a blocking store, so the compiler can see through the blanket
+/// async impl that its futures are `Send`.
+pub struct Net<S: NonVolatileStoreSync = NoNvm, G: RngCore = OsRng> {
     radio: RadioChannel,
     timer: TimerChannel,
-    device: Option<Device>,
+    device: Option<Device<S, G>>,
     /// FCntDown of the network's next downlink, assigned by network.
     fcnt_down: u32,
     /// The session keys the network builds its frames with; follow the
@@ -52,7 +57,7 @@ struct SessionKeys {
 }
 
 impl SessionKeys {
-    fn of(device: &Device) -> Self {
+    fn of<S: NonVolatileStoreSync, G: RngCore>(device: &Device<S, G>) -> Self {
         match device.mac.get_session() {
             Some(session) => Self { nwk: *session.nwkskey(), app: *session.appskey() },
             // No session yet: the one a join creates is not known in advance.
@@ -61,8 +66,8 @@ impl SessionKeys {
     }
 }
 
-impl Net {
-    pub async fn new(radio: RadioChannel, timer: TimerChannel, device: Device) -> Self {
+impl<S: NonVolatileStoreSync + Send + 'static, G: RngCore + Send + 'static> Net<S, G> {
+    pub async fn new(radio: RadioChannel, timer: TimerChannel, device: Device<S, G>) -> Self {
         // Uplinks the device transmitted before the network took over (eg
         // the one that enabled class C) belong to no exchange.
         radio.take_uplinks().await;
@@ -75,7 +80,7 @@ impl Net {
     }
 
     /// The device under test.
-    pub fn device(&mut self) -> &mut Device {
+    pub fn device(&mut self) -> &mut Device<S, G> {
         self.device.as_mut().expect("device not in use")
     }
 
@@ -164,11 +169,11 @@ impl Net {
     /// returns.
     async fn drive<R, F>(
         &mut self,
-        op: impl FnOnce(Device) -> F,
+        op: impl FnOnce(Device<S, G>) -> F,
         mut action: ExchangeAction,
     ) -> Outcome<R>
     where
-        F: Future<Output = (Device, R)> + Send + 'static,
+        F: Future<Output = (Device<S, G>, R)> + Send + 'static,
         R: Send + 'static,
     {
         let mut last = self.timer.get_armed_count().await;
@@ -278,9 +283,9 @@ impl Net {
 }
 
 /// One step of the exchange loop.
-enum Step<R> {
+enum Step<S: NonVolatileStoreSync, G: RngCore, R> {
     /// The device operation returned.
-    Done(Box<(Device, R)>),
+    Done(Box<(Device<S, G>, R)>),
     /// The device armed a timer; the armed count so far.
     Armed(usize),
 }
@@ -306,6 +311,7 @@ enum PktKind {
         payload: Option<(u8, Vec<u8>)>,
     },
     JoinAccept {
+        join_nonce: u8,
         dl_settings: u8,
         rx_delay: u8,
         cf_list: Option<CfList>,
@@ -350,7 +356,22 @@ impl Pkt {
     /// A JoinAccept for the test credentials, with default DLSettings and
     /// RxDelay and no CFList.
     pub fn join_accept() -> Self {
-        Self(PktKind::JoinAccept { dl_settings: 0, rx_delay: 0, cf_list: None, bad_mic: false })
+        Self(PktKind::JoinAccept {
+            join_nonce: 1,
+            dl_settings: 0,
+            rx_delay: 0,
+            cf_list: None,
+            bad_mic: false,
+        })
+    }
+
+    /// The JoinAccept's JoinNonce (low byte; the others are zero). Defaults to 1.
+    pub fn join_nonce(mut self, nonce: u8) -> Self {
+        let PktKind::JoinAccept { join_nonce, .. } = &mut self.0 else {
+            panic!("join_nonce() applies to join accepts")
+        };
+        *join_nonce = nonce;
+        self
     }
 
     /// A frame the test builds itself from the FCntDown the network
@@ -448,9 +469,9 @@ impl Pkt {
                 let app = DefaultCrypto::new(keys.app.inner());
                 frame.build_into(buf, &nwk, Some(&app)).unwrap().len()
             }
-            PktKind::JoinAccept { dl_settings, rx_delay, cf_list, bad_mic } => {
+            PktKind::JoinAccept { join_nonce, dl_settings, rx_delay, cf_list, bad_mic } => {
                 let accept = JoinAccept {
-                    join_nonce: JoinNonce::from_wire_bytes([1; 3]),
+                    join_nonce: JoinNonce::from_wire_bytes([*join_nonce, 0, 0]),
                     net_id: NetId::from_wire_bytes([1; 3]),
                     dev_addr: get_dev_addr(),
                     dl_settings: DLSettings::new(*dl_settings),

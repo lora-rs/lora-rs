@@ -23,13 +23,16 @@ mod certification;
 
 mod maccommands;
 
+mod nvm;
+
 #[cfg(feature = "class-c")]
 mod class_c;
 
 #[cfg(feature = "multicast")]
 mod multicast;
 
-type Device = crate::async_device::Device<TestRadio, TestTimer, rand_core::OsRng, 512, 4>;
+type Device<S = crate::nvm::NoNvm, G = rand_core::OsRng> =
+    crate::async_device::Device<TestRadio, TestTimer, G, 512, 4, S>;
 
 #[tokio::test]
 async fn test_join_rx1() {
