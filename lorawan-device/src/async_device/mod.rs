@@ -11,6 +11,7 @@ use rand_core::RngCore;
 
 pub use crate::region::DR;
 use crate::{
+    DeviceHandler,
     nvm::{MAX_BLOB_LEN, NoNvm, NonVolatileStore, NvmRegion, PersistentIdentity},
     radio::{RadioBuffer, RfConfig, RxConfig},
     rng,
@@ -69,7 +70,7 @@ use self::radio::RxStatus;
 /// S is a user-supplied [`NonVolatileStore`], set via [`Device::restore`]. It enables the
 /// LoRaWAN 1.0.4 join rules: a persisted monotonic DevNonce and JoinNonce replay protection.
 /// The default [`NoNvm`] keeps the stack at LoRaWAN 1.0.2 with no persistence code compiled in.
-pub struct Device<R, T, G, const N: usize = 256, const D: usize = 1, S = NoNvm>
+pub struct Device<R, T, G, const N: usize = 256, const D: usize = 1, S = NoNvm, H = ()>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
@@ -90,6 +91,7 @@ where
     /// Whether the last prepared uplink dropped non-empty application data.
     payload_dropped: bool,
     store: S,
+    _handler: H,
     #[cfg(feature = "class-c")]
     class_c: bool,
 }
@@ -185,7 +187,7 @@ where
     }
 }
 
-impl<R, T, const N: usize, const D: usize, S> Device<R, T, rng::Prng, N, D, S>
+impl<R, T, const N: usize, const D: usize, S> Device<R, T, rng::Prng, N, D, S, ()>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
@@ -221,11 +223,42 @@ where
     /// See also [`new_with_seed`](Device::new_with_seed) to let [`Device`] use a builtin PRNG by providing a random
     /// seed.
     pub fn new(region: region::Configuration, radio: R, timer: T, rng: G) -> Self {
-        Device::new_with_session(region, radio, timer, rng, None)
+        Self::new_with_session_and_handler((), region, radio, timer, rng, None)
     }
 
     /// Create a new [`Device`] and provide an optional [`Session`].
     pub fn new_with_session(
+        region: region::Configuration,
+        radio: R,
+        timer: T,
+        rng: G,
+        session: Option<Session>,
+    ) -> Self {
+        Self::new_with_session_and_handler((), region, radio, timer, rng, session)
+    }
+}
+
+impl<R, T, G, const N: usize, const D: usize, H> Device<R, T, G, N, D, NoNvm, H>
+where
+    R: radio::PhyRxTx + Timings,
+    T: radio::Timer,
+    G: RngCore,
+    H: DeviceHandler,
+{
+    /// Create a [`Device`] with application device hooks and no store.
+    pub fn new_with_handler(
+        handler: H,
+        region: region::Configuration,
+        radio: R,
+        timer: T,
+        rng: G,
+    ) -> Self {
+        Self::new_with_session_and_handler(handler, region, radio, timer, rng, None)
+    }
+
+    /// Create a [`Device`] with application device hooks and an optional [`Session`].
+    pub fn new_with_session_and_handler(
+        handler: H,
         region: region::Configuration,
         radio: R,
         timer: T,
@@ -237,6 +270,7 @@ where
             mac.set_session(session);
         }
         Self {
+            _handler: handler,
             radio,
             rng,
             mac,
@@ -252,12 +286,31 @@ where
     }
 }
 
-impl<R, T, G, const N: usize, const D: usize, S> Device<R, T, G, N, D, S>
+impl<R, T, G, const N: usize, const D: usize, S> Device<R, T, G, N, D, S, ()>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
     G: RngCore,
     S: NonVolatileStore,
+{
+    pub async fn restore(
+        region: region::Configuration,
+        radio: R,
+        timer: T,
+        rng: G,
+        store: S,
+    ) -> Result<Self, S::Error> {
+        Self::restore_with_handler((), region, radio, timer, rng, store).await
+    }
+}
+
+impl<R, T, G, const N: usize, const D: usize, S, H> Device<R, T, G, N, D, S, H>
+where
+    R: radio::PhyRxTx + Timings,
+    T: radio::Timer,
+    G: RngCore,
+    S: NonVolatileStore,
+    H: DeviceHandler,
 {
     /// Create a [`Device`] backed by a non-volatile store, loading the persisted join
     /// counters. This is the only constructor for LoRaWAN 1.0.4 operation.
@@ -266,7 +319,8 @@ where
     /// are returned. A corrupt identity blob restarts the DevNonce at 0, which a join
     /// server rejects until the counter passes its last value, so stores must write
     /// the identity atomically.
-    pub async fn restore(
+    pub async fn restore_with_handler(
+        handler: H,
         region: region::Configuration,
         radio: R,
         timer: T,
@@ -283,6 +337,7 @@ where
             mac.set_identity(identity);
         }
         Ok(Self {
+            _handler: handler,
             radio,
             rng,
             mac,

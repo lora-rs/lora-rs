@@ -14,7 +14,7 @@ mod test;
 
 type TimestampMs = u32;
 
-pub struct Device<R, RNG, const N: usize, const D: usize = 1>
+pub struct Device<R, RNG, const N: usize, const D: usize = 1, H = ()>
 where
     R: PhyRxTx + Timings,
     RNG: RngCore,
@@ -22,6 +22,7 @@ where
     state: State,
     /// Whether the last prepared uplink dropped non-empty application data.
     payload_dropped: bool,
+    _handler: H,
     shared: Shared<R, RNG, N, D>,
 }
 
@@ -31,9 +32,26 @@ where
     RNG: RngCore,
 {
     pub fn new(region: region::Configuration, radio: R, rng: RNG) -> Device<R, RNG, N, D> {
+        Self::new_with_handler((), region, radio, rng)
+    }
+}
+
+impl<R, RNG, const N: usize, const D: usize, H> Device<R, RNG, N, D, H>
+where
+    R: PhyRxTx + Timings,
+    RNG: RngCore,
+    H: DeviceHandler,
+{
+    pub fn new_with_handler(
+        handler: H,
+        region: region::Configuration,
+        radio: R,
+        rng: RNG,
+    ) -> Device<R, RNG, N, D, H> {
         Device {
             state: State::default(),
             payload_dropped: false,
+            _handler: handler,
             shared: Shared {
                 radio,
                 rng,
