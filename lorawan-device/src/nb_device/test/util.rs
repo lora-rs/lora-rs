@@ -12,6 +12,40 @@ pub fn test_device() -> Device<TestRadio, rand_core::OsRng, 255> {
     Device::new(Configuration::new(Region::US915), TestRadio::default(), rand::rngs::OsRng)
 }
 
+#[derive(Clone, Copy)]
+pub struct TestHandler {
+    pub battery: u8,
+}
+
+impl TestHandler {
+    pub fn with_battery(battery: u8) -> Self {
+        Self { battery }
+    }
+}
+
+impl Default for TestHandler {
+    fn default() -> Self {
+        Self { battery: 255 }
+    }
+}
+
+impl crate::DeviceHandler for TestHandler {
+    fn battery_level(&self) -> u8 {
+        self.battery
+    }
+}
+
+pub fn test_device_with_handler<H: crate::DeviceHandler>(
+    handler: H,
+) -> Device<TestRadio, rand_core::OsRng, 255, 1, H> {
+    Device::new_with_handler(
+        handler,
+        Configuration::new(Region::US915),
+        TestRadio::default(),
+        rand::rngs::OsRng,
+    )
+}
+
 #[derive(Debug)]
 pub struct TestRadio {
     current_config: Option<RfConfig>,

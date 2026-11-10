@@ -37,7 +37,7 @@ fn assert_cp_answer(uplink: &Uplink, payload: &[u8]) {
 /// Same scenario is used for all regions.
 async fn eu868_devstatusreq_test() {
     let (radio, timer, mut device) =
-        util::session_with_region(crate::region::EU868::new_eu868().into());
+        util::session_with_region_and_battery(crate::region::EU868::new_eu868().into(), 170);
     device.radio.set_snr(-15);
     let mut net = Net::new(radio, timer, device).await;
 
@@ -45,8 +45,7 @@ async fn eu868_devstatusreq_test() {
     let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("06"))).await;
     r.expect_downlink_received();
 
-    // TODO: Battery value is hardcoded to 255 in MAC for now
-    let expected_ans = [0x06, 255, net.device().radio.snr_scaled()];
+    let expected_ans = [0x06, 170, net.device().radio.snr_scaled()];
 
     // Check whether uplink has been populated with requested MAC:DevStatusAns command
     let session = net.device().mac.get_session().unwrap();

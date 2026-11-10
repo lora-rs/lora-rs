@@ -26,6 +26,41 @@ fn build_cert_downlink(buf: &mut [u8], payload_in_hex: &str, fcnt: u16) -> usize
     let finished = frame.build_into(buf, &get_crypto(), Some(&get_crypto())).unwrap();
     finished.len()
 }
+
+/// Build a downlink with regular MAC commands in the FRMPayload (FPort 0).
+#[cfg(feature = "certification")]
+fn build_mac_downlink(buf: &mut [u8], payload_in_hex: &str, fcnt: u16) -> usize {
+    let payload = hex::decode(payload_in_hex).unwrap();
+    let frame = DataFrame {
+        frame_type: DataFrameType::UnconfirmedDown,
+        dev_addr: get_dev_addr(),
+        ack: true,
+        fcnt: fcnt.into(),
+        payload: Payload::MacCommands(&payload),
+        ..Default::default()
+    };
+    let finished = frame.build_into(buf, &get_crypto(), Some(&get_crypto())).unwrap();
+    finished.len()
+}
+
+/// Send an uplink and return the response to a downlink delivered in RX2.
+#[cfg(feature = "certification")]
+fn send_and_receive_cert<H: crate::DeviceHandler>(
+    device: &mut crate::nb_device::Device<TestRadio, rand_core::OsRng, 255, 1, H>,
+    handler: RxTxHandler,
+) -> Response {
+    let response = device.send(&[0; 1], 1, false).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx1
+    assert!(matches!(response, Response::TimeoutRequest(1100)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // end Rx1
+    assert!(matches!(response, Response::TimeoutRequest(2000)));
+    let response = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx2
+    assert!(matches!(response, Response::TimeoutRequest(2100)));
+    device.get_radio().set_rxtx_handler(handler);
+    device.handle_event(Event::RadioEvent(radio::Event::Phy(()))).unwrap()
+}
+
 #[test]
 fn test_join_rx1() {
     let mut device = test_device();
@@ -231,6 +266,22 @@ fn test_confirmed_uplink_with_ack_rx2() {
     // send a radio event to let the radio device indicate a packet was received
     let response = device.handle_event(Event::RadioEvent(radio::Event::Phy(()))).unwrap();
     assert!(matches!(response, Response::DownlinkReceived(0)));
+}
+
+#[cfg(feature = "certification")]
+#[test]
+fn test_certification_dev_status_req_uses_handler_battery() {
+    fn dev_status_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_mac_downlink(buf, "06", 1) // DevStatusReq
+    }
+
+    let mut device = test_device_with_handler(TestHandler::with_battery(170));
+    device.join(get_abp_credentials()).unwrap();
+    let response = send_and_receive_cert(&mut device, dev_status_req);
+    assert!(matches!(response, Response::DownlinkReceived(1)));
+
+    let session = device.get_session().expect("device is still joined");
+    assert_eq!(session.uplink.mac_commands(), &[0x06, 170, 0]);
 }
 
 #[cfg(feature = "certification")]
