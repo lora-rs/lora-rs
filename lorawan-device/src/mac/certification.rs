@@ -10,6 +10,7 @@ pub(crate) enum Response {
     AdrBitChange(bool),
     DutJoinReq,
     DutResetReq,
+    DutFPort224DisableReq,
     LinkCheckReq,
     TxFramesCtrlReq(Option<bool>),
     TxPeriodicityChange(Option<u16>),
@@ -18,11 +19,22 @@ pub(crate) enum Response {
 
 pub(crate) struct Certification {
     pending_uplink: Option<heapless::Vec<u8, 256>>,
+    /// Set for good by DutFPort224DisableReq or the application. FPort 224 downlinks
+    /// are ordinary application data afterwards.
+    port_disabled: bool,
 }
 
 impl Certification {
     pub fn new() -> Self {
-        Self { pending_uplink: None }
+        Self { pending_uplink: None, port_disabled: false }
+    }
+
+    pub(crate) fn set_port_disabled(&mut self, disabled: bool) {
+        self.port_disabled = disabled;
+    }
+
+    pub(crate) const fn port_disabled(&self) -> bool {
+        self.port_disabled
     }
     pub(crate) fn handle_message(
         &mut self,
@@ -40,6 +52,7 @@ impl Certification {
                 // Device layer
                 DutJoinReq(..) => return Response::DutJoinReq,
                 DutResetReq(..) => return Response::DutResetReq,
+                DutFPort224DisableReq(..) => return Response::DutFPort224DisableReq,
                 TxPeriodicityChangeReq(payload) => {
                     if let Ok(periodicity) = payload.periodicity() {
                         return Response::TxPeriodicityChange(periodicity);
@@ -104,8 +117,9 @@ impl Certification {
         Response::NoUpdate
     }
 
+    /// Whether a downlink on `fport` is a certification command for this device.
     pub(crate) const fn fport(&self, fport: u8) -> bool {
-        CERTIFICATION_PORT == fport
+        !self.port_disabled && CERTIFICATION_PORT == fport
     }
 
     /// Consume the pending certification uplink, if any.

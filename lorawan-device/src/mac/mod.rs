@@ -4,6 +4,7 @@
 
 use crate::{
     AppSKey, Downlink, NwkSKey,
+    nvm::PersistentIdentity,
     radio::{self, RadioBuffer, RfConfig, RxConfig, RxMode},
     region,
 };
@@ -99,6 +100,9 @@ pub(crate) struct Mac {
     state: State,
     /// Whether the last prepared uplink dropped non-empty application data.
     payload_dropped: bool,
+    /// 1.0.4 join anti-replay counters; `None` keeps the 1.0.2 behavior (random
+    /// DevNonce, no JoinNonce check). Set only when a persistent store backs them.
+    identity: Option<PersistentIdentity>,
     #[cfg(feature = "certification")]
     certification: certification::Certification,
     /// Actual TX duration and RX windows of the prepared certification answer
@@ -126,6 +130,10 @@ pub(crate) enum State {
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub enum Error {
     NotJoined,
+    /// The persisted DevNonce counter reached `u16::MAX`; this identity can no longer join.
+    /// TR001 (Remedy #2) has the device switch to another JoinEUI at this point; that is
+    /// not supported yet.
+    DevNonceExhausted,
     #[cfg(feature = "multicast")]
     Multicast(multicast::Error),
 }
@@ -146,6 +154,7 @@ impl Mac {
             region,
             state: State::Unjoined,
             payload_dropped: false,
+            identity: None,
             configuration: Configuration {
                 data_rate,
                 rx1_delay: region::constants::RECEIVE_DELAY1,
@@ -174,14 +183,25 @@ impl Mac {
         rng: &mut RNG,
         credentials: NetworkCredentials,
         buf: &mut RadioBuffer<N>,
-    ) -> (radio::TxConfig, RxWindows, u16) {
+    ) -> Result<(radio::TxConfig, RxWindows, u16)> {
         let mut otaa = otaa::Otaa::new(credentials);
-        let dev_nonce = otaa.prepare_buffer::<RNG, N>(rng, buf);
+        // With a persistent identity the DevNonce is the monotonic counter. The caller
+        // commits the increment to the store before transmitting.
+        let next_dev_nonce = match self.identity.as_mut() {
+            Some(id) if id.dev_nonce == u16::MAX => return Err(Error::DevNonceExhausted),
+            Some(id) => {
+                let n = id.dev_nonce;
+                id.dev_nonce += 1;
+                Some(n)
+            }
+            None => None,
+        };
+        let dev_nonce = otaa.prepare_buffer::<RNG, N>(rng, next_dev_nonce, buf);
         self.state = State::Otaa(otaa);
         let (mut tx_config, tx_channel) =
             self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Join);
         tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
-        (tx_config, self.rx_windows(&tx_channel), dev_nonce)
+        Ok((tx_config, self.rx_windows(&tx_channel), dev_nonce))
     }
 
     /// Join via ABP. This does not transmit a join request frame, but instead sets the session.
@@ -353,7 +373,7 @@ impl Mac {
         snr: i8,
         rf_config: &RfConfig,
     ) -> Response {
-        match &mut self.state {
+        let response = match &mut self.state {
             State::Joined(session) => session.handle_rx::<N, D>(
                 &mut self.region,
                 &mut self.configuration,
@@ -368,9 +388,12 @@ impl Mac {
                 false,
             ),
             State::Otaa(otaa) => {
-                if let Some(session) =
-                    otaa.handle_rx::<N>(&mut self.region, &mut self.configuration, buf)
-                {
+                if let Some(session) = otaa.handle_rx::<N>(
+                    &mut self.region,
+                    &mut self.configuration,
+                    self.identity.as_mut(),
+                    buf,
+                ) {
                     self.state = State::Joined(session);
                     Response::JoinSuccess
                 } else {
@@ -378,7 +401,40 @@ impl Mac {
                 }
             }
             State::Unjoined => Response::NoUpdate,
+        };
+        #[cfg(feature = "certification")]
+        let response = self.apply_device_event(response);
+        response
+    }
+
+    /// Stack side of the certification requests that outlive the session layer, run
+    /// before the event reaches the application. DutFPort224DisableReq closes the port
+    /// for good and then counts as a DutResetReq. The identity changed, and the caller
+    /// persists it before acting on the event.
+    #[cfg(feature = "certification")]
+    fn apply_device_event(&mut self, response: Response) -> Response {
+        match response {
+            Response::DeviceHandler(DeviceEvent::DisableFPort224) => {
+                self.disable_certification();
+                Response::DeviceHandler(DeviceEvent::ResetDevice)
+            }
+            response => response,
         }
+    }
+
+    /// Close FPort 224 for good: certification downlinks become ordinary application
+    /// data. Recorded in the identity so a store keeps it across reboots.
+    #[cfg(feature = "certification")]
+    pub(crate) fn disable_certification(&mut self) {
+        self.certification.set_port_disabled(true);
+        if let Some(identity) = self.identity.as_mut() {
+            identity.fport224_disabled = true;
+        }
+    }
+
+    #[cfg(feature = "certification")]
+    pub(crate) fn certification_enabled(&self) -> bool {
+        !self.certification.port_disabled()
     }
 
     /// Handles a received RF frame during RXC window. Returns None if unparseable, fails decryption,
@@ -392,8 +448,8 @@ impl Mac {
         snr: i8,
         rf_config: &RfConfig,
     ) -> Result<Response> {
-        match &mut self.state {
-            State::Joined(session) => Ok(session.handle_rx::<N, D>(
+        let response = match &mut self.state {
+            State::Joined(session) => session.handle_rx::<N, D>(
                 &mut self.region,
                 &mut self.configuration,
                 #[cfg(feature = "certification")]
@@ -405,10 +461,13 @@ impl Mac {
                 rf_config.max_payload_len,
                 snr,
                 true,
-            )),
-            State::Otaa(_) => Err(Error::NotJoined),
-            State::Unjoined => Err(Error::NotJoined),
-        }
+            ),
+            State::Otaa(_) => return Err(Error::NotJoined),
+            State::Unjoined => return Err(Error::NotJoined),
+        };
+        #[cfg(feature = "certification")]
+        let response = self.apply_device_event(response);
+        Ok(response)
     }
 
     pub(crate) fn rx2_complete(&mut self) -> Response {
@@ -455,6 +514,16 @@ impl Mac {
             State::Otaa(_) => None,
             State::Unjoined => None,
         }
+    }
+
+    pub(crate) fn set_identity(&mut self, identity: PersistentIdentity) {
+        #[cfg(feature = "certification")]
+        self.certification.set_port_disabled(identity.fport224_disabled);
+        self.identity = Some(identity);
+    }
+
+    pub(crate) fn identity(&self) -> Option<&PersistentIdentity> {
+        self.identity.as_ref()
     }
 
     /// Build the RfConfig for a window given its frequency and datarate, handling possibly
@@ -548,7 +617,12 @@ pub(crate) enum Response {
 pub(crate) enum DeviceEvent {
     ResetDevice,
     ResetMac,
-    TxPeriodicityChange { periodicity: Option<u16> },
+    TxPeriodicityChange {
+        periodicity: Option<u16>,
+    },
+    /// DutFPort224DisableReq, seen by the session layer only; the MAC closes the port
+    /// and reports it as `ResetDevice`.
+    DisableFPort224,
 }
 
 impl From<Response> for nb_device::Response {

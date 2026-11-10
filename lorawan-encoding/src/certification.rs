@@ -41,6 +41,10 @@ pub enum DownlinkDUTCommand<'a> {
     #[cmd(cid = 0x20, len = 0)]
     LinkCheckReq(LinkCheckReqPayload),
 
+    /// Request to disable the processing of data received on FPort 224 and reset the DUT
+    #[cmd(cid = 0x7e, len = 0)]
+    DutFPort224DisableReq(DutFPort224DisableReqPayload),
+
     /// Request to send firmware version, LoRaWAN version, and regional parameters version
     #[cmd(cid = 0x7f, len = 0)]
     DutVersionsReq(DutVersionsReqPayload),

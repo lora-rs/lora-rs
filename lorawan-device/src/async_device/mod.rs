@@ -11,6 +11,7 @@ use rand_core::RngCore;
 
 pub use crate::region::DR;
 use crate::{
+    nvm::{MAX_BLOB_LEN, NoNvm, NonVolatileStore, NvmRegion, PersistentIdentity},
     radio::{RadioBuffer, RfConfig, RxConfig},
     rng,
 };
@@ -64,11 +65,16 @@ use self::radio::RxStatus;
 /// that may be buffered. The defaults are 256 and 1 respectively which should be fine for Class A devices. **For Class
 /// C operation**, it is recommended to increase D to at least 2, if not 3. This is because during the RX1/RX2 windows
 /// after a Class A transmit, it is possible to receive Class C downlinks (in additional to any RX1/RX2 responses!).
-pub struct Device<R, T, G, const N: usize = 256, const D: usize = 1>
+///
+/// S is a user-supplied [`NonVolatileStore`], set via [`Device::restore`]. It enables the
+/// LoRaWAN 1.0.4 join rules: a persisted monotonic DevNonce and JoinNonce replay protection.
+/// The default [`NoNvm`] keeps the stack at LoRaWAN 1.0.2 with no persistence code compiled in.
+pub struct Device<R, T, G, const N: usize = 256, const D: usize = 1, S = NoNvm>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
     G: RngCore,
+    S: NonVolatileStore,
 {
     radio: R,
     /// Access to provided (pseudo)-random number generator.
@@ -83,6 +89,7 @@ where
     downlink: Vec<Downlink, D>,
     /// Whether the last prepared uplink dropped non-empty application data.
     payload_dropped: bool,
+    store: S,
     #[cfg(feature = "class-c")]
     class_c: bool,
 }
@@ -92,6 +99,9 @@ where
 pub enum Error<R> {
     Radio(R),
     Mac(mac::Error),
+    /// The non-volatile store failed a save that must complete before the stack can
+    /// proceed (the DevNonce before a join request goes on the air).
+    Nvm,
 }
 
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
@@ -175,7 +185,31 @@ where
     }
 }
 
-impl<R, T, G, const N: usize, const D: usize> Device<R, T, G, N, D>
+impl<R, T, const N: usize, const D: usize, S> Device<R, T, rng::Prng, N, D, S>
+where
+    R: radio::PhyRxTx + Timings,
+    T: radio::Timer,
+    S: NonVolatileStore,
+{
+    /// Create a [`Device`] backed by a non-volatile store, like [`restore`](Device::restore), but let
+    /// [`Device`] use an algorithmic PRNG seeded with `seed` instead of an external RNG.
+    ///
+    /// # ⚠️Warning⚠️
+    ///
+    /// This function must **always** be called with a new randomly generated seed! **Never** call this function more
+    /// than once using the same seed. Generate the seed using a true random number generator.
+    pub async fn restore_with_seed(
+        region: region::Configuration,
+        radio: R,
+        timer: T,
+        seed: u64,
+        store: S,
+    ) -> Result<Self, S::Error> {
+        Device::restore(region, radio, timer, rng::Prng::new(seed), store).await
+    }
+}
+
+impl<R, T, G, const N: usize, const D: usize> Device<R, T, G, N, D, NoNvm>
 where
     R: radio::PhyRxTx + Timings,
     T: radio::Timer,
@@ -211,9 +245,72 @@ where
             timer,
             downlink: Vec::new(),
             payload_dropped: false,
+            store: NoNvm,
             #[cfg(feature = "class-c")]
             class_c: false,
         }
+    }
+}
+
+impl<R, T, G, const N: usize, const D: usize, S> Device<R, T, G, N, D, S>
+where
+    R: radio::PhyRxTx + Timings,
+    T: radio::Timer,
+    G: RngCore,
+    S: NonVolatileStore,
+{
+    /// Create a [`Device`] backed by a non-volatile store, loading the persisted join
+    /// counters. This is the only constructor for LoRaWAN 1.0.4 operation.
+    ///
+    /// A missing or corrupt identity blob means fresh counters. Only store access errors
+    /// are returned. A corrupt identity blob restarts the DevNonce at 0, which a join
+    /// server rejects until the counter passes its last value, so stores must write
+    /// the identity atomically.
+    pub async fn restore(
+        region: region::Configuration,
+        radio: R,
+        timer: T,
+        rng: G,
+        mut store: S,
+    ) -> Result<Self, S::Error> {
+        let mut mac = Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN);
+        if S::PERSISTENT {
+            let mut buf = [0u8; MAX_BLOB_LEN];
+            let identity = match store.load(NvmRegion::Identity, &mut buf).await? {
+                Some(n) => PersistentIdentity::decode(&buf[..n]).unwrap_or_default(),
+                None => PersistentIdentity::default(),
+            };
+            mac.set_identity(identity);
+        }
+        Ok(Self {
+            radio,
+            rng,
+            mac,
+            radio_buffer: RadioBuffer::new(),
+            retransmit_buffer: RadioBuffer::new(),
+            timer,
+            downlink: Vec::new(),
+            payload_dropped: false,
+            store,
+            #[cfg(feature = "class-c")]
+            class_c: false,
+        })
+    }
+
+    /// Close FPort 224 for good, as the certification protocol's DutFPort224DisableReq
+    /// does over the air: certification downlinks become ordinary application data. With
+    /// a store the closed port survives reboots.
+    #[cfg(feature = "certification")]
+    pub async fn disable_certification(&mut self) -> Result<(), Error<R::PhyError>> {
+        self.mac.disable_certification();
+        persist_identity(&mut self.store, &self.mac).await
+    }
+
+    /// Whether FPort 224 downlinks are processed as certification commands. True on a
+    /// fresh device.
+    #[cfg(feature = "certification")]
+    pub fn certification_enabled(&self) -> bool {
+        self.mac.certification_enabled()
     }
 
     /// Enables Class C behavior. Note that Class C downlinks are not possible until a confirmed
@@ -346,7 +443,11 @@ where
                     &mut self.rng,
                     NetworkCredentials::new(*appeui, *deveui, *appkey),
                     &mut self.radio_buffer,
-                );
+                )?;
+
+                // The DevNonce must be durable before the request goes on the air;
+                // a reset after transmit would otherwise reuse it.
+                persist_identity(&mut self.store, &self.mac).await?;
 
                 // Transmit the join payload
                 let ms = self
@@ -357,7 +458,12 @@ where
 
                 // Receive join response within RX window
                 self.timer.reset();
-                Ok(self.rx_downlink(&Frame::Join, ms, &rx_windows).await?.into())
+                let response = self.rx_downlink(&Frame::Join, ms, &rx_windows).await?;
+                if matches!(response, mac::Response::JoinSuccess) {
+                    // The next join rejects an accept repeating this JoinNonce.
+                    persist_identity(&mut self.store, &self.mac).await?;
+                }
+                Ok(response.into())
             }
             JoinMode::ABP { nwkskey, appskey, devaddr } => {
                 self.mac.join_abp(*nwkskey, *appskey, *devaddr);
@@ -558,6 +664,7 @@ where
                         &mut self.mac,
                         &mut self.radio,
                         &mut self.rng,
+                        &mut self.store,
                         mac_response,
                         Some(rx_config),
                     )
@@ -625,6 +732,7 @@ where
                             &mut self.mac,
                             &mut self.radio,
                             &mut self.rng,
+                            &mut self.store,
                             mac_response,
                             Some(rx_config),
                         )
@@ -711,19 +819,28 @@ where
     }
 
     /// Helper function to handle MAC responses and perform common actions
-    #[allow(unused_variables)]
+    // Split borrows: the Class C listen loop holds a timer future across this call.
+    #[allow(unused_variables, clippy::too_many_arguments)]
     async fn handle_mac_response(
         radio_buffer: &mut RadioBuffer<N>,
         retransmit_buffer: &mut RadioBuffer<N>,
         mac: &mut Mac,
         radio: &mut R,
         rng: &mut G,
+        store: &mut S,
         response: mac::Response,
         rx_config: Option<RxConfig>,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
         radio_buffer.clear();
         match response {
             mac::Response::NoUpdate => Ok(None),
+            #[cfg(feature = "certification")]
+            response @ mac::Response::DeviceHandler(_) => {
+                // The MAC may have closed FPort 224, which lives in the identity blob
+                // and must be durable before the application acts on the event.
+                persist_identity(store, mac).await?;
+                Ok(Some(response))
+            }
             #[cfg(feature = "certification")]
             mac::Response::LinkCheckReq => {
                 let _ = mac.add_uplink(lorawan::maccommandcreator::LinkCheckReqCreator::new());
@@ -797,6 +914,7 @@ where
                         &mut self.mac,
                         &mut self.radio,
                         &mut self.rng,
+                        &mut self.store,
                         mac_response,
                         None,
                     )
@@ -828,6 +946,7 @@ where
                 &mut self.mac,
                 &mut self.radio,
                 &mut self.rng,
+                &mut self.store,
                 mac_response,
                 Some(rx_config),
             )
@@ -837,6 +956,31 @@ where
             }
         }
     }
+}
+
+/// Write the identity blob unless the store already holds identical bytes, sparing flash
+/// when nothing changed. No-op without a store.
+async fn persist_identity<S: NonVolatileStore, RE>(
+    store: &mut S,
+    mac: &Mac,
+) -> Result<(), Error<RE>> {
+    if S::PERSISTENT
+        && let Some(identity) = mac.identity()
+    {
+        let mut blob = [0u8; MAX_BLOB_LEN];
+        let len = identity.encode(&mut blob);
+        let mut current = [0u8; MAX_BLOB_LEN];
+        if let Ok(Some(n)) = store.load(NvmRegion::Identity, &mut current).await
+            && current[..n] == blob[..len]
+        {
+            return Ok(());
+        }
+        store.save(NvmRegion::Identity, &blob[..len]).await.map_err(|_| {
+            warn!("nvm: saving the identity failed");
+            Error::Nvm
+        })?;
+    }
+    Ok(())
 }
 
 /// Timing for one receive window: when to start radio setup relative to the
