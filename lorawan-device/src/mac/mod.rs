@@ -562,15 +562,30 @@ impl From<Response> for nb_device::Response {
             Response::NoUpdate => nb_device::Response::NoUpdate,
             Response::RxComplete => nb_device::Response::RxComplete,
             // Handled internally by the nb_device state machine.
-            Response::Retransmit => unimplemented!(),
-            Response::RetransmitConfirmed => unimplemented!(),
-            Response::LinkCheckReq => unimplemented!(),
+            Response::Retransmit | Response::RetransmitConfirmed => {
+                warn!("nb_device: ignoring internally handled response");
+                nb_device::Response::RxComplete
+            }
+            // TODO: handle certification responses once nb_device supports 1.0.4.
+            Response::LinkCheckReq => {
+                warn!("nb_device: ignoring LinkCheckReq");
+                nb_device::Response::RxComplete
+            }
             #[cfg(feature = "certification")]
-            Response::UplinkPrepared => unimplemented!(),
+            Response::UplinkPrepared => {
+                warn!("nb_device: ignoring internally handled response");
+                nb_device::Response::RxComplete
+            }
             #[cfg(feature = "certification")]
-            Response::DeviceHandler(_) => unimplemented!(),
+            Response::DeviceHandler(_) => {
+                warn!("nb_device: ignoring certification device event");
+                nb_device::Response::RxComplete
+            }
             #[cfg(feature = "multicast")]
-            Response::Multicast(_) => unimplemented!(),
+            Response::Multicast(_) => {
+                warn!("nb_device: ignoring multicast response");
+                nb_device::Response::RxComplete
+            }
         }
     }
 }
