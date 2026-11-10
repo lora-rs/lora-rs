@@ -65,7 +65,11 @@ impl defmt::Format for Downlink {
 /// Implement this for the board/MCU type and pass it to
 /// [`async_device::Device::new_with_handler`] or
 /// [`nb_device::Device::new_with_handler`].
-pub trait DeviceHandler {}
+pub trait DeviceHandler {
+    /// Called after the stack has handled a `DutResetReq` and reset its state,
+    /// so the application can reboot the device or MCU. The default does nothing.
+    fn reboot(&mut self) {}
+}
 
 impl DeviceHandler for () {}
 

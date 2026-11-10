@@ -22,7 +22,7 @@ where
     state: State,
     /// Whether the last prepared uplink dropped non-empty application data.
     payload_dropped: bool,
-    _handler: H,
+    handler: H,
     shared: Shared<R, RNG, N, D>,
 }
 
@@ -51,7 +51,7 @@ where
         Device {
             state: State::default(),
             payload_dropped: false,
-            _handler: handler,
+            handler,
             shared: Shared {
                 radio,
                 rng,
@@ -154,13 +154,14 @@ where
 
     pub fn handle_event(&mut self, event: Event<'_, R>) -> Result<Response, Error<R>> {
         let send_request = matches!(&event, Event::SendDataRequest(_));
-        let (new_state, result) = self.state.handle_event::<R, RNG, N, D>(
+        let (new_state, result) = self.state.handle_event::<R, RNG, N, D, H>(
             &mut self.shared.mac,
             &mut self.shared.radio,
             &mut self.shared.rng,
             &mut self.shared.tx_buffer,
             &mut self.shared.retransmit_buffer,
             &mut self.shared.downlink,
+            &mut self.handler,
             event,
         );
         self.state = new_state;

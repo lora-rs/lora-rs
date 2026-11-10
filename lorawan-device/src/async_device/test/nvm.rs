@@ -5,12 +5,12 @@
 use super::net::{ExchangeAction, Net, Pkt};
 use super::radio::TestRadio;
 use super::timer::TestTimer;
-use super::{Device, JoinResponse, region, util};
+use super::{Device, JoinResponse, TestHandler, region, util};
 use crate::nvm::{MAX_BLOB_LEN, NonVolatileStoreSync, NvmRegion, PersistentIdentity};
 use crate::test_util::{Uplink, get_crypto};
 use lorawan::parser::{self, JoinNonce, PhyPayload};
 use std::convert::Infallible;
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 #[cfg(feature = "certification")]
@@ -289,7 +289,23 @@ async fn port_disable_persists_before_the_reset_event() {
     use lorawan::parser::DataFrameType;
 
     let store = MockStore::default();
-    let mut net = restore(&store).await;
+    let handler = TestHandler::default();
+    let reboots = handler.reboots.clone();
+    let pending = Arc::new(AtomicUsize::new(0));
+    let (radio, mock_radio) = TestRadio::new(pending.clone());
+    let (timer, mock_timer) = TestTimer::new(pending);
+    let region = region::US915::default();
+    let device = Device::restore_with_handler(
+        handler,
+        region.into(),
+        mock_radio,
+        mock_timer,
+        rand_core::OsRng,
+        store.clone(),
+    )
+    .await
+    .unwrap();
+    let mut net = Net::new(radio, timer, device).await;
     let device = net.device();
     assert!(matches!(device.join(&get_abp_credentials()).await, Ok(JoinResponse::JoinSuccess)));
     assert_eq!(store.saves(), 0);
@@ -333,6 +349,7 @@ async fn port_disable_persists_before_the_reset_event() {
         &mut device.radio,
         &mut device.rng,
         &mut device.store,
+        &mut device.handler,
         response,
         None,
     )
@@ -340,6 +357,7 @@ async fn port_disable_persists_before_the_reset_event() {
     .unwrap();
     assert_eq!(store.saves(), 1);
     assert!(store.identity().fport224_disabled);
+    assert_eq!(reboots.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]
