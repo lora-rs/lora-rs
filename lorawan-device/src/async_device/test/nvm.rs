@@ -277,9 +277,7 @@ async fn closed_certification_port_survives_a_reboot() {
     assert_eq!(downlink.data.as_slice(), &[0x20]);
 }
 
-/// Closing the port over the air reaches the application as a reset event only after
-/// the identity is in the store. The async device has no application-side handler for
-/// these events yet, so the response path is driven directly.
+/// Closing the port over the air persists the identity before the reset event.
 #[cfg(feature = "certification")]
 #[tokio::test]
 async fn port_disable_persists_before_the_reset_event() {
@@ -327,7 +325,8 @@ async fn port_disable_persists_before_the_reset_event() {
     assert!(!device.certification_enabled());
     assert_eq!(store.saves(), 0, "not yet persisted");
 
-    let passed_on = Device::handle_mac_response(
+    Device::handle_mac_response(
+        &mut device.override_periodicity,
         &mut device.radio_buffer,
         &mut device.retransmit_buffer,
         &mut device.mac,
@@ -339,7 +338,6 @@ async fn port_disable_persists_before_the_reset_event() {
     )
     .await
     .unwrap();
-    assert!(matches!(passed_on, Some(Response::DeviceHandler(DeviceEvent::ResetDevice))));
     assert_eq!(store.saves(), 1);
     assert!(store.identity().fport224_disabled);
 }

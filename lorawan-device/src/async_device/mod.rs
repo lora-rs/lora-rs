@@ -92,6 +92,9 @@ where
     payload_dropped: bool,
     store: S,
     _handler: H,
+    /// Uplink periodicity requested through the certification protocol, in seconds.
+    #[cfg(feature = "certification")]
+    override_periodicity: Option<u16>,
     #[cfg(feature = "class-c")]
     class_c: bool,
 }
@@ -280,6 +283,8 @@ where
             downlink: Vec::new(),
             payload_dropped: false,
             store: NoNvm,
+            #[cfg(feature = "certification")]
+            override_periodicity: None,
             #[cfg(feature = "class-c")]
             class_c: false,
         }
@@ -347,6 +352,8 @@ where
             downlink: Vec::new(),
             payload_dropped: false,
             store,
+            #[cfg(feature = "certification")]
+            override_periodicity: None,
             #[cfg(feature = "class-c")]
             class_c: false,
         })
@@ -616,6 +623,9 @@ where
                     (ms, rx_windows) = self.mac.take_pending_cert_rx();
                     tx_pending = false;
                 }
+                // A certification reset dropped the session mid-flight. The uplink
+                // itself completed, but there is no session state left to report.
+                mac::Response::NoUpdate => return Ok(SendResponse::RxComplete),
                 response => {
                     // Wait for random RETRANSMIT_TIMEOUT before reporting a NoAck.
                     if matches!(response, mac::Response::NoAck) {
@@ -714,6 +724,8 @@ where
                         &rx_config.rf,
                     )?;
                     match Self::handle_mac_response(
+                        #[cfg(feature = "certification")]
+                        &mut self.override_periodicity,
                         &mut self.radio_buffer,
                         &mut self.retransmit_buffer,
                         &mut self.mac,
@@ -782,6 +794,8 @@ where
                             &rx_config.rf,
                         )?;
                         if let Some(response) = Self::handle_mac_response(
+                            #[cfg(feature = "certification")]
+                            &mut self.override_periodicity,
                             &mut self.radio_buffer,
                             &mut self.retransmit_buffer,
                             &mut self.mac,
@@ -877,6 +891,7 @@ where
     // Split borrows: the Class C listen loop holds a timer future across this call.
     #[allow(unused_variables, clippy::too_many_arguments)]
     async fn handle_mac_response(
+        #[cfg(feature = "certification")] periodicity_override: &mut Option<u16>,
         radio_buffer: &mut RadioBuffer<N>,
         retransmit_buffer: &mut RadioBuffer<N>,
         mac: &mut Mac,
@@ -890,11 +905,32 @@ where
         match response {
             mac::Response::NoUpdate => Ok(None),
             #[cfg(feature = "certification")]
-            response @ mac::Response::DeviceHandler(_) => {
+            mac::Response::DeviceHandler(event) => {
+                use mac::DeviceEvent;
+
                 // The MAC may have closed FPort 224, which lives in the identity blob
-                // and must be durable before the application acts on the event.
+                // and must be durable before the device acts on the event.
                 persist_identity(store, mac).await?;
-                Ok(Some(response))
+                match event {
+                    DeviceEvent::ResetMac => {
+                        mac.reset(true);
+                        Ok(None)
+                    }
+                    DeviceEvent::ResetDevice => {
+                        mac.reset(false);
+                        // TODO: Full reset of device
+                        Ok(None)
+                    }
+                    DeviceEvent::TxPeriodicityChange { periodicity } => {
+                        *periodicity_override = periodicity;
+                        Ok(None)
+                    }
+                    DeviceEvent::DisableFPort224 => {
+                        // Event was already handled in MAC layer
+                        // and translated into ResetDevice.
+                        unreachable!()
+                    }
+                }
             }
             #[cfg(feature = "certification")]
             mac::Response::LinkCheckReq => {
@@ -964,6 +1000,8 @@ where
                         rf_config,
                     );
                     Self::handle_mac_response(
+                        #[cfg(feature = "certification")]
+                        &mut self.override_periodicity,
                         &mut self.radio_buffer,
                         &mut self.retransmit_buffer,
                         &mut self.mac,
@@ -996,6 +1034,8 @@ where
                 &rx_config.rf,
             )?;
             if let Some(response) = Self::handle_mac_response(
+                #[cfg(feature = "certification")]
+                &mut self.override_periodicity,
                 &mut self.radio_buffer,
                 &mut self.retransmit_buffer,
                 &mut self.mac,
@@ -1013,8 +1053,8 @@ where
     }
 }
 
-/// Write the identity blob unless the store already holds identical bytes, sparing flash
-/// when nothing changed. No-op without a store.
+/// Write the identity blob unless the store already holds identical bytes,
+/// sparing flash when nothing changed. No-op without a store.
 async fn persist_identity<S: NonVolatileStore, RE>(
     store: &mut S,
     mac: &Mac,
