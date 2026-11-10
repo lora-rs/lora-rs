@@ -14,6 +14,7 @@ use super::{
     radio::RadioChannel,
     timer::{TimerChannel, TimerKind},
 };
+use crate::DeviceHandler;
 use crate::async_device::{Error, JoinResponse, SendResponse, radio::RxConfig};
 use crate::nvm::{NoNvm, NonVolatileStoreSync};
 use crate::test_util::{Uplink, get_dev_addr, get_key, get_network_crypto, get_otaa_credentials};
@@ -39,10 +40,10 @@ const STUCK: Duration = Duration::from_secs(5);
 /// `S` is the device's store and `G` its RNG. The bounds are what spawning the device
 /// onto a task needs: a blocking store, so the compiler can see through the blanket
 /// async impl that its futures are `Send`.
-pub struct Net<S: NonVolatileStoreSync = NoNvm, G: RngCore = OsRng> {
+pub struct Net<S: NonVolatileStoreSync = NoNvm, G: RngCore = OsRng, H = ()> {
     radio: RadioChannel,
     timer: TimerChannel,
-    device: Option<Device<S, G>>,
+    device: Option<Device<S, G, H>>,
     /// FCntDown of the network's next downlink, assigned by network.
     fcnt_down: u32,
     /// The session keys the network builds its frames with; follow the
@@ -57,7 +58,7 @@ struct SessionKeys {
 }
 
 impl SessionKeys {
-    fn of<S: NonVolatileStoreSync, G: RngCore>(device: &Device<S, G>) -> Self {
+    fn of<S: NonVolatileStoreSync, G: RngCore, H>(device: &Device<S, G, H>) -> Self {
         match device.mac.get_session() {
             Some(session) => Self { nwk: *session.nwkskey(), app: *session.appskey() },
             // No session yet: the one a join creates is not known in advance.
@@ -66,8 +67,13 @@ impl SessionKeys {
     }
 }
 
-impl<S: NonVolatileStoreSync + Send + 'static, G: RngCore + Send + 'static> Net<S, G> {
-    pub async fn new(radio: RadioChannel, timer: TimerChannel, device: Device<S, G>) -> Self {
+impl<S, G, H> Net<S, G, H>
+where
+    S: NonVolatileStoreSync + Send + 'static,
+    G: RngCore + Send + 'static,
+    H: DeviceHandler + Send + 'static,
+{
+    pub async fn new(radio: RadioChannel, timer: TimerChannel, device: Device<S, G, H>) -> Self {
         // Uplinks the device transmitted before the network took over (eg
         // the one that enabled class C) belong to no exchange.
         radio.take_uplinks().await;
@@ -80,7 +86,7 @@ impl<S: NonVolatileStoreSync + Send + 'static, G: RngCore + Send + 'static> Net<
     }
 
     /// The device under test.
-    pub fn device(&mut self) -> &mut Device<S, G> {
+    pub fn device(&mut self) -> &mut Device<S, G, H> {
         self.device.as_mut().expect("device not in use")
     }
 
@@ -169,11 +175,11 @@ impl<S: NonVolatileStoreSync + Send + 'static, G: RngCore + Send + 'static> Net<
     /// returns.
     async fn drive<R, F>(
         &mut self,
-        op: impl FnOnce(Device<S, G>) -> F,
+        op: impl FnOnce(Device<S, G, H>) -> F,
         mut action: ExchangeAction,
     ) -> Outcome<R>
     where
-        F: Future<Output = (Device<S, G>, R)> + Send + 'static,
+        F: Future<Output = (Device<S, G, H>, R)> + Send + 'static,
         R: Send + 'static,
     {
         let mut last = self.timer.get_armed_count().await;
@@ -283,9 +289,9 @@ impl<S: NonVolatileStoreSync + Send + 'static, G: RngCore + Send + 'static> Net<
 }
 
 /// One step of the exchange loop.
-enum Step<S: NonVolatileStoreSync, G: RngCore, R> {
+enum Step<S: NonVolatileStoreSync, G: RngCore, H, R> {
     /// The device operation returned.
-    Done(Box<(Device<S, G>, R)>),
+    Done(Box<(Device<S, G, H>, R)>),
     /// The device armed a timer; the armed count so far.
     Armed(usize),
 }

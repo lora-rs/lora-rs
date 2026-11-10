@@ -91,7 +91,7 @@ where
     /// Whether the last prepared uplink dropped non-empty application data.
     payload_dropped: bool,
     store: S,
-    _handler: H,
+    handler: H,
     /// Uplink periodicity requested through the certification protocol, in seconds.
     #[cfg(feature = "certification")]
     override_periodicity: Option<u16>,
@@ -273,7 +273,7 @@ where
             mac.set_session(session);
         }
         Self {
-            _handler: handler,
+            handler,
             radio,
             rng,
             mac,
@@ -342,7 +342,7 @@ where
             mac.set_identity(identity);
         }
         Ok(Self {
-            _handler: handler,
+            handler,
             radio,
             rng,
             mac,
@@ -732,6 +732,7 @@ where
                         &mut self.radio,
                         &mut self.rng,
                         &mut self.store,
+                        &mut self.handler,
                         mac_response,
                         Some(rx_config),
                     )
@@ -802,6 +803,7 @@ where
                             &mut self.radio,
                             &mut self.rng,
                             &mut self.store,
+                            &mut self.handler,
                             mac_response,
                             Some(rx_config),
                         )
@@ -898,6 +900,7 @@ where
         radio: &mut R,
         rng: &mut G,
         store: &mut S,
+        handler: &mut H,
         response: mac::Response,
         rx_config: Option<RxConfig>,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
@@ -917,8 +920,11 @@ where
                         Ok(None)
                     }
                     DeviceEvent::ResetDevice => {
+                        // Reset the stack and ask the application to reboot the MCU.
+                        // The stack-side reset still applies when `reboot` is a
+                        // no-op or deferred.
                         mac.reset(false);
-                        // TODO: Full reset of device
+                        handler.reboot();
                         Ok(None)
                     }
                     DeviceEvent::TxPeriodicityChange { periodicity } => {
@@ -1008,6 +1014,7 @@ where
                         &mut self.radio,
                         &mut self.rng,
                         &mut self.store,
+                        &mut self.handler,
                         mac_response,
                         None,
                     )
@@ -1042,6 +1049,7 @@ where
                 &mut self.radio,
                 &mut self.rng,
                 &mut self.store,
+                &mut self.handler,
                 mac_response,
                 Some(rx_config),
             )

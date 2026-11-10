@@ -1,6 +1,6 @@
 use lorawan::parser::{self, DecryptedDataPayload, PhyPayload};
 
-use super::{Device, get_dev_addr, get_key, radio::*, region, timer::*};
+use super::{Device, TestHandler, get_dev_addr, get_key, radio::*, region, timer::*};
 use crate::mac::Session;
 use crate::test_util::{Uplink, get_crypto};
 use crate::{AppSKey, NwkSKey};
@@ -27,12 +27,16 @@ pub fn session_with_region(region: region::Configuration) -> (RadioChannel, Time
     (radio_channel, timer_channel, async_device)
 }
 
-fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel, Device) {
+fn setup_internal<H: crate::DeviceHandler>(
+    handler: H,
+    session_data: Option<Session>,
+) -> (RadioChannel, TimerChannel, Device<crate::nvm::NoNvm, rand_core::OsRng, H>) {
     let pending = Arc::new(AtomicUsize::new(0));
     let (radio_channel, mock_radio) = TestRadio::new(pending.clone());
     let (timer_channel, mock_timer) = TestTimer::new(pending);
     let region = region::US915::default();
-    let async_device = Device::new_with_session(
+    let async_device = Device::new_with_session_and_handler(
+        handler,
         region.into(),
         mock_radio,
         mock_timer,
@@ -43,7 +47,13 @@ fn setup_internal(session_data: Option<Session>) -> (RadioChannel, TimerChannel,
 }
 
 pub fn setup_with_session() -> (RadioChannel, TimerChannel, Device) {
-    setup_internal(Some(default_session()))
+    setup_internal((), Some(default_session()))
+}
+
+pub fn setup_with_session_and_handler(
+    handler: TestHandler,
+) -> (RadioChannel, TimerChannel, Device<crate::nvm::NoNvm, rand_core::OsRng, TestHandler>) {
+    setup_internal(handler, Some(default_session()))
 }
 
 /// Parses the uplink, checks the MIC, and decrypts it in place, allowing
@@ -90,5 +100,5 @@ pub async fn setup_with_session_class_c() -> Net {
 }
 
 pub fn setup() -> (RadioChannel, TimerChannel, Device) {
-    setup_internal(None)
+    setup_internal((), None)
 }

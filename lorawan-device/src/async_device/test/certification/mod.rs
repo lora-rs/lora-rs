@@ -1,5 +1,6 @@
 //! LoRaWAN 1.0.4 Certification testcases
 //! Based on LoRaWAN 1.0.4 End Device Certification Test Specification v1.6.1
+use super::TestHandler;
 use super::net;
 use super::util;
 use super::util::decrypt_uplink;
@@ -7,6 +8,7 @@ use crate::test_util::{get_crypto, get_dev_addr};
 use lorawan::keys::Crypto;
 
 use net::{ExchangeAction, Net, Pkt};
+use std::sync::atomic::Ordering;
 
 mod mac_common;
 
@@ -117,7 +119,7 @@ async fn dut_join_req_resets_the_mac() {
 
 #[tokio::test]
 async fn dut_reset_req_resets_the_device() {
-    let (radio, timer, device) = util::setup_with_session();
+    let (radio, timer, device) = util::setup_with_session_and_handler(TestHandler::default());
     let mut net = Net::new(radio, timer, device).await;
 
     let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx1(Pkt::cp_cmd("01"))).await;
@@ -125,6 +127,7 @@ async fn dut_reset_req_resets_the_device() {
 
     // Without a store there is nothing to resume, so the device restarts unjoined.
     assert!(net.device().get_session().is_none());
+    assert_eq!(net.device().handler.reboots.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

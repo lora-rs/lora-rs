@@ -5,6 +5,8 @@ use crate::{
     test_util::*,
 };
 use lorawan::maccommands::{UplinkMacCommand, parse_uplink_mac_commands};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod timer;
 use timer::TestTimer;
@@ -31,8 +33,19 @@ mod class_c;
 #[cfg(feature = "multicast")]
 mod multicast;
 
-type Device<S = crate::nvm::NoNvm, G = rand_core::OsRng> =
-    crate::async_device::Device<TestRadio, TestTimer, G, 512, 4, S>;
+type Device<S = crate::nvm::NoNvm, G = rand_core::OsRng, H = ()> =
+    crate::async_device::Device<TestRadio, TestTimer, G, 512, 4, S, H>;
+
+#[derive(Clone, Default)]
+pub(crate) struct TestHandler {
+    pub reboots: Arc<AtomicUsize>,
+}
+
+impl crate::DeviceHandler for TestHandler {
+    fn reboot(&mut self) {
+        self.reboots.fetch_add(1, Ordering::SeqCst);
+    }
+}
 
 #[tokio::test]
 async fn test_join_rx1() {
