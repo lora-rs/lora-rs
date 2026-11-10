@@ -103,3 +103,38 @@ async fn txframectrlreq_no_change() {
     // Check that override_confirm has not changed!
     assert_eq!(net.device().mac.get_session().unwrap().override_confirmed, Some(true));
 }
+
+#[tokio::test]
+async fn dut_join_req_resets_the_mac() {
+    let (radio, timer, device) = util::setup_with_session();
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx1(Pkt::cp_cmd("02"))).await;
+    r.expect_rx_complete();
+
+    assert!(net.device().get_session().is_none());
+}
+
+#[tokio::test]
+async fn dut_reset_req_resets_the_device() {
+    let (radio, timer, device) = util::setup_with_session();
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx1(Pkt::cp_cmd("01"))).await;
+    r.expect_rx_complete();
+
+    // Without a store there is nothing to resume, so the device restarts unjoined.
+    assert!(net.device().get_session().is_none());
+}
+
+#[tokio::test]
+async fn tx_periodicity_change_overrides_the_uplink_period() {
+    let (radio, timer, device) = util::setup_with_session();
+    let mut net = Net::new(radio, timer, device).await;
+
+    // TxPeriodicityChangeReq with index 1: one uplink every 5 seconds.
+    let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx1(Pkt::cp_cmd("0601"))).await;
+    r.expect_rx_complete();
+
+    assert_eq!(net.device().override_periodicity, Some(5));
+}

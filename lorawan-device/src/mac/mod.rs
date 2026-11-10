@@ -422,6 +422,20 @@ impl Mac {
         }
     }
 
+    /// Drop the running MAC state. With `keep_identity`, the durable join counters and
+    /// FPort 224 state are retained; otherwise the identity is cleared and certification
+    /// returns to its default state.
+    #[cfg(feature = "certification")]
+    pub(crate) fn reset(&mut self, keep_identity: bool) {
+        self.state = State::Unjoined;
+        self.payload_dropped = false;
+        self.pending_cert_rx = None;
+        if !keep_identity {
+            self.identity = None;
+            self.certification = certification::Certification::new();
+        }
+    }
+
     /// Close FPort 224 for good: certification downlinks become ordinary application
     /// data. Recorded in the identity so a store keeps it across reboots.
     #[cfg(feature = "certification")]
@@ -616,6 +630,7 @@ pub(crate) enum Response {
 #[cfg(feature = "certification")]
 pub(crate) enum DeviceEvent {
     ResetDevice,
+    /// Drop the current session, forcing an OTAA device to rejoin the network.
     ResetMac,
     TxPeriodicityChange {
         periodicity: Option<u16>,
