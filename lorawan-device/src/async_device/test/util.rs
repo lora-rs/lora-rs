@@ -27,6 +27,24 @@ pub fn session_with_region(region: region::Configuration) -> (RadioChannel, Time
     (radio_channel, timer_channel, async_device)
 }
 
+pub fn session_with_region_and_battery(
+    region: region::Configuration,
+    battery: u8,
+) -> (RadioChannel, TimerChannel, Device<crate::nvm::NoNvm, rand_core::OsRng, TestHandler>) {
+    let pending = Arc::new(AtomicUsize::new(0));
+    let (radio_channel, mock_radio) = TestRadio::new(pending.clone());
+    let (timer_channel, mock_timer) = TestTimer::new(pending);
+    let async_device = Device::new_with_session_and_handler(
+        TestHandler::with_battery(battery),
+        region,
+        mock_radio,
+        mock_timer,
+        rand::rngs::OsRng,
+        Some(default_session()),
+    );
+    (radio_channel, timer_channel, async_device)
+}
+
 fn setup_internal<H: crate::DeviceHandler>(
     handler: H,
     session_data: Option<Session>,

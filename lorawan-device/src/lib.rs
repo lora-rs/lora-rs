@@ -66,6 +66,16 @@ impl defmt::Format for Downlink {
 /// [`async_device::Device::new_with_handler`] or
 /// [`nb_device::Device::new_with_handler`].
 pub trait DeviceHandler {
+    /// Battery level reported in `DevStatusAns`:
+    /// - 0: device is powered externally
+    /// - 255: battery status is unknown
+    /// - 1..=254: battery level
+    ///
+    /// Defaults to 255 (unknown).
+    fn battery_level(&self) -> u8 {
+        255
+    }
+
     /// Called after the stack has handled a `DutResetReq` and reset its state,
     /// so the application can reboot the device or MCU. The default does nothing.
     fn reboot(&mut self) {}

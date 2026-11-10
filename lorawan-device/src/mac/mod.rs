@@ -91,6 +91,13 @@ pub struct Configuration {
     /// the network via LinkADRReq: 1..=15 transmissions per FCntUp. Defaults
     /// to 1 (no retransmission).
     pub(crate) nb_trans: u8,
+    /// Battery level reported in `DevStatusAns`:
+    /// - 0: device is powered externally
+    /// - 255: battery status is unknown
+    /// - 1..=254: battery level
+    ///
+    /// Defaults to 255 (unknown).
+    pub(crate) battery: u8,
 }
 
 pub(crate) struct Mac {
@@ -166,6 +173,7 @@ impl Mac {
                 tx_power: None,
                 adr_enabled: true,
                 nb_trans: 1,
+                battery: 255,
             },
             #[cfg(feature = "certification")]
             certification: certification::Certification::new(),

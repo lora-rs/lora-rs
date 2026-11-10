@@ -36,12 +36,29 @@ mod multicast;
 type Device<S = crate::nvm::NoNvm, G = rand_core::OsRng, H = ()> =
     crate::async_device::Device<TestRadio, TestTimer, G, 512, 4, S, H>;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(crate) struct TestHandler {
+    pub battery: u8,
     pub reboots: Arc<AtomicUsize>,
 }
 
+impl TestHandler {
+    pub(crate) fn with_battery(battery: u8) -> Self {
+        Self { battery, reboots: Arc::new(AtomicUsize::new(0)) }
+    }
+}
+
+impl Default for TestHandler {
+    fn default() -> Self {
+        Self::with_battery(255)
+    }
+}
+
 impl crate::DeviceHandler for TestHandler {
+    fn battery_level(&self) -> u8 {
+        self.battery
+    }
+
     fn reboot(&mut self) {
         self.reboots.fetch_add(1, Ordering::SeqCst);
     }
