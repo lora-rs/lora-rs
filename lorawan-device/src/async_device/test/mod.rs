@@ -98,6 +98,44 @@ async fn test_no_join_accept() {
     assert_eq!(r.windows(), 2);
 }
 
+#[should_panic]
+#[tokio::test]
+async fn join_accept_resets_mac_parameters() {
+    let (radio, timer, device) = setup();
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.join(ExchangeAction::rx1(Pkt::join_accept().dl_settings(0x23))).await;
+    r.expect_joined();
+
+    // Simulate parameters changed by LinkADRReq, RXParamSetupReq and
+    // NewChannelReq after the first join.
+    let device = net.device();
+    device.mac.configuration.data_rate = region::DR::_4;
+    device.mac.configuration.tx_power = Some(5);
+    device.mac.configuration.nb_trans = 7;
+    device.mac.configuration.rx2_frequency = Some(869_525_000);
+    device.mac.configuration.adr_enabled = false;
+    device.mac.configuration.rx1_delay = 7_000;
+    device.mac.region.channel_mask_set(
+        lorawan::types::ChannelMask::<9>::new(&[0xff, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap(),
+    );
+
+    let r = net.join(ExchangeAction::rx1(Pkt::join_accept().dl_settings(0x00))).await;
+    r.expect_joined();
+
+    let default_dr = net.device().mac.region.get_default_datarate();
+    let config = &net.device().mac.configuration;
+    assert_eq!(config.data_rate, default_dr);
+    assert_eq!(config.tx_power, None);
+    assert_eq!(config.nb_trans, 1);
+    assert_eq!(config.rx2_frequency, None);
+    assert!(config.adr_enabled);
+    assert_eq!(config.rx1_delay, crate::region::constants::RECEIVE_DELAY1);
+    assert_eq!(config.rx1_dr_offset, 0);
+    assert_eq!(config.rx2_data_rate, Some(region::DR::_0));
+    assert_eq!(net.device().mac.region.channel_mask_get(), Default::default());
+}
+
 #[tokio::test]
 async fn test_join_accept_dl_settings_applied() {
     let (radio, timer, device) = setup();
