@@ -368,6 +368,13 @@ where
         self.mac.certification_enabled()
     }
 
+    /// Uplink periodicity in seconds requested through the certification protocol,
+    /// or `None` for the application's default.
+    #[cfg(feature = "certification")]
+    pub fn get_override_periodicity(&self) -> Option<u16> {
+        self.override_periodicity
+    }
+
     /// Enables Class C behavior. Note that Class C downlinks are not possible until a confirmed
     /// uplink is sent to the LNS.
     #[cfg(feature = "class-c")]
