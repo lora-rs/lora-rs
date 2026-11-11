@@ -1,14 +1,16 @@
 //! LoRaWAN 1.0.4 Certification testcases
 //! Based on LoRaWAN 1.0.4 End Device Certification Test Specification v1.6.1
-use super::TestHandler;
 use super::net;
+use super::nvm::{MockStore, dev_nonce};
 use super::util;
 use super::util::decrypt_uplink;
+use super::{Device, TestHandler, radio::TestRadio, timer::TestTimer};
 use crate::test_util::{get_crypto, get_dev_addr};
 use lorawan::keys::Crypto;
 
 use net::{ExchangeAction, Net, Pkt};
-use std::sync::atomic::Ordering;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod mac_common;
 
@@ -128,6 +130,47 @@ async fn dut_reset_req_resets_the_device() {
     // Without a store there is nothing to resume, so the device restarts unjoined.
     assert!(net.device().get_session().is_none());
     assert_eq!(net.device().handler.reboots.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+#[should_panic(expected = "FPort 224 reopened after reset")]
+async fn port_disable_reset_preserves_identity() {
+    let store = MockStore::default();
+    let handler = TestHandler::default();
+    let reboots = handler.reboots.clone();
+    let pending = Arc::new(AtomicUsize::new(0));
+    let (radio, mock_radio) = TestRadio::new(pending.clone());
+    let (timer, mock_timer) = TestTimer::new(pending);
+    let device = Device::restore_with_handler(
+        handler,
+        crate::region::EU868::new_eu868().into(),
+        mock_radio,
+        mock_timer,
+        rand_core::OsRng,
+        store.clone(),
+    )
+    .await
+    .unwrap();
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.join(ExchangeAction::rx1(Pkt::join_accept().join_nonce(1))).await;
+    r.expect_joined();
+    assert_eq!(dev_nonce(r.uplink(0)), 0);
+
+    // DutFPort224DisableReq closes the port and resets the device. The handler
+    // does not reboot, so the reset must preserve the identity in-process.
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::cp_cmd("7e"))).await;
+    r.expect_rx_complete();
+    assert_eq!(reboots.load(Ordering::SeqCst), 1);
+    assert!(store.identity().fport224_disabled);
+    assert!(!net.device().certification_enabled(), "FPort 224 reopened after reset");
+
+    // The next join must use the stored monotonic DevNonce, not a random value.
+    let r = net.join(ExchangeAction::rx1(Pkt::join_accept().join_nonce(2))).await;
+    r.expect_joined();
+    assert_eq!(dev_nonce(r.uplink(0)), 1, "next join used a random DevNonce");
+    assert!(!net.device().certification_enabled());
+    assert_eq!(store.identity().dev_nonce, 2);
 }
 
 #[tokio::test]

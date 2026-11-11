@@ -30,7 +30,7 @@ struct Inner {
 /// In-memory store implementing the *sync* trait; the device consumes it through the
 /// blanket async impl, so these tests cover that path too.
 #[derive(Clone, Default)]
-struct MockStore {
+pub(crate) struct MockStore {
     inner: Arc<Mutex<Inner>>,
 }
 
@@ -39,7 +39,7 @@ impl MockStore {
         self.inner.lock().unwrap().saves
     }
 
-    fn identity(&self) -> PersistentIdentity {
+    pub(crate) fn identity(&self) -> PersistentIdentity {
         PersistentIdentity::decode(self.inner.lock().unwrap().blob.as_ref().unwrap()).unwrap()
     }
 
@@ -89,7 +89,7 @@ async fn restore(store: &MockStore) -> Net<MockStore> {
 }
 
 /// The DevNonce the device put in a JoinRequest.
-fn dev_nonce(uplink: &Uplink) -> u16 {
+pub(crate) fn dev_nonce(uplink: &Uplink) -> u16 {
     let mut uplink = uplink.clone();
     let Ok(PhyPayload::JoinRequest(join_request)) = parser::parse(uplink.data_mut()) else {
         panic!("not a join request");
