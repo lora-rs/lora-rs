@@ -133,7 +133,6 @@ async fn dut_reset_req_resets_the_device() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "FPort 224 reopened after reset")]
 async fn port_disable_reset_preserves_identity() {
     let store = MockStore::default();
     let handler = TestHandler::default();
