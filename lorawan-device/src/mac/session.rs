@@ -737,7 +737,7 @@ mod tests {
     use lorawan::parser::{
         DataFrameType, DecryptedDataPayload, DevAddr, EncryptedDataPayload, FrmPayload,
     };
-    use lorawan::types::DR;
+    use lorawan::types::{ChannelMask, DR};
     use rand_core::RngCore;
 
     fn uplink_fctrl(session: &mut Session, mac: &Mac) -> lorawan::parser::FCtrl {
@@ -837,6 +837,36 @@ mod tests {
         };
         let mut dl: heapless::Vec<Downlink, 1> = heapless::Vec::new();
         mac.handle_rx::<256, 1>(&mut rx, &mut dl, 10, &rf_config, &())
+    }
+
+    #[cfg(feature = "certification")]
+    #[should_panic]
+    #[test]
+    fn mac_reset_restores_network_parameters() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+        mac.configuration.data_rate = DR::_5;
+        mac.configuration.tx_power = Some(5);
+        mac.configuration.nb_trans = 7;
+        mac.configuration.rx1_dr_offset = 3;
+        mac.configuration.rx2_data_rate = Some(DR::_3);
+        mac.configuration.rx2_frequency = Some(869_525_000);
+        mac.configuration.adr_enabled = false;
+        mac.configuration.rx1_delay = 7_000;
+        mac.region
+            .channel_mask_set(ChannelMask::<9>::new(&[0xff, 0, 0, 0, 0, 0, 0, 0, 0]).unwrap());
+
+        mac.reset(true);
+
+        assert_eq!(mac.configuration.data_rate, mac.region.get_default_datarate());
+        assert_eq!(mac.configuration.tx_power, None);
+        assert_eq!(mac.configuration.nb_trans, 1);
+        assert_eq!(mac.configuration.rx1_dr_offset, 0);
+        assert_eq!(mac.configuration.rx2_data_rate, None);
+        assert_eq!(mac.configuration.rx2_frequency, None);
+        assert!(mac.configuration.adr_enabled);
+        assert_eq!(mac.configuration.rx1_delay, region::constants::RECEIVE_DELAY1);
+        assert_eq!(mac.region.channel_mask_get(), Default::default());
     }
 
     #[cfg(feature = "certification")]
