@@ -333,14 +333,7 @@ where
         mut store: S,
     ) -> Result<Self, S::Error> {
         let mut mac = Mac::new(region, R::MAX_RADIO_POWER, R::ANTENNA_GAIN);
-        if S::PERSISTENT {
-            let mut buf = [0u8; MAX_BLOB_LEN];
-            let identity = match store.load(NvmRegion::Identity, &mut buf).await? {
-                Some(n) => PersistentIdentity::decode(&buf[..n]).unwrap_or_default(),
-                None => PersistentIdentity::default(),
-            };
-            mac.set_identity(identity);
-        }
+        reload_identity(&mut store, &mut mac).await?;
         Ok(Self {
             handler,
             radio,
@@ -926,6 +919,7 @@ where
                         // The stack-side reset still applies when `reboot` is a
                         // no-op or deferred.
                         mac.reset(false);
+                        reload_identity(store, mac).await.map_err(|_| Error::Nvm)?;
                         handler.reboot();
                         Ok(None)
                     }
@@ -1063,6 +1057,22 @@ where
             }
         }
     }
+}
+
+/// Load the persisted identity into `mac`. No-op without a store.
+async fn reload_identity<S: NonVolatileStore>(
+    store: &mut S,
+    mac: &mut Mac,
+) -> core::result::Result<(), S::Error> {
+    if S::PERSISTENT {
+        let mut buf = [0u8; MAX_BLOB_LEN];
+        let identity = match store.load(NvmRegion::Identity, &mut buf).await? {
+            Some(n) => PersistentIdentity::decode(&buf[..n]).unwrap_or_default(),
+            None => PersistentIdentity::default(),
+        };
+        mac.set_identity(identity);
+    }
+    Ok(())
 }
 
 /// Write the identity blob unless the store already holds identical bytes,
