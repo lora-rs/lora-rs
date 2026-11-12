@@ -20,6 +20,7 @@
 use super::{decrypt_uplink, net, util};
 use crate::test_util::Uplink;
 use net::{ExchangeAction, Net, Pkt};
+use std::sync::atomic::Ordering;
 
 use lorawan::maccommands::parse_uplink_mac_commands;
 use lorawan::parser::FrmPayload;
@@ -58,6 +59,11 @@ async fn eu868_devstatusreq_test() {
     r.expect_rx_complete();
     let mut uplink = r.uplink(0).clone();
     assert_eq!(decrypt_uplink(&mut uplink).fhdr().f_opts(), &expected_ans);
+
+    // Step 3: a downlink without DevStatusReq does not read the battery
+    let r = net.exchange(&[1, 2, 3], 2, false, ExchangeAction::rx1(Pkt::app(1, &[0xAA]))).await;
+    r.expect_downlink_received();
+    assert_eq!(net.device().handler.battery_reads.load(Ordering::SeqCst), 1);
 }
 
 #[tokio::test]

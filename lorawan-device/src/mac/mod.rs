@@ -3,7 +3,7 @@
 //! decrypting from send and receive buffers.
 
 use crate::{
-    AppSKey, Downlink, NwkSKey,
+    AppSKey, DeviceHandler, Downlink, NwkSKey,
     nvm::PersistentIdentity,
     radio::{self, RadioBuffer, RfConfig, RxConfig, RxMode},
     region,
@@ -91,13 +91,6 @@ pub struct Configuration {
     /// the network via LinkADRReq: 1..=15 transmissions per FCntUp. Defaults
     /// to 1 (no retransmission).
     pub(crate) nb_trans: u8,
-    /// Battery level reported in `DevStatusAns`:
-    /// - 0: device is powered externally
-    /// - 255: battery status is unknown
-    /// - 1..=254: battery level
-    ///
-    /// Defaults to 255 (unknown).
-    pub(crate) battery: u8,
 }
 
 pub(crate) struct Mac {
@@ -173,7 +166,6 @@ impl Mac {
                 tx_power: None,
                 adr_enabled: true,
                 nb_trans: 1,
-                battery: 255,
             },
             #[cfg(feature = "certification")]
             certification: certification::Certification::new(),
@@ -380,6 +372,7 @@ impl Mac {
         dl: &mut Vec<Downlink, D>,
         snr: i8,
         rf_config: &RfConfig,
+        handler: &impl DeviceHandler,
     ) -> Response {
         let response = match &mut self.state {
             State::Joined(session) => session.handle_rx::<N, D>(
@@ -394,6 +387,7 @@ impl Mac {
                 rf_config.max_payload_len,
                 snr,
                 false,
+                handler,
             ),
             State::Otaa(otaa) => {
                 if let Some(session) = otaa.handle_rx::<N>(
@@ -469,6 +463,7 @@ impl Mac {
         dl: &mut Vec<Downlink, D>,
         snr: i8,
         rf_config: &RfConfig,
+        handler: &impl DeviceHandler,
     ) -> Result<Response> {
         let response = match &mut self.state {
             State::Joined(session) => session.handle_rx::<N, D>(
@@ -483,6 +478,7 @@ impl Mac {
                 rf_config.max_payload_len,
                 snr,
                 true,
+                handler,
             ),
             State::Otaa(_) => return Err(Error::NotJoined),
             State::Unjoined => return Err(Error::NotJoined),

@@ -154,7 +154,6 @@ where
 
     pub fn handle_event(&mut self, event: Event<'_, R>) -> Result<Response, Error<R>> {
         let send_request = matches!(&event, Event::SendDataRequest(_));
-        self.shared.mac.configuration.battery = self.handler.battery_level();
         let (new_state, result) = self.state.handle_event::<R, RNG, N, D, H>(
             &mut self.shared.mac,
             &mut self.shared.radio,

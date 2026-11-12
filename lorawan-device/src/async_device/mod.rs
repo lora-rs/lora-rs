@@ -717,12 +717,12 @@ where
                 RxcWindowResponse::Rx(sz, q, timeout_fut) => {
                     debug!("RXC window received {} bytes.", sz);
                     self.radio_buffer.set_pos(sz);
-                    self.mac.configuration.battery = self.handler.battery_level();
                     let mac_response = self.mac.handle_rxc::<N, D>(
                         &mut self.radio_buffer,
                         &mut self.downlink,
                         q.snr(),
                         &rx_config.rf,
+                        &self.handler,
                     )?;
                     match Self::handle_mac_response(
                         #[cfg(feature = "certification")]
@@ -789,12 +789,12 @@ where
                     RxcWindowResponse::Rx(sz, q, timeout_fut) => {
                         debug!("RXC window received {} bytes.", sz);
                         self.radio_buffer.set_pos(sz);
-                        self.mac.configuration.battery = self.handler.battery_level();
                         let mac_response = self.mac.handle_rxc::<N, D>(
                             &mut self.radio_buffer,
                             &mut self.downlink,
                             q.snr(),
                             &rx_config.rf,
+                            &self.handler,
                         )?;
                         if let Some(response) = Self::handle_mac_response(
                             #[cfg(feature = "certification")]
@@ -1002,12 +1002,12 @@ where
             match self.radio.rx_single(self.radio_buffer.as_mut()).await.map_err(Error::Radio)? {
                 RxStatus::Rx(s, q) => {
                     self.radio_buffer.set_pos(s);
-                    self.mac.configuration.battery = self.handler.battery_level();
                     let mac_response = self.mac.handle_rx::<N, D>(
                         &mut self.radio_buffer,
                         &mut self.downlink,
                         q.snr(),
                         rf_config,
+                        &self.handler,
                     );
                     Self::handle_mac_response(
                         #[cfg(feature = "certification")]
@@ -1038,12 +1038,12 @@ where
             let (sz, q) =
                 self.radio.rx_continuous(self.radio_buffer.as_mut()).await.map_err(Error::Radio)?;
             self.radio_buffer.set_pos(sz);
-            self.mac.configuration.battery = self.handler.battery_level();
             let mac_response = self.mac.handle_rxc::<N, D>(
                 &mut self.radio_buffer,
                 &mut self.downlink,
                 q.snr(),
                 &rx_config.rf,
+                &self.handler,
             )?;
             if let Some(response) = Self::handle_mac_response(
                 #[cfg(feature = "certification")]

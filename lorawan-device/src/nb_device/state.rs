@@ -380,8 +380,13 @@ impl WaitingForRx {
                                     Err(Error::BufferTooSmall.into()),
                                 );
                             }
-                            let response =
-                                mac.handle_rx::<N, D>(buf, dl, quality.snr(), &self.rf_config);
+                            let response = mac.handle_rx::<N, D>(
+                                buf,
+                                dl,
+                                quality.snr(),
+                                &self.rf_config,
+                                handler,
+                            );
                             #[cfg(feature = "certification")]
                             if let mac::Response::UplinkPrepared = response {
                                 // Transmit the certification answer in place,
