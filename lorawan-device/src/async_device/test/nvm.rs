@@ -336,6 +336,7 @@ async fn port_disable_persists_before_the_reset_event() {
         &mut device.downlink,
         10,
         &rf_config,
+        &device.handler,
     );
     assert!(matches!(response, Response::DeviceHandler(DeviceEvent::ResetDevice)));
     assert!(!device.certification_enabled());

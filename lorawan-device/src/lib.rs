@@ -71,7 +71,8 @@ pub trait DeviceHandler {
     /// - 255: battery status is unknown
     /// - 1..=254: battery level
     ///
-    /// Defaults to 255 (unknown).
+    /// Called once per `DevStatusReq` received, while the downlink is being
+    /// processed. Defaults to 255 (unknown).
     fn battery_level(&self) -> u8 {
         255
     }

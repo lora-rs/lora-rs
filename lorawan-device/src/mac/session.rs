@@ -5,7 +5,7 @@ use super::{
 };
 use crate::radio::RadioBuffer;
 use crate::region::constants::{ADR_ACK_DELAY, ADR_ACK_LIMIT, MAX_FCNT_GAP};
-use crate::{AppSKey, Downlink, NwkSKey, region};
+use crate::{AppSKey, DeviceHandler, Downlink, NwkSKey, region};
 use core::num::NonZeroU8;
 use heapless::Vec;
 use lorawan::creator::{DataFrame, Payload};
@@ -153,6 +153,7 @@ impl Session {
         max_payload_len: u8,
         snr: i8,
         ignore_mac: bool,
+        handler: &impl DeviceHandler,
     ) -> Response {
         let bytes = rx.as_mut_for_read();
         if let Ok(encrypted_data) = EncryptedDataPayload::parse(bytes) {
@@ -230,6 +231,7 @@ impl Session {
                         region,
                         parse_downlink_mac_commands(decrypted.fhdr().f_opts()),
                         snr,
+                        handler,
                     );
                     if let FrmPayload::MacCommands(mac_cmds) = decrypted.frm_payload() {
                         self.handle_downlink_macs(
@@ -237,6 +239,7 @@ impl Session {
                             region,
                             parse_downlink_mac_commands(mac_cmds),
                             snr,
+                            handler,
                         );
                     }
                 }
@@ -487,6 +490,7 @@ impl Session {
         region: &mut region::Configuration,
         cmds: MacCommands<'_, DownlinkMacCommand<'_>>,
         snr: i8,
+        handler: &impl DeviceHandler,
     ) {
         use DownlinkMacCommand::*;
         let mut channel_mask = region.channel_mask_get();
@@ -499,7 +503,7 @@ impl Session {
             match cmd {
                 DevStatusReq(..) => {
                     let mut cmd = DevStatusAnsCreator::new();
-                    let _ = cmd.set_battery(configuration.battery).set_margin(snr);
+                    let _ = cmd.set_battery(handler.battery_level()).set_margin(snr);
                     self.uplink.add_mac_command(cmd);
                 }
                 DlChannelReq(payload) => {
@@ -787,7 +791,7 @@ mod tests {
             max_payload_len: 255,
         };
         let mut dl: heapless::Vec<Downlink, 1> = heapless::Vec::new();
-        mac.handle_rx::<256, 1>(&mut rx, &mut dl, 10, &rf_config)
+        mac.handle_rx::<256, 1>(&mut rx, &mut dl, 10, &rf_config, &())
     }
 
     /// Feed an encrypted downlink with an application payload on `fport` into
@@ -832,7 +836,7 @@ mod tests {
             max_payload_len: 255,
         };
         let mut dl: heapless::Vec<Downlink, 1> = heapless::Vec::new();
-        mac.handle_rx::<256, 1>(&mut rx, &mut dl, 10, &rf_config)
+        mac.handle_rx::<256, 1>(&mut rx, &mut dl, 10, &rf_config, &())
     }
 
     #[cfg(feature = "certification")]
