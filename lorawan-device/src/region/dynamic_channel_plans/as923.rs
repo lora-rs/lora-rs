@@ -77,12 +77,11 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion
         }
     }
 
-    // Although Network gateways SHALL always listen on following frequencies
-    // with DR0..=DR5, the default Join-Request Data Rate SHALL utilize DR2..=DR5
-    // (SF10/125 kHz – SF7/125 kHz).
+    // Network gateways listen on the default channels with DR0..=DR5. The
+    // Join-Request selection is restricted to DR2..=DR5 separately.
     fn init_channels(channels: &mut ChannelPlan) {
-        channels[0] = Some(Channel::new(923200000 - OFFSET, DR::_2, DR::_5));
-        channels[1] = Some(Channel::new(923400000 - OFFSET, DR::_2, DR::_5));
+        channels[0] = Some(Channel::new(923200000 - OFFSET, DR::_0, DR::_5));
+        channels[1] = Some(Channel::new(923400000 - OFFSET, DR::_0, DR::_5));
     }
 }
 
