@@ -475,6 +475,10 @@ impl Configuration {
         mut_region_dispatch!(self, select_tx_channel, rng, datarate, frame)
     }
 
+    pub(crate) fn reset(&mut self) {
+        mut_region_dispatch!(self, reset)
+    }
+
     pub(crate) fn process_join_accept(&mut self, c_f_list: Option<&CfList>) {
         mut_region_dispatch!(self, process_join_accept, c_f_list)
     }
@@ -588,6 +592,9 @@ from_region!(US915);
 
 pub(crate) trait RegionHandler {
     fn process_join_accept(&mut self, c_f_list: Option<&CfList>);
+
+    /// Restore the region to its power-on channel configuration.
+    fn reset(&mut self);
 
     fn channel_mask_get(&self) -> ChannelMask<9>;
     fn channel_mask_set(&mut self, channel_mask: ChannelMask<9>);

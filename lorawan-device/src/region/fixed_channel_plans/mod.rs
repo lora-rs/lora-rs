@@ -97,6 +97,11 @@ pub(crate) trait FixedChannelRegion: ChannelRegion {
 }
 
 impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
+    fn reset(&mut self) {
+        self.channel_mask = Default::default();
+        self.channel_selector = Default::default();
+    }
+
     fn process_join_accept(&mut self, c_f_list: Option<&CfList>) {
         if let Some(CfList::FixedChannel(channel_mask)) = c_f_list {
             self.channel_mask_set(channel_mask.clone());

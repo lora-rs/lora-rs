@@ -109,6 +109,13 @@ pub(crate) trait DynamicChannelRegion: ChannelRegion {
 }
 
 impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
+    fn reset(&mut self) {
+        self.channels = Self::default_channels();
+        self.channel_mask = Default::default();
+        self.channel_selector = Default::default();
+        self.join_channel_selector = Default::default();
+    }
+
     fn process_join_accept(&mut self, c_f_list: Option<&CfList>) {
         match c_f_list {
             // Type 0

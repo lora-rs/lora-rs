@@ -93,6 +93,24 @@ pub struct Configuration {
     pub(crate) nb_trans: u8,
 }
 
+impl Configuration {
+    /// Default network parameters for a fresh join.
+    fn default_for_region(region: &region::Configuration) -> Self {
+        Self {
+            data_rate: region.get_default_datarate(),
+            rx1_delay: region::constants::RECEIVE_DELAY1,
+            rx1_dr_offset: 0,
+            join_accept_delay1: region::constants::JOIN_ACCEPT_DELAY1,
+            join_accept_delay2: region::constants::JOIN_ACCEPT_DELAY2,
+            rx2_data_rate: None,
+            rx2_frequency: None,
+            tx_power: None,
+            adr_enabled: true,
+            nb_trans: 1,
+        }
+    }
+}
+
 pub(crate) struct Mac {
     pub configuration: Configuration,
     pub region: region::Configuration,
@@ -148,25 +166,14 @@ pub(crate) type Result<T = ()> = core::result::Result<T, Error>;
 
 impl Mac {
     pub(crate) fn new(region: region::Configuration, max_power: u8, antenna_gain: i8) -> Self {
-        let data_rate = region.get_default_datarate();
+        let configuration = Configuration::default_for_region(&region);
         Self {
             board_eirp: BoardEirp { max_power, antenna_gain },
             region,
             state: State::Unjoined,
             payload_dropped: false,
             identity: None,
-            configuration: Configuration {
-                data_rate,
-                rx1_delay: region::constants::RECEIVE_DELAY1,
-                rx1_dr_offset: 0,
-                join_accept_delay1: region::constants::JOIN_ACCEPT_DELAY1,
-                join_accept_delay2: region::constants::JOIN_ACCEPT_DELAY2,
-                rx2_data_rate: None,
-                rx2_frequency: None,
-                tx_power: None,
-                adr_enabled: true,
-                nb_trans: 1,
-            },
+            configuration,
             #[cfg(feature = "certification")]
             certification: certification::Certification::new(),
             #[cfg(feature = "certification")]
