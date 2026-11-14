@@ -106,6 +106,10 @@ pub(crate) trait DynamicChannelRegion: ChannelRegion {
     const NUM_JOIN_CHANNELS: u8;
     fn init_channels(channels: &mut ChannelPlan);
     fn get_rx_datarate(tx_datarate: DR, rx1_dr_offset: u8, window: &Window) -> DR;
+
+    fn join_datarate() -> DR {
+        DR::_0
+    }
 }
 
 impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
@@ -246,6 +250,10 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
                 }
             }
         }
+    }
+
+    fn get_join_datarate(&self) -> DR {
+        R::join_datarate()
     }
 
     fn get_rx2_frequency(&self) -> u32 {

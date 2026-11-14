@@ -764,7 +764,6 @@ mod tests {
 
     #[test]
     #[cfg(feature = "region-as923-1")]
-    #[should_panic]
     fn as923_join_uses_dr2() {
         let mut mac = Mac::new(region::Configuration::new(region::Region::AS923_1), 14, 0);
         let mut buf = RadioBuffer::<256>::new();

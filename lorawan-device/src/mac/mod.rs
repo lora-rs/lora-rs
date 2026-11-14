@@ -225,8 +225,9 @@ impl Mac {
         };
         let dev_nonce = otaa.prepare_buffer::<RNG, N>(rng, next_dev_nonce, buf);
         self.state = State::Otaa(otaa);
+        let join_datarate = self.region.get_join_datarate();
         let (mut tx_config, tx_channel) =
-            self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Join);
+            self.region.create_tx_config(rng, join_datarate, &Frame::Join);
         tx_config.adjust_power(self.board_eirp.max_power, self.board_eirp.antenna_gain);
         Ok((tx_config, self.rx_windows(&tx_channel), dev_nonce))
     }

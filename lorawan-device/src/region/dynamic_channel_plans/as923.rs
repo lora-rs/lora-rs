@@ -57,6 +57,10 @@ impl<const DEFAULT_RX2: u32, const OFFSET: u32> DynamicChannelRegion
 {
     const NUM_JOIN_CHANNELS: u8 = 2;
 
+    fn join_datarate() -> DR {
+        DR::_2
+    }
+
     fn get_rx_datarate(tx_dr: DR, rx1_dr_offset: u8, window: &Window) -> DR {
         // TODO: Handle DwellTime, current values correspond to Dwelltime = 0
         // In case DwellTime is 1, minimum data rate is DR::_2

@@ -524,6 +524,10 @@ impl Configuration {
         region_dispatch!(self, get_default_datarate)
     }
 
+    pub(crate) fn get_join_datarate(&self) -> DR {
+        region_dispatch!(self, get_join_datarate)
+    }
+
     pub(crate) fn get_coding_rate(&self) -> CodingRate {
         region_dispatch!(self, get_coding_rate)
     }
@@ -628,6 +632,10 @@ pub(crate) trait RegionHandler {
         DR::_0
     }
 
+    fn get_join_datarate(&self) -> DR {
+        self.get_default_datarate()
+    }
+
     fn select_tx_channel<RNG: RngCore>(
         &mut self,
         rng: &mut RNG,
@@ -712,6 +720,20 @@ mod tests {
             "channel 0 was reused before the low set completed"
         );
         assert_eq!(selector.select(&mut rng, high), Some(5));
+    }
+
+    #[test]
+    #[cfg(feature = "region-as923-1")]
+    fn as923_join_datarate_is_dr2() {
+        let r = Configuration::new(Region::AS923_1);
+        assert_eq!(r.get_join_datarate(), DR::_2);
+    }
+
+    #[test]
+    #[cfg(feature = "region-eu868")]
+    fn eu868_join_datarate_is_dr0() {
+        let r = Configuration::new(Region::EU868);
+        assert_eq!(r.get_join_datarate(), DR::_0);
     }
 
     #[test]
