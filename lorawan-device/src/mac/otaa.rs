@@ -73,6 +73,8 @@ impl Otaa {
                 }
                 identity.last_join_nonce = Some(join_nonce);
             }
+            region.reset();
+            configuration.reset(region);
             region.process_join_accept(decrypt.c_f_list().as_ref());
             configuration.rx1_delay = del_to_delay_ms(decrypt.rx_delay());
             let dl_settings = decrypt.dl_settings();

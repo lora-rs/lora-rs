@@ -98,7 +98,6 @@ async fn test_no_join_accept() {
     assert_eq!(r.windows(), 2);
 }
 
-#[should_panic]
 #[tokio::test]
 async fn join_accept_resets_mac_parameters() {
     let (radio, timer, device) = setup();

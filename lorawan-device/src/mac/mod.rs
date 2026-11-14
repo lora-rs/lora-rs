@@ -109,6 +109,10 @@ impl Configuration {
             nb_trans: 1,
         }
     }
+
+    fn reset(&mut self, region: &region::Configuration) {
+        *self = Self::default_for_region(region);
+    }
 }
 
 pub(crate) struct Mac {
