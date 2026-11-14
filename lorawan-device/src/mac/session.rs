@@ -762,6 +762,25 @@ mod tests {
         Session::new(NwkSKey::from([2; 16]), AppSKey::from([1; 16]), DevAddr::from_value(1))
     }
 
+    #[test]
+    #[cfg(feature = "region-as923-1")]
+    #[should_panic]
+    fn as923_join_uses_dr2() {
+        let mut mac = Mac::new(region::Configuration::new(region::Region::AS923_1), 14, 0);
+        let mut buf = RadioBuffer::<256>::new();
+        let credentials = crate::mac::NetworkCredentials::new(
+            crate::AppEui::from([0u8; 8]),
+            crate::DevEui::from([0u8; 8]),
+            crate::AppKey::from(crate::test_util::get_key()),
+        );
+
+        let (tx_config, _, _) =
+            mac.join_otaa(&mut rand::rngs::OsRng, credentials, &mut buf).unwrap();
+
+        assert_eq!(tx_config.rf.bb.sf, lora_modulation::SpreadingFactor::_10);
+        assert_eq!(tx_config.rf.bb.bw, lora_modulation::Bandwidth::_125KHz);
+    }
+
     /// Feed an encrypted downlink with the given FOpts (and a data payload on
     /// port 1) into a Mac with the standard test session, returning the
     /// Mac's response.
