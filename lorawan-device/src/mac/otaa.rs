@@ -1,4 +1,4 @@
-use super::{Response, del_to_delay_ms, session::Session};
+use super::{Response, del_to_delay_ms, reset_network, session::Session};
 use crate::nvm::PersistentIdentity;
 use crate::radio::RadioBuffer;
 use crate::region::Configuration;
@@ -73,8 +73,7 @@ impl Otaa {
                 }
                 identity.last_join_nonce = Some(join_nonce);
             }
-            region.reset();
-            configuration.reset(region);
+            reset_network(region, configuration);
             region.process_join_accept(decrypt.c_f_list().as_ref());
             configuration.rx1_delay = del_to_delay_ms(decrypt.rx_delay());
             let dl_settings = decrypt.dl_settings();

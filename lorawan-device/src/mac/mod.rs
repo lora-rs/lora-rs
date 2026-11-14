@@ -115,6 +115,14 @@ impl Configuration {
     }
 }
 
+/// Restore the region's default channels and reset the MAC network parameters.
+/// The caller applies any Join-Accept overrides (RXDelay, RX2DataRate,
+/// RX1DROffset) and CFList afterwards.
+fn reset_network(region: &mut region::Configuration, configuration: &mut Configuration) {
+    region.reset();
+    configuration.reset(region);
+}
+
 pub(crate) struct Mac {
     pub configuration: Configuration,
     pub region: region::Configuration,
@@ -443,6 +451,7 @@ impl Mac {
         self.state = State::Unjoined;
         self.payload_dropped = false;
         self.pending_cert_rx = None;
+        reset_network(&mut self.region, &mut self.configuration);
         if !keep_identity {
             self.identity = None;
             self.certification = certification::Certification::new();

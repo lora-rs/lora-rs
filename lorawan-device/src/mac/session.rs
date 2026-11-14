@@ -840,7 +840,6 @@ mod tests {
     }
 
     #[cfg(feature = "certification")]
-    #[should_panic]
     #[test]
     fn mac_reset_restores_network_parameters() {
         let mut mac = eu868_mac();
