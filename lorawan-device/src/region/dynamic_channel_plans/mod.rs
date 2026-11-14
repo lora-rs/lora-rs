@@ -412,6 +412,21 @@ mod tests {
     }
 
     #[test]
+    fn reset_removes_channels_added_after_join() {
+        let mut config = Configuration::new(Region::EU868);
+        let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));
+        assert_eq!(config.handle_new_channel(3, 867_100_000, dr), (true, true));
+
+        config.reset();
+
+        let crate::region::State::EU868(plan) = &config.state else {
+            panic!("expected EU868 configuration");
+        };
+        assert!(plan.channels[3].is_none(), "channel added after join must be removed");
+        assert!(plan.channels[0].is_some(), "default channels must remain");
+    }
+
+    #[test]
     fn disabling_channel_keeps_coverage_for_enabled_channels() {
         let mut config = Configuration::new(Region::EU868);
         let dr = Some(DataRateRange::new_range(DR::_0, DR::_5));

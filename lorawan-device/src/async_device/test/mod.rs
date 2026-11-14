@@ -100,7 +100,8 @@ async fn test_no_join_accept() {
 
 #[tokio::test]
 async fn join_accept_resets_mac_parameters() {
-    let (radio, timer, device) = setup();
+    let (radio, timer, device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
     let mut net = Net::new(radio, timer, device).await;
 
     let r = net.join(ExchangeAction::rx1(Pkt::join_accept().dl_settings(0x23))).await;
@@ -109,6 +110,14 @@ async fn join_accept_resets_mac_parameters() {
     // Simulate parameters changed by LinkADRReq, RXParamSetupReq and
     // NewChannelReq after the first join.
     let device = net.device();
+    assert_eq!(
+        device.mac.region.handle_new_channel(
+            3,
+            867_100_000,
+            Some(lorawan::types::DataRateRange::new_range(region::DR::_0, region::DR::_5)),
+        ),
+        (true, true)
+    );
     device.mac.configuration.data_rate = region::DR::_4;
     device.mac.configuration.tx_power = Some(5);
     device.mac.configuration.nb_trans = 7;
