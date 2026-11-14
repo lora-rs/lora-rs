@@ -14,6 +14,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 mod mac_common;
 
+#[cfg(feature = "class-c")]
+mod class_c_eu868;
 mod dlchannelreq_eu868;
 mod join_cflist_eu868;
 mod linkadrreq_eu868;
