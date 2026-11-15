@@ -17,6 +17,10 @@ pub enum DownlinkDUTCommand<'a> {
     #[cmd(cid = 0x02, len = 0)]
     DutJoinReq(DutJoinReqPayload),
 
+    /// Request to switch the end-device class
+    #[cmd(cid = 0x03, len = 1)]
+    SwitchClassReq(SwitchClassReqPayload<'a>),
+
     /// Request to activate/deactivate Adaptive Data Rate (ADR)
     #[cmd(cid = 0x04, len = 1)]
     AdrBitChangeReq(AdrBitChangeReqPayload<'a>),
@@ -104,6 +108,27 @@ pub trait UnimplementedCreator {
 
     fn len(&self) -> usize {
         unimplemented!()
+    }
+}
+
+/// Device class requested by `SwitchClassReq`.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum DeviceClass {
+    A,
+    B,
+    C,
+}
+
+impl SwitchClassReqPayload<'_> {
+    /// Requested device class.
+    pub fn class(&self) -> Result<DeviceClass, Error> {
+        match self.0[0] {
+            0 => Ok(DeviceClass::A),
+            1 => Ok(DeviceClass::B),
+            2 => Ok(DeviceClass::C),
+            _ => Err(Error::RFU),
+        }
     }
 }
 
