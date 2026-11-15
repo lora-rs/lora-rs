@@ -87,6 +87,8 @@ pub struct Configuration {
     /// When true, uplinks set the FCtrl ADR bit so the network may manage
     /// data rate and TX power via LinkADRReq.
     pub(crate) adr_enabled: bool,
+    /// Application-selected ADR setting, reapplied after network resets.
+    pub(crate) adr_override: Option<bool>,
     /// Number of transmissions of each uplink (LoRaWAN 1.0.4 NbTrans), set by
     /// the network via LinkADRReq: 1..=15 transmissions per FCntUp. Defaults
     /// to 1 (no retransmission).
@@ -106,12 +108,18 @@ impl Configuration {
             rx2_frequency: None,
             tx_power: None,
             adr_enabled: true,
+            adr_override: None,
             nb_trans: 1,
         }
     }
 
     fn reset(&mut self, region: &region::Configuration) {
+        let adr_override = self.adr_override;
         *self = Self::default_for_region(region);
+        self.adr_override = adr_override;
+        if let Some(enabled) = adr_override {
+            self.adr_enabled = enabled;
+        }
     }
 }
 

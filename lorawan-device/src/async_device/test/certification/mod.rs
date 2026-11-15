@@ -173,6 +173,21 @@ async fn port_disable_reset_preserves_identity() {
 }
 
 #[tokio::test]
+async fn adr_bit_change_survives_reset() {
+    let (radio, timer, device) = util::setup_with_session();
+    let mut net = Net::new(radio, timer, device).await;
+
+    // AdrBitChangeReq with ADR disabled.
+    let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx1(Pkt::cp_cmd("0400"))).await;
+    r.expect_downlink_received();
+    assert!(!net.device().get_adr());
+
+    net.device().mac.reset(true);
+
+    assert!(!net.device().get_adr(), "MAC reset must preserve ADR disabled");
+}
+
+#[tokio::test]
 async fn tx_periodicity_change_overrides_the_uplink_period() {
     let (radio, timer, device) = util::setup_with_session();
     let mut net = Net::new(radio, timer, device).await;
