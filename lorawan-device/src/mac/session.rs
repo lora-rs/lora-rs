@@ -281,6 +281,7 @@ impl Session {
                             ) {
                                 AdrBitChange(adr) => {
                                     configuration.adr_enabled = adr;
+                                    configuration.adr_override = Some(adr);
                                 }
                                 DutJoinReq => {
                                     return Response::DeviceHandler(DeviceEvent::ResetMac);

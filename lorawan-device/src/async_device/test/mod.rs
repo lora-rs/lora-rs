@@ -99,6 +99,18 @@ async fn test_no_join_accept() {
 }
 
 #[tokio::test]
+async fn join_accept_preserves_application_adr_override() {
+    let (radio, timer, mut device) = setup();
+    device.set_adr(false);
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.join(ExchangeAction::rx1(Pkt::join_accept().dl_settings(0x23))).await;
+    r.expect_joined();
+
+    assert!(!net.device().get_adr(), "JoinAccept must preserve the application ADR override");
+}
+
+#[tokio::test]
 async fn join_accept_resets_mac_parameters() {
     let (radio, timer, device) =
         util::session_with_region(crate::region::EU868::new_eu868().into());
