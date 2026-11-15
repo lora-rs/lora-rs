@@ -70,6 +70,51 @@ impl crate::DeviceHandler for TestHandler {
     }
 }
 
+/// The US915 subband (1 to 8) of an uplink sent on a 125 kHz channel.
+fn us915_subband(uplink: &Uplink) -> u32 {
+    (uplink.tx_config().rf.frequency - 902_300_000) / 200_000 / 8 + 1
+}
+
+fn us915_biased_to_subband_2() -> (radio::RadioChannel, timer::TimerChannel, Device) {
+    let pending = Arc::new(AtomicUsize::new(0));
+    let (radio, mock_radio) = TestRadio::new(pending.clone());
+    let (timer, mock_timer) = TestTimer::new(pending);
+    let mut us915 = region::US915::default();
+    us915.set_join_bias(region::Subband::_2);
+    (radio, timer, Device::new(us915.into(), mock_radio, mock_timer, rand_core::OsRng))
+}
+
+#[tokio::test]
+async fn join_bias_applies_to_every_join_cycle() {
+    let (radio, timer, device) = us915_biased_to_subband_2();
+    let mut net = Net::new(radio, timer, device).await;
+
+    for _ in 0..3 {
+        let r = net.join(ExchangeAction::rx1(Pkt::join_accept())).await;
+        r.expect_joined();
+        assert_eq!(us915_subband(r.uplink(0)), 2);
+
+        // The first data uplink stays on the subband the join succeeded on.
+        let r = net.exchange(&[1], 1, false, ExchangeAction::none()).await;
+        r.expect_rx_complete();
+        assert_eq!(us915_subband(r.uplink(0)), 2);
+    }
+}
+
+#[tokio::test]
+async fn join_retry_moves_on_from_the_biased_subband() {
+    let (radio, timer, device) = us915_biased_to_subband_2();
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.join(ExchangeAction::none()).await;
+    r.expect_no_join_accept();
+    assert_eq!(us915_subband(r.uplink(0)), 2);
+
+    let r = net.join(ExchangeAction::none()).await;
+    r.expect_no_join_accept();
+    assert_eq!(us915_subband(r.uplink(0)), 3);
+}
+
 #[tokio::test]
 async fn test_join_rx1() {
     let (radio, timer, device) = setup();

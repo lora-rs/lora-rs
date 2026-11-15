@@ -102,6 +102,10 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
         self.channel_selector = Default::default();
     }
 
+    fn start_join_cycle(&mut self) {
+        self.join_channels.start_join_cycle();
+    }
+
     fn process_join_accept(&mut self, c_f_list: Option<&CfList>) {
         if let Some(CfList::FixedChannel(channel_mask)) = c_f_list {
             self.channel_mask_set(channel_mask.clone());

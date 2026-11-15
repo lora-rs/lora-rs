@@ -10,6 +10,8 @@ pub(crate) struct JoinChannels {
     pub num_retries: usize,
     /// Preferred subband
     preferred_subband: Option<Subband>,
+    /// The preferred subband has served this join cycle and no longer applies to it.
+    bias_spent: bool,
     /// Channels that have been attempted.
     pub(crate) available_channels: AvailableChannels,
     /// The channel used for the previous join request.
@@ -17,18 +19,25 @@ pub(crate) struct JoinChannels {
 }
 
 impl JoinChannels {
+    /// The preferred subband, while it still applies to this join cycle.
+    fn bias(&self) -> Option<Subband> {
+        if self.bias_spent {
+            None
+        } else {
+            self.preferred_subband
+        }
+    }
+
     pub(crate) fn has_bias_and_not_exhausted(&self) -> bool {
         // there are remaining retries AND we have not yet been reset
-        self.preferred_subband.is_some()
-            && self.num_retries < self.max_retries
-            && self.num_retries != 0
+        self.bias().is_some() && self.num_retries < self.max_retries && self.num_retries != 0
     }
 
     /// The first data channel will always be some random channel (possibly the same as previous)
     /// of the preferred subband. Returns None if there is no preferred subband.
     pub(crate) fn first_data_channel(&mut self, rng: &mut impl RngCore) -> Option<u8> {
-        if self.preferred_subband.is_some() && self.num_retries != 0 {
-            self.clear_join_bias();
+        if self.bias().is_some() && self.num_retries != 0 {
+            self.bias_spent = true;
             // determine which subband the successful join was sent on
             let sb = if self.previous_channel < 64 {
                 self.previous_channel / 8
@@ -45,6 +54,7 @@ impl JoinChannels {
     pub(crate) fn set_join_bias(&mut self, subband: Subband, max_retries: usize) {
         self.preferred_subband = Some(subband);
         self.max_retries = max_retries;
+        self.bias_spent = false;
     }
 
     pub(crate) fn clear_join_bias(&mut self) {
@@ -58,8 +68,18 @@ impl JoinChannels {
         self.available_channels = AvailableChannels::default();
     }
 
+    /// Start a new join cycle: the first join attempt after a session, or the first
+    /// ever. The configured bias applies again and the channel walk starts over.
+    pub(crate) fn start_join_cycle(&mut self) {
+        *self = Self {
+            max_retries: self.max_retries,
+            preferred_subband: self.preferred_subband,
+            ..Default::default()
+        };
+    }
+
     pub(crate) fn get_next_channel(&mut self, rng: &mut impl RngCore) -> u8 {
-        match (self.preferred_subband, self.num_retries.cmp(&self.max_retries)) {
+        match (self.bias(), self.num_retries.cmp(&self.max_retries)) {
             (Some(sb), Ordering::Less) => {
                 self.num_retries += 1;
                 // pick a  random number 0-7 on the preferred subband
@@ -171,8 +191,10 @@ macro_rules! impl_join_bias {
             }
 
             /// Specify a preferred subband when joining the network. Only the first join attempt
-            /// will occur on this subband. After that, each bank will be attempted sequentially
-            /// as described in the US915/AU915 regional specifications.
+            /// of each join cycle will occur on this subband. After that, each bank will be
+            /// attempted sequentially as described in the US915/AU915 regional specifications.
+            /// A join cycle starts with the first Join-Request and with each one that follows
+            /// a session or a reset.
             pub fn set_join_bias(&mut self, subband: Subband) {
                 self.0.join_channels.set_join_bias(subband, 1)
             }
@@ -290,6 +312,21 @@ mod test {
             assert_eq!(ninth_channel / 8, first_channel / 8);
             assert_ne!(ninth_channel, first_channel);
         }
+    }
+
+    #[test]
+    fn test_join_bias_applies_to_every_join_cycle() {
+        let mut rng = rand_core::OsRng;
+        let mut join_channels = JoinChannels::default();
+        join_channels.set_join_bias(Subband::_2, 1);
+        assert!((8..16).contains(&join_channels.get_next_channel(&mut rng)));
+        // The first data uplink after the join stays on the subband that worked,
+        // and the bias is spent for this cycle.
+        assert!(matches!(join_channels.first_data_channel(&mut rng), Some(8..16)));
+        assert!(join_channels.first_data_channel(&mut rng).is_none());
+
+        join_channels.start_join_cycle();
+        assert!((8..16).contains(&join_channels.get_next_channel(&mut rng)));
     }
 
     /// A standard (unbiased) US915 join walk hits the 500 kHz bank (channels 64-71) once every

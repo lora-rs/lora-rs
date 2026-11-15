@@ -479,6 +479,11 @@ impl Configuration {
         mut_region_dispatch!(self, reset)
     }
 
+    /// To be called before the first Join-Request of a join cycle.
+    pub(crate) fn start_join_cycle(&mut self) {
+        mut_region_dispatch!(self, start_join_cycle)
+    }
+
     pub(crate) fn process_join_accept(&mut self, c_f_list: Option<&CfList>) {
         mut_region_dispatch!(self, process_join_accept, c_f_list)
     }
@@ -599,6 +604,9 @@ pub(crate) trait RegionHandler {
 
     /// Restore the region to its power-on channel configuration.
     fn reset(&mut self);
+
+    /// To be called before the first Join-Request of a join cycle.
+    fn start_join_cycle(&mut self) {}
 
     fn channel_mask_get(&self) -> ChannelMask<9>;
     fn channel_mask_set(&mut self, channel_mask: ChannelMask<9>);
