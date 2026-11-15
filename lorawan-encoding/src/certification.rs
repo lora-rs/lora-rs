@@ -25,6 +25,10 @@ pub enum DownlinkDUTCommand<'a> {
     #[cmd(cid = 0x04, len = 1)]
     AdrBitChangeReq(AdrBitChangeReqPayload<'a>),
 
+    /// Request to activate/deactivate regional duty-cycle enforcement
+    #[cmd(cid = 0x05, len = 1)]
+    RegionalDutyCycleCtrlReq(RegionalDutyCycleCtrlReqPayload<'a>),
+
     /// Change uplink periodicity to the provided value
     #[cmd(cid = 0x06, len = 1)]
     TxPeriodicityChangeReq(TxPeriodicityChangeReqPayload<'a>),
@@ -118,6 +122,17 @@ pub enum DeviceClass {
     A,
     B,
     C,
+}
+
+impl RegionalDutyCycleCtrlReqPayload<'_> {
+    /// Whether regional duty-cycle enforcement should be enabled.
+    pub fn duty_cycle(&self) -> Result<bool, Error> {
+        match self.0[0] {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(Error::RFU),
+        }
+    }
 }
 
 impl SwitchClassReqPayload<'_> {
