@@ -6,7 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## Unreleased
 
+- certification: add `SwitchClassReq` (CID 0x03)
+- certification: add `RegionalDutyCycleCtrlReq` (CID 0x05)
 - certification: add `DutFPort224DisableReq` (CID 0x7E)
+- certification: mark `DownlinkDUTCommand` and `UplinkDUTCommand` as `#[non_exhaustive]`
 - Move to Rust edition 2024 (requires Rust 1.85+)
 - Rewrite parser and creator as borrowed views, replacing the `T: AsRef<[u8]>`
   generic-over-storage design ([#465](https://github.com/lora-rs/lora-rs/pull/465)).
