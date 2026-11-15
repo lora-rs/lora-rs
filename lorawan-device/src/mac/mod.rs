@@ -224,6 +224,10 @@ impl Mac {
             None => None,
         };
         let dev_nonce = otaa.prepare_buffer::<RNG, N>(rng, next_dev_nonce, buf);
+        // A Join-Request sent while still in the OTAA state retries the running cycle.
+        if !matches!(self.state, State::Otaa(_)) {
+            self.region.start_join_cycle();
+        }
         self.state = State::Otaa(otaa);
         let join_datarate = self.region.get_join_datarate();
         let (mut tx_config, tx_channel) =

@@ -26,7 +26,6 @@ use std::{
 #[derive(Debug, Clone)]
 pub struct Uplink {
     data: Vec<u8>,
-    #[allow(unused)]
     tx_config: TxConfig,
 }
 
@@ -45,6 +44,10 @@ impl Uplink {
     }
 
     /// The raw frame bytes.
+    pub fn tx_config(&self) -> &TxConfig {
+        &self.tx_config
+    }
+
     pub fn data(&self) -> &[u8] {
         &self.data
     }
