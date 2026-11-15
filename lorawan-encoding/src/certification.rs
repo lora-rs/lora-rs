@@ -7,6 +7,7 @@ use crate::maccommands::Error;
 
 #[derive(Debug, PartialEq, CommandHandler)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum DownlinkDUTCommand<'a> {
     /// Request to reset the Microcontroller Unit
     #[cmd(cid = 0x01, len = 0)]
@@ -52,6 +53,7 @@ pub enum DownlinkDUTCommand<'a> {
 
 #[derive(Debug, PartialEq, CommandHandler)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+#[non_exhaustive]
 pub enum UplinkDUTCommand<'a> {
     /// Returns data sent by EchoIncPayloadReq, where each byte except the initial CID is incremented by 1
     #[cmd(cid = 0x08)]
