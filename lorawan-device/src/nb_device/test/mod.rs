@@ -286,6 +286,24 @@ fn test_certification_dev_status_req_uses_handler_battery() {
 
 #[cfg(feature = "certification")]
 #[test]
+fn test_certification_dut_reset_req_resets_the_stack() {
+    fn dut_reset_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_cert_downlink(buf, "01", 1) // DutResetReq
+    }
+
+    let mut device = test_device();
+    device.join(get_abp_credentials()).unwrap();
+    device.shared.mac.configuration.tx_power = Some(2);
+
+    let response = send_and_receive_cert(&mut device, dut_reset_req);
+    assert!(matches!(response, Response::RxComplete));
+
+    assert!(device.get_session().is_none());
+    assert_eq!(device.shared.mac.configuration.tx_power, None);
+}
+
+#[cfg(feature = "certification")]
+#[test]
 fn test_certification_answer_uplink() {
     // An RxAppCntReq received in an RX window is answered with a regular
     // uplink: it opens its own RX windows.

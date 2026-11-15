@@ -123,9 +123,11 @@ async fn dut_join_req_resets_the_mac() {
 async fn dut_reset_req_resets_the_device() {
     let (radio, timer, device) = util::setup_with_session_and_handler(TestHandler::default());
     let mut net = Net::new(radio, timer, device).await;
+    net.device().override_periodicity = Some(5);
 
     let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx1(Pkt::cp_cmd("01"))).await;
     r.expect_rx_complete();
+    assert_eq!(net.device().get_override_periodicity(), None);
 
     // Without a store there is nothing to resume, so the device restarts unjoined.
     assert!(net.device().get_session().is_none());
