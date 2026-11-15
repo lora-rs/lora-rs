@@ -112,6 +112,8 @@ impl Certification {
                         return Response::TxFramesCtrlReq(frametype);
                     }
                 }
+                // Commands not implemented by the device are ignored.
+                other => debug!("Ignoring unsupported certification command: {:?}", other),
             }
         }
         Response::NoUpdate
