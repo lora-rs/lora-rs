@@ -928,6 +928,7 @@ where
                         // no-op or deferred.
                         mac.reset(false);
                         reload_identity(store, mac).await.map_err(|_| Error::Nvm)?;
+                        *periodicity_override = None;
                         handler.reboot();
                         Ok(None)
                     }
