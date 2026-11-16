@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     radio::{RxQuality, TxConfig},
-    region,
+    region::{self, DR, EU868},
     test_util::*,
 };
 use lorawan::maccommands::{UplinkMacCommand, parse_uplink_mac_commands};
@@ -157,8 +157,7 @@ async fn join_accept_preserves_application_adr_override() {
 
 #[tokio::test]
 async fn join_accept_resets_mac_parameters() {
-    let (radio, timer, device) =
-        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let (radio, timer, device) = util::session_with_region(EU868::new_eu868().into());
     let mut net = Net::new(radio, timer, device).await;
 
     let r = net.join(ExchangeAction::rx1(Pkt::join_accept().dl_settings(0x23))).await;
@@ -171,11 +170,11 @@ async fn join_accept_resets_mac_parameters() {
         device.mac.region.handle_new_channel(
             3,
             867_100_000,
-            Some(lorawan::types::DataRateRange::new_range(region::DR::_0, region::DR::_5)),
+            Some(lorawan::types::DataRateRange::new_range(DR::_0, DR::_5)),
         ),
         (true, true)
     );
-    device.mac.configuration.data_rate = region::DR::_4;
+    device.mac.configuration.data_rate = DR::_4;
     device.mac.configuration.tx_power = Some(5);
     device.mac.configuration.nb_trans = 7;
     device.mac.configuration.rx2_frequency = Some(869_525_000);
@@ -195,9 +194,9 @@ async fn join_accept_resets_mac_parameters() {
     assert_eq!(config.nb_trans, 1);
     assert_eq!(config.rx2_frequency, None);
     assert!(config.adr_enabled);
-    assert_eq!(config.rx1_delay, crate::region::constants::RECEIVE_DELAY1);
+    assert_eq!(config.rx1_delay, region::constants::RECEIVE_DELAY1);
     assert_eq!(config.rx1_dr_offset, 0);
-    assert_eq!(config.rx2_data_rate, Some(region::DR::_0));
+    assert_eq!(config.rx2_data_rate, Some(DR::_0));
     assert_eq!(net.device().mac.region.channel_mask_get(), Default::default());
 }
 
@@ -209,7 +208,7 @@ async fn test_join_accept_dl_settings_applied() {
     let r = net.join(ExchangeAction::rx1(Pkt::join_accept().dl_settings(0x2A))).await;
     r.expect_joined();
     assert_eq!(net.device().mac.configuration.rx1_dr_offset, 2);
-    assert_eq!(net.device().mac.configuration.rx2_data_rate, Some(region::DR::_10));
+    assert_eq!(net.device().mac.configuration.rx2_data_rate, Some(DR::_10));
 }
 
 #[tokio::test]
@@ -373,4 +372,37 @@ async fn invalid_maccommands_in_frmpayload() {
     r.expect_downlink_received();
     // Nothing in downlink as expected
     assert!(net.device().take_downlink().is_none());
+}
+
+#[test]
+fn set_datarate_requires_adr_disabled() {
+    let (_, _, mut device) = util::session_with_region(EU868::new_eu868().into());
+    assert_eq!(device.set_datarate(DR::_0), Err(SetDatarateError::AdrEnabled));
+}
+
+#[test]
+fn set_datarate_rejects_unsupported_datarate() {
+    let (_, _, mut device) = util::session_with_region(EU868::new_eu868().into());
+    device.set_adr(false);
+    assert_eq!(device.set_datarate(DR::_7), Err(SetDatarateError::UnsupportedDataRate));
+}
+
+#[test]
+fn set_datarate_rejects_datarate_without_enabled_channel() {
+    let (_, _, mut device) = util::session_with_region(EU868::new_eu868().into());
+    device.set_adr(false);
+    let mut mask = device.mac.region.channel_mask_get();
+    for channel in 0..3 {
+        mask.set_channel(channel, false);
+    }
+    device.mac.region.channel_mask_set(mask);
+    assert_eq!(device.set_datarate(DR::_0), Err(SetDatarateError::NoEnabledChannel));
+}
+
+#[test]
+fn set_datarate_accepts_supported_datarate() {
+    let (_, _, mut device) = util::session_with_region(EU868::new_eu868().into());
+    device.set_adr(false);
+    assert_eq!(device.set_datarate(DR::_5), Ok(()));
+    assert_eq!(device.get_datarate(), DR::_5);
 }

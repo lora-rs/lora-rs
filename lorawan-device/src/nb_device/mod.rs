@@ -83,8 +83,12 @@ where
         self.shared.mac.configuration.data_rate
     }
 
-    pub fn set_datarate(&mut self, datarate: region::DR) {
-        self.shared.mac.configuration.data_rate = datarate
+    pub fn set_datarate(
+        &mut self,
+        datarate: region::DR,
+    ) -> core::result::Result<(), SetDatarateError> {
+        // TODO: Check whether radio supports selected datarate
+        self.shared.mac.set_datarate(datarate)
     }
 
     /// Whether Adaptive Data Rate (ADR) is enabled.

@@ -3,7 +3,7 @@
 //! decrypting from send and receive buffers.
 
 use crate::{
-    AppSKey, DeviceHandler, Downlink, NwkSKey,
+    AppSKey, DeviceHandler, Downlink, NwkSKey, SetDatarateError,
     nvm::PersistentIdentity,
     radio::{self, RadioBuffer, RfConfig, RxConfig, RxMode},
     region,
@@ -312,6 +312,25 @@ impl Mac {
             self.board_eirp.antenna_gain,
         );
         (tx_config, self.rx_windows(&tx_channel))
+    }
+
+    /// Set the data rate used for data uplinks, after validating it.
+    pub(crate) fn set_datarate(
+        &mut self,
+        datarate: DR,
+    ) -> core::result::Result<(), SetDatarateError> {
+        if self.configuration.adr_enabled {
+            return Err(SetDatarateError::AdrEnabled);
+        }
+        if self.region.get_datarate(datarate as u8).is_none() {
+            return Err(SetDatarateError::UnsupportedDataRate);
+        }
+        let channel_mask = self.region.channel_mask_get();
+        if !self.region.channel_mask_validate(&channel_mask, Some(datarate)) {
+            return Err(SetDatarateError::NoEnabledChannel);
+        }
+        self.configuration.data_rate = datarate;
+        Ok(())
     }
 
     pub(crate) fn add_uplink<M: SerializableMacCommand>(&mut self, cmd: M) -> Result<()> {
