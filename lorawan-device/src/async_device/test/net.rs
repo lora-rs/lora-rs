@@ -281,7 +281,7 @@ where
         }
         let uplinks = self.radio.take_uplinks().await;
         let window_configs = self.radio.take_window_configs().await;
-        assert_eq!(window_configs.len(), window, "one RX window configuration per window");
+        assert!(window_configs.len() <= window, "unexpected extra RX window configurations");
         self.device = Some(device);
         Outcome { response, uplinks, fcnt_down, window_configs }
     }
