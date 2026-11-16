@@ -738,6 +738,8 @@ impl From<Response> for async_device::ListenResponse {
             Response::DownlinkReceived(fcnt) => {
                 async_device::ListenResponse::DownlinkReceived(fcnt)
             }
+            #[cfg(feature = "certification")]
+            Response::UplinkPrepared => async_device::ListenResponse::UplinkPrepared,
             #[cfg(feature = "multicast")]
             Response::Multicast(mc) => async_device::ListenResponse::Multicast(mc.into()),
             r => panic!("Invalid async_device::ListenResponse::from {:?}", r),
