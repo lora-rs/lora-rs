@@ -193,8 +193,8 @@ async fn eu868_rxappcnt_test() {
 
     // Downlink 7: CP-CMD RxAppCntReq (FPort 224) in the TX->RX1 gap:
     // counted. The answer reports the number of counted downlinks so far,
-    // i.e. 5 (downlinks 1, 2, 4, 6 and 7), and is transmitted in the gap;
-    // RX1 and RX2 then time out.
+    // i.e. 5 (downlinks 1, 2, 4, 6 and 7), and is transmitted in the gap.
+    // The answer then runs its own RX1/RX2 windows.
     let r = net
         .exchange(&[1, 2, 3], 3, false, ExchangeAction::none().rxc_after(0, Pkt::cp_cmd("09")))
         .await;

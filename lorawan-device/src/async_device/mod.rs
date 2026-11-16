@@ -849,11 +849,16 @@ where
         );
 
         debug!("Starting RX1 in {} ms.", rx1_start_delay);
-        // sleep or RXC. A certification answer sent in the gap (Class C)
-        // stays the in-flight uplink: its cycle completes through the
-        // send loop, and the remaining RX windows of this send serve as
-        // its best-effort RX1/RX2.
-        let _ = self.between_windows(rx1_start_delay).await?;
+        // Sleep or listen in RXC. A certification answer sent in the gap
+        // becomes the in-flight uplink, so hand its response back to the
+        // send loop to run the answer's own RX windows.
+        let response = self.between_windows(rx1_start_delay).await?;
+        #[cfg(feature = "certification")]
+        if let Some(response @ mac::Response::UplinkPrepared) = response {
+            return Ok(response);
+        }
+        #[cfg(not(feature = "certification"))]
+        let _ = response;
 
         // RX1
         let rx_config = rx_windows.rx_config(self.radio.get_rx_window_buffer(), &Window::_1);
@@ -880,8 +885,16 @@ where
             rx2_timing.offset_ms,
         );
         debug!("RX1 did not receive anything. Awaiting RX2 for {} ms.", rx2_start_delay);
-        // sleep or RXC
-        let _ = self.between_windows(rx2_start_delay).await?;
+        // Sleep or listen in RXC. A certification answer sent in the gap
+        // becomes the in-flight uplink, so hand its response back to the
+        // send loop to run the answer's own RX windows.
+        let response = self.between_windows(rx2_start_delay).await?;
+        #[cfg(feature = "certification")]
+        if let Some(response @ mac::Response::UplinkPrepared) = response {
+            return Ok(response);
+        }
+        #[cfg(not(feature = "certification"))]
+        let _ = response;
 
         // RX2
         let rx_config = rx_windows.rx_config(self.radio.get_rx_window_buffer(), &Window::_2);
@@ -972,11 +985,8 @@ where
                     .tx(tx_config, retransmit_buffer.as_ref_for_read())
                     .await
                     .map_err(Error::Radio)?;
-                // Stash the answer's RX windows for the send loop's
-                // UplinkPrepared arm.
-                //
-                // A gap answer's stash goes unused: this send's remaining
-                // windows serve as its best-effort RX1/RX2.
+                // Stash the answer's RX windows. The send loop or RXC
+                // listener takes them and runs the answer's own RX cycle.
                 mac.set_pending_cert_rx(tx_duration_ms, rx_windows);
                 Ok(Some(mac::Response::UplinkPrepared))
             }
