@@ -728,6 +728,8 @@ where
                     match Self::handle_mac_response(
                         #[cfg(feature = "certification")]
                         &mut self.override_periodicity,
+                        #[cfg(feature = "class-c")]
+                        &mut self.class_c,
                         &mut self.radio_buffer,
                         &mut self.retransmit_buffer,
                         &mut self.mac,
@@ -800,6 +802,8 @@ where
                         if let Some(response) = Self::handle_mac_response(
                             #[cfg(feature = "certification")]
                             &mut self.override_periodicity,
+                            #[cfg(feature = "class-c")]
+                            &mut self.class_c,
                             &mut self.radio_buffer,
                             &mut self.retransmit_buffer,
                             &mut self.mac,
@@ -897,6 +901,7 @@ where
     #[allow(unused_variables, clippy::too_many_arguments)]
     async fn handle_mac_response(
         #[cfg(feature = "certification")] periodicity_override: &mut Option<u16>,
+        #[cfg(feature = "class-c")] class_c: &mut bool,
         radio_buffer: &mut RadioBuffer<N>,
         retransmit_buffer: &mut RadioBuffer<N>,
         mac: &mut Mac,
@@ -929,6 +934,10 @@ where
                         mac.reset(false);
                         reload_identity(store, mac).await.map_err(|_| Error::Nvm)?;
                         *periodicity_override = None;
+                        #[cfg(feature = "class-c")]
+                        {
+                            *class_c = false;
+                        }
                         handler.reboot();
                         Ok(None)
                     }
@@ -1014,6 +1023,8 @@ where
                     Self::handle_mac_response(
                         #[cfg(feature = "certification")]
                         &mut self.override_periodicity,
+                        #[cfg(feature = "class-c")]
+                        &mut self.class_c,
                         &mut self.radio_buffer,
                         &mut self.retransmit_buffer,
                         &mut self.mac,
@@ -1050,6 +1061,8 @@ where
             if let Some(response) = Self::handle_mac_response(
                 #[cfg(feature = "certification")]
                 &mut self.override_periodicity,
+                #[cfg(feature = "class-c")]
+                &mut self.class_c,
                 &mut self.radio_buffer,
                 &mut self.retransmit_buffer,
                 &mut self.mac,

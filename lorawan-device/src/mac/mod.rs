@@ -458,8 +458,8 @@ impl Mac {
 
     /// Drop the running MAC state. With `keep_identity`, the durable join counters and
     /// FPort 224 state are retained; otherwise the stack returns to the state it was
-    /// constructed in: the identity is cleared, and certification and multicast go
-    /// back to their defaults.
+    /// constructed in: the identity and the application's ADR choice are cleared, and
+    /// certification and multicast go back to their defaults.
     #[cfg(feature = "certification")]
     pub(crate) fn reset(&mut self, keep_identity: bool) {
         self.state = State::Unjoined;
@@ -467,6 +467,7 @@ impl Mac {
         self.pending_cert_rx = None;
         reset_network(&mut self.region, &mut self.configuration);
         if !keep_identity {
+            self.configuration = Configuration::default_for_region(&self.region);
             self.identity = None;
             self.certification = certification::Certification::new();
             #[cfg(feature = "multicast")]
