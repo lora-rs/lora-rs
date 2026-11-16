@@ -148,18 +148,44 @@ where
         });
         let mut fcnt_down = None;
         let mut frames = frames.into_iter();
+        let mut last = self.timer.get_armed_count().await;
         let (device, response) = loop {
-            let Some(pkt) = frames.next() else {
-                break tokio::time::timeout(STUCK, &mut task)
-                    .await
-                    .expect("listen did not end on the last frame")
-                    .expect("device task panicked");
-            };
-            self.deliver(pkt, &mut fcnt_down).await;
-            if let Some(outcome) = self.settle(&mut task).await {
-                let undelivered = frames.len();
-                assert_eq!(undelivered, 0, "listen ended with {undelivered} frames undelivered");
-                break outcome;
+            // A certification answer sent from RXC runs its own RX windows
+            // before the listen returns. Fire those windows with no downlink.
+            let armed = self.timer.get_armed_count().await;
+            if armed > last {
+                last = armed;
+                let kind = self.timer.last_timer_kind();
+                self.timer.fire_most_recent().await;
+                if kind == TimerKind::Window {
+                    self.radio.handle_timeout().await;
+                }
+                continue;
+            }
+            if let Some(pkt) = frames.next() {
+                self.deliver(pkt, &mut fcnt_down).await;
+                if let Some(outcome) = self.settle(&mut task).await {
+                    let undelivered = frames.len();
+                    assert_eq!(
+                        undelivered, 0,
+                        "listen ended with {undelivered} frames undelivered"
+                    );
+                    break outcome;
+                }
+                continue;
+            }
+            let step = tokio::time::timeout(STUCK, async {
+                tokio::select! {
+                    joined = &mut task => Step::Done(Box::new(joined.expect("device task panicked"))),
+                    armed = self.timer.wait_armed(last + 1) => Step::Armed(armed),
+                }
+            })
+            .await
+            .expect("listen did not end on the last frame");
+            match step {
+                Step::Done(outcome) => break *outcome,
+                // Loop again so the armed timer is fired at the top.
+                Step::Armed(_) => {}
             }
         };
         self.device = Some(device);
@@ -167,7 +193,7 @@ where
             response,
             uplinks: self.radio.take_uplinks().await,
             fcnt_down,
-            window_configs: Vec::new(),
+            window_configs: self.radio.take_window_configs().await,
         }
     }
 
