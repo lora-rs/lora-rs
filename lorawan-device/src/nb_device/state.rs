@@ -388,7 +388,7 @@ impl WaitingForRx {
                                 handler,
                             );
                             #[cfg(feature = "certification")]
-                            if let mac::Response::UplinkPrepared = response {
+                            if let mac::Response::CertificationAnswerSent = response {
                                 // Transmit the certification answer in place,
                                 // like a regular uplink.
                                 return self.answer_certification_uplink(

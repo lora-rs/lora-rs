@@ -372,8 +372,8 @@ impl Mac {
     }
 
     /// Take the TX duration and RX windows stashed by
-    /// [`set_pending_cert_rx`](Self::set_pending_cert_rx). Only valid immediately
-    /// after an `UplinkPrepared` response.
+    /// [`set_pending_cert_rx`](Self::set_pending_cert_rx).
+    /// Only valid immediately after an `CertificationAnswerSent` response.
     #[cfg(feature = "certification")]
     pub(crate) fn take_pending_cert_rx(&mut self) -> (u32, RxWindows) {
         self.pending_cert_rx.take().unwrap()
@@ -660,8 +660,10 @@ pub(crate) enum Response {
     /// (confirmed frame).
     RetransmitConfirmed,
     LinkCheckReq,
+    /// A certification answer uplink was transmitted during a receive window.
+    /// The answer's RX windows are retained so the send loop can run them.
     #[cfg(feature = "certification")]
-    UplinkPrepared,
+    CertificationAnswerSent,
     #[cfg(feature = "certification")]
     DeviceHandler(DeviceEvent),
     #[cfg(feature = "multicast")]
@@ -698,7 +700,7 @@ impl From<Response> for nb_device::Response {
             Response::RetransmitConfirmed => unimplemented!(),
             Response::LinkCheckReq => unimplemented!(),
             #[cfg(feature = "certification")]
-            Response::UplinkPrepared => unimplemented!(),
+            Response::CertificationAnswerSent => unimplemented!(),
             #[cfg(feature = "certification")]
             Response::DeviceHandler(_) => unimplemented!(),
             #[cfg(feature = "multicast")]
@@ -739,7 +741,9 @@ impl From<Response> for async_device::ListenResponse {
                 async_device::ListenResponse::DownlinkReceived(fcnt)
             }
             #[cfg(feature = "certification")]
-            Response::UplinkPrepared => async_device::ListenResponse::UplinkPrepared,
+            Response::CertificationAnswerSent => {
+                async_device::ListenResponse::CertificationAnswerSent
+            }
             #[cfg(feature = "multicast")]
             Response::Multicast(mc) => async_device::ListenResponse::Multicast(mc.into()),
             r => panic!("Invalid async_device::ListenResponse::from {:?}", r),

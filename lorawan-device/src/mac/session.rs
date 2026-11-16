@@ -306,7 +306,9 @@ impl Session {
                                         DeviceEvent::TxPeriodicityChange { periodicity },
                                     );
                                 }
-                                UplinkPrepared => return Response::UplinkPrepared,
+                                CertificationAnswerSent => {
+                                    return Response::CertificationAnswerSent;
+                                }
                                 NoUpdate => return Response::NoUpdate,
                             }
                         }
@@ -903,7 +905,7 @@ mod tests {
             }
             let response = handle_downlink_on_port(&mut mac, 224, &payload, fcnt);
             assert!(
-                matches!(response, Response::UplinkPrepared),
+                matches!(response, Response::CertificationAnswerSent),
                 "oversized EchoPayloadAns must be clipped"
             );
 
@@ -962,7 +964,7 @@ mod tests {
             payload.push(0x01).unwrap();
         }
         let response = handle_downlink_on_port(&mut mac, 224, &payload, 0);
-        assert!(matches!(response, Response::UplinkPrepared));
+        assert!(matches!(response, Response::CertificationAnswerSent));
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
         mac.certification_setup_send::<_, 256>(&mut SeqRng(0), &mut tx).unwrap();
         assert_eq!(tx.as_mut_for_read().len(), max_phy);
@@ -972,7 +974,7 @@ mod tests {
         // clipped to keep the frame within the DR0 payload limit.
         let response = handle_downlink_on_port_with_fopts(&mut mac, &[0x06], 224, &payload, 1);
         assert!(
-            matches!(response, Response::UplinkPrepared),
+            matches!(response, Response::CertificationAnswerSent),
             "echo answer must be clipped to leave room for FOpts"
         );
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
