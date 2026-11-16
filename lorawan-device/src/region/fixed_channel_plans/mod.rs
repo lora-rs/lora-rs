@@ -234,6 +234,16 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
                     let eligible = (start..end)
                         .filter(|&channel| self.channel_mask.is_enabled(channel).unwrap())
                         .fold(0u128, |mask, channel| mask | (1u128 << channel));
+                    let eligible = if eligible == 0 {
+                        // No enabled channel supports this data rate. Fall back
+                        // to the power-on channel set.
+                        self.enable_default_channels();
+                        (start..end)
+                            .filter(|&channel| self.channel_mask.is_enabled(channel).unwrap())
+                            .fold(0u128, |mask, channel| mask | (1u128 << channel))
+                    } else {
+                        eligible
+                    };
                     let channel = self
                         .channel_selector
                         .select(rng, eligible)

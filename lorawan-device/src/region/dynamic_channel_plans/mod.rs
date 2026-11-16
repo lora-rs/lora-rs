@@ -102,6 +102,19 @@ impl<R: DynamicChannelRegion> DynamicChannelPlan<R> {
         self.channel_mask.set_channel(index, channel.is_some());
     }
 
+    /// Bitmask of enabled channels that support `datarate`.
+    fn eligible_data_channels(&self, datarate: DR) -> u128 {
+        let mut eligible = 0u128;
+        for (index, channel) in self.channels.iter().enumerate() {
+            if self.channel_mask.is_enabled(index).unwrap()
+                && channel.as_ref().is_some_and(|ch| ch.supports(datarate))
+            {
+                eligible |= 1u128 << index;
+            }
+        }
+        eligible
+    }
+
     pub fn get_max_payload_length(datarate: DR, repeater_compatible: bool, dwell_time: bool) -> u8 {
         R::get_max_payload_length(datarate, repeater_compatible, dwell_time)
     }
@@ -233,13 +246,12 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
                 }
             }
             Frame::Data => {
-                let mut eligible = 0u128;
-                for (index, channel) in self.channels.iter().enumerate() {
-                    if self.channel_mask.is_enabled(index).unwrap()
-                        && channel.as_ref().is_some_and(|ch| ch.supports(datarate))
-                    {
-                        eligible |= 1u128 << index;
-                    }
+                let mut eligible = self.eligible_data_channels(datarate);
+                if eligible == 0 {
+                    // No enabled channel supports this data rate. Fall back to
+                    // the power-on channel set.
+                    self.enable_default_channels();
+                    eligible = self.eligible_data_channels(datarate);
                 }
                 let index = self
                     .channel_selector
@@ -530,6 +542,28 @@ mod tests {
         let mut rng = SeqRng(3);
         let (tx, _) = config.create_tx_config(&mut rng, DR::_2, &Frame::Data);
         assert_ne!(tx.rf.frequency, 867_100_000, "channel 3 only supports DR5");
+    }
+
+    #[test]
+    fn fallback_to_default_channels_when_none_support_datarate() {
+        let mut config = Configuration::new(Region::EU868);
+
+        // Disable every default channel (0, 1 and 2).
+        let mut mask = config.channel_mask_get();
+        mask.set_channel(0, false);
+        mask.set_channel(1, false);
+        mask.set_channel(2, false);
+        config.channel_mask_set(mask);
+
+        let mut rng = SeqRng(0);
+        let (tx, _) = config.create_tx_config(&mut rng, DR::_0, &Frame::Data);
+
+        // Selection fell back to the power-on channels instead of panicking.
+        assert!(
+            matches!(tx.rf.frequency, 868_100_000 | 868_300_000 | 868_500_000),
+            "unexpected channel {} Hz",
+            tx.rf.frequency
+        );
     }
 
     // NewChannelReq carries a raw u8 channel index. Indices beyond the channel plan
