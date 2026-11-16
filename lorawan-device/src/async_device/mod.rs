@@ -132,8 +132,10 @@ pub enum JoinResponse {
 pub enum ListenResponse {
     SessionExpired,
     DownlinkReceived(FcntDown),
+    /// A certification answer was transmitted during a receive window.
+    /// For RXC, the radio remains configured so listening can continue.
     #[cfg(feature = "certification")]
-    UplinkPrepared,
+    CertificationAnswerSent,
     #[cfg(feature = "multicast")]
     Multicast(MulticastResponse),
 }
@@ -622,7 +624,7 @@ where
                 // it is a regular uplink, so run its RX windows (and NbTrans
                 // retransmissions) without transmitting again.
                 #[cfg(feature = "certification")]
-                mac::Response::UplinkPrepared => {
+                mac::Response::CertificationAnswerSent => {
                     (ms, rx_windows) = self.mac.take_pending_cert_rx();
                     tx_pending = false;
                 }
@@ -854,7 +856,7 @@ where
         // send loop to run the answer's own RX windows.
         let response = self.between_windows(rx1_start_delay).await?;
         #[cfg(feature = "certification")]
-        if let Some(response @ mac::Response::UplinkPrepared) = response {
+        if let Some(response @ mac::Response::CertificationAnswerSent) = response {
             return Ok(response);
         }
         #[cfg(not(feature = "certification"))]
@@ -890,7 +892,7 @@ where
         // send loop to run the answer's own RX windows.
         let response = self.between_windows(rx2_start_delay).await?;
         #[cfg(feature = "certification")]
-        if let Some(response @ mac::Response::UplinkPrepared) = response {
+        if let Some(response @ mac::Response::CertificationAnswerSent) = response {
             return Ok(response);
         }
         #[cfg(not(feature = "certification"))]
@@ -973,7 +975,7 @@ where
                 Ok(Some(mac.rx2_complete()))
             }
             #[cfg(feature = "certification")]
-            mac::Response::UplinkPrepared => {
+            mac::Response::CertificationAnswerSent => {
                 let (tx_config, rx_windows, _fcnt_up) =
                     mac.certification_setup_send::<G, N>(rng, radio_buffer)?;
                 // The answer is a regular uplink: retain it so the send loop
@@ -988,7 +990,7 @@ where
                 // Stash the answer's RX windows. The send loop or RXC
                 // listener takes them and runs the answer's own RX cycle.
                 mac.set_pending_cert_rx(tx_duration_ms, rx_windows);
-                Ok(Some(mac::Response::UplinkPrepared))
+                Ok(Some(mac::Response::CertificationAnswerSent))
             }
             #[cfg(feature = "multicast")]
             mac::Response::Multicast(mut response) => {

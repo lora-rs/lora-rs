@@ -14,7 +14,8 @@ pub(crate) enum Response {
     LinkCheckReq,
     TxFramesCtrlReq(Option<bool>),
     TxPeriodicityChange(Option<u16>),
-    UplinkPrepared,
+    /// The command prepared an uplink answer that must be transmitted.
+    CertificationAnswerSent,
 }
 
 pub(crate) struct Certification {
@@ -72,7 +73,7 @@ impl Certification {
                     ]);
                     buf.extend_from_slice(ans.build()).unwrap();
                     self.pending_uplink = Some(buf);
-                    return Response::UplinkPrepared;
+                    return Response::CertificationAnswerSent;
                 }
                 EchoIncPayloadReq(payload) => {
                     let data = payload.payload();
@@ -91,7 +92,7 @@ impl Certification {
                     // The answer is a regular uplink. Clip it to what the
                     // current DR leaves for the FRMPayload.
                     self.pending_uplink = Some(buf);
-                    return Response::UplinkPrepared;
+                    return Response::CertificationAnswerSent;
                 }
                 RxAppCntReq(..) => {
                     let mut buf: heapless::Vec<u8, 256> = heapless::Vec::new();
@@ -99,7 +100,7 @@ impl Certification {
                     ans.set_rx_app_cnt(rx_app_cnt);
                     buf.extend_from_slice(ans.build()).unwrap();
                     self.pending_uplink = Some(buf);
-                    return Response::UplinkPrepared;
+                    return Response::CertificationAnswerSent;
                 }
                 // MAC layer
                 AdrBitChangeReq(payload) => {

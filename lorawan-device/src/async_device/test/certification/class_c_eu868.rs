@@ -17,7 +17,7 @@ async fn eu868_class_c_echo_payload_req_in_rxc() {
 
     let r = net.listen(vec![Pkt::cp_cmd("08010203")]).await;
 
-    assert!(matches!(r.response(), Ok(ListenResponse::UplinkPrepared)));
+    assert!(matches!(r.response(), Ok(ListenResponse::CertificationAnswerSent)));
     assert_eq!(r.uplinks().len(), 1, "EchoIncPayloadReq must be answered");
     let mut uplink = r.uplink(0).clone();
     let dl = util::decrypt_uplink(&mut uplink);
