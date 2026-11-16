@@ -11,7 +11,7 @@ use rand_core::RngCore;
 
 pub use crate::region::DR;
 use crate::{
-    DeviceHandler,
+    DeviceHandler, SetDatarateError,
     nvm::{MAX_BLOB_LEN, NoNvm, NonVolatileStore, NvmRegion, PersistentIdentity},
     radio::{RadioBuffer, RfConfig, RxConfig},
     rng,
@@ -471,8 +471,9 @@ where
     }
 
     /// Set the data rate being used by this device. This overrides the region default.
-    pub fn set_datarate(&mut self, datarate: DR) {
-        self.mac.configuration.data_rate = datarate;
+    pub fn set_datarate(&mut self, datarate: DR) -> core::result::Result<(), SetDatarateError> {
+        // TODO: Check whether radio supports selected datarate
+        self.mac.set_datarate(datarate)
     }
 
     /// Whether Adaptive Data Rate (ADR) is enabled.

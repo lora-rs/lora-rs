@@ -42,6 +42,20 @@ pub use rand_core::RngCore;
 mod rng;
 pub use rng::Prng;
 
+/// Why [`async_device::Device::set_datarate`] or
+/// [`nb_device::Device::set_datarate`] rejected a data rate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub enum SetDatarateError {
+    /// Adaptive Data Rate is enabled, so the network controls the data rate.
+    /// Call `set_adr(false)` first to manage the data rate from the application.
+    AdrEnabled,
+    /// The region does not define this data rate.
+    UnsupportedDataRate,
+    /// No enabled channel supports this data rate.
+    NoEnabledChannel,
+}
+
 /// Provides the application payload and FPort of a downlink message.
 pub struct Downlink {
     pub data: Vec<u8, 256>,
