@@ -80,9 +80,10 @@ pub trait DeviceHandler {
     /// Called on `DutResetReq` so the application can reboot the device or MCU.
     ///
     /// The stack has already reset itself by then: the session is gone, the MAC
-    /// parameters and channel plan are back to their defaults, and the persisted
-    /// identity is reloaded from the store. The default does nothing, which leaves
-    /// the device unjoined and ready to join again.
+    /// parameters and channel plan are back to their defaults, multicast keys and
+    /// sessions are dropped, and the persisted identity is reloaded from the store.
+    /// The default does nothing, which leaves the device unjoined and ready to join
+    /// again.
     fn reboot(&mut self) {}
 }
 

@@ -129,3 +129,18 @@ async fn test_multicast_invalid_group_delete() {
     // Group 1 is untouched
     assert!(net.device().mac.multicast.matching_session(mc_addr()).is_some());
 }
+
+/// DutResetReq stands in for an MCU reset, which keeps no multicast state.
+#[cfg(feature = "certification")]
+#[tokio::test]
+async fn test_multicast_state_dropped_on_dut_reset_req() {
+    let mut net = setup_multicast().await;
+    net.listen(vec![mc_group_setup_req()]).await;
+    assert!(net.device().mac.multicast.matching_session(mc_addr()).is_some());
+
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::cp_cmd("01"))).await;
+    r.expect_rx_complete();
+
+    assert!(net.device().mac.multicast.matching_session(mc_addr()).is_none());
+    assert!(net.device().mac.multicast.mc_k_e_key.is_none());
+}
