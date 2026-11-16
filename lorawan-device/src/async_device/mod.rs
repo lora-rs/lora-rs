@@ -132,6 +132,8 @@ pub enum JoinResponse {
 pub enum ListenResponse {
     SessionExpired,
     DownlinkReceived(FcntDown),
+    #[cfg(feature = "certification")]
+    UplinkPrepared,
     #[cfg(feature = "multicast")]
     Multicast(MulticastResponse),
 }
