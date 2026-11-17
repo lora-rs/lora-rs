@@ -133,7 +133,7 @@ pub enum ListenResponse {
     SessionExpired,
     DownlinkReceived(FcntDown),
     /// A certification answer was transmitted during a receive window.
-    /// For RXC, the radio remains configured so listening can continue.
+    /// For RXC, the radio is listening again so `rxc_listen` can continue.
     #[cfg(feature = "certification")]
     CertificationAnswerSent,
     #[cfg(feature = "multicast")]
@@ -987,6 +987,10 @@ where
                     .tx(tx_config, retransmit_buffer.as_ref_for_read())
                     .await
                     .map_err(Error::Radio)?;
+                // The transmission ended RXC: listen again.
+                if let Some(rx_config) = rx_config {
+                    radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
+                }
                 // Stash the answer's RX windows. The send loop or RXC
                 // listener takes them and runs the answer's own RX cycle.
                 mac.set_pending_cert_rx(tx_duration_ms, rx_windows);
