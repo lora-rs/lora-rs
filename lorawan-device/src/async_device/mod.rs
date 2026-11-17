@@ -854,13 +854,11 @@ where
         // Sleep or listen in RXC. A certification answer sent in the gap
         // becomes the in-flight uplink, so hand its response back to the
         // send loop to run the answer's own RX windows.
-        let response = self.between_windows(rx1_start_delay).await?;
+        let mut gap_response = self.between_windows(rx1_start_delay).await?;
         #[cfg(feature = "certification")]
-        if let Some(response @ mac::Response::CertificationAnswerSent) = response {
-            return Ok(response);
+        if matches!(gap_response.as_ref(), Some(mac::Response::CertificationAnswerSent)) {
+            return Ok(mac::Response::CertificationAnswerSent);
         }
-        #[cfg(not(feature = "certification"))]
-        let _ = response;
 
         // RX1
         let rx_config = rx_windows.rx_config(self.radio.get_rx_window_buffer(), &Window::_1);
@@ -892,11 +890,12 @@ where
         // send loop to run the answer's own RX windows.
         let response = self.between_windows(rx2_start_delay).await?;
         #[cfg(feature = "certification")]
-        if let Some(response @ mac::Response::CertificationAnswerSent) = response {
-            return Ok(response);
+        if matches!(response.as_ref(), Some(mac::Response::CertificationAnswerSent)) {
+            return Ok(mac::Response::CertificationAnswerSent);
         }
-        #[cfg(not(feature = "certification"))]
-        let _ = response;
+        if gap_response.is_none() {
+            gap_response = response;
+        }
 
         // RX2
         let rx_config = rx_windows.rx_config(self.radio.get_rx_window_buffer(), &Window::_2);
@@ -910,6 +909,10 @@ where
             return Ok(response);
         }
         debug!("RX2 did not receive anything.");
+        // A downlink accepted in the RXC gap already completed the cycle.
+        if let Some(response) = gap_response {
+            return Ok(response);
+        }
         Ok(self.mac.rx2_complete())
     }
 
@@ -1076,6 +1079,47 @@ where
         Ok(response)
     }
 
+    /// Complete a certification answer transmitted from RXC by running its
+    /// RX windows and NbTrans repetitions, as the send loop does for an answer
+    /// transmitted during an uplink.
+    #[cfg(all(feature = "class-c", feature = "certification"))]
+    async fn finish_certification_answer(&mut self) -> Result<(), Error<R::PhyError>> {
+        let (mut ms, mut rx_windows) = self.mac.take_pending_cert_rx();
+        loop {
+            match self.rx_downlink(&Frame::Data, ms, &rx_windows).await? {
+                mac::Response::Retransmit => {
+                    let (tx_config, windows) = self.mac.retransmit_config::<G>(&mut self.rng);
+                    rx_windows = windows;
+                    ms = self
+                        .radio
+                        .tx(tx_config, self.retransmit_buffer.as_ref_for_read())
+                        .await
+                        .map_err(Error::Radio)?;
+                }
+                mac::Response::RetransmitConfirmed => {
+                    let timeout_ms = mac::retransmit_timeout_ms(&mut self.rng);
+                    if self.retransmit_wait(timeout_ms).await?.is_some() {
+                        break;
+                    }
+                    let (tx_config, windows) = self.mac.retransmit_config::<G>(&mut self.rng);
+                    rx_windows = windows;
+                    ms = self
+                        .radio
+                        .tx(tx_config, self.retransmit_buffer.as_ref_for_read())
+                        .await
+                        .map_err(Error::Radio)?;
+                }
+                // Another certification answer was sent while this one's RX
+                // windows were open. Complete that answer as well.
+                mac::Response::CertificationAnswerSent => {
+                    (ms, rx_windows) = self.mac.take_pending_cert_rx();
+                }
+                _ => break,
+            }
+        }
+        Ok(())
+    }
+
     /// When not involved in sending and RX1/RX2 windows, a class C configured device will be
     /// listening to RXC frames. The caller is expected to be awaiting this message at all times.
     #[cfg(feature = "class-c")]
@@ -1109,6 +1153,14 @@ where
             )
             .await?
             {
+                // Run the answer's RX windows before returning to the
+                // application. This completes its FCntUp and keeps a periodic
+                // application uplink from being transmitted immediately after
+                // the answer.
+                #[cfg(feature = "certification")]
+                if matches!(response, mac::Response::CertificationAnswerSent) {
+                    self.finish_certification_answer().await?;
+                }
                 return Ok(response.into());
             }
         }

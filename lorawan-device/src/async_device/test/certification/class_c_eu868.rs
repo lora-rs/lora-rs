@@ -9,7 +9,6 @@ use lorawan::parser::FrmPayload;
 /// Based on TP_C_EU868_ED_MAC_104_BV_000 - Testing for downlinks on different RXC reception slots.
 #[cfg(feature = "class-c")]
 #[tokio::test]
-#[should_panic(expected = "next uplink must advance FCntUp")]
 async fn eu868_class_c_echo_payload_req_in_rxc() {
     let (radio, timer, mut device) =
         util::session_with_region(crate::region::EU868::new_eu868().into());
@@ -73,7 +72,7 @@ async fn eu868_class_c_confirmed_downlink_in_rxc_is_acknowledged() {
         .in_window(1, Pkt::cp_cmd("0603"))
         .rxc_after(1, Pkt::cp_cmd("0700").confirmed());
     let r = net.exchange(&[1, 2, 3], 3, false, action).await;
-    r.expect_rx_complete();
+    r.expect_downlink_received();
     assert_eq!(net.device().get_override_periodicity(), Some(20));
 
     assert_eq!(r.uplinks().len(), 2, "confirmed downlink must be acknowledged");
