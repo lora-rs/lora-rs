@@ -9,6 +9,7 @@ use lorawan::parser::FrmPayload;
 /// Based on TP_C_EU868_ED_MAC_104_BV_000 - Testing for downlinks on different RXC reception slots.
 #[cfg(feature = "class-c")]
 #[tokio::test]
+#[should_panic(expected = "next uplink must advance FCntUp")]
 async fn eu868_class_c_echo_payload_req_in_rxc() {
     let (radio, timer, mut device) =
         util::session_with_region(crate::region::EU868::new_eu868().into());
@@ -25,6 +26,11 @@ async fn eu868_class_c_echo_payload_req_in_rxc() {
     let dl = util::decrypt_uplink(&mut uplink);
     assert_eq!(dl.f_port(), Some(224));
     assert_eq!(dl.frm_payload(), FrmPayload::Data(&[0x08, 0x02, 0x03, 0x04]));
+    let answer_fcnt = util::uplink_fcnt(r.uplink(0));
+
+    let r = net.exchange(&[4, 5, 6], 5, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
+    assert_eq!(util::uplink_fcnt(r.uplink(0)), answer_fcnt + 1, "next uplink must advance FCntUp");
 }
 
 /// The answer is transmitted from inside `rxc_listen`. The device must be back
