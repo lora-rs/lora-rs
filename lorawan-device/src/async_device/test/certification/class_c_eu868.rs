@@ -26,3 +26,25 @@ async fn eu868_class_c_echo_payload_req_in_rxc() {
     assert_eq!(dl.f_port(), Some(224));
     assert_eq!(dl.frm_payload(), FrmPayload::Data(&[0x08, 0x02, 0x03, 0x04]));
 }
+
+/// The answer is transmitted from inside `rxc_listen`. The device must be back
+/// in RXC afterwards, or the next downlink is lost.
+#[cfg(feature = "class-c")]
+#[tokio::test]
+async fn eu868_class_c_listens_again_after_answering_in_rxc() {
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    device.enable_class_c();
+    let mut net = Net::new(radio, timer, device).await;
+    net.exchange(&[1], 1, false, ExchangeAction::none()).await.expect_rx_complete();
+
+    let r = net.listen(vec![Pkt::cp_cmd("08010203")]).await;
+    assert!(matches!(r.response(), Ok(ListenResponse::CertificationAnswerSent)));
+
+    let r = net.listen(vec![Pkt::app(1, &[0xAA])]).await;
+    assert!(
+        matches!(r.response(), Ok(ListenResponse::DownlinkReceived(_))),
+        "expected the downlink after the answer, got {:?}",
+        r.response()
+    );
+}
