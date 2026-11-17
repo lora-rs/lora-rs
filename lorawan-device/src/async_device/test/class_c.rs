@@ -87,3 +87,40 @@ async fn test_listen_without_class_c_flag_errors() {
     let r = net.listen(vec![class_c_downlink().confirmed()]).await;
     assert!(r.response().is_err(), "listen() requires class C mode (radio in RXC)");
 }
+
+/// A confirmed downlink received in RXC must be acknowledged immediately,
+/// without waiting for the next periodic uplink
+/// (TP_C_EU868_ED_MAC_104_BV_000: "downlinks on RXC just before RX1/RX2").
+#[tokio::test]
+#[should_panic(expected = "confirmed downlink must be acknowledged")]
+async fn test_class_c_confirmed_downlink_in_rxc_is_acknowledged() {
+    let mut net = util::setup_with_session_class_c().await;
+    let action = ExchangeAction::none().rxc_after(0, class_c_downlink().confirmed());
+    let r = net.exchange(&[1, 2, 3], 3, false, action).await;
+
+    r.expect_rx_complete();
+    assert_eq!(r.uplinks().len(), 2, "confirmed downlink must be acknowledged");
+
+    let mut ack = r.uplink(1).clone();
+    let dl = util::decrypt_uplink(&mut ack);
+    assert!(dl.fhdr().fctrl().ack(), "ACK bit must be set");
+    assert_eq!(dl.f_port(), None, "ACK-only uplink has no FPort");
+}
+
+/// A downlink accepted in the RXC gap must still advance FCntUp exactly once
+/// before the next application uplink
+/// (TP_C_EU868_ED_MAC_104_BV_000: "downlinks on RXC just before RX1/RX2").
+#[tokio::test]
+#[should_panic(expected = "next uplink must advance FCntUp")]
+async fn test_class_c_rxc_uplink_advances_fcnt() {
+    let mut net = util::setup_with_session_class_c().await;
+    let action = ExchangeAction::none().rxc_after(0, class_c_downlink());
+    let r = net.exchange(&[1, 2, 3], 3, false, action).await;
+
+    r.expect_rx_complete();
+    let first_fcnt = util::uplink_fcnt(r.uplink(0));
+
+    let r = net.exchange(&[4, 5, 6], 3, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
+    assert_eq!(util::uplink_fcnt(r.uplink(0)), first_fcnt + 1, "next uplink must advance FCntUp");
+}
