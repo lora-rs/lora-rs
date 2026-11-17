@@ -574,15 +574,8 @@ impl Session {
                     // transmissions as-is.
                     let nb_trans = payload.redundancy().number_of_transmissions().max(1);
 
-                    // Fixed channel plans validate the mask against the
-                    // requested 125/500 kHz channel set; dynamic plans
-                    // validate the mask independently of the data rate.
                     let cm_ack = channel_mask_valid
-                        && if region.has_fixed_channel_plan() {
-                            region.channel_mask_validate(&channel_mask, dr)
-                        } else {
-                            region.channel_mask_validate(&channel_mask, None)
-                        };
+                        && region.channel_mask_validate_for_link_adr(&channel_mask, dr);
                     // The data rate is accepted only if it is defined and at
                     // least one enabled channel supports it.
                     let dr_ack = dr.is_some()
