@@ -268,3 +268,53 @@ async fn eu868_linkadrreq_rfu_chmaskcntl_is_rejected() {
         "LinkADRAns must report the channel mask as not accepted"
     );
 }
+
+#[tokio::test]
+/// A LinkADRReq with a data rate the region does not define is refused on the
+/// DataRateACK bit. Its channel mask is valid, so ChannelMaskACK stays set
+/// (TS001 1.0.4, Table 23).
+async fn eu868_linkadrreq_undefined_datarate_clears_datarate_ack() {
+    let (radio, timer, device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let mut net = Net::new(radio, timer, device).await;
+
+    // LinkADRReq(DR6, TXPower 1, ChMask 0007, ChMaskCntl 0, NbTrans 1)
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("0361070001"))).await;
+    r.expect_downlink_received();
+
+    let session = net.device().mac.get_session().unwrap();
+    assert_eq!(
+        session.uplink.mac_commands(),
+        [0x03, 0x05],
+        "LinkADRAns must clear DataRateACK only"
+    );
+}
+
+#[tokio::test]
+/// A LinkADRReq whose data rate is not supported by any channel its mask
+/// enables is refused on the DataRateACK bit: "not possible, given the channel
+/// mask provided (not supported by any of the enabled channels)". The mask
+/// itself only enables a defined channel, so ChannelMaskACK stays set
+/// (TS001 1.0.4, Table 23).
+async fn eu868_linkadrreq_datarate_unsupported_by_mask_clears_datarate_ack() {
+    let (radio, timer, device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let mut net = Net::new(radio, timer, device).await;
+
+    // NewChannelReq: add channel 3 (867.1 MHz) with DR5 only.
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("0703184f8455"))).await;
+    r.expect_downlink_received();
+    // The next uplink carries the NewChannelAns.
+    net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await.expect_rx_complete();
+
+    // LinkADRReq(DR2, TXPower 1, ChMask 0008 = channel 3 only, ChMaskCntl 0, NbTrans 1)
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("0321080001"))).await;
+    r.expect_downlink_received();
+
+    let session = net.device().mac.get_session().unwrap();
+    assert_eq!(
+        session.uplink.mac_commands(),
+        [0x03, 0x05],
+        "LinkADRAns must clear DataRateACK only"
+    );
+}
