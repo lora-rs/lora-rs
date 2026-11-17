@@ -574,9 +574,23 @@ impl Session {
                     // transmissions as-is.
                     let nb_trans = payload.redundancy().number_of_transmissions().max(1);
 
-                    let cm_ack =
-                        channel_mask_valid && region.channel_mask_validate(&channel_mask, dr);
-                    if cm_ack && let (Some(dr), Some(pw)) = (dr, pw) {
+                    // Fixed channel plans validate the mask against the
+                    // requested 125/500 kHz channel set; dynamic plans
+                    // validate the mask independently of the data rate.
+                    let cm_ack = channel_mask_valid
+                        && if region.has_fixed_channel_plan() {
+                            region.channel_mask_validate(&channel_mask, dr)
+                        } else {
+                            region.channel_mask_validate(&channel_mask, None)
+                        };
+                    // The data rate is accepted only if it is defined and at
+                    // least one enabled channel supports it.
+                    let dr_ack = dr.is_some()
+                        && (!cm_ack || region.channel_mask_validate(&channel_mask, dr));
+                    if cm_ack
+                        && dr_ack
+                        && let (Some(dr), Some(pw)) = (dr, pw)
+                    {
                         configuration.data_rate = dr;
                         configuration.tx_power = pw;
                         configuration.nb_trans = nb_trans;
@@ -586,7 +600,7 @@ impl Session {
                     for _ in 0..num_adrreq {
                         let mut cmd = LinkADRAnsCreator::new();
                         cmd.set_channel_mask_ack(cm_ack)
-                            .set_data_rate_ack(dr.is_some())
+                            .set_data_rate_ack(dr_ack)
                             .set_tx_power_ack(pw.is_some());
                         self.uplink.add_mac_command(cmd);
                     }
