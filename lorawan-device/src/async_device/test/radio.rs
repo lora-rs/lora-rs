@@ -53,6 +53,8 @@ enum Msg {
 }
 
 pub struct TestRadio {
+    /// The receive configuration in effect. A transmission ends it, as on a
+    /// real radio, so receiving again takes another `setup_rx`.
     current_config: Option<RxConfig>,
     uplinks: Arc<Mutex<std::vec::Vec<Uplink>>>,
     /// The configuration of every single-shot receive (one per RX window).
@@ -73,6 +75,7 @@ impl PhyRxTx for TestRadio {
         let length = buffer.len();
         let uplink = Uplink::new(buffer, config).map_err(|_| "Parse error")?;
         self.uplinks.lock().await.push(uplink);
+        self.current_config = None;
         Ok(length as u32)
     }
 
@@ -86,6 +89,9 @@ impl PhyRxTx for TestRadio {
         rx_buf: &mut [u8],
     ) -> Result<(usize, RxQuality), Self::PhyError> {
         let msg = self.rx.recv().await.unwrap();
+        if self.current_config.is_none() {
+            return Err("rx_continuous without setup_rx");
+        }
         match msg {
             Msg::Frame(frame) => Ok(self.inject(&frame, rx_buf)),
             Msg::Timeout => Err("Unexpected Timeout"),

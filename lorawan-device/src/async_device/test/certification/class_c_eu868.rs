@@ -2,7 +2,7 @@
 //!
 use super::{net, util};
 use crate::async_device::ListenResponse;
-use net::{Net, Pkt};
+use net::{ExchangeAction, Net, Pkt};
 
 use lorawan::parser::FrmPayload;
 
@@ -14,6 +14,8 @@ async fn eu868_class_c_echo_payload_req_in_rxc() {
         util::session_with_region(crate::region::EU868::new_eu868().into());
     device.enable_class_c();
     let mut net = Net::new(radio, timer, device).await;
+    // The first uplink leaves the radio listening on RXC.
+    net.exchange(&[1], 1, false, ExchangeAction::none()).await.expect_rx_complete();
 
     let r = net.listen(vec![Pkt::cp_cmd("08010203")]).await;
 
