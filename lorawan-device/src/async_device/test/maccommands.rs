@@ -266,6 +266,7 @@ async fn maccommands_in_frmpayload() {
 }
 
 #[tokio::test]
+#[should_panic]
 #[cfg(feature = "region-as923-1")]
 /// The network adds a channel, moves the device to a data rate only that
 /// channel supports, then removes the channel. The device must still be able

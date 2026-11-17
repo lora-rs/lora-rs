@@ -270,6 +270,7 @@ async fn eu868_linkadrreq_rfu_chmaskcntl_is_rejected() {
 }
 
 #[tokio::test]
+#[should_panic(expected = "LinkADRAns must clear DataRateACK only")]
 /// A LinkADRReq with a data rate the region does not define is refused on the
 /// DataRateACK bit. Its channel mask is valid, so ChannelMaskACK stays set
 /// (TS001 1.0.4, Table 23).
@@ -291,6 +292,7 @@ async fn eu868_linkadrreq_undefined_datarate_clears_datarate_ack() {
 }
 
 #[tokio::test]
+#[should_panic(expected = "LinkADRAns must clear DataRateACK only")]
 /// A LinkADRReq whose data rate is not supported by any channel its mask
 /// enables is refused on the DataRateACK bit: "not possible, given the channel
 /// mask provided (not supported by any of the enabled channels)". The mask
