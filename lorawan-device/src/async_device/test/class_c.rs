@@ -124,3 +124,16 @@ async fn test_class_c_rxc_uplink_advances_fcnt() {
     r.expect_rx_complete();
     assert_eq!(util::uplink_fcnt(r.uplink(0)), first_fcnt + 1, "next uplink must advance FCntUp");
 }
+
+/// An ACK is an uplink, so the device must open RX1/RX2 after sending it.
+/// A reply sent in RX1 would otherwise be lost.
+#[tokio::test]
+#[should_panic(expected = "confirmed downlink must be acknowledged")]
+async fn test_class_c_ack_opens_rx_windows() {
+    let mut net = util::setup_with_session_class_c().await;
+    let r = net.listen(vec![class_c_downlink().confirmed()]).await;
+
+    r.expect_downlink_received();
+    assert_eq!(r.uplinks().len(), 1, "confirmed downlink must be acknowledged");
+    assert!(r.windows() > 0, "ACK must open RX1/RX2");
+}
