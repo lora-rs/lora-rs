@@ -530,6 +530,19 @@ impl Configuration {
         }
     }
 
+    /// Return the highest data rate at or below `max` that is supported by
+    /// at least one channel enabled in `channel_mask`.
+    pub(crate) fn highest_supported_datarate(
+        &self,
+        channel_mask: &ChannelMask<9>,
+        max: DR,
+    ) -> Option<DR> {
+        (0..=max as u8)
+            .rev()
+            .map(DR::from)
+            .find(|dr| self.channel_mask_validate(channel_mask, Some(*dr)))
+    }
+
     pub(crate) fn enable_default_channels(&mut self) {
         mut_region_dispatch!(self, enable_default_channels)
     }
