@@ -266,7 +266,6 @@ async fn maccommands_in_frmpayload() {
 }
 
 #[tokio::test]
-#[should_panic]
 #[cfg(feature = "region-as923-1")]
 /// The network adds a channel, moves the device to a data rate only that
 /// channel supports, then removes the channel. The device must still be able
@@ -291,6 +290,7 @@ async fn uplink_after_only_channel_for_datarate_is_removed() {
     // NewChannelReq: remove channel 2 (frequency 0).
     let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("070200000060"))).await;
     r.expect_downlink_received();
+    assert_eq!(net.device().mac.configuration.data_rate, DR::_5);
 
     let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
     r.expect_rx_complete();

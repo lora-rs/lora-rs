@@ -666,6 +666,15 @@ impl Session {
                 _ => (),
             }
         }
+
+        // A NewChannelReq should not remove the only channel supporting the
+        // current data rate, but stay usable if it does.
+        let channel_mask = region.channel_mask_get();
+        if let Some(datarate) =
+            region.highest_supported_datarate(&channel_mask, configuration.data_rate)
+        {
+            configuration.data_rate = datarate;
+        }
     }
 }
 
