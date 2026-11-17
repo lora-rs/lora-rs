@@ -28,6 +28,11 @@ async fn eu868_class_c_echo_payload_req_in_rxc() {
     // The answer is a regular uplink: its own RX1 and RX2 windows are run
     // before `rxc_listen` returns.
     assert_eq!(r.windows(), 2, "the answer's RX1 and RX2 must be run");
+    let answer_fcnt = util::uplink_fcnt(r.uplink(0));
+
+    let r = net.exchange(&[4, 5, 6], 5, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
+    assert_eq!(util::uplink_fcnt(r.uplink(0)), answer_fcnt + 1, "next uplink must advance FCntUp");
 }
 
 /// The answer is transmitted from inside `rxc_listen`. The device must be back
