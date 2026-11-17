@@ -81,7 +81,6 @@ async fn test_class_c_async_down() {
 /// A confirmed downlink received in RXC must be acknowledged immediately,
 /// without waiting for the next periodic uplink.
 #[tokio::test]
-#[should_panic(expected = "confirmed downlink must be acknowledged")]
 async fn test_class_c_confirmed_downlink_in_rxc_is_acknowledged() {
     let mut net = util::setup_with_session_class_c().await;
     let action = ExchangeAction::none().rxc_after(0, class_c_downlink().confirmed());

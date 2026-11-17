@@ -280,6 +280,43 @@ impl Mac {
         Ok((tx_config, rx_windows, fcnt))
     }
 
+    /// Whether a received confirmed downlink still needs an ACK uplink.
+    #[cfg(feature = "class-c")]
+    pub(crate) fn ack_pending(&self) -> bool {
+        match &self.state {
+            State::Joined(session) => session.uplink.confirms_downlink(),
+            _ => false,
+        }
+    }
+
+    /// Prepare an ACK-only uplink for transmission from the Class C RXC
+    /// listen. It has no application payload and no RX windows.
+    #[cfg(feature = "class-c")]
+    pub(crate) fn send_ack<RNG: RngCore, const N: usize>(
+        &mut self,
+        rng: &mut RNG,
+        buf: &mut RadioBuffer<N>,
+    ) -> Result<radio::TxConfig> {
+        // TODO: Share TX config selection with send().
+        let max_mac_payload_len =
+            self.region.get_max_payload_length(self.configuration.data_rate, false, false);
+        let payload_dropped = match &mut self.state {
+            State::Joined(session) => {
+                session.prepare_ack_buffer::<N>(buf, &self.configuration, max_mac_payload_len);
+                session.take_payload_dropped()
+            }
+            State::Otaa(_) | State::Unjoined => return Err(Error::NotJoined),
+        };
+        self.payload_dropped = payload_dropped;
+        let (mut tx_config, _) =
+            self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
+        tx_config.adjust_power(
+            self.configuration.tx_power.unwrap_or(self.board_eirp.max_power),
+            self.board_eirp.antenna_gain,
+        );
+        Ok(tx_config)
+    }
+
     /// Whether the last prepared uplink dropped non-empty application data.
     pub(crate) fn take_payload_dropped(&mut self) -> bool {
         let dropped = self.payload_dropped;

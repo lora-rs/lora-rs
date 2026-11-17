@@ -930,7 +930,7 @@ where
         rx_config: Option<RxConfig>,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
         radio_buffer.clear();
-        match response {
+        let response: Result<_, Error<R::PhyError>> = match response {
             mac::Response::NoUpdate => Ok(None),
             #[cfg(feature = "certification")]
             mac::Response::DeviceHandler(event) => {
@@ -1020,7 +1020,23 @@ where
                 }
             }
             r => Ok(Some(r)),
+        };
+        let response = response?;
+
+        // A confirmed downlink received while listening in RXC is acknowledged
+        // immediately, without waiting for the next periodic uplink. The ACK
+        // has no RX windows; complete it now and re-arm continuous receive.
+        #[cfg(feature = "class-c")]
+        if let Some(rx_config) = rx_config
+            && mac.ack_pending()
+        {
+            let tx_config = mac.send_ack::<G, N>(rng, radio_buffer)?;
+            radio.tx(tx_config, radio_buffer.as_ref_for_read()).await.map_err(Error::Radio)?;
+            let _ = mac.rx2_complete();
+            radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
         }
+
+        Ok(response)
     }
 
     async fn rx_listen(

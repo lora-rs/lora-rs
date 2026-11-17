@@ -63,7 +63,6 @@ async fn eu868_class_c_listens_again_after_answering_in_rxc() {
 /// the next periodic uplink.
 #[cfg(feature = "class-c")]
 #[tokio::test]
-#[should_panic(expected = "confirmed downlink must be acknowledged")]
 async fn eu868_class_c_confirmed_downlink_in_rxc_is_acknowledged() {
     let (radio, timer, mut device) =
         util::session_with_region(crate::region::EU868::new_eu868().into());
