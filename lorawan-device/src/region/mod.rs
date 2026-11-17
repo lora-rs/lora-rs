@@ -513,6 +513,23 @@ impl Configuration {
         region_dispatch!(self, channel_mask_validate, channel_mask, dr)
     }
 
+    /// Validate a `LinkADRReq` channel mask.
+    ///
+    /// ChannelMaskACK is data-rate dependent for fixed channel plans, where
+    /// the mask selects the 125/500 kHz channel set, but independent for
+    /// dynamic plans.
+    pub(crate) fn channel_mask_validate_for_link_adr(
+        &self,
+        channel_mask: &ChannelMask<9>,
+        dr: Option<DR>,
+    ) -> bool {
+        if self.has_fixed_channel_plan() {
+            self.channel_mask_validate(channel_mask, dr)
+        } else {
+            self.channel_mask_validate(channel_mask, None)
+        }
+    }
+
     pub(crate) fn enable_default_channels(&mut self) {
         mut_region_dispatch!(self, enable_default_channels)
     }
