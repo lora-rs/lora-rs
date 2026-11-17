@@ -268,6 +268,19 @@ fn test_device_time_ans() {
     );
 }
 
+/// `1139322288` seconds since the GPS epoch is 2016-02-12 14:24:31 UTC.
+#[test]
+#[should_panic(expected = "DeviceTimeAns seconds must round-trip")]
+fn test_device_time_ans_roundtrip() {
+    let mut creator = DeviceTimeAnsCreator::new();
+    creator.set_seconds(1_139_322_288).set_nano_seconds(123456789).unwrap();
+    let built = creator.build();
+
+    let parsed = DeviceTimeAnsPayload::new(&built[1..]).unwrap();
+    assert_eq!(parsed.seconds(), 1_139_322_288, "DeviceTimeAns seconds must round-trip");
+    assert_eq!(parsed.nano_seconds(), 121_093_750, "DeviceTimeAns fraction must round-trip");
+}
+
 #[test]
 fn test_parse_mac_commands_empty_uplink() {
     assert_eq!(parse_uplink_mac_commands(&[]).count(), 0);
