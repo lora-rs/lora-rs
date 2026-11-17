@@ -404,6 +404,46 @@ impl Session {
         configuration: &super::Configuration,
         max_mac_payload_len: u8,
     ) -> FcntUp {
+        self.prepare_buffer_inner::<N>(
+            Some((data.fport, data.data)),
+            data.confirmed,
+            true,
+            tx_buffer,
+            configuration,
+            max_mac_payload_len,
+        )
+    }
+
+    /// Prepare an uplink carrying only the pending ACK bit and MAC answers,
+    /// with no application FPort.
+    #[cfg(feature = "class-c")]
+    pub(crate) fn prepare_ack_buffer<const N: usize>(
+        &mut self,
+        tx_buffer: &mut RadioBuffer<N>,
+        configuration: &super::Configuration,
+        max_mac_payload_len: u8,
+    ) -> FcntUp {
+        // An ACK has no application payload and is never retransmitted.
+        self.retransmissions = 0;
+        self.prepare_buffer_inner::<N>(
+            None,
+            false,
+            false,
+            tx_buffer,
+            configuration,
+            max_mac_payload_len,
+        )
+    }
+
+    fn prepare_buffer_inner<const N: usize>(
+        &mut self,
+        app_payload: Option<(u8, &[u8])>,
+        confirmed: bool,
+        handle_override: bool,
+        tx_buffer: &mut RadioBuffer<N>,
+        configuration: &super::Configuration,
+        max_mac_payload_len: u8,
+    ) -> FcntUp {
         tx_buffer.clear();
         let fcnt = self.fcnt_up;
         let mut buf = [0u8; 256];
@@ -419,9 +459,9 @@ impl Session {
         // data rate.
         let adr_ack_req = adr && self.adr_ack_cnt >= ADR_ACK_LIMIT as u32;
 
-        self.confirmed = data.confirmed;
+        self.confirmed = confirmed;
         #[cfg(feature = "certification")]
-        if let Some(v) = self.override_confirmed {
+        if handle_override && let Some(v) = self.override_confirmed {
             self.confirmed = v;
         }
 
@@ -432,24 +472,29 @@ impl Session {
             max_mac_payload_len.saturating_sub(FHDR_MIN_LEN as u8 + FPORT_LEN as u8) as usize;
         let mac_commands = self.uplink.mac_commands();
         let mac_commands_len = mac_commands_prefix_len(mac_commands, max_frm_payload);
+        let mac_commands_fit = mac_commands.len() <= FOPTS_MAX_LEN.min(max_frm_payload);
         self.app_payload_dropped = false;
-        let (f_opts, payload) = match NonZeroU8::new(data.fport) {
+        let (f_opts, payload) = match app_payload {
             // Keep the application payload only when the queued MAC answers
             // fit in FOpts and within the current data rate's payload limit.
-            Some(f_port) if mac_commands.len() <= FOPTS_MAX_LEN.min(max_frm_payload) => {
-                (mac_commands, Payload::Data { f_port, data: data.data })
-            }
-            Some(_) => {
-                self.app_payload_dropped = !data.data.is_empty();
-                (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
-            }
-            None => {
-                if !data.data.is_empty() {
-                    // TODO: Return a proper Error instead of panicking.
-                    panic!("Error assembling packet! Data payload with fport 0 not allowed");
+            Some((fport, data)) => match NonZeroU8::new(fport) {
+                Some(f_port) if mac_commands_fit => (mac_commands, Payload::Data { f_port, data }),
+                Some(_) => {
+                    self.app_payload_dropped = !data.is_empty();
+                    (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
                 }
-                (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
-            }
+                None => {
+                    if !data.is_empty() {
+                        // TODO: Return a proper Error instead of panicking.
+                        panic!("Error assembling packet! Data payload with fport 0 not allowed");
+                    }
+                    (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
+                }
+            },
+            // An ACK has no FPort. MAC answers stay in FOpts when they fit,
+            // otherwise they move to FPort 0 as usual.
+            None if mac_commands_fit => (mac_commands, Payload::None),
+            None => (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len])),
         };
         let frame = DataFrame {
             frame_type: if self.confirmed {
@@ -457,67 +502,6 @@ impl Session {
             } else {
                 DataFrameType::UnconfirmedUp
             },
-            dev_addr: self.devaddr,
-            adr,
-            adr_ack_req,
-            ack,
-            f_pending: false,
-            fcnt,
-            f_opts,
-            payload,
-        };
-        let nwk_crypto = DefaultCrypto::new(self.nwkskey.inner());
-        let app_crypto = DefaultCrypto::new(self.appskey.inner());
-        match frame.build_into(&mut buf, &nwk_crypto, Some(&app_crypto)) {
-            Ok(packet) => {
-                tx_buffer.clear();
-                tx_buffer.extend_from_slice(packet).unwrap();
-            }
-            // TODO: Return a proper Error instead of panicking.
-            Err(e) => panic!("Error assembling packet! {:?} ", e),
-        }
-        self.uplink.clear_mac_commands(true);
-        fcnt
-    }
-
-    /// Prepare an uplink carrying only the pending ACK bit and MAC answers,
-    /// with no application FPort.
-    #[cfg(feature = "class-c")]
-    pub(crate) fn prepare_ack_buffer<const N: usize>(
-        &mut self,
-        tx_buffer: &mut RadioBuffer<N>,
-        configuration: &super::Configuration,
-        max_mac_payload_len: u8,
-    ) -> FcntUp {
-        // TODO: Share the frame-building code with prepare_buffer.
-        tx_buffer.clear();
-        let fcnt = self.fcnt_up;
-        let mut buf = [0u8; 256];
-
-        let ack = self.uplink.confirms_downlink();
-        if ack {
-            self.uplink.clear_downlink_confirmation();
-        }
-
-        let adr = configuration.adr_enabled;
-        let adr_ack_req = adr && self.adr_ack_cnt >= ADR_ACK_LIMIT as u32;
-
-        // An ACK has no application payload and is never retransmitted.
-        self.confirmed = false;
-        self.retransmissions = 0;
-
-        let max_frm_payload =
-            max_mac_payload_len.saturating_sub(FHDR_MIN_LEN as u8 + FPORT_LEN as u8) as usize;
-        let mac_commands = self.uplink.mac_commands();
-        let mac_commands_len = mac_commands_prefix_len(mac_commands, max_frm_payload);
-        self.app_payload_dropped = false;
-        let (f_opts, payload) = if mac_commands.len() <= FOPTS_MAX_LEN.min(max_frm_payload) {
-            (mac_commands, Payload::None)
-        } else {
-            (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
-        };
-        let frame = DataFrame {
-            frame_type: DataFrameType::UnconfirmedUp,
             dev_addr: self.devaddr,
             adr,
             adr_ack_req,
