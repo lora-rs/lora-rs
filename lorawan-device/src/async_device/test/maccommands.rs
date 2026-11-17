@@ -264,3 +264,34 @@ async fn maccommands_in_frmpayload() {
     // TODO: Implement RxParamSetup and RxTimingSetup...
     // assert_eq!(data, [5, 7]);
 }
+
+#[tokio::test]
+#[cfg(feature = "region-as923-1")]
+/// The network adds a channel, moves the device to a data rate only that
+/// channel supports, then removes the channel. The device must still be able
+/// to send its next uplink.
+async fn uplink_after_only_channel_for_datarate_is_removed() {
+    use crate::region::{Configuration, Region};
+    use lorawan::types::DR;
+
+    let (radio, timer, device) = util::session_with_region(Configuration::new(Region::AS923_1));
+    let mut net = Net::new(radio, timer, device).await;
+
+    // NewChannelReq: add channel 2 (923.6 MHz) with DR0..=DR6. The AS923
+    // default channels stop at DR5.
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("070220ee8c60"))).await;
+    r.expect_downlink_received();
+
+    // LinkADRReq(DR6, TXPower 0, ChMask 0007, ChMaskCntl 0, NbTrans 1)
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("0360070001"))).await;
+    r.expect_downlink_received();
+    assert_eq!(net.device().mac.configuration.data_rate, DR::_6);
+
+    // NewChannelReq: remove channel 2 (frequency 0).
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("070200000060"))).await;
+    r.expect_downlink_received();
+
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
+    assert_eq!(r.uplinks().len(), 1);
+}
