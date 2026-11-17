@@ -163,6 +163,8 @@ impl<F: FixedChannelRegion> RegionHandler for FixedChannelPlan<F> {
     }
 
     fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, dr: Option<DR>) -> bool {
+        // Fixed plans need the data rate to know which 125/500 kHz channel
+        // set the mask refers to, so `None` cannot validate the mask alone.
         if let Some(dr) = dr
             && let Some(dr) = &F::datarates()[dr as usize]
         {

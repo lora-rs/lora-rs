@@ -196,12 +196,14 @@ impl<R: DynamicChannelRegion> RegionHandler for DynamicChannelPlan<R> {
     }
 
     fn channel_mask_validate(&self, channel_mask: &ChannelMask<9>, dr: Option<DR>) -> bool {
-        let Some(dr) = dr else {
-            return false;
-        };
+        // LinkADRReq can request a data rate this region does not define, but
+        // its ChannelMaskACK and DataRateACK fields must be handled separately.
+        // ChannelMaskACK must report independently whether the mask enables at
+        // least one configured channel, in this case dr is None.
         (0..NUM_CHANNELS_DYNAMIC).any(|i| {
             channel_mask.is_enabled(i as usize).unwrap()
-                && self.channels[i as usize].is_some_and(|channel| channel.supports(dr))
+                && self.channels[i as usize]
+                    .is_some_and(|channel| dr.is_none_or(|dr| channel.supports(dr)))
         })
     }
 
