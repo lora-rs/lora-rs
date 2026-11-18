@@ -156,7 +156,6 @@ async fn join_accept_preserves_application_adr_override() {
 }
 
 #[tokio::test]
-#[should_panic(expected = "JoinAccept must preserve the application data rate")]
 async fn join_accept_preserves_application_datarate() {
     let (radio, timer, mut device) = util::session_with_region(EU868::new_eu868().into());
     device.set_adr(false);
@@ -171,6 +170,51 @@ async fn join_accept_preserves_application_datarate() {
         DR::_3,
         "JoinAccept must preserve the application data rate"
     );
+}
+
+#[tokio::test]
+async fn join_accept_resets_datarate_after_adr_is_enabled_again() {
+    let (radio, timer, mut device) = util::session_with_region(EU868::new_eu868().into());
+    device.set_adr(false);
+    device.set_datarate(DR::_3).unwrap();
+    // The network owns the data rate again, then the application takes ADR
+    // off without choosing a data rate.
+    device.set_adr(true);
+    device.set_adr(false);
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.join(ExchangeAction::rx1(Pkt::join_accept())).await;
+    r.expect_joined();
+
+    let default_dr = net.device().mac.region.get_default_datarate();
+    assert_eq!(net.device().get_datarate(), default_dr);
+}
+
+#[tokio::test]
+#[cfg(feature = "region-as923-1")]
+async fn join_accept_limits_application_datarate_to_default_channels() {
+    use crate::region::{Configuration, Region};
+
+    let (radio, timer, mut device) = util::session_with_region(Configuration::new(Region::AS923_1));
+    // DR6 is only available on a channel the network added. The AS923 default
+    // channels stop at DR5.
+    assert_eq!(
+        device.mac.region.handle_new_channel(
+            2,
+            923_600_000,
+            Some(lorawan::types::DataRateRange::new_range(DR::_0, DR::_6)),
+        ),
+        (true, true)
+    );
+    device.set_adr(false);
+    device.set_datarate(DR::_6).unwrap();
+    let mut net = Net::new(radio, timer, device).await;
+
+    // The join drops the added channel.
+    let r = net.join(ExchangeAction::rx1(Pkt::join_accept())).await;
+    r.expect_joined();
+
+    assert_eq!(net.device().get_datarate(), DR::_5);
 }
 
 #[tokio::test]

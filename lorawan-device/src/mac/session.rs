@@ -910,6 +910,20 @@ mod tests {
 
     #[cfg(feature = "certification")]
     #[test]
+    fn mac_reset_keeps_application_datarate() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+        mac.configuration.set_adr(false);
+        mac.set_datarate(DR::_3).unwrap();
+
+        mac.reset(true);
+
+        assert!(!mac.configuration.adr_enabled);
+        assert_eq!(mac.configuration.data_rate, DR::_3);
+    }
+
+    #[cfg(feature = "certification")]
+    #[test]
     fn certification_clips_oversized_echo_payload() {
         use lorawan::packet_length::phy::{MHDR_LEN, MIC_LEN};
         let mut mac = eu868_mac();

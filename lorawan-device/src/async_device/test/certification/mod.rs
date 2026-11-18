@@ -5,6 +5,7 @@ use super::nvm::{MockStore, dev_nonce};
 use super::util;
 use super::util::decrypt_uplink;
 use super::{Device, TestHandler, radio::TestRadio, timer::TestTimer};
+use crate::region::DR;
 use crate::test_util::{get_crypto, get_dev_addr};
 use lorawan::keys::Crypto;
 
@@ -127,11 +128,14 @@ async fn dut_reset_req_resets_the_device() {
     let mut net = Net::new(radio, timer, device).await;
     net.device().override_periodicity = Some(5);
     net.device().set_adr(false);
+    net.device().set_datarate(DR::_3).unwrap();
 
     let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx1(Pkt::cp_cmd("01"))).await;
     r.expect_rx_complete();
     assert_eq!(net.device().get_override_periodicity(), None);
     assert!(net.device().get_adr(), "ADR is on at boot");
+    let default_dr = net.device().mac.region.get_default_datarate();
+    assert_eq!(net.device().get_datarate(), default_dr);
 
     // Without a store there is nothing to resume, so the device restarts unjoined.
     assert!(net.device().get_session().is_none());

@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) 
 
 ## Unreleased
 
+- A data rate set with `Device::set_datarate` (ADR disabled) is kept across
+  joins, limited to what the default channels support. Enabling ADR again
+  hands the data rate back to the network
 - Add optional non-volatile storage to `async_device::Device` (`nvm` module).
   With a store (`Device::restore`, `Device::restore_with_seed`) the device
   follows the LoRaWAN 1.0.4 join rules: a persisted monotonic DevNonce and a

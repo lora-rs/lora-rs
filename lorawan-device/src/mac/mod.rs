@@ -89,6 +89,9 @@ pub struct Configuration {
     pub(crate) adr_enabled: bool,
     /// Application-selected ADR setting, reapplied after network resets.
     pub(crate) adr_override: Option<bool>,
+    /// Application-selected data rate, reapplied after network resets while
+    /// ADR is disabled.
+    pub(crate) data_rate_override: Option<DR>,
     /// Number of transmissions of each uplink (LoRaWAN 1.0.4 NbTrans), set by
     /// the network via LinkADRReq: 1..=15 transmissions per FCntUp. Defaults
     /// to 1 (no retransmission).
@@ -109,24 +112,39 @@ impl Configuration {
             tx_power: None,
             adr_enabled: true,
             adr_override: None,
+            data_rate_override: None,
             nb_trans: 1,
         }
     }
 
     fn reset(&mut self, region: &region::Configuration) {
         let adr_override = self.adr_override;
+        let data_rate_override = self.data_rate_override;
         *self = Self::default_for_region(region);
         self.adr_override = adr_override;
+        self.data_rate_override = data_rate_override;
         if let Some(enabled) = adr_override {
             self.adr_enabled = enabled;
+        }
+        // The reset restored the default channels, which may not support the
+        // application's data rate: use the highest one they do.
+        if !self.adr_enabled
+            && let Some(datarate) = data_rate_override
+            && let Some(datarate) =
+                region.highest_supported_datarate(&region.channel_mask_get(), datarate)
+        {
+            self.data_rate = datarate;
         }
     }
 
     /// Apply an ADR setting chosen by the application or by the certification
-    /// protocol.
+    /// protocol. Enabling ADR hands the data rate back to the network.
     pub(crate) fn set_adr(&mut self, enabled: bool) {
         self.adr_enabled = enabled;
         self.adr_override = Some(enabled);
+        if enabled {
+            self.data_rate_override = None;
+        }
     }
 }
 
@@ -337,6 +355,7 @@ impl Mac {
             return Err(SetDatarateError::NoEnabledChannel);
         }
         self.configuration.data_rate = datarate;
+        self.configuration.data_rate_override = Some(datarate);
         Ok(())
     }
 
