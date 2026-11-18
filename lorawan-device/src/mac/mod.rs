@@ -121,6 +121,13 @@ impl Configuration {
             self.adr_enabled = enabled;
         }
     }
+
+    /// Apply an ADR setting chosen by the application or by the certification
+    /// protocol.
+    pub(crate) fn set_adr(&mut self, enabled: bool) {
+        self.adr_enabled = enabled;
+        self.adr_override = Some(enabled);
+    }
 }
 
 /// Restore the region's default channels and reset the MAC network parameters.

@@ -490,8 +490,7 @@ where
     /// ADR is enabled by default. Disable it for mobile devices or when the
     /// application manages data rate itself.
     pub fn set_adr(&mut self, enabled: bool) {
-        self.mac.configuration.adr_enabled = enabled;
-        self.mac.configuration.adr_override = Some(enabled);
+        self.mac.configuration.set_adr(enabled);
         if !enabled && let Some(session) = self.mac.get_session_mut() {
             session.adr_ack_cnt = 0;
         }
