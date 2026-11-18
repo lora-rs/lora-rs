@@ -340,6 +340,7 @@ pub fn coding_rate_value(coding_rate: CodingRate) -> Result<u8, RadioError> {
         CodingRate::_4_6 => Ok(0x02),
         CodingRate::_4_7 => Ok(0x03),
         CodingRate::_4_8 => Ok(0x04),
+        _ => Err(RadioError::UnavailableCodingRate),
     }
 }
 
@@ -349,5 +350,6 @@ pub fn coding_rate_denominator_value(coding_rate: CodingRate) -> Result<u8, Radi
         CodingRate::_4_6 => Ok(0x06),
         CodingRate::_4_7 => Ok(0x07),
         CodingRate::_4_8 => Ok(0x08),
+        _ => Err(RadioError::UnavailableCodingRate),
     }
 }

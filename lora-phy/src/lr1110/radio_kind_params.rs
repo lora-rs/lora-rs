@@ -313,7 +313,6 @@ pub fn spreading_factor_value(spreading_factor: SpreadingFactor) -> Result<u8, R
 /// LoRa bandwidth values for LR1110
 pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError> {
     match bandwidth {
-        Bandwidth::_7KHz => Err(RadioError::InvalidBandwidthForFrequency), // Not supported on LR1110
         Bandwidth::_10KHz => Ok(0x08),
         Bandwidth::_15KHz => Ok(0x01),
         Bandwidth::_20KHz => Ok(0x09),
@@ -323,6 +322,7 @@ pub fn bandwidth_value(bandwidth: Bandwidth) -> Result<u8, RadioError> {
         Bandwidth::_125KHz => Ok(0x04),
         Bandwidth::_250KHz => Ok(0x05),
         Bandwidth::_500KHz => Ok(0x06),
+        _ => Err(RadioError::InvalidBandwidthForFrequency), // Not supported on LR1110
     }
 }
 
@@ -333,6 +333,7 @@ pub fn coding_rate_value(coding_rate: CodingRate) -> Result<u8, RadioError> {
         CodingRate::_4_6 => Ok(0x02),
         CodingRate::_4_7 => Ok(0x03),
         CodingRate::_4_8 => Ok(0x04),
+        _ => Err(RadioError::UnavailableCodingRate),
     }
 }
 
@@ -1326,6 +1327,8 @@ pub fn lora_rx_input_delay_in_us(bandwidth: Bandwidth) -> u32 {
         Bandwidth::_15KHz => 456,
         Bandwidth::_10KHz => 684,
         Bandwidth::_7KHz => 912,
+        // The others aren't supported, maybe turn into Option<u32>
+        _ => 1000,
     }
 }
 

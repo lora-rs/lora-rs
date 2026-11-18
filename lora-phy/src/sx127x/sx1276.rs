@@ -40,6 +40,7 @@ impl Sx127xVariant for Sx1276 {
             Bandwidth::_125KHz => Ok(0x07),
             Bandwidth::_250KHz => Ok(0x08),
             Bandwidth::_500KHz => Ok(0x09),
+            _ => Err(RadioError::InvalidBandwidthForFrequency),
         }
     }
 

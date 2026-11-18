@@ -15,8 +15,12 @@ pub enum Bandwidth {
     _41KHz,
     _62KHz,
     _125KHz,
+    _200KHz,
     _250KHz,
+    _400KHz,
     _500KHz,
+    _800KHz,
+    _1600KHz,
 }
 
 impl Bandwidth {
@@ -30,8 +34,12 @@ impl Bandwidth {
             Bandwidth::_41KHz => 41670u32,
             Bandwidth::_62KHz => 62500u32,
             Bandwidth::_125KHz => 125000u32,
+            Bandwidth::_200KHz => 200000u32,
             Bandwidth::_250KHz => 250000u32,
+            Bandwidth::_400KHz => 400000u32,
             Bandwidth::_500KHz => 500000u32,
+            Bandwidth::_800KHz => 800000u32,
+            Bandwidth::_1600KHz => 1600000u32,
         }
     }
 }
@@ -88,6 +96,10 @@ pub enum CodingRate {
     _4_6,
     _4_7,
     _4_8,
+    /// Long interleaving, SX128x only (Table 14-49 in its datasheet)
+    Li4_5,
+    Li4_6,
+    Li4_8,
 }
 
 impl CodingRate {
@@ -97,6 +109,9 @@ impl CodingRate {
             CodingRate::_4_6 => 6,
             CodingRate::_4_7 => 7,
             CodingRate::_4_8 => 8,
+            CodingRate::Li4_5 => 5,
+            CodingRate::Li4_6 => 6,
+            CodingRate::Li4_8 => 8,
         }
     }
 }
@@ -133,6 +148,11 @@ impl BaseBandModulationParams {
     /// instead. Both ends of a link must agree on this bit, so match the reference.
     pub const fn low_data_rate_optimize(sf: SpreadingFactor, bw: Bandwidth) -> bool {
         match bw {
+            // The 2.4 GHz bandwidths (SX128x) have no low data rate optimize
+            // setting; the RAL table does not list them either.
+            Bandwidth::_200KHz | Bandwidth::_400KHz | Bandwidth::_800KHz | Bandwidth::_1600KHz => {
+                false
+            }
             Bandwidth::_500KHz => false,
             Bandwidth::_250KHz => matches!(sf, SpreadingFactor::_12),
             Bandwidth::_125KHz => matches!(sf, SpreadingFactor::_11 | SpreadingFactor::_12),
