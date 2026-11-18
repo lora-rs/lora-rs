@@ -299,7 +299,6 @@ async fn uplink_after_only_channel_for_datarate_is_removed() {
 
 #[tokio::test]
 #[cfg(feature = "region-as923-1")]
-#[should_panic]
 /// The network leaves a single channel enabled, then removes it. With no
 /// channel left the device must go back to its default channels and still be
 /// able to send its next uplink.
