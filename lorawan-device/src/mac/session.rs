@@ -279,10 +279,7 @@ impl Session {
                                 self.rx_app_cnt,
                                 max_frm_payload_len,
                             ) {
-                                AdrBitChange(adr) => {
-                                    configuration.adr_enabled = adr;
-                                    configuration.adr_override = Some(adr);
-                                }
+                                AdrBitChange(adr) => configuration.set_adr(adr),
                                 DutJoinReq => {
                                     return Response::DeviceHandler(DeviceEvent::ResetMac);
                                 }
