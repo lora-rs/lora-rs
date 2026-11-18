@@ -156,6 +156,24 @@ async fn join_accept_preserves_application_adr_override() {
 }
 
 #[tokio::test]
+#[should_panic(expected = "JoinAccept must preserve the application data rate")]
+async fn join_accept_preserves_application_datarate() {
+    let (radio, timer, mut device) = util::session_with_region(EU868::new_eu868().into());
+    device.set_adr(false);
+    device.set_datarate(DR::_3).unwrap();
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.join(ExchangeAction::rx1(Pkt::join_accept())).await;
+    r.expect_joined();
+
+    assert_eq!(
+        net.device().get_datarate(),
+        DR::_3,
+        "JoinAccept must preserve the application data rate"
+    );
+}
+
+#[tokio::test]
 async fn join_accept_resets_mac_parameters() {
     let (radio, timer, device) = util::session_with_region(EU868::new_eu868().into());
     let mut net = Net::new(radio, timer, device).await;
