@@ -471,6 +471,9 @@ where
     }
 
     /// Set the data rate being used by this device. This overrides the region default.
+    ///
+    /// ADR has to be disabled first, see [`set_adr`](Self::set_adr). The data rate
+    /// is then kept across joins, limited to what the default channels support.
     pub fn set_datarate(&mut self, datarate: DR) -> core::result::Result<(), SetDatarateError> {
         // TODO: Check whether radio supports selected datarate
         self.mac.set_datarate(datarate)
@@ -488,7 +491,9 @@ where
     /// Enable or disable Adaptive Data Rate (ADR).
     ///
     /// ADR is enabled by default. Disable it for mobile devices or when the
-    /// application manages data rate itself.
+    /// application manages data rate itself. Enabling it again hands the data
+    /// rate back to the network and forgets one set with
+    /// [`set_datarate`](Self::set_datarate).
     pub fn set_adr(&mut self, enabled: bool) {
         self.mac.configuration.set_adr(enabled);
         if !enabled && let Some(session) = self.mac.get_session_mut() {
