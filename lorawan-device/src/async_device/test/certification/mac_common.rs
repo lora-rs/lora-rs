@@ -33,6 +33,41 @@ fn assert_cp_answer(uplink: &Uplink, payload: &[u8]) {
     assert_eq!(dl.frm_payload(), FrmPayload::Data(payload));
 }
 
+#[derive(Clone)]
+struct FirmwareHandler {
+    version: [u8; 4],
+}
+
+impl crate::DeviceHandler for FirmwareHandler {}
+
+impl FirmwareHandler {
+    fn firmware_version(&self) -> [u8; 4] {
+        self.version
+    }
+}
+
+#[tokio::test]
+async fn dut_versions_reports_application_firmware_version() {
+    let handler = FirmwareHandler { version: [2, 3, 4, 5] };
+    assert_eq!(handler.firmware_version(), [2, 3, 4, 5]);
+
+    let (radio, timer, device) = util::setup_with_session_and_handler(handler);
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::cp_cmd("7f"))).await;
+    r.expect_rx_complete();
+    assert_eq!(r.uplinks().len(), 2, "DutVersionsReq must be answered");
+
+    let mut uplink = r.uplink(1).clone();
+    let dl = decrypt_uplink(&mut uplink);
+    assert_eq!(dl.f_port(), Some(224));
+    let FrmPayload::Data(data) = dl.frm_payload() else {
+        panic!("expected a data payload");
+    };
+    assert_eq!(data[0], 0x7f);
+    assert_eq!(&data[1..5], &[2, 3, 4, 5]);
+}
+
 #[tokio::test]
 /// 2.5.1. DevStatusReq test
 /// Same scenario is used for all regions.

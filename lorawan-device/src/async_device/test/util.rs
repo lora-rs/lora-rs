@@ -68,9 +68,9 @@ pub fn setup_with_session() -> (RadioChannel, TimerChannel, Device) {
     setup_internal((), Some(default_session()))
 }
 
-pub fn setup_with_session_and_handler(
-    handler: TestHandler,
-) -> (RadioChannel, TimerChannel, Device<crate::nvm::NoNvm, rand_core::OsRng, TestHandler>) {
+pub fn setup_with_session_and_handler<H: crate::DeviceHandler>(
+    handler: H,
+) -> (RadioChannel, TimerChannel, Device<crate::nvm::NoNvm, rand_core::OsRng, H>) {
     setup_internal(handler, Some(default_session()))
 }
 
