@@ -50,6 +50,10 @@ pub enum DownlinkDUTCommand<'a> {
     #[cmd(cid = 0x20, len = 0)]
     LinkCheckReq(LinkCheckReqPayload),
 
+    /// Requests the DUT to send a DeviceTimeReq MAC command.
+    #[cmd(cid = 0x21, len = 0)]
+    DeviceTimeReq(DeviceTimeReqPayload),
+
     /// Request to disable the processing of data received on FPort 224 and reset the DUT
     #[cmd(cid = 0x7e, len = 0)]
     DutFPort224DisableReq(DutFPort224DisableReqPayload),
