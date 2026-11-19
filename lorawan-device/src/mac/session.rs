@@ -65,6 +65,9 @@ pub struct Session {
     /// Whether the last prepared uplink dropped non-empty application data.
     #[cfg_attr(feature = "serde", serde(skip))]
     pub(crate) app_payload_dropped: bool,
+    /// GPS time provided in the last `DeviceTimeAns` downlink MAC command.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    device_time: Option<super::DeviceTime>,
 }
 
 #[derive(Clone, Debug)]
@@ -111,6 +114,7 @@ impl Session {
             #[cfg(feature = "certification")]
             rx_app_cnt: 0,
             app_payload_dropped: false,
+            device_time: None,
         }
     }
 
@@ -292,6 +296,9 @@ impl Session {
                                 }
                                 LinkCheckReq => {
                                     return Response::LinkCheckReq;
+                                }
+                                DeviceTimeReq => {
+                                    return Response::DeviceTimeReq;
                                 }
                                 TxFramesCtrlReq(ftype) => {
                                     // None is a no-op, allowing network to trigger uplinks
@@ -478,6 +485,13 @@ impl Session {
         fcnt
     }
 
+    /// The GPS time received in the last `DeviceTimeAns` downlink MAC command,
+    /// if any.
+    /// Clears the stored value.
+    pub(crate) fn take_device_time(&mut self) -> Option<super::DeviceTime> {
+        self.device_time.take()
+    }
+
     /// Whether the last prepared uplink dropped non-empty application data.
     pub(crate) fn take_payload_dropped(&mut self) -> bool {
         let dropped = self.app_payload_dropped;
@@ -606,6 +620,12 @@ impl Session {
                      * Therefore keep this as a placeholder until a proper
                      * device <-> mac integration has been implemented.
                      */
+                }
+                DeviceTimeAns(payload) => {
+                    self.device_time = Some(super::DeviceTime {
+                        seconds: payload.seconds(),
+                        fraction: payload.fraction(),
+                    });
                 }
                 NewChannelReq(payload) => {
                     if region.has_fixed_channel_plan() {

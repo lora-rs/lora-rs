@@ -312,6 +312,15 @@ impl Mac {
         dropped
     }
 
+    /// The GPS time provided in the last `DeviceTimeAns` downlink MAC command,
+    /// if any. Clears the stored value.
+    pub(crate) fn take_device_time(&mut self) -> Option<DeviceTime> {
+        match &mut self.state {
+            State::Joined(session) => session.take_device_time(),
+            State::Otaa(_) | State::Unjoined => None,
+        }
+    }
+
     /// Prepare the radio configuration and RX windows for a NbTrans
     /// retransmission of the current uplink. The frame itself (and its
     /// FCntUp) is unchanged; the region's normal channel selection is run
@@ -690,6 +699,17 @@ impl Mac {
     }
 }
 
+/// GPS time provided by the network in a `DeviceTimeAns` downlink MAC
+/// command, as the raw payload values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct DeviceTime {
+    /// Seconds since the GPS epoch (1980-01-06 00:00:00 UTC).
+    pub seconds: u32,
+    /// Fractional second in 1/256 s increments.
+    pub fraction: u8,
+}
+
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[derive(Debug)]
 pub(crate) enum Response {
@@ -707,6 +727,7 @@ pub(crate) enum Response {
     /// (confirmed frame).
     RetransmitConfirmed,
     LinkCheckReq,
+    DeviceTimeReq,
     /// A certification answer uplink was transmitted during a receive window.
     /// The answer's RX windows are retained so the send loop can run them.
     #[cfg(feature = "certification")]
@@ -746,6 +767,7 @@ impl From<Response> for nb_device::Response {
             Response::Retransmit => unimplemented!(),
             Response::RetransmitConfirmed => unimplemented!(),
             Response::LinkCheckReq => unimplemented!(),
+            Response::DeviceTimeReq => unimplemented!(),
             #[cfg(feature = "certification")]
             Response::CertificationAnswerSent => unimplemented!(),
             #[cfg(feature = "certification")]

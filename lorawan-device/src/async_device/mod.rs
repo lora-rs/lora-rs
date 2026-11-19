@@ -672,6 +672,12 @@ where
         dropped
     }
 
+    /// The GPS time provided by the network in the last `DeviceTimeAns`
+    /// downlink MAC command, if any. Clears the stored value.
+    pub fn take_device_time(&mut self) -> Option<mac::DeviceTime> {
+        self.mac.take_device_time()
+    }
+
     async fn window_complete(&mut self) -> Result<(), Error<R::PhyError>> {
         #[cfg(feature = "class-c")]
         if self.class_c {
@@ -977,6 +983,11 @@ where
             #[cfg(feature = "certification")]
             mac::Response::LinkCheckReq => {
                 let _ = mac.add_uplink(lorawan::maccommandcreator::LinkCheckReqCreator::new());
+                Ok(Some(mac.rx2_complete()))
+            }
+            #[cfg(feature = "certification")]
+            mac::Response::DeviceTimeReq => {
+                let _ = mac.add_uplink(lorawan::maccommandcreator::DeviceTimeReqCreator::new());
                 Ok(Some(mac.rx2_complete()))
             }
             #[cfg(feature = "certification")]

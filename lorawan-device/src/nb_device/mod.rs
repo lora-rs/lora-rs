@@ -163,6 +163,12 @@ where
         dropped
     }
 
+    /// The GPS time provided by the network in the last `DeviceTimeAns`
+    /// downlink MAC command, if any. Clears the stored value.
+    pub fn take_device_time(&mut self) -> Option<mac::DeviceTime> {
+        self.shared.mac.take_device_time()
+    }
+
     pub fn handle_event(&mut self, event: Event<'_, R>) -> Result<Response, Error<R>> {
         let send_request = matches!(&event, Event::SendDataRequest(_));
         let (new_state, result) = self.state.handle_event::<R, RNG, N, D, H>(
