@@ -342,3 +342,35 @@ async fn add_uplink_without_session_fails() {
 
     assert!(matches!(result, Err(crate::mac::Error::NotJoined)), "got {result:?}");
 }
+
+#[tokio::test]
+#[cfg(feature = "region-eu868")]
+/// The application requests the network time. A `DeviceTimeReq` is queued and
+/// sent in the next uplink's FOpts; the network answers with a `DeviceTimeAns`,
+/// and the application retrieves the provided GPS time.
+async fn devicetimereq_app_triggered() {
+    let (radio, timer, device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let mut net = Net::new(radio, timer, device).await;
+
+    // The application asks the network for its GPS time.
+    net.device().request_device_time().unwrap();
+
+    // The next uplink carries the DeviceTimeReq in FOpts; the network answers
+    // with a DeviceTimeAns (CID 0x0D + 4 LE seconds + 1/256 s fraction).
+    // Seconds 0x01020304, fraction 0x80.
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("0D0403020180"))).await;
+    r.expect_downlink_received();
+
+    // The uplink carried the DeviceTimeReq command.
+    let mut uplink = r.uplink(0).clone();
+    assert_eq!(util::decrypt_uplink(&mut uplink).fhdr().f_opts(), [0x0D]);
+
+    // The application retrieves the GPS time provided by the network.
+    assert_eq!(
+        net.device().take_device_time(),
+        Some(crate::mac::DeviceTime { seconds: 0x01020304, fraction: 0x80 })
+    );
+    // The value is consumed by the read.
+    assert_eq!(net.device().take_device_time(), None);
+}
