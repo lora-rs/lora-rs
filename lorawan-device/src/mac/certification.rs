@@ -1,3 +1,4 @@
+use crate::region::constants::RP002_VERSION;
 use lorawan::certification::parse_downlink_dut_commands;
 
 /// Certification protocol uses `fport = 224`
@@ -70,8 +71,7 @@ impl Certification {
                     // TODO: report 1.0.4 only when persistent identity/NVM is
                     // enabled; otherwise report 1.0.2 (random DevNonce).
                     versions[4..8].copy_from_slice(&[1, 0, 4, 0]);
-                    // TODO: define and import the regional parameters version.
-                    versions[8..].copy_from_slice(&[2, 1, 0, 4]);
+                    versions[8..].copy_from_slice(&RP002_VERSION);
                     ans.set_versions_raw(versions);
                     buf.extend_from_slice(ans.build()).unwrap();
                     self.pending_uplink = Some(buf);

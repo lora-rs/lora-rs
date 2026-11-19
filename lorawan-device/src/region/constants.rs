@@ -15,6 +15,10 @@ pub(crate) const RETRANSMIT_TIMEOUT_MAX_MS: u32 = 3000;
 pub(crate) const NUM_DATARATES: u8 = 15;
 pub(crate) const NUM_CHANNELS_DYNAMIC: u8 = 16;
 
+/// RP002 regional parameters version implemented by this crate.
+/// Encoded as it appears in `DutVersionsAns`: revision 2, major 1, minor 0, patch 3.
+pub(crate) const RP002_VERSION: [u8; 4] = [2, 1, 0, 3];
+
 pub(crate) const DEFAULT_BANDWIDTH: Bandwidth = Bandwidth::_125KHz;
 pub(crate) const DEFAULT_SPREADING_FACTOR: SpreadingFactor = SpreadingFactor::_7;
 pub(crate) const DEFAULT_CODING_RATE: CodingRate = CodingRate::_4_5;
