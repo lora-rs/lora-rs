@@ -169,6 +169,16 @@ where
         self.shared.mac.take_device_time()
     }
 
+    /// Ask the network to provide its GPS time.
+    ///
+    /// Queues a `DeviceTimeReq` uplink MAC command, which is transmitted in the next
+    /// uplink's FOpts.
+    /// Networks response can be retrieved via [`take_device_time`](Self::take_device_time).
+    pub fn request_device_time(&mut self) -> Result<(), Error<R>> {
+        self.shared.mac.add_uplink(lorawan::maccommandcreator::DeviceTimeReqCreator::new())?;
+        Ok(())
+    }
+
     pub fn handle_event(&mut self, event: Event<'_, R>) -> Result<Response, Error<R>> {
         let send_request = matches!(&event, Event::SendDataRequest(_));
         let (new_state, result) = self.state.handle_event::<R, RNG, N, D, H>(
