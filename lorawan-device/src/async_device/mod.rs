@@ -678,6 +678,16 @@ where
         self.mac.take_device_time()
     }
 
+    /// Ask the network to provide its GPS time
+    ///
+    /// Queues a `DeviceTimeReq` uplink MAC command, which is transmitted in the next
+    /// uplink's FOpts.
+    /// Networks response can be retrieved via [`take_device_time`](Self::take_device_time).
+    pub fn request_device_time(&mut self) -> Result<(), Error<R::PhyError>> {
+        self.mac.add_uplink(lorawan::maccommandcreator::DeviceTimeReqCreator::new())?;
+        Ok(())
+    }
+
     async fn window_complete(&mut self) -> Result<(), Error<R::PhyError>> {
         #[cfg(feature = "class-c")]
         if self.class_c {
