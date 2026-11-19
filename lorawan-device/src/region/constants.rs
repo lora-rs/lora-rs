@@ -30,6 +30,16 @@ pub(crate) const RP002_VERSION: [u8; 4] = [2, 1, 0, 3];
 // - Grow the internal channel mask from 9 to 10 bytes to represent 80 channels.
 // - Update regional data-rate and channel-plan validation for the new channels.
 
+// TODO(RP002-1.0.5): Implement the regional changes before reporting [2, 1, 0, 5].
+// Required work:
+// - Relay WOR channel 1 changes from SF9/DR3 to SF7/DR5.
+// - Add SF6/SF5 data rates: EU868/RU864/IN865 DR12..=13, US915 DR7..=8
+//   with RX DR14, and KR920 DR12..=13.
+// - Extend the regional data-rate, backoff, and maximum-payload tables for the
+//   new data rates.
+// - Relax LinkADRReq data-rate range validation for DRMin=6 and DRMax=0.
+// - Add CFList type 1 channel-mask support for KR920.
+
 pub(crate) const DEFAULT_BANDWIDTH: Bandwidth = Bandwidth::_125KHz;
 pub(crate) const DEFAULT_SPREADING_FACTOR: SpreadingFactor = SpreadingFactor::_7;
 pub(crate) const DEFAULT_CODING_RATE: CodingRate = CodingRate::_4_5;
