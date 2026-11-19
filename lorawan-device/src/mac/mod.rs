@@ -334,15 +334,14 @@ impl Mac {
     }
 
     pub(crate) fn add_uplink<M: SerializableMacCommand>(&mut self, cmd: M) -> Result<()> {
-        let _fcnt = match &mut self.state {
+        match &mut self.state {
             State::Joined(session) => {
                 session.uplink.add_mac_command(cmd);
                 Ok(())
             }
             State::Otaa(_) => Err(Error::NotJoined),
             State::Unjoined => Err(Error::NotJoined),
-        };
-        Ok(())
+        }
     }
 
     #[cfg(feature = "multicast")]
