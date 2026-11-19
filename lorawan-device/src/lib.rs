@@ -80,6 +80,15 @@ impl defmt::Format for Downlink {
 /// [`async_device::Device::new_with_handler`] or
 /// [`nb_device::Device::new_with_handler`].
 pub trait DeviceHandler {
+    /// Four-byte firmware version copied verbatim into the certification
+    /// protocol's `DutVersionsAns`.
+    ///
+    /// Defaults to `0.0.0.0`; applications should override this with their
+    /// firmware version.
+    fn firmware_version(&self) -> [u8; 4] {
+        [0, 0, 0, 0]
+    }
+
     /// Battery level reported in `DevStatusAns`:
     /// - 0: device is powered externally
     /// - 255: battery status is unknown

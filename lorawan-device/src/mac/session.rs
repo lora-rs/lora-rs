@@ -278,6 +278,7 @@ impl Session {
                                 data,
                                 self.rx_app_cnt,
                                 max_frm_payload_len,
+                                handler.firmware_version(),
                             ) {
                                 AdrBitChange(adr) => {
                                     configuration.adr_enabled = adr;
