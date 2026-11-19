@@ -331,3 +331,14 @@ async fn uplink_after_only_enabled_channel_is_removed() {
         "expected a default channel, got {frequency} Hz"
     );
 }
+
+#[tokio::test]
+async fn add_uplink_without_session_fails() {
+    let (radio, timer, device) = util::setup();
+    let mut net = Net::new(radio, timer, device).await;
+
+    let result =
+        net.device().mac.add_uplink(lorawan::maccommandcreator::LinkCheckReqCreator::new());
+
+    assert!(matches!(result, Err(crate::mac::Error::NotJoined)), "got {result:?}");
+}
