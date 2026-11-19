@@ -5,6 +5,7 @@
 //! * DevStatusReq (2.5.1)
 //! * RXTimingSetupReq (2.5.5)
 //! * LinkCheckReq (2.5.7)
+//! * DeviceTimeReq (2.5.10)
 //! * RxAppCnt (certification protocol)
 //!
 //! Region-specific tests (in separate files):
@@ -16,7 +17,6 @@
 //! * TXParamSetupReq (2.5.6)
 //! * LinkADRReq (2.5.8)
 //! * DutyCycleReq (2.5.9)
-//! * DeviceTimeReq (2.5.10)
 use super::{decrypt_uplink, net, util};
 use crate::DeviceHandler;
 use crate::test_util::Uplink;
@@ -190,6 +190,46 @@ async fn eu868_linkcheckreq_test() {
     // Step 4: DUT automatically responded with FP:EchoPayloadAns
     assert_eq!(r.uplinks().len(), 2);
     assert_cp_answer(r.uplink(1), &[0x08, 0x02, 0x03, 0x04]);
+}
+
+#[tokio::test]
+/// 2.5.10. DeviceTimeReq test
+/// Same scenario is used for all regions.
+///
+/// The DUT is triggered to send a `DeviceTimeReq` MAC command, answers the
+/// network's `DeviceTimeAns` with the provided GPS time, and makes that time
+/// available to the application via `take_device_time`.
+async fn eu868_devicetimereq_test() {
+    let (radio, timer, device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let mut net = Net::new(radio, timer, device).await;
+
+    // Step 1: send uplink, TCL responds with CP:DeviceTimeReq
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::cp_cmd("21"))).await;
+    r.expect_rx_complete();
+
+    // Check whether uplink has been populated with requested MAC:DeviceTimeReq command
+    let session = net.device().mac.get_session().unwrap();
+    let data = session.uplink.mac_commands();
+    assert_eq!(parse_uplink_mac_commands(data).count(), 1);
+    assert_eq!(data, &[0x0D]);
+
+    // Step 2: trigger uplink with no data, TCL responds with MAC:DeviceTimeAns.
+    // DeviceTimeAns = CID 0x0D + seconds (4 LE) + fraction (1/256 s).
+    // Seconds 0x01020304, fraction 0x80.
+    let r = net.exchange(&[], 2, false, ExchangeAction::rx1(Pkt::mac("0D0403020180"))).await;
+    r.expect_downlink_received();
+    // Check whether the uplink contained the DeviceTimeReq command
+    let mut uplink = r.uplink(0).clone();
+    assert_eq!(decrypt_uplink(&mut uplink).fhdr().f_opts(), [0x0D]);
+
+    // The device exposes the GPS time provided by the network.
+    assert_eq!(
+        net.device().take_device_time(),
+        Some(crate::mac::DeviceTime { seconds: 0x01020304, fraction: 0x80 })
+    );
+    // The value is consumed by the read.
+    assert_eq!(net.device().take_device_time(), None);
 }
 
 #[tokio::test]
