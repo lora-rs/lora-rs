@@ -16,7 +16,7 @@ pub(crate) const NUM_DATARATES: u8 = 15;
 pub(crate) const NUM_CHANNELS_DYNAMIC: u8 = 16;
 
 /// RP002 regional parameters version implemented by this crate.
-/// Encoded as it appears in `DutVersionsAns`: revision 2, major 1, minor 0, patch 3.
+/// Named RP002-1.0.3 in RP002 Table 5: Regional Parameter Revision Names.
 pub(crate) const RP002_VERSION: [u8; 4] = [2, 1, 0, 3];
 
 // TODO(RP002-1.0.4): Implement the regional changes before reporting [2, 1, 0, 4].
