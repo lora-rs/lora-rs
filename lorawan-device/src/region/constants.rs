@@ -19,6 +19,17 @@ pub(crate) const NUM_CHANNELS_DYNAMIC: u8 = 16;
 /// Encoded as it appears in `DutVersionsAns`: revision 2, major 1, minor 0, patch 3.
 pub(crate) const RP002_VERSION: [u8; 4] = [2, 1, 0, 3];
 
+// TODO(RP002-1.0.4): Implement the regional changes before reporting [2, 1, 0, 4].
+// Required work:
+// - Relay support: WOR/ACK channels and relay delay/backoff parameters per region.
+// - Extended dynamic channel plans: 24 default channels and up to 80 channels on
+//   EU868, KR920, RU864 and IN865.
+// - Extended fixed channel plans: user TX/RX channels 72..=79 on US915 and AU915.
+// - CFList type 1 for dynamic channel plans: frequency list plus channel mask.
+// - ChMaskCntl blocks 1..=4 and an 80-channel-aware block mask for ChMaskCntl 5.
+// - Grow the internal channel mask from 9 to 10 bytes to represent 80 channels.
+// - Update regional data-rate and channel-plan validation for the new channels.
+
 pub(crate) const DEFAULT_BANDWIDTH: Bandwidth = Bandwidth::_125KHz;
 pub(crate) const DEFAULT_SPREADING_FACTOR: SpreadingFactor = SpreadingFactor::_7;
 pub(crate) const DEFAULT_CODING_RATE: CodingRate = CodingRate::_4_5;
