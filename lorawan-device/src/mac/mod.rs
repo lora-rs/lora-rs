@@ -619,7 +619,10 @@ impl Mac {
 
     pub(crate) fn set_identity(&mut self, identity: PersistentIdentity) {
         #[cfg(feature = "certification")]
-        self.certification.set_port_disabled(identity.fport224_disabled);
+        {
+            self.certification.set_port_disabled(identity.fport224_disabled);
+            self.certification.set_lorawan_version(certification::LORAWAN_VERSION_1_0_4);
+        }
         self.identity = Some(identity);
     }
 

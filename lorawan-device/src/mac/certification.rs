@@ -4,6 +4,11 @@ use lorawan::certification::parse_downlink_dut_commands;
 /// Certification protocol uses `fport = 224`
 pub(crate) const CERTIFICATION_PORT: u8 = 224;
 
+/// LoRaWAN version reported without persistent identity: random DevNonce.
+pub(crate) const LORAWAN_VERSION_1_0_2: [u8; 4] = [1, 0, 2, 0];
+/// LoRaWAN version reported with persistent identity: monotonic DevNonce.
+pub(crate) const LORAWAN_VERSION_1_0_4: [u8; 4] = [1, 0, 4, 0];
+
 #[derive(Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 pub(crate) enum Response {
@@ -24,15 +29,20 @@ pub(crate) struct Certification {
     /// Set for good by DutFPort224DisableReq or the application. FPort 224 downlinks
     /// are ordinary application data afterwards.
     port_disabled: bool,
+    lorawan_version: [u8; 4],
 }
 
 impl Certification {
     pub fn new() -> Self {
-        Self { pending_uplink: None, port_disabled: false }
+        Self { pending_uplink: None, port_disabled: false, lorawan_version: LORAWAN_VERSION_1_0_2 }
     }
 
     pub(crate) fn set_port_disabled(&mut self, disabled: bool) {
         self.port_disabled = disabled;
+    }
+
+    pub(crate) fn set_lorawan_version(&mut self, version: [u8; 4]) {
+        self.lorawan_version = version;
     }
 
     pub(crate) const fn port_disabled(&self) -> bool {
@@ -68,9 +78,7 @@ impl Certification {
                     let mut ans = lorawan::certification::DutVersionsAnsCreator::new();
                     let mut versions = [0u8; 12];
                     versions[..4].copy_from_slice(&firmware_version);
-                    // TODO: report 1.0.4 only when persistent identity/NVM is
-                    // enabled; otherwise report 1.0.2 (random DevNonce).
-                    versions[4..8].copy_from_slice(&[1, 0, 4, 0]);
+                    versions[4..8].copy_from_slice(&self.lorawan_version);
                     versions[8..].copy_from_slice(&RP002_VERSION);
                     ans.set_versions_raw(versions);
                     buf.extend_from_slice(ans.build()).unwrap();
