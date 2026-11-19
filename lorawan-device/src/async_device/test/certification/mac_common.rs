@@ -27,7 +27,7 @@ use lorawan::maccommands::parse_uplink_mac_commands;
 use lorawan::parser::FrmPayload;
 
 /// Check an uplink is a certification answer (FPort 224) with `payload`.
-fn assert_cp_answer(uplink: &Uplink, payload: &[u8]) {
+pub(super) fn assert_cp_answer(uplink: &Uplink, payload: &[u8]) {
     let mut uplink = uplink.clone();
     let dl = decrypt_uplink(&mut uplink);
     assert_eq!(dl.f_port(), Some(224));
@@ -68,7 +68,7 @@ async fn dut_versions_reports_application_firmware_version() {
 }
 
 #[tokio::test]
-async fn dut_versions_reports_regional_parameters_version() {
+async fn dut_versions_without_nvm_reports_lorawan_1_0_2() {
     let (radio, timer, device) = util::setup_with_session();
     let mut net = Net::new(radio, timer, device).await;
 
@@ -76,7 +76,7 @@ async fn dut_versions_reports_regional_parameters_version() {
     r.expect_rx_complete();
     assert_eq!(r.uplinks().len(), 2, "DutVersionsReq must be answered");
 
-    assert_cp_answer(r.uplink(1), &[0x7f, 0, 0, 0, 0, 1, 0, 4, 0, 2, 1, 0, 3]);
+    assert_cp_answer(r.uplink(1), &[0x7f, 0, 0, 0, 0, 1, 0, 2, 0, 2, 1, 0, 3]);
 }
 
 #[tokio::test]

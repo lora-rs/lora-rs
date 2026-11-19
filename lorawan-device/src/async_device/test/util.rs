@@ -9,7 +9,7 @@ use std::sync::{Arc, atomic::AtomicUsize};
 #[cfg(feature = "class-c")]
 use super::net::{ExchangeAction, Net, Pkt};
 
-fn default_session() -> Session {
+pub(crate) fn default_session() -> Session {
     Session::new(NwkSKey::from(get_key()), AppSKey::from(get_key()), get_dev_addr())
 }
 

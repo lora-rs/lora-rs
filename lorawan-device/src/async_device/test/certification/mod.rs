@@ -122,6 +122,30 @@ async fn dut_join_req_resets_the_mac() {
 }
 
 #[tokio::test]
+async fn dut_versions_with_nvm_reports_lorawan_1_0_4() {
+    let store = MockStore::default();
+    let pending = Arc::new(AtomicUsize::new(0));
+    let (radio, mock_radio) = TestRadio::new(pending.clone());
+    let (timer, mock_timer) = TestTimer::new(pending);
+    let mut device = Device::restore_with_handler(
+        TestHandler::default(),
+        crate::region::EU868::new_eu868().into(),
+        mock_radio,
+        mock_timer,
+        rand_core::OsRng,
+        store,
+    )
+    .await
+    .unwrap();
+    device.mac.set_session(util::default_session());
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::cp_cmd("7f"))).await;
+    r.expect_rx_complete();
+    mac_common::assert_cp_answer(r.uplink(1), &[0x7f, 0, 0, 0, 0, 1, 0, 4, 0, 2, 1, 0, 3]);
+}
+
+#[tokio::test]
 async fn dut_reset_req_resets_the_device() {
     let (radio, timer, device) = util::setup_with_session_and_handler(TestHandler::default());
     let mut net = Net::new(radio, timer, device).await;
