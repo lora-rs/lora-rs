@@ -18,6 +18,7 @@
 //! * DutyCycleReq (2.5.9)
 //! * DeviceTimeReq (2.5.10)
 use super::{decrypt_uplink, net, util};
+use crate::DeviceHandler;
 use crate::test_util::Uplink;
 use net::{ExchangeAction, Net, Pkt};
 use std::sync::atomic::Ordering;
@@ -38,9 +39,7 @@ struct FirmwareHandler {
     version: [u8; 4],
 }
 
-impl crate::DeviceHandler for FirmwareHandler {}
-
-impl FirmwareHandler {
+impl crate::DeviceHandler for FirmwareHandler {
     fn firmware_version(&self) -> [u8; 4] {
         self.version
     }
