@@ -18,6 +18,7 @@ pub(crate) enum Response {
     DutResetReq,
     DutFPort224DisableReq,
     LinkCheckReq,
+    DeviceTimeReq,
     TxFramesCtrlReq(Option<bool>),
     TxPeriodicityChange(Option<u16>),
     /// The command prepared an uplink answer that must be transmitted.
@@ -73,6 +74,7 @@ impl Certification {
                 }
                 // Responses with uplink
                 LinkCheckReq(..) => return Response::LinkCheckReq,
+                DeviceTimeReq(..) => return Response::DeviceTimeReq,
                 DutVersionsReq(..) => {
                     let mut buf: heapless::Vec<u8, 256> = heapless::Vec::new();
                     let mut ans = lorawan::certification::DutVersionsAnsCreator::new();
