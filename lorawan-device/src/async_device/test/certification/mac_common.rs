@@ -68,6 +68,18 @@ async fn dut_versions_reports_application_firmware_version() {
 }
 
 #[tokio::test]
+async fn dut_versions_reports_regional_parameters_version() {
+    let (radio, timer, device) = util::setup_with_session();
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::cp_cmd("7f"))).await;
+    r.expect_rx_complete();
+    assert_eq!(r.uplinks().len(), 2, "DutVersionsReq must be answered");
+
+    assert_cp_answer(r.uplink(1), &[0x7f, 0, 0, 0, 0, 1, 0, 4, 0, 2, 1, 0, 3]);
+}
+
+#[tokio::test]
 /// 2.5.1. DevStatusReq test
 /// Same scenario is used for all regions.
 async fn eu868_devstatusreq_test() {
