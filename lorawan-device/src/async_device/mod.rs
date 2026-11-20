@@ -1103,8 +1103,11 @@ where
         Ok(response)
     }
 
-    /// When not involved in sending and RX1/RX2 windows, a class C configured device will be
-    /// listening to RXC frames. The caller is expected to be awaiting this message at all times.
+    /// Listen for the next downlink while in class C mode: the device keeps the
+    /// radio in RXC between uplinks (see [`enable_class_c`](Self::enable_class_c)),
+    /// and the caller is expected to be awaiting this message at all times.
+    /// Calling it outside class C mode is a radio error: the radio is not set
+    /// up for RXC.
     #[cfg(feature = "class-c")]
     pub async fn rxc_listen(&mut self) -> Result<ListenResponse, Error<R::PhyError>> {
         let rx_config = self.mac.get_rxc_config();

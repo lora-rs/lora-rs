@@ -1,4 +1,4 @@
-use super::net::{ExchangeAction, Pkt};
+use super::net::{ExchangeAction, Net, Pkt};
 use super::util;
 
 /// An application downlink on FPort 3, as the network sends it in RXC.
@@ -76,4 +76,14 @@ async fn test_class_c_async_down() {
     let r = net.listen(vec![class_c_downlink()]).await;
     r.expect_downlink_received();
     let _ = net.device().take_downlink().unwrap();
+}
+
+/// `listen()` requires the runtime class C flag: the radio is only set up
+/// for RXC in class C mode.
+#[tokio::test]
+async fn test_listen_without_class_c_flag_errors() {
+    let (radio, timer, device) = util::setup_with_session();
+    let mut net = Net::new(radio, timer, device).await;
+    let r = net.listen(vec![class_c_downlink().confirmed()]).await;
+    assert!(r.response().is_err(), "listen() requires class C mode (radio in RXC)");
 }
