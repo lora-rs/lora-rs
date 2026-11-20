@@ -321,6 +321,15 @@ impl Mac {
         }
     }
 
+    /// The link check answer provided in the last `LinkCheckAns` downlink MAC
+    /// command, if any. Clears the stored value.
+    pub(crate) fn take_link_check_answer(&mut self) -> Option<LinkCheckAnswer> {
+        match &mut self.state {
+            State::Joined(session) => session.take_link_check_answer(),
+            State::Otaa(_) | State::Unjoined => None,
+        }
+    }
+
     /// Prepare the radio configuration and RX windows for a NbTrans
     /// retransmission of the current uplink. The frame itself (and its
     /// FCntUp) is unchanged; the region's normal channel selection is run
@@ -708,6 +717,17 @@ pub struct DeviceTime {
     pub seconds: u32,
     /// Fractional second in 1/256 s increments.
     pub fraction: u8,
+}
+
+/// Link check answer provided by the network in a `LinkCheckAns` downlink MAC
+/// command, as the raw payload values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
+pub struct LinkCheckAnswer {
+    /// Link margin in dB of the last successfully received `LinkCheckReq`.
+    pub margin: u8,
+    /// Number of gateways that received the last `LinkCheckReq`.
+    pub gateway_count: u8,
 }
 
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
