@@ -179,6 +179,23 @@ where
         Ok(())
     }
 
+    /// The link check answer provided by the network in the last
+    /// `LinkCheckAns` downlink MAC command, if any. Clears the stored value.
+    pub fn take_link_check_answer(&mut self) -> Option<mac::LinkCheckAnswer> {
+        self.shared.mac.take_link_check_answer()
+    }
+
+    /// Ask the network to check the link.
+    ///
+    /// Queues a `LinkCheckReq` uplink MAC command, which is transmitted in the
+    /// next uplink's FOpts.
+    /// Network's response can be retrieved via
+    /// [`take_link_check_answer`](Self::take_link_check_answer).
+    pub fn request_link_check(&mut self) -> Result<(), Error<R>> {
+        self.shared.mac.add_uplink(lorawan::maccommandcreator::LinkCheckReqCreator::new())?;
+        Ok(())
+    }
+
     pub fn handle_event(&mut self, event: Event<'_, R>) -> Result<Response, Error<R>> {
         let send_request = matches!(&event, Event::SendDataRequest(_));
         let (new_state, result) = self.state.handle_event::<R, RNG, N, D, H>(

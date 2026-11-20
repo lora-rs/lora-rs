@@ -68,6 +68,10 @@ pub struct Session {
     /// GPS time provided in the last `DeviceTimeAns` downlink MAC command.
     #[cfg_attr(feature = "serde", serde(skip))]
     device_time: Option<super::DeviceTime>,
+    /// Link check answer provided in the last `LinkCheckAns` downlink MAC
+    /// command.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    link_check_answer: Option<super::LinkCheckAnswer>,
 }
 
 #[derive(Clone, Debug)]
@@ -115,6 +119,7 @@ impl Session {
             rx_app_cnt: 0,
             app_payload_dropped: false,
             device_time: None,
+            link_check_answer: None,
         }
     }
 
@@ -492,6 +497,13 @@ impl Session {
         self.device_time.take()
     }
 
+    /// The link check answer received in the last `LinkCheckAns` downlink MAC
+    /// command, if any.
+    /// Clears the stored value.
+    pub(crate) fn take_link_check_answer(&mut self) -> Option<super::LinkCheckAnswer> {
+        self.link_check_answer.take()
+    }
+
     /// Whether the last prepared uplink dropped non-empty application data.
     pub(crate) fn take_payload_dropped(&mut self) -> bool {
         let dropped = self.app_payload_dropped;
@@ -613,13 +625,11 @@ impl Session {
                     channel_mask_valid = true;
                     channel_mask = region.channel_mask_get();
                 }
-                LinkCheckAns(..) => {
-                    /* TODO: Payload contents are not consumed/handled
-                     * by MAC layer, instead these might be useful to
-                     * application layer.
-                     * Therefore keep this as a placeholder until a proper
-                     * device <-> mac integration has been implemented.
-                     */
+                LinkCheckAns(payload) => {
+                    self.link_check_answer = Some(super::LinkCheckAnswer {
+                        margin: payload.margin(),
+                        gateway_count: payload.gateway_count(),
+                    });
                 }
                 DeviceTimeAns(payload) => {
                     self.device_time = Some(super::DeviceTime {
