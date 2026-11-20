@@ -374,3 +374,34 @@ async fn devicetimereq_app_triggered() {
     // The value is consumed by the read.
     assert_eq!(net.device().take_device_time(), None);
 }
+
+#[tokio::test]
+#[cfg(feature = "region-eu868")]
+/// The application requests a link check. A `LinkCheckReq` is queued and sent
+/// in the next uplink's FOpts; the network answers with a `LinkCheckAns`, and
+/// the application retrieves the reported link margin and gateway count.
+async fn linkcheckreq_app_triggered() {
+    let (radio, timer, device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    let mut net = Net::new(radio, timer, device).await;
+
+    // The application asks the network to check the link.
+    net.device().request_link_check().unwrap();
+
+    // The next uplink carries the LinkCheckReq in FOpts; the network answers
+    // with a LinkCheckAns (CID 0x02 + margin + gateway count).
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx1(Pkt::mac("020703"))).await;
+    r.expect_downlink_received();
+
+    // The uplink carried the LinkCheckReq command.
+    let mut uplink = r.uplink(0).clone();
+    assert_eq!(util::decrypt_uplink(&mut uplink).fhdr().f_opts(), [0x02]);
+
+    // The application retrieves the link check answer provided by the network.
+    assert_eq!(
+        net.device().take_link_check_answer(),
+        Some(crate::mac::LinkCheckAnswer { margin: 7, gateway_count: 3 })
+    );
+    // The value is consumed by the read.
+    assert_eq!(net.device().take_link_check_answer(), None);
+}
