@@ -132,8 +132,10 @@ pub enum JoinResponse {
 pub enum ListenResponse {
     SessionExpired,
     DownlinkReceived(FcntDown),
-    /// A certification answer was transmitted during a receive window.
-    /// For RXC, the radio is listening again so `rxc_listen` can continue.
+    /// A certification answer was prepared while receiving. The answer is a
+    /// regular uplink: its complete cycle (transmit, RX1/RX2, retransmissions)
+    /// is run before this response is reported, with the radio back where it
+    /// was before the cycle (RXC for `rxc_listen`).
     #[cfg(feature = "certification")]
     CertificationAnswerSent,
     #[cfg(feature = "multicast")]
@@ -579,7 +581,7 @@ where
         confirmed: bool,
     ) -> Result<SendResponse, Error<R::PhyError>> {
         // Prepare transmission buffer
-        let (mut tx_config, mut rx_windows, _fcnt_up) = self.mac.send::<G, N>(
+        let (tx_config, rx_windows, _fcnt_up) = self.mac.send::<G, N>(
             &mut self.rng,
             &mut self.radio_buffer,
             &SendData { data, fport, confirmed },
@@ -589,17 +591,32 @@ where
         self.retransmit_buffer.clear();
         self.retransmit_buffer.extend_from_slice(self.radio_buffer.as_ref_for_read()).unwrap();
 
-        let mut ms = 0u32;
-        let mut tx_pending = true;
+        let response = self.run_uplink_cycle(tx_config, rx_windows).await?;
+        Ok(match response {
+            mac::Response::NoUpdate => SendResponse::RxComplete,
+            response => response.into(),
+        })
+    }
+
+    /// Run the complete uplink cycle of a frame already staged in
+    /// `retransmit_buffer`: transmit it, then run its RX windows and NbTrans
+    /// retransmissions until the MAC reports a terminal response.
+    ///
+    /// A certification answer prepared inside a receive window is a regular
+    /// uplink: it replaces the in-flight frame and its cycle takes over,
+    /// exactly like the frame it replaced.
+    async fn run_uplink_cycle(
+        &mut self,
+        mut tx_config: radio::TxConfig,
+        mut rx_windows: mac::RxWindows,
+    ) -> Result<mac::Response, Error<R::PhyError>> {
         loop {
-            if tx_pending {
-                // Transmit our data packet
-                ms = self
-                    .radio
-                    .tx(tx_config, self.retransmit_buffer.as_ref_for_read())
-                    .await
-                    .map_err(Error::Radio)?;
-            }
+            // Transmit the (possibly replaced) frame
+            let ms = self
+                .radio
+                .tx(tx_config, self.retransmit_buffer.as_ref_for_read())
+                .await
+                .map_err(Error::Radio)?;
 
             // Wait for received data within window
             self.timer.reset();
@@ -608,7 +625,6 @@ where
                 // re-select the channel (and its RX windows) as usual
                 mac::Response::Retransmit => {
                     (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
-                    tx_pending = true;
                 }
                 // Every repetition of a confirmed frame waits RETRANSMIT_TIMEOUT.
                 mac::Response::RetransmitConfirmed => {
@@ -617,25 +633,33 @@ where
                         "Retransmitting confirmed frame; waiting {} ms before the next copy.",
                         timeout_ms
                     );
-                    // A downlink accepted during the wait (class C) ends the
-                    // retransmission cycle: the MAC has moved to the next FCntUp.
+                    // A downlink accepted during the wait (class C) supersedes
+                    // the retransmission cycle: the MAC has moved to the next
+                    // FCntUp.
                     if let Some(response) = self.retransmit_wait(timeout_ms).await? {
-                        return Ok(response.into());
+                        // A certification answer prepared during the wait
+                        // becomes the in-flight uplink.
+                        #[cfg(feature = "certification")]
+                        if matches!(response, mac::Response::CertificationAnswerSent) {
+                            (tx_config, rx_windows) = self.mac.take_pending_cert_tx();
+                            continue;
+                        }
+                        return Ok(response);
                     }
                     (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
-                    tx_pending = true;
                 }
-                // A certification answer was transmitted inside the RX window;
-                // it is a regular uplink, so run its RX windows (and NbTrans
-                // retransmissions) without transmitting again.
+                // A certification answer was prepared inside the RX window;
+                // it is a regular uplink, so transmit it and run its own
+                // windows (and NbTrans retransmissions) in place of the
+                // current cycle.
                 #[cfg(feature = "certification")]
                 mac::Response::CertificationAnswerSent => {
-                    (ms, rx_windows) = self.mac.take_pending_cert_rx();
-                    tx_pending = false;
+                    (tx_config, rx_windows) = self.mac.take_pending_cert_tx();
+                    continue;
                 }
                 // A certification reset dropped the session mid-flight. The uplink
                 // itself completed, but there is no session state left to report.
-                mac::Response::NoUpdate => return Ok(SendResponse::RxComplete),
+                mac::Response::NoUpdate => return Ok(mac::Response::NoUpdate),
                 response => {
                     // Wait for random RETRANSMIT_TIMEOUT before reporting a NoAck.
                     if matches!(response, mac::Response::NoAck) {
@@ -645,10 +669,17 @@ where
                             timeout_ms
                         );
                         if let Some(response) = self.retransmit_wait(timeout_ms).await? {
-                            return Ok(response.into());
+                            // A certification answer prepared during the wait
+                            // becomes the in-flight uplink.
+                            #[cfg(feature = "certification")]
+                            if matches!(response, mac::Response::CertificationAnswerSent) {
+                                (tx_config, rx_windows) = self.mac.take_pending_cert_tx();
+                                continue;
+                            }
+                            return Ok(response);
                         }
                     }
-                    return Ok(response.into());
+                    return Ok(response);
                 }
             }
         }
@@ -1021,26 +1052,21 @@ where
             mac::Response::CertificationAnswerSent => {
                 let (tx_config, rx_windows, _fcnt_up) =
                     mac.certification_setup_send::<G, N>(rng, radio_buffer)?;
-                // The answer is a regular uplink: retain it so the send loop
-                // can retransmit it per NbTrans (the radio buffer is reused
-                // for reception).
+                // The answer is a regular uplink: retain it so its cycle can
+                // retransmit it per NbTrans (the radio buffer is reused for
+                // reception), and stash the prepared frame. The context that
+                // owns the radio transmits it and runs its RX windows.
                 retransmit_buffer.clear();
                 retransmit_buffer.extend_from_slice(radio_buffer.as_ref_for_read()).unwrap();
-                let tx_duration_ms = radio
-                    .tx(tx_config, retransmit_buffer.as_ref_for_read())
-                    .await
-                    .map_err(Error::Radio)?;
-                // The transmission ended RXC: listen again.
-                if let Some(rx_config) = rx_config {
-                    radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
-                }
-                // Stash the answer's RX windows. The send loop or RXC
-                // listener takes them and runs the answer's own RX cycle.
-                mac.set_pending_cert_rx(tx_duration_ms, rx_windows);
+                mac.set_pending_cert_tx(tx_config, rx_windows);
                 Ok(Some(mac::Response::CertificationAnswerSent))
             }
             #[cfg(feature = "multicast")]
             mac::Response::Multicast(mut response) => {
+                // TODO: Investigate whether to handle this the same way as
+                // certification answers: prepare the answer here and stash
+                // the TxConfig, then let the context owning the radio handle
+                // the transmit.
                 if response.is_transmit_request() {
                     let (tx_config, _fcnt_up) =
                         mac.multicast_setup_send::<G, N>(rng, radio_buffer)?;
@@ -1139,6 +1165,14 @@ where
             )
             .await?
             {
+                // A certification answer prepared while listening on RXC is a
+                // regular uplink: run its complete cycle (TX, RX1/RX2 and
+                // NbTrans retransmissions) before resuming RXC.
+                #[cfg(feature = "certification")]
+                if matches!(response, mac::Response::CertificationAnswerSent) {
+                    let (tx_config, rx_windows) = self.mac.take_pending_cert_tx();
+                    self.run_uplink_cycle(tx_config, rx_windows).await?;
+                }
                 return Ok(response.into());
             }
         }

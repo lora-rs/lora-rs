@@ -25,6 +25,9 @@ async fn eu868_class_c_echo_payload_req_in_rxc() {
     let dl = util::decrypt_uplink(&mut uplink);
     assert_eq!(dl.f_port(), Some(224));
     assert_eq!(dl.frm_payload(), FrmPayload::Data(&[0x08, 0x02, 0x03, 0x04]));
+    // The answer is a regular uplink: its own RX1 and RX2 windows are run
+    // before `rxc_listen` returns.
+    assert_eq!(r.windows(), 2, "the answer's RX1 and RX2 must be run");
 }
 
 /// The answer is transmitted from inside `rxc_listen`. The device must be back
