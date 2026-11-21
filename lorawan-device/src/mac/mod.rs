@@ -168,11 +168,11 @@ pub(crate) struct Mac {
     identity: Option<PersistentIdentity>,
     #[cfg(feature = "certification")]
     certification: certification::Certification,
-    /// Actual TX duration and RX windows of the prepared certification answer
-    /// uplink, stashed by the device after transmitting it, for the send loop
-    /// which runs its RX windows and any NbTrans retransmissions.
+    /// Prepared certification answer uplink (TX config and RX windows),
+    /// stashed by the device when the answer is built, for the context that
+    /// owns the radio to transmit it and run its windows like any uplink.
     #[cfg(feature = "certification")]
-    pending_cert_rx: Option<(u32, RxWindows)>,
+    pending_cert_tx: Option<(radio::TxConfig, RxWindows)>,
     #[cfg(feature = "multicast")]
     pub multicast: multicast::Multicast,
 }
@@ -222,7 +222,7 @@ impl Mac {
             #[cfg(feature = "certification")]
             certification: certification::Certification::new(),
             #[cfg(feature = "certification")]
-            pending_cert_rx: None,
+            pending_cert_tx: None,
             #[cfg(feature = "multicast")]
             multicast: multicast::Multicast::new(),
         }
@@ -426,19 +426,23 @@ impl Mac {
         self.send::<RNG, N>(rng, buf, &send_data)
     }
 
-    /// Stash the actual TX duration and RX windows of the transmitted
-    /// certification answer; see [`take_pending_cert_rx`](Self::take_pending_cert_rx).
+    /// Stash the prepared certification answer uplink; see
+    /// [`take_pending_cert_tx`](Self::take_pending_cert_tx).
     #[cfg(feature = "certification")]
-    pub(crate) fn set_pending_cert_rx(&mut self, tx_duration_ms: u32, rx_windows: RxWindows) {
-        self.pending_cert_rx = Some((tx_duration_ms, rx_windows));
+    pub(crate) fn set_pending_cert_tx(
+        &mut self,
+        tx_config: radio::TxConfig,
+        rx_windows: RxWindows,
+    ) {
+        self.pending_cert_tx = Some((tx_config, rx_windows));
     }
 
-    /// Take the TX duration and RX windows stashed by
-    /// [`set_pending_cert_rx`](Self::set_pending_cert_rx).
-    /// Only valid immediately after an `CertificationAnswerSent` response.
+    /// Take the prepared certification answer uplink stashed by
+    /// [`set_pending_cert_tx`](Self::set_pending_cert_tx).
+    /// Only valid immediately after a `CertificationAnswerSent` response.
     #[cfg(feature = "certification")]
-    pub(crate) fn take_pending_cert_rx(&mut self) -> (u32, RxWindows) {
-        self.pending_cert_rx.take().unwrap()
+    pub(crate) fn take_pending_cert_tx(&mut self) -> (radio::TxConfig, RxWindows) {
+        self.pending_cert_tx.take().unwrap()
     }
 
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
@@ -526,7 +530,7 @@ impl Mac {
     pub(crate) fn reset(&mut self, keep_identity: bool) {
         self.state = State::Unjoined;
         self.payload_dropped = false;
-        self.pending_cert_rx = None;
+        self.pending_cert_tx = None;
         reset_network(&mut self.region, &mut self.configuration);
         if !keep_identity {
             self.configuration = Configuration::default_for_region(&self.region);
