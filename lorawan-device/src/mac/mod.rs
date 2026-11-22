@@ -506,16 +506,13 @@ impl Mac {
     }
 
     /// Take the staged immediate uplink (see `set_pending_cert_tx` /
-    /// `set_pending_ack_tx`), for the context that owns the radio.
-    /// Only valid while `immediate_uplink_pending` is true.
-    // TODO: Return `Option<...>`
+    /// `set_pending_ack_tx`), for the context that owns the radio or `None`
+    /// if none is staged.
     #[cfg(any(feature = "certification", feature = "class-c"))]
-    pub(crate) fn take_pending_immediate_uplink(&mut self) -> (radio::TxConfig, RxWindows) {
-        let (_, tx_config, rx_windows) = self
-            .pending_immediate_uplink
+    pub(crate) fn take_pending_immediate_uplink(&mut self) -> Option<(radio::TxConfig, RxWindows)> {
+        self.pending_immediate_uplink
             .take()
-            .expect("no immediate uplink staged; take while immediate_uplink_pending");
-        (tx_config, rx_windows)
+            .map(|(_, tx_config, rx_windows)| (tx_config, rx_windows))
     }
 
     /// Whether an immediate uplink (a certification answer, or the ACK for a
