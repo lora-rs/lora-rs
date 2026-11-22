@@ -36,6 +36,19 @@ use lorawan::{
 #[cfg(feature = "certification")]
 use super::DeviceEvent;
 
+/// The application payload part of an uplink frame.
+enum AppPayload<'a> {
+    /// Application data on the given port.
+    Data { f_port: NonZeroU8, data: &'a [u8] },
+    /// The application requested FPort 0: no application data, the queued
+    /// MAC commands are sent as the FRMPayload.
+    FPort0,
+    /// No FPort at all (an immediate ACK): the queued MAC commands stay in
+    /// FOpts when they fit, otherwise they move to FPort 0.
+    #[cfg(feature = "class-c")]
+    NoFPort,
+}
+
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "defmt-03", derive(defmt::Format))]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -261,9 +274,9 @@ impl Session {
                     // if the FCnt is used up, the session has expired
                     Response::SessionExpired
                 } else {
-                    // we can always increment fcnt_up when we receive a downlink;
-                    // the accepted downlink also ends any retransmission cycle
-                    self.fcnt_up += 1;
+                    // An accepted downlink ends any retransmission cycle; the
+                    // in-flight uplink's FCntUp was already consumed when the
+                    // frame was prepared, so it is not consumed again here.
                     self.retransmissions = 0;
                     if let (Some(fport), FrmPayload::Data(data)) =
                         (decrypted.f_port(), decrypted.frm_payload())
@@ -345,10 +358,10 @@ impl Session {
         configuration: &mut super::Configuration,
         region: &mut region::Configuration,
     ) -> Response {
-        // With NbTrans > 1, a missed downlink does not consume the FCntUp: the
-        // same frame is retransmitted (same FCntUp) until NbTrans is reached
-        // or a downlink is accepted. A used-up FCntUp can never be
-        // retransmitted, so the session expires.
+        // The FCntUp was consumed when the frame was prepared, so a missed
+        // downlink does not consume it again: the same frame is retransmitted
+        // (same FCntUp) until NbTrans is reached or a downlink is accepted.
+        // A used-up FCntUp can never be retransmitted, so the session expires.
         let retransmit = self.retransmissions > 0
             && self.fcnt_up != 0xFFFF_FFFF
             && self.retransmissions < configuration.nb_trans;
@@ -368,10 +381,10 @@ impl Session {
             // if the FCnt is used up, the session has expired
             return Response::SessionExpired;
         }
-        self.fcnt_up += 1;
 
         // ADRACKCnt counts uplink frames, not transmissions: it advances
-        // once per new FCntUp.
+        // once per completed frame (the FCntUp itself was consumed when the
+        // frame was prepared).
         if configuration.adr_enabled {
             self.adr_ack_cnt = self.adr_ack_cnt.saturating_add(1);
             // After ADR_ACK_LIMIT + N*ADR_ACK_DELAY uplinks without a downlink,
@@ -414,8 +427,75 @@ impl Session {
         configuration: &super::Configuration,
         max_mac_payload_len: u8,
     ) -> FcntUp {
+        let app_payload = match NonZeroU8::new(data.fport) {
+            Some(f_port) => AppPayload::Data { f_port, data: data.data },
+            None if data.data.is_empty() => AppPayload::FPort0,
+            None => {
+                // TODO: Return a proper Error instead of panicking.
+                panic!("Error assembling packet! Data payload with fport 0 not allowed");
+            }
+        };
+        self.prepare_buffer_inner(
+            app_payload,
+            data.confirmed,
+            true,
+            tx_buffer,
+            configuration,
+            max_mac_payload_len,
+        )
+    }
+
+    /// Assemble the immediate ACK uplink for a confirmed downlink received
+    /// while listening in RXC and write it to `tx_buffer`.
+    ///
+    /// The ACK is the minimal uplink: the ACK bit carried from the downlink
+    /// confirmation, no FPort and no application payload. The certification
+    /// confirmed-frame override does not apply to it.
+    #[cfg(feature = "class-c")]
+    pub(crate) fn prepare_ack_buffer<const N: usize>(
+        &mut self,
+        tx_buffer: &mut RadioBuffer<N>,
+        configuration: &super::Configuration,
+        max_mac_payload_len: u8,
+    ) -> FcntUp {
+        self.prepare_buffer_inner(
+            AppPayload::NoFPort,
+            false,
+            false,
+            tx_buffer,
+            configuration,
+            max_mac_payload_len,
+        )
+    }
+
+    /// Assemble a data uplink frame and write it to `tx_buffer`.
+    ///
+    /// `app_payload` carries the FPort and application data; `NoFPort` builds
+    /// the immediate ACK frame when the downlink confirmation is pending.
+    /// `handle_override` applies the certification confirmed-frame override to
+    /// the frame type.
+    ///
+    /// The frame consumes the next FCntUp when it is prepared: retransmissions
+    /// reuse the buffer (and the FCntUp) without preparing again, and a
+    /// downlink accepted mid-cycle can neither skip a counter value nor
+    /// consume it twice.
+    fn prepare_buffer_inner<const N: usize>(
+        &mut self,
+        app_payload: AppPayload<'_>,
+        confirmed: bool,
+        #[cfg_attr(not(feature = "certification"), allow(unused_variables))] handle_override: bool,
+        tx_buffer: &mut RadioBuffer<N>,
+        configuration: &super::Configuration,
+        max_mac_payload_len: u8,
+    ) -> FcntUp {
         tx_buffer.clear();
+        // The FCntUp is consumed when the frame is prepared: each unique
+        // uplink frame gets the next counter value, a retransmission resends
+        // the same frame (same FCntUp) without preparing again, and a
+        // downlink accepted mid-cycle (e.g. in the class C RXC gap) neither
+        // skips a counter value nor consumes it twice.
         let fcnt = self.fcnt_up;
+        self.fcnt_up = self.fcnt_up.saturating_add(1);
         let mut buf = [0u8; 256];
 
         let ack = self.uplink.confirms_downlink();
@@ -429,9 +509,9 @@ impl Session {
         // data rate.
         let adr_ack_req = adr && self.adr_ack_cnt >= ADR_ACK_LIMIT as u32;
 
-        self.confirmed = data.confirmed;
+        self.confirmed = confirmed;
         #[cfg(feature = "certification")]
-        if let Some(v) = self.override_confirmed {
+        if handle_override && let Some(v) = self.override_confirmed {
             self.confirmed = v;
         }
 
@@ -443,21 +523,30 @@ impl Session {
         let mac_commands = self.uplink.mac_commands();
         let mac_commands_len = mac_commands_prefix_len(mac_commands, max_frm_payload);
         self.app_payload_dropped = false;
-        let (f_opts, payload) = match NonZeroU8::new(data.fport) {
+        let (f_opts, payload) = match app_payload {
             // Keep the application payload only when the queued MAC answers
             // fit in FOpts and within the current data rate's payload limit.
-            Some(f_port) if mac_commands.len() <= FOPTS_MAX_LEN.min(max_frm_payload) => {
-                (mac_commands, Payload::Data { f_port, data: data.data })
+            AppPayload::Data { f_port, data }
+                if mac_commands.len() <= FOPTS_MAX_LEN.min(max_frm_payload) =>
+            {
+                (mac_commands, Payload::Data { f_port, data })
             }
-            Some(_) => {
-                self.app_payload_dropped = !data.data.is_empty();
+            AppPayload::Data { data, .. } => {
+                self.app_payload_dropped = !data.is_empty();
                 (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
             }
-            None => {
-                if !data.data.is_empty() {
-                    // TODO: Return a proper Error instead of panicking.
-                    panic!("Error assembling packet! Data payload with fport 0 not allowed");
-                }
+            // FPort 0: the queued MAC commands are sent as the FRMPayload.
+            AppPayload::FPort0 => {
+                (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
+            }
+            // No FPort (an immediate ACK): the MAC commands stay in FOpts
+            // when they fit, otherwise they move to FPort 0 as usual.
+            #[cfg(feature = "class-c")]
+            AppPayload::NoFPort if mac_commands.len() <= FOPTS_MAX_LEN.min(max_frm_payload) => {
+                (mac_commands, Payload::None)
+            }
+            #[cfg(feature = "class-c")]
+            AppPayload::NoFPort => {
                 (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
             }
         };
@@ -488,6 +577,14 @@ impl Session {
         }
         self.uplink.clear_mac_commands(true);
         fcnt
+    }
+
+    /// Re-arm the downlink confirmation so the next prepared uplink carries
+    /// the ACK bit: an immediate ACK that was staged but lost the uplink slot
+    /// to a certification answer must still be acknowledged.
+    #[cfg(feature = "class-c")]
+    pub(crate) fn requeue_downlink_confirmation(&mut self) {
+        self.uplink.set_downlink_confirmation();
     }
 
     /// The GPS time received in the last `DeviceTimeAns` downlink MAC command,
@@ -1331,14 +1428,16 @@ mod tests {
     }
 
     #[test]
-    fn rx2_complete_without_retransmission_consumes_fcnt() {
+    fn rx2_complete_without_retransmission_finalizes_the_cycle() {
         let mut mac = eu868_mac();
         let mut session = session();
         session.retransmissions = 1;
 
         let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::RxComplete));
-        assert_eq!(session.fcnt_up, 1);
+        // The FCntUp was consumed when the frame was prepared, not when the
+        // cycle completes.
+        assert_eq!(session.fcnt_up, 0);
         assert_eq!(session.retransmissions, 0);
     }
 
@@ -1358,10 +1457,11 @@ mod tests {
         assert!(matches!(response, Response::Retransmit));
         assert_eq!(session.retransmissions, 3);
 
-        // Third transmission done: the FCntUp is consumed.
+        // Third transmission done: the cycle completes (the FCntUp was
+        // consumed when the frame was prepared).
         let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::RxComplete));
-        assert_eq!(session.fcnt_up, 1);
+        assert_eq!(session.fcnt_up, 0);
         assert_eq!(session.retransmissions, 0);
     }
 
@@ -1378,10 +1478,11 @@ mod tests {
             assert_eq!(session.retransmissions, expected);
             assert_eq!(session.fcnt_up, 0);
         }
-        // 15th transmission done: the FCntUp is consumed
+        // 15th transmission done: the cycle completes (the FCntUp was
+        // consumed when the frame was prepared)
         let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::RxComplete));
-        assert_eq!(session.fcnt_up, 1);
+        assert_eq!(session.fcnt_up, 0);
     }
 
     #[test]
@@ -1400,11 +1501,12 @@ mod tests {
         assert!(matches!(response, Response::Retransmit));
         assert_eq!(session.adr_ack_cnt, 0);
 
-        // The third transmission completes the cycle and consumes the
-        // FCntUp: only now does ADRACKCnt advance, and by exactly one.
+        // The third transmission completes the cycle: only now does
+        // ADRACKCnt advance, and by exactly one (the FCntUp was consumed
+        // when the frame was prepared).
         let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::RxComplete));
-        assert_eq!(session.fcnt_up, 1);
+        assert_eq!(session.fcnt_up, 0);
         assert_eq!(session.adr_ack_cnt, 1);
     }
 
@@ -1421,16 +1523,17 @@ mod tests {
     }
 
     #[test]
-    fn rx2_complete_without_uplink_in_flight_consumes_fcnt() {
+    fn rx2_complete_without_uplink_in_flight_finalizes_the_cycle() {
         // retransmissions == 0 (join, multicast setup, certification): the
-        // FCntUp is consumed even when NbTrans > 1.
+        // cycle completes even when NbTrans > 1; the FCntUp was consumed when
+        // the frame was prepared.
         let mut mac = eu868_mac();
         mac.configuration.nb_trans = 4;
         let mut session = session();
 
         let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
         assert!(matches!(response, Response::RxComplete));
-        assert_eq!(session.fcnt_up, 1);
+        assert_eq!(session.fcnt_up, 0);
     }
 
     /// FPort 0 sends the queued MAC commands as the FRMPayload (encrypted
