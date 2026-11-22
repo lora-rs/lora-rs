@@ -966,24 +966,29 @@ mod tests {
     /// a Mac with the standard test session, returning the Mac's response.
     #[cfg(feature = "certification")]
     fn handle_downlink_on_port(mac: &mut Mac, fport: u8, data: &[u8], fcnt: u32) -> Response {
-        handle_downlink_on_port_with_fopts(mac, &[], fport, data, fcnt)
+        handle_downlink_on_port_with_fopts(mac, &[], fport, data, fcnt, false)
     }
 
-    /// As [`handle_downlink_on_port`], with MAC commands in the FHDR FOpts.
-    #[cfg(feature = "certification")]
+    /// As [`handle_downlink_on_port`], with MAC commands in the FHDR FOpts
+    /// and an optional confirmed frame.
     fn handle_downlink_on_port_with_fopts(
         mac: &mut Mac,
         f_opts: &[u8],
         fport: u8,
         data: &[u8],
         fcnt: u32,
+        confirmed: bool,
     ) -> Response {
         let mut rx: RadioBuffer<256> = RadioBuffer::new();
         let mut buf = [0u8; 256];
         let nwk_crypto = DefaultCrypto::new(NwkSKey::from([2; 16]).inner());
         let app_crypto = DefaultCrypto::new(AppSKey::from([1; 16]).inner());
         let frame = DataFrame {
-            frame_type: DataFrameType::UnconfirmedDown,
+            frame_type: if confirmed {
+                DataFrameType::ConfirmedDown
+            } else {
+                DataFrameType::UnconfirmedDown
+            },
             dev_addr: DevAddr::from_value(1),
             fcnt,
             f_opts,
@@ -1133,7 +1138,8 @@ mod tests {
         // Same echo with a DevStatusReq in the downlink's FOpts: the 3-byte
         // DevStatusAns rides along in the answer's FOpts, so the echo is
         // clipped to keep the frame within the DR0 payload limit.
-        let response = handle_downlink_on_port_with_fopts(&mut mac, &[0x06], 224, &payload, 1);
+        let response =
+            handle_downlink_on_port_with_fopts(&mut mac, &[0x06], 224, &payload, 1, false);
         assert!(
             matches!(response, Response::CertificationAnswerSent),
             "echo answer must be clipped to leave room for FOpts"
@@ -1141,6 +1147,61 @@ mod tests {
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
         mac.certification_setup_send::<_, 256>(&mut SeqRng(0), &mut tx).unwrap();
         assert_eq!(tx.as_mut_for_read().len(), max_phy);
+    }
+
+    /// A generic confirmed downlink is acknowledged by the next uplink:
+    /// the confirmation is consumed and the ACK bit is set.
+    #[test]
+    fn confirmed_downlink_is_acked_in_next_uplink() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+
+        let response = handle_downlink_on_port_with_fopts(&mut mac, &[], 1, &[0x01], 0, true);
+        assert!(matches!(response, Response::DownlinkReceived(0)));
+
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        mac.send::<_, 256>(
+            &mut SeqRng(0),
+            &mut tx,
+            &SendData { data: &[], fport: 1, confirmed: false },
+        )
+        .unwrap();
+        let fctrl = EncryptedDataPayload::parse(tx.as_mut_for_read()).unwrap().fhdr().fctrl();
+        assert!(fctrl.ack(), "the next uplink must carry the ACK bit");
+        assert!(!mac.get_session().unwrap().uplink.confirms_downlink());
+    }
+
+    /// A confirmed FPort 224 command that requires an answer is acknowledged
+    /// in the answer itself: the answer frame carries the ACK bit, and no
+    /// pending ACK is left for the radio layer to stage as a separate
+    /// uplink.
+    #[cfg(all(feature = "certification", feature = "class-c"))]
+    #[test]
+    fn certification_answer_to_confirmed_downlink_carries_ack_bit() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+
+        let response = handle_downlink_on_port_with_fopts(
+            &mut mac,
+            &[],
+            224,
+            &[0x08, 0x01, 0x02, 0x03],
+            0,
+            true,
+        );
+        assert!(matches!(response, Response::CertificationAnswerSent));
+
+        // The downlink confirmation is pending until the answer is prepared.
+        assert!(mac.ack_pending());
+
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        mac.certification_setup_send::<_, 256>(&mut SeqRng(0), &mut tx).unwrap();
+
+        // Preparing the answer consumes the confirmation: the ACK bit is set
+        // on the answer frame, and no pending ACK is left behind.
+        assert!(!mac.ack_pending());
+        let fctrl = EncryptedDataPayload::parse(tx.as_mut_for_read()).unwrap().fhdr().fctrl();
+        assert!(fctrl.ack(), "the answer must carry the ACK bit");
     }
 
     #[test]
