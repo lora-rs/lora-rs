@@ -634,14 +634,19 @@ where
                         timeout_ms
                     );
                     // A downlink accepted during the wait (class C) supersedes
-                    // the retransmission cycle: the MAC has moved to the next
-                    // FCntUp.
+                    // the retransmission cycle and ends it; an immediate ACK
+                    // for a confirmed downlink replaces the cycle instead.
                     if let Some(response) = self.retransmit_wait(timeout_ms).await? {
                         // A certification answer prepared during the wait
                         // becomes the in-flight uplink.
                         #[cfg(feature = "certification")]
                         if matches!(response, mac::Response::CertificationAnswerSent) {
                             (tx_config, rx_windows) = self.mac.take_pending_cert_tx();
+                            continue;
+                        }
+                        #[cfg(feature = "class-c")]
+                        if self.mac.ack_tx_pending() {
+                            (tx_config, rx_windows) = self.mac.take_pending_ack_tx();
                             continue;
                         }
                         return Ok(response);
@@ -655,6 +660,14 @@ where
                 #[cfg(feature = "certification")]
                 mac::Response::CertificationAnswerSent => {
                     (tx_config, rx_windows) = self.mac.take_pending_cert_tx();
+                    continue;
+                }
+                // An immediate ACK prepared for a confirmed downlink received
+                // in an RXC gap is a regular uplink: transmit it and run its
+                // own windows in place of the current cycle.
+                #[cfg(feature = "class-c")]
+                mac::Response::AckSent => {
+                    (tx_config, rx_windows) = self.mac.take_pending_ack_tx();
                     continue;
                 }
                 // A certification reset dropped the session mid-flight. The uplink
@@ -674,6 +687,13 @@ where
                             #[cfg(feature = "certification")]
                             if matches!(response, mac::Response::CertificationAnswerSent) {
                                 (tx_config, rx_windows) = self.mac.take_pending_cert_tx();
+                                continue;
+                            }
+                            // An immediate ACK prepared during the wait
+                            // replaces the cycle the same way.
+                            #[cfg(feature = "class-c")]
+                            if self.mac.ack_tx_pending() {
+                                (tx_config, rx_windows) = self.mac.take_pending_ack_tx();
                                 continue;
                             }
                             return Ok(response);
@@ -928,6 +948,13 @@ where
         if let Some(response @ mac::Response::CertificationAnswerSent) = response {
             return Ok(response);
         }
+        // A confirmed downlink received in the gap is acknowledged
+        // immediately; the ACK replaces the in-flight frame, so hand the
+        // marker back to the send loop to run the ACK's own RX windows.
+        #[cfg(feature = "class-c")]
+        if self.mac.ack_tx_pending() {
+            return Ok(mac::Response::AckSent);
+        }
         #[cfg(not(feature = "certification"))]
         let _ = response;
 
@@ -964,6 +991,13 @@ where
         if let Some(response @ mac::Response::CertificationAnswerSent) = response {
             return Ok(response);
         }
+        // A confirmed downlink received in the gap is acknowledged
+        // immediately; the ACK replaces the in-flight frame, so hand the
+        // marker back to the send loop to run the ACK's own RX windows.
+        #[cfg(feature = "class-c")]
+        if self.mac.ack_tx_pending() {
+            return Ok(mac::Response::AckSent);
+        }
         #[cfg(not(feature = "certification"))]
         let _ = response;
 
@@ -999,7 +1033,7 @@ where
         rx_config: Option<RxConfig>,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
         radio_buffer.clear();
-        match response {
+        let result = match response {
             mac::Response::NoUpdate => Ok(None),
             #[cfg(feature = "certification")]
             mac::Response::DeviceHandler(event) => {
@@ -1089,7 +1123,28 @@ where
                 }
             }
             r => Ok(Some(r)),
+        };
+        // A confirmed downlink received while listening in RXC is
+        // acknowledged immediately, without waiting for the next periodic
+        // uplink. The ACK is a regular uplink: prepare it, stage it in the
+        // retransmit buffer, and stash the transmission for the context that
+        // owns the radio to transmit it and run its RX windows. A
+        // certification answer that just took the uplink slot wins; the ACK
+        // then rides the next periodic uplink.
+        #[cfg(feature = "class-c")]
+        if rx_config.is_some() && mac.ack_pending() {
+            #[cfg(feature = "certification")]
+            let slot_free = !mac.cert_tx_pending();
+            #[cfg(not(feature = "certification"))]
+            let slot_free = true;
+            if slot_free {
+                let (tx_config, rx_windows) = mac.send_ack::<G, N>(rng, radio_buffer)?;
+                retransmit_buffer.clear();
+                retransmit_buffer.extend_from_slice(radio_buffer.as_ref_for_read()).unwrap();
+                mac.set_pending_ack_tx(tx_config, rx_windows);
+            }
         }
+        result
     }
 
     async fn rx_listen(
@@ -1171,6 +1226,14 @@ where
                 #[cfg(feature = "certification")]
                 if matches!(response, mac::Response::CertificationAnswerSent) {
                     let (tx_config, rx_windows) = self.mac.take_pending_cert_tx();
+                    self.run_uplink_cycle(tx_config, rx_windows).await?;
+                }
+                // An immediate ACK for a confirmed downlink received on RXC
+                // is a regular uplink too: run its complete cycle so the ACK
+                // opens its own RX windows before resuming RXC.
+                #[cfg(feature = "class-c")]
+                if self.mac.ack_tx_pending() {
+                    let (tx_config, rx_windows) = self.mac.take_pending_ack_tx();
                     self.run_uplink_cycle(tx_config, rx_windows).await?;
                 }
                 return Ok(response.into());
