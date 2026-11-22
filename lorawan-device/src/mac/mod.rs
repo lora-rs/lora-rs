@@ -496,25 +496,6 @@ impl Mac {
         self.pending_immediate_uplink = Some((ImmediateUplink::Answer, tx_config, rx_windows));
     }
 
-    /// Take the staged certification answer uplink; see
-    /// [`set_pending_cert_tx`](Self::set_pending_cert_tx).
-    /// Only valid immediately after a `CertificationAnswerSent` response.
-    #[cfg(feature = "certification")]
-    pub(crate) fn take_pending_cert_tx(&mut self) -> (radio::TxConfig, RxWindows) {
-        debug_assert!(
-            matches!(self.pending_immediate_uplink, Some((ImmediateUplink::Answer, ..))),
-            "no certification answer staged; take_pending_cert_tx while an ACK is staged"
-        );
-        self.take_pending_immediate_uplink()
-    }
-
-    /// Whether a certification answer uplink is staged (see
-    /// [`take_pending_cert_tx`](Self::take_pending_cert_tx)).
-    #[cfg(feature = "certification")]
-    pub(crate) fn cert_tx_pending(&self) -> bool {
-        matches!(self.pending_immediate_uplink, Some((ImmediateUplink::Answer, ..)))
-    }
-
     /// Stash the prepared immediate ACK uplink; see
     /// [`take_pending_immediate_uplink`](Self::take_pending_immediate_uplink).
     /// Only valid while no immediate uplink is staged
@@ -522,25 +503,6 @@ impl Mac {
     #[cfg(feature = "class-c")]
     pub(crate) fn set_pending_ack_tx(&mut self, tx_config: radio::TxConfig, rx_windows: RxWindows) {
         self.pending_immediate_uplink = Some((ImmediateUplink::Ack, tx_config, rx_windows));
-    }
-
-    /// Take the staged immediate ACK uplink; see
-    /// [`set_pending_ack_tx`](Self::set_pending_ack_tx).
-    /// Only valid while the ACK uplink is the staged immediate uplink.
-    #[cfg(feature = "class-c")]
-    pub(crate) fn take_pending_ack_tx(&mut self) -> (radio::TxConfig, RxWindows) {
-        debug_assert!(
-            matches!(self.pending_immediate_uplink, Some((ImmediateUplink::Ack, ..))),
-            "no ACK uplink staged; take_pending_ack_tx after a certification answer"
-        );
-        self.take_pending_immediate_uplink()
-    }
-
-    /// Whether an immediate ACK uplink is staged (see
-    /// [`take_pending_ack_tx`](Self::take_pending_ack_tx)).
-    #[cfg(feature = "class-c")]
-    pub(crate) fn ack_tx_pending(&self) -> bool {
-        matches!(self.pending_immediate_uplink, Some((ImmediateUplink::Ack, ..)))
     }
 
     /// Take the staged immediate uplink (see `set_pending_cert_tx` /
@@ -876,10 +838,6 @@ pub(crate) enum Response {
     /// place of the in-flight cycle. Never reported to the application.
     #[cfg(any(feature = "certification", feature = "class-c"))]
     UplinkStaged,
-    /// A certification answer uplink was transmitted during a receive window.
-    /// The answer's RX windows are retained so the send loop can run them.
-    #[cfg(feature = "certification")]
-    CertificationAnswerSent,
     #[cfg(feature = "certification")]
     DeviceHandler(DeviceEvent),
     #[cfg(feature = "multicast")]
@@ -918,8 +876,6 @@ impl From<Response> for nb_device::Response {
             Response::DeviceTimeReq => unimplemented!(),
             #[cfg(any(feature = "certification", feature = "class-c"))]
             Response::UplinkStaged => unimplemented!(),
-            #[cfg(feature = "certification")]
-            Response::CertificationAnswerSent => unimplemented!(),
             #[cfg(feature = "certification")]
             Response::DeviceHandler(_) => unimplemented!(),
             #[cfg(feature = "multicast")]
@@ -960,9 +916,7 @@ impl From<Response> for async_device::ListenResponse {
                 async_device::ListenResponse::DownlinkReceived(fcnt)
             }
             #[cfg(feature = "certification")]
-            Response::CertificationAnswerSent => {
-                async_device::ListenResponse::CertificationAnswerSent
-            }
+            Response::UplinkStaged => async_device::ListenResponse::CertificationAnswerSent,
             #[cfg(feature = "multicast")]
             Response::Multicast(mc) => async_device::ListenResponse::Multicast(mc.into()),
             r => panic!("Invalid async_device::ListenResponse::from {:?}", r),

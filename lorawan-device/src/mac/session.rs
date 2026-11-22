@@ -330,7 +330,7 @@ impl Session {
                                     );
                                 }
                                 CertificationAnswerSent => {
-                                    return Response::CertificationAnswerSent;
+                                    return Response::UplinkStaged;
                                 }
                                 NoUpdate => return Response::NoUpdate,
                             }
@@ -582,7 +582,7 @@ impl Session {
     /// Re-arm the downlink confirmation so the next prepared uplink carries
     /// the ACK bit: an immediate ACK that was staged but lost the uplink slot
     /// to a certification answer must still be acknowledged.
-    #[cfg(feature = "class-c")]
+    #[cfg(all(feature = "class-c", feature = "certification"))]
     pub(crate) fn requeue_downlink_confirmation(&mut self) {
         self.uplink.set_downlink_confirmation();
     }
@@ -1071,7 +1071,7 @@ mod tests {
             }
             let response = handle_downlink_on_port(&mut mac, 224, &payload, fcnt);
             assert!(
-                matches!(response, Response::CertificationAnswerSent),
+                matches!(response, Response::UplinkStaged),
                 "oversized EchoPayloadAns must be clipped"
             );
 
@@ -1130,7 +1130,7 @@ mod tests {
             payload.push(0x01).unwrap();
         }
         let response = handle_downlink_on_port(&mut mac, 224, &payload, 0);
-        assert!(matches!(response, Response::CertificationAnswerSent));
+        assert!(matches!(response, Response::UplinkStaged));
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
         mac.certification_setup_send::<_, 256>(&mut SeqRng(0), &mut tx).unwrap();
         assert_eq!(tx.as_mut_for_read().len(), max_phy);
@@ -1141,7 +1141,7 @@ mod tests {
         let response =
             handle_downlink_on_port_with_fopts(&mut mac, &[0x06], 224, &payload, 1, false);
         assert!(
-            matches!(response, Response::CertificationAnswerSent),
+            matches!(response, Response::UplinkStaged),
             "echo answer must be clipped to leave room for FOpts"
         );
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
@@ -1189,7 +1189,7 @@ mod tests {
             0,
             true,
         );
-        assert!(matches!(response, Response::CertificationAnswerSent));
+        assert!(matches!(response, Response::UplinkStaged));
 
         // The downlink confirmation is pending until the answer is prepared.
         assert!(mac.ack_pending());
