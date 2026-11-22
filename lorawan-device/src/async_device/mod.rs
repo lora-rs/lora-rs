@@ -1052,7 +1052,7 @@ where
                 Ok(Some(mac.rx2_complete()))
             }
             #[cfg(feature = "certification")]
-            mac::Response::CertificationAnswerSent => {
+            mac::Response::UplinkStaged => {
                 let (tx_config, rx_windows, _fcnt_up) =
                     mac.certification_setup_send::<G, N>(rng, radio_buffer)?;
                 // The answer is a regular uplink: retain it so its cycle can
@@ -1062,7 +1062,7 @@ where
                 retransmit_buffer.clear();
                 retransmit_buffer.extend_from_slice(radio_buffer.as_ref_for_read()).unwrap();
                 mac.set_pending_cert_tx(tx_config, rx_windows);
-                Ok(Some(mac::Response::CertificationAnswerSent))
+                Ok(Some(mac::Response::UplinkStaged))
             }
             #[cfg(feature = "multicast")]
             mac::Response::Multicast(mut response) => {
@@ -1097,21 +1097,16 @@ where
         // acknowledged immediately, without waiting for the next periodic
         // uplink. The ACK is a regular uplink: prepare it, stage it in the
         // retransmit buffer, and stash the transmission for the context that
-        // owns the radio to transmit it and run its RX windows. A
-        // certification answer that just took the uplink slot wins; the ACK
-        // then rides the next periodic uplink.
+        // owns the radio to transmit it and run its RX windows. An
+        // immediate uplink that already holds the slot (including a
+        // certification answer staged earlier in this very call) wins; the
+        // ACK then rides the next periodic uplink.
         #[cfg(feature = "class-c")]
-        if rx_config.is_some() && mac.ack_pending() {
-            #[cfg(feature = "certification")]
-            let slot_free = !mac.cert_tx_pending();
-            #[cfg(not(feature = "certification"))]
-            let slot_free = true;
-            if slot_free {
-                let (tx_config, rx_windows) = mac.send_ack::<G, N>(rng, radio_buffer)?;
-                retransmit_buffer.clear();
-                retransmit_buffer.extend_from_slice(radio_buffer.as_ref_for_read()).unwrap();
-                mac.set_pending_ack_tx(tx_config, rx_windows);
-            }
+        if rx_config.is_some() && mac.ack_pending() && !mac.immediate_uplink_pending() {
+            let (tx_config, rx_windows) = mac.send_ack::<G, N>(rng, radio_buffer)?;
+            retransmit_buffer.clear();
+            retransmit_buffer.extend_from_slice(radio_buffer.as_ref_for_read()).unwrap();
+            mac.set_pending_ack_tx(tx_config, rx_windows);
         }
         result
     }
@@ -1189,20 +1184,13 @@ where
             )
             .await?
             {
-                // A certification answer prepared while listening on RXC is a
-                // regular uplink: run its complete cycle (TX, RX1/RX2 and
-                // NbTrans retransmissions) before resuming RXC.
-                #[cfg(feature = "certification")]
-                if matches!(response, mac::Response::CertificationAnswerSent) {
-                    let (tx_config, rx_windows) = self.mac.take_pending_cert_tx();
-                    self.run_uplink_cycle(tx_config, rx_windows).await?;
-                }
-                // An immediate ACK for a confirmed downlink received on RXC
-                // is a regular uplink too: run its complete cycle so the ACK
-                // opens its own RX windows before resuming RXC.
-                #[cfg(feature = "class-c")]
-                if self.mac.ack_tx_pending() {
-                    let (tx_config, rx_windows) = self.mac.take_pending_ack_tx();
+                // An immediate uplink staged while listening on RXC (a
+                // certification answer, or the ACK for a confirmed downlink)
+                // is a regular uplink: run its complete cycle (TX, RX1/RX2
+                // and NbTrans retransmissions) before resuming RXC.
+                #[cfg(any(feature = "certification", feature = "class-c"))]
+                if self.mac.immediate_uplink_pending() {
+                    let (tx_config, rx_windows) = self.mac.take_pending_immediate_uplink();
                     self.run_uplink_cycle(tx_config, rx_windows).await?;
                 }
                 return Ok(response.into());
