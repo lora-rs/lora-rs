@@ -627,8 +627,8 @@ where
             // downlink) is a regular uplink: it replaces the in-flight frame
             // and its cycle takes over.
             #[cfg(any(feature = "certification", feature = "class-c"))]
-            if self.mac.immediate_uplink_pending() {
-                (tx_config, rx_windows) = self.mac.take_pending_immediate_uplink();
+            if let Some(staged) = self.mac.take_pending_immediate_uplink() {
+                (tx_config, rx_windows) = staged;
                 continue;
             }
             match response {
@@ -652,8 +652,8 @@ where
                         // certification answer, or the ACK for a confirmed
                         // downlink) replaces the cycle.
                         #[cfg(any(feature = "certification", feature = "class-c"))]
-                        if self.mac.immediate_uplink_pending() {
-                            (tx_config, rx_windows) = self.mac.take_pending_immediate_uplink();
+                        if let Some(staged) = self.mac.take_pending_immediate_uplink() {
+                            (tx_config, rx_windows) = staged;
                             continue;
                         }
                         return Ok(response);
@@ -675,8 +675,8 @@ where
                             // An immediate uplink staged during the wait
                             // replaces the cycle the same way.
                             #[cfg(any(feature = "certification", feature = "class-c"))]
-                            if self.mac.immediate_uplink_pending() {
-                                (tx_config, rx_windows) = self.mac.take_pending_immediate_uplink();
+                            if let Some(staged) = self.mac.take_pending_immediate_uplink() {
+                                (tx_config, rx_windows) = staged;
                                 continue;
                             }
                             return Ok(response);
@@ -1189,8 +1189,7 @@ where
                 // is a regular uplink: run its complete cycle (TX, RX1/RX2
                 // and NbTrans retransmissions) before resuming RXC.
                 #[cfg(any(feature = "certification", feature = "class-c"))]
-                if self.mac.immediate_uplink_pending() {
-                    let (tx_config, rx_windows) = self.mac.take_pending_immediate_uplink();
+                if let Some((tx_config, rx_windows)) = self.mac.take_pending_immediate_uplink() {
                     self.run_uplink_cycle(tx_config, rx_windows).await?;
                 }
                 return Ok(response.into());
