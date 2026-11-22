@@ -436,3 +436,55 @@ fn test_link_adr_ans() {
     let response = device.handle_event(Event::RadioEvent(radio::Event::Phy(()))).unwrap();
     assert!(matches!(response, Response::DownlinkReceived(1)));
 }
+
+#[test]
+fn test_retransmission_uplink_sending_reports_frame_fcnt() {
+    let mut device = test_device();
+    device.get_radio().set_async_tx(true);
+    device.join(get_abp_credentials()).unwrap();
+    device.shared.mac.configuration.nb_trans = 2;
+
+    let response = device.send(&[0; 1], 1, false).unwrap();
+    assert!(matches!(response, Response::UplinkSending(0)));
+    let _ = device.get_radio().take_last_uplink().unwrap();
+    let response = device.handle_event(Event::RadioEvent(radio::Event::Phy(()))).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+    let _ = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx1
+    let _ = device.handle_event(Event::TimeoutFired).unwrap(); // end Rx1
+    let _ = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx2
+    // End Rx2: NbTrans retransmits the same frame (FCntUp 0).
+    let response = device.handle_event(Event::TimeoutFired).unwrap();
+    assert!(
+        matches!(response, Response::UplinkSending(0)),
+        "retransmission must report FCntUp 0, got {:?}",
+        response
+    );
+}
+
+#[cfg(feature = "certification")]
+#[test]
+fn test_certification_answer_uplink_sending_reports_frame_fcnt() {
+    fn fp_rxappcnt_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        build_cert_downlink(buf, "09", 1) // RxAppCntReq
+    }
+
+    let mut device = test_device();
+    device.get_radio().set_async_tx(true);
+    device.join(get_abp_credentials()).unwrap();
+
+    let response = device.send(&[0; 1], 1, false).unwrap();
+    assert!(matches!(response, Response::UplinkSending(0)));
+    let response = device.handle_event(Event::RadioEvent(radio::Event::Phy(()))).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+    let _ = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx1
+    let _ = device.handle_event(Event::TimeoutFired).unwrap(); // end Rx1
+    let _ = device.handle_event(Event::TimeoutFired).unwrap(); // begin Rx2
+    device.get_radio().set_rxtx_handler(fp_rxappcnt_req);
+    // The answer frame uses FCntUp 1 (following the user uplink's FCntUp 0).
+    let response = device.handle_event(Event::RadioEvent(radio::Event::Phy(()))).unwrap();
+    assert!(
+        matches!(response, Response::UplinkSending(1)),
+        "certification answer must report FCntUp 1, got {:?}",
+        response
+    );
+}
