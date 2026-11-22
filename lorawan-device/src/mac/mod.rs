@@ -503,7 +503,7 @@ impl Mac {
     pub(crate) fn take_pending_cert_tx(&mut self) -> (radio::TxConfig, RxWindows) {
         debug_assert!(
             matches!(self.pending_immediate_uplink, Some((ImmediateUplink::Answer, ..))),
-            "no certification answer staged; take_pending_cert_tx after an AckSent"
+            "no certification answer staged; take_pending_cert_tx while an ACK is staged"
         );
         self.take_pending_immediate_uplink()
     }
@@ -517,7 +517,8 @@ impl Mac {
 
     /// Stash the prepared immediate ACK uplink; see
     /// [`take_pending_immediate_uplink`](Self::take_pending_immediate_uplink).
-    /// Only valid while no immediate uplink is staged.
+    /// Only valid while no immediate uplink is staged
+    /// (`immediate_uplink_pending` is false).
     #[cfg(feature = "class-c")]
     pub(crate) fn set_pending_ack_tx(&mut self, tx_config: radio::TxConfig, rx_windows: RxWindows) {
         self.pending_immediate_uplink = Some((ImmediateUplink::Ack, tx_config, rx_windows));
@@ -525,7 +526,7 @@ impl Mac {
 
     /// Take the staged immediate ACK uplink; see
     /// [`set_pending_ack_tx`](Self::set_pending_ack_tx).
-    /// Only valid immediately after an `AckSent` response.
+    /// Only valid while the ACK uplink is the staged immediate uplink.
     #[cfg(feature = "class-c")]
     pub(crate) fn take_pending_ack_tx(&mut self) -> (radio::TxConfig, RxWindows) {
         debug_assert!(
@@ -544,15 +545,22 @@ impl Mac {
 
     /// Take the staged immediate uplink (see `set_pending_cert_tx` /
     /// `set_pending_ack_tx`), for the context that owns the radio.
-    /// Only valid while an immediate uplink is staged.
+    /// Only valid while `immediate_uplink_pending` is true.
     // TODO: Return `Option<...>`
     #[cfg(any(feature = "certification", feature = "class-c"))]
     pub(crate) fn take_pending_immediate_uplink(&mut self) -> (radio::TxConfig, RxWindows) {
         let (_, tx_config, rx_windows) = self
             .pending_immediate_uplink
             .take()
-            .expect("no immediate uplink staged; take while an immediate uplink is pending");
+            .expect("no immediate uplink staged; take while immediate_uplink_pending");
         (tx_config, rx_windows)
+    }
+
+    /// Whether an immediate uplink (a certification answer, or the ACK for a
+    /// confirmed downlink received in RXC) is staged.
+    #[cfg(any(feature = "certification", feature = "class-c"))]
+    pub(crate) fn immediate_uplink_pending(&self) -> bool {
+        self.pending_immediate_uplink.is_some()
     }
 
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
@@ -862,15 +870,16 @@ pub(crate) enum Response {
     RetransmitConfirmed,
     LinkCheckReq,
     DeviceTimeReq,
+    /// An immediate uplink (a certification answer, or the ACK for a
+    /// confirmed downlink received in RXC) was staged; the context owning
+    /// the radio transmits the staged frame and runs its RX windows in
+    /// place of the in-flight cycle. Never reported to the application.
+    #[cfg(any(feature = "certification", feature = "class-c"))]
+    UplinkStaged,
     /// A certification answer uplink was transmitted during a receive window.
     /// The answer's RX windows are retained so the send loop can run them.
     #[cfg(feature = "certification")]
     CertificationAnswerSent,
-    /// An ACK uplink for a confirmed downlink received while listening in
-    /// RXC has been prepared. The ACK is a regular uplink; the context that
-    /// owns the radio transmits it and runs its RX windows.
-    #[cfg(feature = "class-c")]
-    AckSent,
     #[cfg(feature = "certification")]
     DeviceHandler(DeviceEvent),
     #[cfg(feature = "multicast")]
@@ -907,10 +916,10 @@ impl From<Response> for nb_device::Response {
             Response::RetransmitConfirmed => unimplemented!(),
             Response::LinkCheckReq => unimplemented!(),
             Response::DeviceTimeReq => unimplemented!(),
+            #[cfg(any(feature = "certification", feature = "class-c"))]
+            Response::UplinkStaged => unimplemented!(),
             #[cfg(feature = "certification")]
             Response::CertificationAnswerSent => unimplemented!(),
-            #[cfg(feature = "class-c")]
-            Response::AckSent => unimplemented!(),
             #[cfg(feature = "certification")]
             Response::DeviceHandler(_) => unimplemented!(),
             #[cfg(feature = "multicast")]
