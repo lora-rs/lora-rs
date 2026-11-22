@@ -468,3 +468,40 @@ fn set_datarate_accepts_supported_datarate() {
     assert_eq!(device.set_datarate(DR::_5), Ok(()));
     assert_eq!(device.get_datarate(), DR::_5);
 }
+
+/// Frame `0xFFFF_FFFE` is not the final counter value: it must still honor
+/// `NbTrans` retransmissions and complete normally before `0xFFFF_FFFF`
+/// expires the session.
+#[tokio::test]
+async fn fcnt_up_penultimate_retransmits_and_does_not_expire() {
+    let (radio, timer, mut device) = setup_with_session();
+    device.mac.get_session_mut().unwrap().fcnt_up = 0xFFFF_FFFE;
+    device.mac.configuration.nb_trans = 2;
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
+    assert_eq!(r.uplinks().len(), 2, "FCntUp 0xFFFF_FFFE must still retransmit per NbTrans");
+
+    let r = net.exchange(&[4, 5, 6], 3, false, ExchangeAction::none()).await;
+    assert!(
+        matches!(r.response(), Ok(SendResponse::SessionExpired)),
+        "FCntUp 0xFFFF_FFFF must expire the session, got {:?}",
+        r.response()
+    );
+}
+
+/// A downlink received in RX1 after sending `FCntUp = 0xFFFF_FFFE` must be
+/// delivered rather than dropped with `SessionExpired`.
+#[tokio::test]
+async fn fcnt_up_penultimate_delivers_downlink() {
+    let (radio, timer, mut device) = setup_with_session();
+    device.mac.get_session_mut().unwrap().fcnt_up = 0xFFFF_FFFE;
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx1(Pkt::app(4, &[9, 8]))).await;
+    r.expect_downlink_received();
+    let dl = net.device().take_downlink().expect("downlink on 0xFFFF_FFFE must not be dropped");
+    assert_eq!(dl.fport, 4);
+    assert_eq!(dl.data.as_slice(), &[9, 8]);
+}
