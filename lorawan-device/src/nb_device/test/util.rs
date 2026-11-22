@@ -53,11 +53,19 @@ pub struct TestRadio {
     rxtx_handler: Option<RxTxHandler>,
     buffer: [u8; 256],
     buffer_index: usize,
+    async_tx: bool,
+    txing: bool,
 }
 
 impl TestRadio {
     pub fn set_rxtx_handler(&mut self, handler: RxTxHandler) {
         self.rxtx_handler = Some(handler);
+    }
+
+    /// When enabled, `TxRequest` returns `Response::Txing` and waits for an
+    /// `Event::Phy(())` before reporting `Response::TxDone(0)`.
+    pub fn set_async_tx(&mut self, enabled: bool) {
+        self.async_tx = enabled;
     }
 
     /// Take the most recently transmitted uplink, if any.
@@ -74,6 +82,8 @@ impl Default for TestRadio {
             rxtx_handler: None,
             buffer: [0; 256],
             buffer_index: 0,
+            async_tx: false,
+            txing: false,
         }
     }
 }
@@ -106,6 +116,10 @@ impl PhyRxTx for TestRadio {
                 }
                 self.last_uplink =
                     Some(Uplink::new(buf, config).map_err(|_| "error creating uplink")?);
+                if self.async_tx {
+                    self.txing = true;
+                    return Ok(Response::Txing);
+                }
                 return Ok(Response::TxDone(0));
             }
             Event::RxRequest(rf_config) => {
@@ -113,6 +127,10 @@ impl PhyRxTx for TestRadio {
             }
             Event::CancelRx => (),
             Event::Phy(()) => {
+                if self.txing {
+                    self.txing = false;
+                    return Ok(Response::TxDone(0));
+                }
                 if let (Some(rf_config), Some(rxtx_handler)) =
                     (self.current_config, self.rxtx_handler)
                 {
