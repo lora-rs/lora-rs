@@ -109,3 +109,67 @@ async fn eu868_class_c_confirmed_tx_periodicity_in_retransmit_wait_is_acked() {
     assert!(!dl.is_confirmed(), "the ACK is an unconfirmed uplink");
     assert_eq!(dl.f_port(), None, "an ACK-only uplink has no FPort");
 }
+
+/// A downlink received during a certification answer's RX1 window inside
+/// `rxc_listen` must be reported to the caller instead of being discarded in
+/// favor of `CertificationAnswerSent`.
+#[cfg(feature = "class-c")]
+#[tokio::test]
+async fn eu868_class_c_rxc_listen_reports_downlink_in_answer_rx1() {
+    use crate::test_util::{get_crypto, get_dev_addr};
+    use core::num::NonZeroU8;
+    use lorawan::creator::{DataFrame, Payload};
+    use lorawan::parser::DataFrameType;
+
+    fn build_dl(fcnt: u32, fport: u8, data: &[u8]) -> std::vec::Vec<u8> {
+        let mut buf = [0u8; 256];
+        let crypto = get_crypto();
+        let frame = DataFrame {
+            frame_type: DataFrameType::UnconfirmedDown,
+            dev_addr: get_dev_addr(),
+            adr: false,
+            adr_ack_req: false,
+            ack: false,
+            f_pending: false,
+            fcnt,
+            f_opts: &[],
+            payload: Payload::Data { f_port: NonZeroU8::new(fport).unwrap(), data },
+        };
+        frame.build_into(&mut buf, &crypto, Some(&crypto)).unwrap().to_vec()
+    }
+
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    device.enable_class_c();
+    let task = tokio::spawn(async move {
+        let _ = device.send(&[1], 1, false).await;
+        let res = device.rxc_listen().await;
+        (device, res)
+    });
+
+    // Drive the initial uplink's RX1 and RX2 so the radio enters RXC.
+    for _ in 0..2 {
+        let armed = timer.get_armed_count().await;
+        timer.wait_armed(armed + 1).await;
+        timer.fire_most_recent().await;
+        radio.handle_timeout().await;
+    }
+
+    // Deliver EchoIncPayloadReq in RXC; the answer opens its own RX1.
+    radio.handle_frame(build_dl(0, 224, &[0x08, 1, 2, 3])).await;
+    let armed = timer.get_armed_count().await;
+    timer.wait_armed(armed + 1).await;
+    timer.fire_most_recent().await;
+    // Deliver an application downlink in the answer's RX1.
+    radio.handle_frame(build_dl(1, 5, &[0xDE, 0xAD])).await;
+
+    let (mut device, res) = task.await.unwrap();
+    assert!(
+        matches!(res, Ok(ListenResponse::DownlinkReceived(1))),
+        "expected DownlinkReceived(1) from the answer's RX1, got {:?}",
+        res
+    );
+    let dl = device.take_downlink().expect("downlink must be queued");
+    assert_eq!(dl.fport, 5);
+    assert_eq!(dl.data.as_slice(), &[0xDE, 0xAD]);
+}
