@@ -134,3 +134,16 @@ async fn test_class_c_ack_opens_rx_windows() {
     assert_eq!(r.uplinks().len(), 1, "confirmed downlink must be acknowledged");
     assert!(r.windows() > 0, "ACK must open RX1/RX2");
 }
+
+/// A confirmed downlink received in RXC after the session's FCntUp is
+/// exhausted must expire the session without transmitting an ACK that
+/// reuses 0xFFFF_FFFF.
+#[tokio::test]
+async fn test_class_c_confirmed_downlink_when_session_expired_does_not_transmit_ack() {
+    let mut net = util::setup_with_session_class_c().await;
+    net.device().mac.get_session_mut().unwrap().fcnt_up = 0xFFFF_FFFF;
+
+    let r = net.listen(vec![class_c_downlink().confirmed()]).await;
+    assert!(matches!(r.response(), Ok(crate::async_device::ListenResponse::SessionExpired)));
+    assert!(r.uplinks().is_empty(), "must not transmit an ACK after SessionExpired");
+}
