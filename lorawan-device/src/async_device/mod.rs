@@ -1200,13 +1200,20 @@ where
             )
             .await?
             {
-                // An immediate uplink staged while listening on RXC (a
-                // certification answer, or the ACK for a confirmed downlink)
-                // is a regular uplink: run its complete cycle (TX, RX1/RX2
-                // and NbTrans retransmissions) before resuming RXC.
+                // Firstly check whether an immediate uplink (a
+                // certification answer, or the ACK for a confirmed
+                // downlink) is staged: run its complete cycle before
+                // resuming RXC.
+                //
+                // And secondly report a downlink received in the
+                // staged uplink's windows instead of the regular
+                // response.
                 #[cfg(any(feature = "certification", feature = "class-c"))]
-                if let Some((tx_config, rx_windows)) = self.mac.take_pending_immediate_uplink() {
-                    self.run_uplink_cycle(tx_config, rx_windows).await?;
+                if let Some((tx_config, rx_windows)) = self.mac.take_pending_immediate_uplink()
+                    && let mac::Response::DownlinkReceived(fcnt) =
+                        self.run_uplink_cycle(tx_config, rx_windows).await?
+                {
+                    return Ok(ListenResponse::DownlinkReceived(fcnt));
                 }
                 return Ok(response.into());
             }

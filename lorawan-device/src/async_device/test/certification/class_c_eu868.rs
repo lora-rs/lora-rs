@@ -114,7 +114,6 @@ async fn eu868_class_c_confirmed_tx_periodicity_in_retransmit_wait_is_acked() {
 /// `rxc_listen` must be reported to the caller instead of being discarded in
 /// favor of `CertificationAnswerSent`.
 #[cfg(feature = "class-c")]
-#[should_panic(expected = "expected DownlinkReceived(1) from the answer's RX1")]
 #[tokio::test]
 async fn eu868_class_c_rxc_listen_reports_downlink_in_answer_rx1() {
     use crate::test_util::{get_crypto, get_dev_addr};
