@@ -222,7 +222,7 @@ impl Multicast {
                     buf,
                     configuration,
                     max_mac_payload_len,
-                );
+                )?;
                 self.pending_uplinks.clear();
                 Ok(response)
             }

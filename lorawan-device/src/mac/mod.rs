@@ -209,6 +209,8 @@ pub enum Error {
     /// TR001 (Remedy #2) has the device switch to another JoinEUI at this point; that is
     /// not supported yet.
     DevNonceExhausted,
+    /// FCntUp counter has reached 0xFFFF_FFFF, no further uplinks can be prepared.
+    SessionExpired,
     #[cfg(feature = "multicast")]
     Multicast(multicast::Error),
 }
@@ -301,7 +303,7 @@ impl Mac {
                     buf,
                     &self.configuration,
                     max_mac_payload_len,
-                );
+                )?;
                 let payload_dropped = session.take_payload_dropped();
                 // Uplinks prepared here (data uplinks and certification answers)
                 // participate in NbTrans retransmission; multicast setup uplinks
@@ -349,7 +351,7 @@ impl Mac {
         self.payload_dropped = false;
         let payload_dropped = match &mut self.state {
             State::Joined(session) => {
-                session.prepare_ack_buffer(buf, &self.configuration, max_mac_payload_len);
+                session.prepare_ack_buffer(buf, &self.configuration, max_mac_payload_len)?;
                 let payload_dropped = session.take_payload_dropped();
                 // Like any other uplink, the ACK participates in NbTrans
                 // retransmission.

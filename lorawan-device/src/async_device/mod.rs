@@ -581,11 +581,16 @@ where
         confirmed: bool,
     ) -> Result<SendResponse, Error<R::PhyError>> {
         // Prepare transmission buffer
-        let (tx_config, rx_windows, _fcnt_up) = self.mac.send::<G, N>(
+        let (tx_config, rx_windows, _fcnt_up) = match self.mac.send::<G, N>(
             &mut self.rng,
             &mut self.radio_buffer,
             &SendData { data, fport, confirmed },
-        )?;
+        ) {
+            Ok(v) => v,
+            // The FCntUp counter is full, no further uplink can be prepared.
+            Err(mac::Error::SessionExpired) => return Ok(SendResponse::SessionExpired),
+            Err(e) => return Err(e.into()),
+        };
         self.payload_dropped = self.mac.take_payload_dropped();
         // Retain a copy of the built frame for potential NbTrans retransmissions
         self.retransmit_buffer.clear();
@@ -1119,7 +1124,13 @@ where
         // ACK then rides the next periodic uplink.
         #[cfg(feature = "class-c")]
         if rx_config.is_some() && mac.ack_pending() && !mac.immediate_uplink_pending() {
-            let (tx_config, rx_windows) = mac.send_ack::<G, N>(rng, radio_buffer)?;
+            let (tx_config, rx_windows) = match mac.send_ack::<G, N>(rng, radio_buffer) {
+                Ok(v) => v,
+                // The FCntUp counter is full: the ACK cannot be transmitted,
+                // just report the downlink as received.
+                Err(mac::Error::SessionExpired) => return result,
+                Err(e) => return Err(e.into()),
+            };
             retransmit_buffer.clear();
             retransmit_buffer.extend_from_slice(radio_buffer.as_ref_for_read()).unwrap();
             mac.set_pending_ack_tx(tx_config, rx_windows);
