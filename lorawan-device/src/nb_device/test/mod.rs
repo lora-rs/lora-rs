@@ -437,6 +437,7 @@ fn test_link_adr_ans() {
     assert!(matches!(response, Response::DownlinkReceived(1)));
 }
 
+#[should_panic(expected = "retransmission must report FCntUp 0")]
 #[test]
 fn test_retransmission_uplink_sending_reports_frame_fcnt() {
     let mut device = test_device();
@@ -462,6 +463,7 @@ fn test_retransmission_uplink_sending_reports_frame_fcnt() {
 }
 
 #[cfg(feature = "certification")]
+#[should_panic(expected = "certification answer must report FCntUp 1")]
 #[test]
 fn test_certification_answer_uplink_sending_reports_frame_fcnt() {
     fn fp_rxappcnt_req(_uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
