@@ -138,7 +138,6 @@ async fn test_class_c_ack_opens_rx_windows() {
 /// A confirmed downlink received in RXC after the session's FCntUp is
 /// exhausted must expire the session without transmitting an ACK that
 /// reuses 0xFFFF_FFFF.
-#[should_panic(expected = "must not transmit an ACK after SessionExpired")]
 #[tokio::test]
 async fn test_class_c_confirmed_downlink_when_session_expired_does_not_transmit_ack() {
     let mut net = util::setup_with_session_class_c().await;

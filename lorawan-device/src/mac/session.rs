@@ -157,6 +157,11 @@ impl Session {
         self.fcnt_down
     }
 
+    /// The FCntUp counter is full: no further uplink can be prepared.
+    fn fcnt_up_exhausted(&self) -> bool {
+        self.fcnt_up == 0xFFFF_FFFF
+    }
+
     pub fn get_session_keys(&self) -> Option<SessionKeys> {
         Some(SessionKeys { nwkskey: self.nwkskey, appskey: self.appskey, devaddr: self.devaddr })
     }
@@ -270,8 +275,9 @@ impl Session {
                     self.uplink.set_downlink_confirmation();
                 }
 
-                return if self.fcnt_up == 0xFFFF_FFFF {
-                    // if the FCnt is used up, the session has expired
+                return if self.fcnt_up_exhausted() && self.retransmissions == 0 {
+                    // The FCntUp counter is full and there's nothing pending,
+                    // just expire the session.
                     Response::SessionExpired
                 } else {
                     // An accepted downlink ends any retransmission cycle; the
@@ -358,13 +364,9 @@ impl Session {
         configuration: &mut super::Configuration,
         region: &mut region::Configuration,
     ) -> Response {
-        // The FCntUp was consumed when the frame was prepared, so a missed
-        // downlink does not consume it again: the same frame is retransmitted
-        // (same FCntUp) until NbTrans is reached or a downlink is accepted.
-        // A used-up FCntUp can never be retransmitted, so the session expires.
-        let retransmit = self.retransmissions > 0
-            && self.fcnt_up != 0xFFFF_FFFF
-            && self.retransmissions < configuration.nb_trans;
+        // Retransmissions reuse the prepared frame, so no FCntUp check here;
+        // the session expires when the next uplink cannot be prepared.
+        let retransmit = self.retransmissions > 0 && self.retransmissions < configuration.nb_trans;
 
         if retransmit {
             self.retransmissions += 1;
@@ -377,14 +379,8 @@ impl Session {
         }
 
         self.retransmissions = 0;
-        if self.fcnt_up == 0xFFFF_FFFF {
-            // if the FCnt is used up, the session has expired
-            return Response::SessionExpired;
-        }
-
         // ADRACKCnt counts uplink frames, not transmissions: it advances
-        // once per completed frame (the FCntUp itself was consumed when the
-        // frame was prepared).
+        // once per completed frame.
         if configuration.adr_enabled {
             self.adr_ack_cnt = self.adr_ack_cnt.saturating_add(1);
             // After ADR_ACK_LIMIT + N*ADR_ACK_DELAY uplinks without a downlink,
@@ -426,7 +422,7 @@ impl Session {
         tx_buffer: &mut RadioBuffer<N>,
         configuration: &super::Configuration,
         max_mac_payload_len: u8,
-    ) -> FcntUp {
+    ) -> Result<FcntUp, super::Error> {
         let app_payload = match NonZeroU8::new(data.fport) {
             Some(f_port) => AppPayload::Data { f_port, data: data.data },
             None if data.data.is_empty() => AppPayload::FPort0,
@@ -457,7 +453,7 @@ impl Session {
         tx_buffer: &mut RadioBuffer<N>,
         configuration: &super::Configuration,
         max_mac_payload_len: u8,
-    ) -> FcntUp {
+    ) -> Result<FcntUp, super::Error> {
         self.prepare_buffer_inner(
             AppPayload::NoFPort,
             false,
@@ -487,13 +483,15 @@ impl Session {
         tx_buffer: &mut RadioBuffer<N>,
         configuration: &super::Configuration,
         max_mac_payload_len: u8,
-    ) -> FcntUp {
+    ) -> Result<FcntUp, super::Error> {
+        // The FCntUp counter is full, no further uplink can be prepared.
+        if self.fcnt_up_exhausted() {
+            return Err(super::Error::SessionExpired);
+        }
         tx_buffer.clear();
-        // The FCntUp is consumed when the frame is prepared: each unique
-        // uplink frame gets the next counter value, a retransmission resends
-        // the same frame (same FCntUp) without preparing again, and a
-        // downlink accepted mid-cycle (e.g. in the class C RXC gap) neither
-        // skips a counter value nor consumes it twice.
+        // The FCntUp is consumed when the frame is prepared: retransmissions
+        // reuse the prepared frame, and a downlink accepted mid-cycle neither
+        // skips a value nor consumes it twice.
         let fcnt = self.fcnt_up;
         self.fcnt_up = self.fcnt_up.saturating_add(1);
         let mut buf = [0u8; 256];
@@ -576,7 +574,7 @@ impl Session {
             Err(e) => panic!("Error assembling packet! {:?} ", e),
         }
         self.uplink.clear_mac_commands(true);
-        fcnt
+        Ok(fcnt)
     }
 
     /// Re-arm the downlink confirmation so the next prepared uplink carries
@@ -894,12 +892,14 @@ mod tests {
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
         let max_mac_payload_len =
             mac.region.get_max_payload_length(mac.configuration.data_rate, false, false);
-        session.prepare_buffer::<256>(
-            &SendData { data: &[], fport: 1, confirmed: false },
-            &mut tx,
-            &mac.configuration,
-            max_mac_payload_len,
-        );
+        session
+            .prepare_buffer::<256>(
+                &SendData { data: &[], fport: 1, confirmed: false },
+                &mut tx,
+                &mac.configuration,
+                max_mac_payload_len,
+            )
+            .unwrap();
         EncryptedDataPayload::parse(tx.as_mut_for_read()).unwrap().fhdr().fctrl()
     }
 
@@ -1416,12 +1416,14 @@ mod tests {
         }
 
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
-        session.prepare_buffer::<256>(
-            &SendData { data: &[1, 2, 3], fport: 1, confirmed: false },
-            &mut tx,
-            &configuration,
-            max_mac_payload_len,
-        );
+        session
+            .prepare_buffer::<256>(
+                &SendData { data: &[1, 2, 3], fport: 1, confirmed: false },
+                &mut tx,
+                &configuration,
+                max_mac_payload_len,
+            )
+            .unwrap();
 
         assert!(session.take_payload_dropped());
         assert!(!session.take_payload_dropped());
@@ -1572,15 +1574,18 @@ mod tests {
     }
 
     #[test]
-    fn rx2_complete_exhausted_fcnt_expires_instead_of_retransmitting() {
+    fn rx2_complete_terminal_counter_retransmits_the_prepared_frame() {
         let mut mac = eu868_mac();
         mac.configuration.nb_trans = 4;
         let mut session = session();
+        // The in-flight frame (FCntUp 0xFFFF_FFFE) was prepared before the
+        // counter reached its terminal value; retransmissions reuse the
+        // prepared buffer, so the cycle continues.
         session.fcnt_up = 0xFFFF_FFFF;
         session.retransmissions = 1;
 
         let response = session.rx2_complete(&mut mac.configuration, &mut mac.region);
-        assert!(matches!(response, Response::SessionExpired));
+        assert!(matches!(response, Response::Retransmit));
     }
 
     #[test]
@@ -1614,12 +1619,14 @@ mod tests {
         let mac = Mac::new(region::Configuration::new(region::Region::EU868), 14, 0);
         let max_mac_payload_len =
             mac.region.get_max_payload_length(mac.configuration.data_rate, false, false);
-        session.prepare_buffer::<256>(
-            &SendData { data: &[], fport: 0, confirmed: false },
-            &mut tx,
-            &mac.configuration,
-            max_mac_payload_len,
-        );
+        session
+            .prepare_buffer::<256>(
+                &SendData { data: &[], fport: 0, confirmed: false },
+                &mut tx,
+                &mac.configuration,
+                max_mac_payload_len,
+            )
+            .unwrap();
 
         let bytes = tx.as_mut_for_read();
         let nwk_crypto = DefaultCrypto::new(nwkskey.inner());

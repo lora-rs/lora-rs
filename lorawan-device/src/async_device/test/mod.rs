@@ -472,7 +472,6 @@ fn set_datarate_accepts_supported_datarate() {
 /// Frame `0xFFFF_FFFE` is not the final counter value: it must still honor
 /// `NbTrans` retransmissions and complete normally before `0xFFFF_FFFF`
 /// expires the session.
-#[should_panic(expected = "expected RxComplete")]
 #[tokio::test]
 async fn fcnt_up_penultimate_retransmits_and_does_not_expire() {
     let (radio, timer, mut device) = setup_with_session();
@@ -494,7 +493,6 @@ async fn fcnt_up_penultimate_retransmits_and_does_not_expire() {
 
 /// A downlink received in RX1 after sending `FCntUp = 0xFFFF_FFFE` must be
 /// delivered rather than dropped with `SessionExpired`.
-#[should_panic(expected = "expected DownlinkReceived")]
 #[tokio::test]
 async fn fcnt_up_penultimate_delivers_downlink() {
     let (radio, timer, mut device) = setup_with_session();
