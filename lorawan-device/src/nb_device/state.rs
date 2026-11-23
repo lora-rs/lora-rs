@@ -206,14 +206,14 @@ impl Idle {
                             // intermediate state where we wait for Join to complete sending
                             // allows for asynchronous sending
                             radio::Response::Txing => (
-                                State::SendingData(SendingData { frame, rx_windows }),
+                                State::SendingData(SendingData { frame, rx_windows, fcnt_up }),
                                 Ok(Response::UplinkSending(fcnt_up)),
                             ),
                             // directly jump to waiting for RxWindow
                             // allows for synchronous sending
-                            radio::Response::TxDone(ms) => {
-                                data_rxwindow1_timeout::<R, N>(frame, rx_windows, mac, radio, ms)
-                            }
+                            radio::Response::TxDone(ms) => data_rxwindow1_timeout::<R, N>(
+                                frame, rx_windows, fcnt_up, mac, radio, ms,
+                            ),
                             _ => (State::Idle(self), Err(Error::UnexpectedRadioResponse.into())),
                         }
                     }
@@ -228,6 +228,8 @@ impl Idle {
 pub struct SendingData {
     frame: Frame,
     rx_windows: RxWindows,
+    /// The FCntUp of the prepared uplink frame
+    fcnt_up: u32,
 }
 
 impl SendingData {
@@ -248,6 +250,7 @@ impl SendingData {
                             radio::Response::TxDone(ms) => data_rxwindow1_timeout::<R, N>(
                                 self.frame,
                                 self.rx_windows,
+                                self.fcnt_up,
                                 mac,
                                 radio,
                                 ms,
@@ -276,6 +279,7 @@ pub struct WaitingForRxWindow {
     frame: Frame,
     rx_windows: RxWindows,
     window: Rx,
+    fcnt_up: u32,
 }
 
 impl WaitingForRxWindow {
@@ -313,6 +317,7 @@ impl WaitingForRxWindow {
                                 rx_windows: self.rx_windows,
                                 window: self.window,
                                 rf_config,
+                                fcnt_up: self.fcnt_up,
                             }),
                             Ok(Response::TimeoutRequest(window_close)),
                         )
@@ -342,6 +347,7 @@ pub struct WaitingForRx {
     rx_windows: RxWindows,
     window: Rx,
     rf_config: radio::RfConfig,
+    fcnt_up: u32,
 }
 
 impl WaitingForRx {
@@ -429,6 +435,7 @@ impl WaitingForRx {
                                 frame: self.frame,
                                 rx_windows: self.rx_windows,
                                 window: Rx::_2(t2),
+                                fcnt_up: self.fcnt_up,
                             }),
                             Ok(Response::TimeoutRequest(t2)),
                         )
@@ -501,19 +508,30 @@ impl WaitingForRx {
                 let event = radio::Event::TxRequest(tx, retransmit_buf.as_ref_for_read());
                 match radio.handle_event(event) {
                     Ok(radio::Response::Txing) => (
-                        State::SendingData(SendingData { frame: self.frame, rx_windows }),
-                        Ok(Response::UplinkSending(mac.get_fcnt_up().unwrap())),
+                        State::SendingData(SendingData {
+                            frame: self.frame,
+                            rx_windows,
+                            fcnt_up: self.fcnt_up,
+                        }),
+                        Ok(Response::UplinkSending(self.fcnt_up)),
                     ),
-                    Ok(radio::Response::TxDone(ms)) => {
-                        data_rxwindow1_timeout::<R, N>(self.frame, rx_windows, mac, radio, ms)
-                    }
+                    Ok(radio::Response::TxDone(ms)) => data_rxwindow1_timeout::<R, N>(
+                        self.frame,
+                        rx_windows,
+                        self.fcnt_up,
+                        mac,
+                        radio,
+                        ms,
+                    ),
                     _ => (State::WaitingForRx(self), Err(Error::UnexpectedRadioResponse.into())),
                 }
             }
             // A confirmed repetition: wait RETRANSMIT_TIMEOUT before re-arming TX.
-            mac::Response::RetransmitConfirmed => {
-                self.wait_after_rx2(RetransmitTimeoutAction::Retransmit(self.frame), radio, rng)
-            }
+            mac::Response::RetransmitConfirmed => self.wait_after_rx2(
+                RetransmitTimeoutAction::Retransmit(self.frame, self.fcnt_up),
+                radio,
+                rng,
+            ),
             // NoAck: wait a random RETRANSMIT_TIMEOUT after RX2 closes, then
             // report it.
             mac::Response::NoAck => self.wait_after_rx2(RetransmitTimeoutAction::NoAck, radio, rng),
@@ -553,8 +571,8 @@ impl WaitingForRx {
         rng: &mut RNG,
         retransmit_buf: &mut RadioBuffer<N>,
     ) -> (State, Result<Response, super::Error<R>>) {
-        let (tx, rx_windows) = match mac.certification_setup_send::<RNG, N>(rng, buf) {
-            Ok((tx, rx_windows, _)) => (tx, rx_windows),
+        let (tx, rx_windows, fcnt_up) = match mac.certification_setup_send::<RNG, N>(rng, buf) {
+            Ok(v) => v,
             Err(e) => return (State::WaitingForRx(self), Err(e.into())),
         };
         // Retain the answer so it can be retransmitted per NbTrans (the radio
@@ -564,11 +582,11 @@ impl WaitingForRx {
         let event = radio::Event::TxRequest(tx, retransmit_buf.as_ref_for_read());
         match radio.handle_event(event) {
             Ok(radio::Response::Txing) => (
-                State::SendingData(SendingData { frame: self.frame, rx_windows }),
-                Ok(Response::UplinkSending(mac.get_fcnt_up().unwrap())),
+                State::SendingData(SendingData { frame: self.frame, rx_windows, fcnt_up }),
+                Ok(Response::UplinkSending(fcnt_up)),
             ),
             Ok(radio::Response::TxDone(ms)) => {
-                data_rxwindow1_timeout::<R, N>(self.frame, rx_windows, mac, radio, ms)
+                data_rxwindow1_timeout::<R, N>(self.frame, rx_windows, self.fcnt_up, mac, radio, ms)
             }
             _ => (State::WaitingForRx(self), Err(Error::UnexpectedRadioResponse.into())),
         }
@@ -581,7 +599,7 @@ enum RetransmitTimeoutAction {
     /// Report the missing ACK.
     NoAck,
     /// Transmit the next copy.
-    Retransmit(Frame),
+    Retransmit(Frame, u32),
 }
 
 #[derive(Copy, Clone)]
@@ -601,18 +619,18 @@ impl WaitingForRetransmitTimeout {
         match event {
             Event::TimeoutFired => match self.action {
                 RetransmitTimeoutAction::NoAck => (State::Idle(Idle), Ok(Response::NoAck)),
-                RetransmitTimeoutAction::Retransmit(frame) => {
+                RetransmitTimeoutAction::Retransmit(frame, fcnt_up) => {
                     // Re-select the channel; the frame itself is unchanged.
                     let (tx, rx_windows) = mac.retransmit_config::<RNG>(rng);
                     let event = radio::Event::TxRequest(tx, retransmit_buf.as_ref_for_read());
                     match radio.handle_event(event) {
                         Ok(radio::Response::Txing) => (
-                            State::SendingData(SendingData { frame, rx_windows }),
-                            Ok(Response::UplinkSending(mac.get_fcnt_up().unwrap())),
+                            State::SendingData(SendingData { frame, rx_windows, fcnt_up }),
+                            Ok(Response::UplinkSending(fcnt_up)),
                         ),
-                        Ok(radio::Response::TxDone(ms)) => {
-                            data_rxwindow1_timeout::<R, N>(frame, rx_windows, mac, radio, ms)
-                        }
+                        Ok(radio::Response::TxDone(ms)) => data_rxwindow1_timeout::<R, N>(
+                            frame, rx_windows, fcnt_up, mac, radio, ms,
+                        ),
                         _ => (State::Idle(Idle), Err(Error::UnexpectedRadioResponse.into())),
                     }
                 }
@@ -648,6 +666,7 @@ impl Rx {
 fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, const N: usize>(
     frame: Frame,
     rx_windows: RxWindows,
+    fcnt_up: u32,
     mac: &mut Mac,
     radio: &mut R,
     timestamp_ms: u32,
@@ -655,7 +674,12 @@ fn data_rxwindow1_timeout<R: radio::PhyRxTx + Timings, const N: usize>(
     let delay = mac.get_rx_delay(&frame, &Window::_1);
     let t1 = (delay as i32 + timestamp_ms as i32 + radio.get_rx_window_offset_ms()) as u32;
     (
-        State::WaitingForRxWindow(WaitingForRxWindow { frame, rx_windows, window: Rx::_1(t1) }),
+        State::WaitingForRxWindow(WaitingForRxWindow {
+            frame,
+            rx_windows,
+            window: Rx::_1(t1),
+            fcnt_up,
+        }),
         Ok(Response::TimeoutRequest(t1)),
     )
 }
