@@ -645,18 +645,15 @@ where
                         timeout_ms
                     );
                     // A downlink accepted during the wait (class C) supersedes
-                    // the retransmission cycle and ends it; an immediate
-                    // uplink staged during the wait replaces the cycle.
-                    if let Some(response) = self.retransmit_wait(timeout_ms).await? {
-                        // An immediate uplink staged during the wait (a
-                        // certification answer, or the ACK for a confirmed
-                        // downlink) replaces the cycle.
+                    // the retransmission cycle and ends it.
+                    match self.retransmit_wait_outcome(timeout_ms).await? {
                         #[cfg(any(feature = "certification", feature = "class-c"))]
-                        if let Some(staged) = self.mac.take_pending_immediate_uplink() {
+                        RetransmitWaitOutcome::Staged(staged) => {
                             (tx_config, rx_windows) = staged;
                             continue;
                         }
-                        return Ok(response);
+                        RetransmitWaitOutcome::Response(response) => return Ok(response),
+                        RetransmitWaitOutcome::Timeout => {}
                     }
                     (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
                 }
@@ -671,15 +668,14 @@ where
                             "No ACK received; waiting {} ms before the next uplink.",
                             timeout_ms
                         );
-                        if let Some(response) = self.retransmit_wait(timeout_ms).await? {
-                            // An immediate uplink staged during the wait
-                            // replaces the cycle the same way.
+                        match self.retransmit_wait_outcome(timeout_ms).await? {
                             #[cfg(any(feature = "certification", feature = "class-c"))]
-                            if let Some(staged) = self.mac.take_pending_immediate_uplink() {
+                            RetransmitWaitOutcome::Staged(staged) => {
                                 (tx_config, rx_windows) = staged;
                                 continue;
                             }
-                            return Ok(response);
+                            RetransmitWaitOutcome::Response(response) => return Ok(response),
+                            RetransmitWaitOutcome::Timeout => {}
                         }
                     }
                     return Ok(response);
@@ -903,6 +899,26 @@ where
         }
         self.timer.delay_ms(u64::from(timeout_ms)).await;
         Ok(None)
+    }
+
+    /// Wait for the retransmission timeout and report what the wait saw.
+    ///
+    /// The staged-uplink check runs even when the wait timed out, because
+    /// a downlink carrying a device event (e.g. TxPeriodicityChange)
+    /// produces no wait response.
+    async fn retransmit_wait_outcome(
+        &mut self,
+        timeout_ms: u32,
+    ) -> Result<RetransmitWaitOutcome, Error<R::PhyError>> {
+        let response = self.retransmit_wait(timeout_ms).await?;
+        #[cfg(any(feature = "certification", feature = "class-c"))]
+        if let Some(staged) = self.mac.take_pending_immediate_uplink() {
+            return Ok(RetransmitWaitOutcome::Staged(staged));
+        }
+        Ok(match response {
+            Some(response) => RetransmitWaitOutcome::Response(response),
+            None => RetransmitWaitOutcome::Timeout,
+        })
     }
 
     /// Attempt to receive data within RX1 and RX2 windows. This function will populate the
@@ -1275,6 +1291,17 @@ pub trait Timings {
                 .saturating_add(rf.bb.delay_in_symbols_ceil(self.get_rx_window_buffer())),
         }
     }
+}
+
+/// The outcome of a retransmission wait
+enum RetransmitWaitOutcome {
+    /// The wait's response - cycle ends with it
+    Response(mac::Response),
+    /// Immediate uplink staged during the wait - take over the cycle
+    #[cfg(any(feature = "certification", feature = "class-c"))]
+    Staged((radio::TxConfig, mac::RxWindows)),
+    /// Plain timeout - proceed as usual
+    Timeout,
 }
 
 /// Outcome of listening in RXC until a frame arrives or the timeout fires.
