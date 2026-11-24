@@ -318,3 +318,22 @@ async fn eu868_linkadrreq_datarate_unsupported_by_mask_clears_datarate_ack() {
         "LinkADRAns must clear DataRateACK only"
     );
 }
+
+/// A certification answer that cannot be prepared at the terminal counter
+/// reports SessionExpired instead of a mac error.
+#[tokio::test]
+#[should_panic]
+async fn eu868_cert_answer_expired_at_terminal_counter() {
+    use crate::async_device::SendResponse;
+    let (radio, timer, mut device) =
+        util::session_with_region(crate::region::EU868::new_eu868().into());
+    device.mac.get_session_mut().unwrap().fcnt_up = 0xFFFF_FFFE;
+    let mut net = Net::new(radio, timer, device).await;
+
+    let r = net.exchange(&[1, 2, 3], 3, false, ExchangeAction::rx1(Pkt::cp_cmd("08010203"))).await;
+    assert!(
+        matches!(r.response(), Ok(SendResponse::SessionExpired)),
+        "the answer cannot be prepared at the terminal counter, got {:?}",
+        r.response()
+    );
+}
