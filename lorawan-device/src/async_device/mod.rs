@@ -132,12 +132,6 @@ pub enum JoinResponse {
 pub enum ListenResponse {
     SessionExpired,
     DownlinkReceived(FcntDown),
-    /// A certification answer was prepared while receiving. The answer is a
-    /// regular uplink: its complete cycle (transmit, RX1/RX2, retransmissions)
-    /// is run before this response is reported, with the radio back where it
-    /// was before the cycle (RXC for `rxc_listen`).
-    #[cfg(feature = "certification")]
-    CertificationAnswerSent,
     #[cfg(feature = "multicast")]
     Multicast(MulticastResponse),
 }
@@ -627,15 +621,6 @@ where
             // Wait for received data within window
             self.timer.reset();
             let response = self.rx_downlink(&Frame::Data, ms, &rx_windows).await?;
-            // An immediate uplink staged during the RX windows or the RXC
-            // gaps (a certification answer, or the ACK for a confirmed
-            // downlink) is a regular uplink: it replaces the in-flight frame
-            // and its cycle takes over.
-            #[cfg(any(feature = "certification", feature = "class-c"))]
-            if let Some(staged) = self.mac.take_pending_immediate_uplink() {
-                (tx_config, rx_windows) = staged;
-                continue;
-            }
             match response {
                 // NbTrans: the MAC will resend this frame with the same FCntUp;
                 // re-select the channel (and its RX windows) as usual
@@ -651,14 +636,8 @@ where
                     );
                     // A downlink accepted during the wait (class C) supersedes
                     // the retransmission cycle and ends it.
-                    match self.retransmit_wait_outcome(timeout_ms).await? {
-                        #[cfg(any(feature = "certification", feature = "class-c"))]
-                        RetransmitWaitOutcome::Staged(staged) => {
-                            (tx_config, rx_windows) = staged;
-                            continue;
-                        }
-                        RetransmitWaitOutcome::Response(response) => return Ok(response),
-                        RetransmitWaitOutcome::Timeout => {}
+                    if let Some(response) = self.retransmit_wait(timeout_ms).await? {
+                        return Ok(response);
                     }
                     (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
                 }
@@ -673,14 +652,8 @@ where
                             "No ACK received; waiting {} ms before the next uplink.",
                             timeout_ms
                         );
-                        match self.retransmit_wait_outcome(timeout_ms).await? {
-                            #[cfg(any(feature = "certification", feature = "class-c"))]
-                            RetransmitWaitOutcome::Staged(staged) => {
-                                (tx_config, rx_windows) = staged;
-                                continue;
-                            }
-                            RetransmitWaitOutcome::Response(response) => return Ok(response),
-                            RetransmitWaitOutcome::Timeout => {}
+                        if let Some(response) = self.retransmit_wait(timeout_ms).await? {
+                            return Ok(response);
                         }
                     }
                     return Ok(response);
@@ -808,7 +781,6 @@ where
                         #[cfg(feature = "class-c")]
                         &mut self.class_c,
                         &mut self.radio_buffer,
-                        &mut self.retransmit_buffer,
                         &mut self.mac,
                         &mut self.radio,
                         &mut self.rng,
@@ -882,7 +854,6 @@ where
                             #[cfg(feature = "class-c")]
                             &mut self.class_c,
                             &mut self.radio_buffer,
-                            &mut self.retransmit_buffer,
                             &mut self.mac,
                             &mut self.radio,
                             &mut self.rng,
@@ -906,26 +877,6 @@ where
         Ok(None)
     }
 
-    /// Wait for the retransmission timeout and report what the wait saw.
-    ///
-    /// The staged-uplink check runs even when the wait timed out, because
-    /// a downlink carrying a device event (e.g. TxPeriodicityChange)
-    /// produces no wait response.
-    async fn retransmit_wait_outcome(
-        &mut self,
-        timeout_ms: u32,
-    ) -> Result<RetransmitWaitOutcome, Error<R::PhyError>> {
-        let response = self.retransmit_wait(timeout_ms).await?;
-        #[cfg(any(feature = "certification", feature = "class-c"))]
-        if let Some(staged) = self.mac.take_pending_immediate_uplink() {
-            return Ok(RetransmitWaitOutcome::Staged(staged));
-        }
-        Ok(match response {
-            Some(response) => RetransmitWaitOutcome::Response(response),
-            None => RetransmitWaitOutcome::Timeout,
-        })
-    }
-
     /// Attempt to receive data within RX1 and RX2 windows. This function will populate the
     /// provided buffer with data if received.
     async fn rx_downlink(
@@ -944,16 +895,8 @@ where
         );
 
         debug!("Starting RX1 in {} ms.", rx1_start_delay);
-        // Sleep or listen in RXC. An immediate uplink staged in the gap (a
-        // certification answer, or the ACK for a confirmed downlink)
-        // becomes the in-flight uplink, so hand the marker back to the send
-        // loop to run the staged uplink's own RX windows.
-        let response = self.between_windows(rx1_start_delay).await?;
-        #[cfg(any(feature = "certification", feature = "class-c"))]
-        if self.mac.immediate_uplink_pending() {
-            return Ok(mac::Response::UplinkStaged);
-        }
-        let _ = response;
+        // Sleep or listen in RXC.
+        let _ = self.between_windows(rx1_start_delay).await?;
 
         // RX1
         let rx_config = rx_windows.rx_config(self.radio.get_rx_window_buffer(), &Window::_1);
@@ -980,16 +923,8 @@ where
             rx2_timing.offset_ms,
         );
         debug!("RX1 did not receive anything. Awaiting RX2 for {} ms.", rx2_start_delay);
-        // Sleep or listen in RXC. An immediate uplink staged in the gap (a
-        // certification answer, or the ACK for a confirmed downlink)
-        // becomes the in-flight uplink, so hand the marker back to the send
-        // loop to run the staged uplink's own RX windows.
-        let response = self.between_windows(rx2_start_delay).await?;
-        #[cfg(any(feature = "certification", feature = "class-c"))]
-        if self.mac.immediate_uplink_pending() {
-            return Ok(mac::Response::UplinkStaged);
-        }
-        let _ = response;
+        // Sleep or listen in RXC.
+        let _ = self.between_windows(rx2_start_delay).await?;
 
         // RX2
         let rx_config = rx_windows.rx_config(self.radio.get_rx_window_buffer(), &Window::_2);
@@ -1013,7 +948,6 @@ where
         #[cfg(feature = "certification")] periodicity_override: &mut Option<u16>,
         #[cfg(feature = "class-c")] class_c: &mut bool,
         radio_buffer: &mut RadioBuffer<N>,
-        retransmit_buffer: &mut RadioBuffer<N>,
         mac: &mut Mac,
         radio: &mut R,
         rng: &mut G,
@@ -1023,7 +957,7 @@ where
         rx_config: Option<RxConfig>,
     ) -> Result<Option<mac::Response>, Error<R::PhyError>> {
         radio_buffer.clear();
-        let result = match response {
+        match response {
             mac::Response::NoUpdate => Ok(None),
             #[cfg(feature = "certification")]
             mac::Response::DeviceHandler(event) => {
@@ -1074,22 +1008,8 @@ where
             }
             #[cfg(feature = "certification")]
             mac::Response::UplinkStaged => {
-                let (tx_config, rx_windows, _fcnt_up) =
-                    match mac.certification_setup_send::<G, N>(rng, radio_buffer) {
-                        Ok(v) => v,
-                        Err(mac::Error::SessionExpired) => {
-                            return Ok(Some(mac::Response::SessionExpired));
-                        }
-                        Err(e) => return Err(e.into()),
-                    };
-                // The answer is a regular uplink: retain it so its cycle can
-                // retransmit it per NbTrans (the radio buffer is reused for
-                // reception), and stash the prepared frame. The context that
-                // owns the radio transmits it and runs its RX windows.
-                retransmit_buffer.clear();
-                retransmit_buffer.extend_from_slice(radio_buffer.as_ref_for_read()).unwrap();
-                mac.set_pending_cert_tx(tx_config, rx_windows);
-                Ok(Some(mac::Response::UplinkStaged))
+                // The answer stays pending and is sent on the next regular uplink.
+                Ok(None)
             }
             #[cfg(feature = "multicast")]
             mac::Response::Multicast(mut response) => {
@@ -1125,29 +1045,7 @@ where
                 }
             }
             r => Ok(Some(r)),
-        };
-        // A confirmed downlink received while listening in RXC is
-        // acknowledged immediately, without waiting for the next periodic
-        // uplink. The ACK is a regular uplink: prepare it, stage it in the
-        // retransmit buffer, and stash the transmission for the context that
-        // owns the radio to transmit it and run its RX windows. An
-        // immediate uplink that already holds the slot (including a
-        // certification answer staged earlier in this very call) wins; the
-        // ACK then rides the next periodic uplink.
-        #[cfg(feature = "class-c")]
-        if rx_config.is_some() && mac.ack_pending() && !mac.immediate_uplink_pending() {
-            let (tx_config, rx_windows) = match mac.send_ack::<G, N>(rng, radio_buffer) {
-                Ok(v) => v,
-                // The FCntUp counter is full: the ACK cannot be transmitted,
-                // just report the downlink as received.
-                Err(mac::Error::SessionExpired) => return result,
-                Err(e) => return Err(e.into()),
-            };
-            retransmit_buffer.clear();
-            retransmit_buffer.extend_from_slice(radio_buffer.as_ref_for_read()).unwrap();
-            mac.set_pending_ack_tx(tx_config, rx_windows);
         }
-        result
     }
 
     async fn rx_listen(
@@ -1171,7 +1069,6 @@ where
                         #[cfg(feature = "class-c")]
                         &mut self.class_c,
                         &mut self.radio_buffer,
-                        &mut self.retransmit_buffer,
                         &mut self.mac,
                         &mut self.radio,
                         &mut self.rng,
@@ -1212,7 +1109,6 @@ where
                 #[cfg(feature = "class-c")]
                 &mut self.class_c,
                 &mut self.radio_buffer,
-                &mut self.retransmit_buffer,
                 &mut self.mac,
                 &mut self.radio,
                 &mut self.rng,
@@ -1223,40 +1119,7 @@ where
             )
             .await?
             {
-                // Firstly check whether an immediate uplink (a
-                // certification answer, or the ACK for a confirmed
-                // downlink) is staged: run its complete cycle before
-                // resuming RXC.
-                //
-                // And secondly report a downlink received in the
-                // staged uplink's windows instead of the regular
-                // response.
-                if let Some((tx_config, rx_windows)) = self.mac.take_pending_immediate_uplink() {
-                    match self.run_uplink_cycle(tx_config, rx_windows).await? {
-                        mac::Response::DownlinkReceived(fcnt) => {
-                            return Ok(ListenResponse::DownlinkReceived(fcnt));
-                        }
-                        mac::Response::SessionExpired => return Ok(ListenResponse::SessionExpired),
-                        #[cfg(feature = "multicast")]
-                        mac::Response::Multicast(mc) => {
-                            return Ok(ListenResponse::Multicast(mc.into()));
-                        }
-                        _ => {}
-                    }
-                }
                 return Ok(response.into());
-            } else if let Some((tx_config, rx_windows)) = self.mac.take_pending_immediate_uplink() {
-                match self.run_uplink_cycle(tx_config, rx_windows).await? {
-                    mac::Response::DownlinkReceived(fcnt) => {
-                        return Ok(ListenResponse::DownlinkReceived(fcnt));
-                    }
-                    mac::Response::SessionExpired => return Ok(ListenResponse::SessionExpired),
-                    #[cfg(feature = "multicast")]
-                    mac::Response::Multicast(mc) => {
-                        return Ok(ListenResponse::Multicast(mc.into()));
-                    }
-                    _ => {}
-                }
             }
         }
     }
@@ -1339,17 +1202,6 @@ pub trait Timings {
                 .saturating_add(rf.bb.delay_in_symbols_ceil(self.get_rx_window_buffer())),
         }
     }
-}
-
-/// The outcome of a retransmission wait
-enum RetransmitWaitOutcome {
-    /// The wait's response - cycle ends with it
-    Response(mac::Response),
-    /// Immediate uplink staged during the wait - take over the cycle
-    #[cfg(any(feature = "certification", feature = "class-c"))]
-    Staged((radio::TxConfig, mac::RxWindows)),
-    /// Plain timeout - proceed as usual
-    Timeout,
 }
 
 /// Outcome of listening in RXC until a frame arrives or the timeout fires.

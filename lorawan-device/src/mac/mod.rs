@@ -156,18 +156,6 @@ fn reset_network(region: &mut region::Configuration, configuration: &mut Configu
     configuration.reset(region);
 }
 
-/// The kind of an immediate uplink stashed in
-/// [`Mac::pending_immediate_uplink`](Mac::pending_immediate_uplink).
-#[cfg(any(feature = "certification", feature = "class-c"))]
-pub(crate) enum ImmediateUplink {
-    /// A certification answer. Takes the uplink slot over a staged ACK.
-    #[cfg(feature = "certification")]
-    Answer,
-    /// The ACK for a confirmed downlink received while listening in RXC.
-    #[cfg(feature = "class-c")]
-    Ack,
-}
-
 pub(crate) struct Mac {
     pub configuration: Configuration,
     pub region: region::Configuration,
@@ -180,11 +168,6 @@ pub(crate) struct Mac {
     identity: Option<PersistentIdentity>,
     #[cfg(feature = "certification")]
     certification: certification::Certification,
-    /// A prepared immediate uplink, either:
-    /// - certification answer
-    /// - ACK for a confirmed downlink received in RXC
-    #[cfg(any(feature = "certification", feature = "class-c"))]
-    pending_immediate_uplink: Option<(ImmediateUplink, radio::TxConfig, RxWindows)>,
     #[cfg(feature = "multicast")]
     pub multicast: multicast::Multicast,
 }
@@ -235,8 +218,6 @@ impl Mac {
             configuration,
             #[cfg(feature = "certification")]
             certification: certification::Certification::new(),
-            #[cfg(any(feature = "certification", feature = "class-c"))]
-            pending_immediate_uplink: None,
             #[cfg(feature = "multicast")]
             multicast: multicast::Multicast::new(),
         }
@@ -333,45 +314,6 @@ impl Mac {
         let dropped = self.payload_dropped;
         self.payload_dropped = false;
         dropped
-    }
-
-    /// Whether the network's last downlink (a confirmed frame received while
-    /// listening in RXC) still awaits an immediate ACK.
-    #[cfg(feature = "class-c")]
-    pub(crate) fn ack_pending(&self) -> bool {
-        matches!(
-            &self.state,
-            State::Joined(session) if session.uplink.confirms_downlink()
-        )
-    }
-
-    /// Prepare the radio buffer with the immediate ACK for the last confirmed
-    /// downlink, and provide the radio configuration and the RX windows bound
-    /// to it. The ACK is the minimal uplink: the ACK bit only, no FPort and
-    /// no payload.
-    #[cfg(feature = "class-c")]
-    pub(crate) fn send_ack<RNG: RngCore, const N: usize>(
-        &mut self,
-        rng: &mut RNG,
-        buf: &mut RadioBuffer<N>,
-    ) -> Result<(radio::TxConfig, RxWindows)> {
-        let max_mac_payload_len =
-            self.region.get_max_payload_length(self.configuration.data_rate, false, false);
-        self.payload_dropped = false;
-        let payload_dropped = match &mut self.state {
-            State::Joined(session) => {
-                session.prepare_ack_buffer(buf, &self.configuration, max_mac_payload_len)?;
-                let payload_dropped = session.take_payload_dropped();
-                // Like any other uplink, the ACK participates in NbTrans
-                // retransmission.
-                session.retransmissions = 1;
-                Ok(payload_dropped)
-            }
-            State::Otaa(_) | State::Unjoined => Err(Error::NotJoined),
-        }?;
-        self.payload_dropped = payload_dropped;
-        let (tx_config, rx_windows) = self.tx_config_and_windows(rng);
-        Ok((tx_config, rx_windows))
     }
 
     /// The GPS time provided in the last `DeviceTimeAns` downlink MAC command,
@@ -485,51 +427,6 @@ impl Mac {
         self.send::<RNG, N>(rng, buf, &send_data)
     }
 
-    /// Stash the prepared certification answer uplink; see
-    /// [`take_pending_immediate_uplink`](Self::take_pending_immediate_uplink).
-    /// A certification answer takes the uplink slot over a staged ACK, causing
-    /// it to be requeued, so it's transmitted with next uplink.
-    #[cfg(feature = "certification")]
-    pub(crate) fn set_pending_cert_tx(
-        &mut self,
-        tx_config: radio::TxConfig,
-        rx_windows: RxWindows,
-    ) {
-        #[cfg(feature = "class-c")]
-        if matches!(self.pending_immediate_uplink.take(), Some((ImmediateUplink::Ack, _, _)))
-            && let State::Joined(session) = &mut self.state
-        {
-            session.requeue_downlink_confirmation();
-        }
-        self.pending_immediate_uplink = Some((ImmediateUplink::Answer, tx_config, rx_windows));
-    }
-
-    /// Stash the prepared immediate ACK uplink; see
-    /// [`take_pending_immediate_uplink`](Self::take_pending_immediate_uplink).
-    /// Only valid while no immediate uplink is staged
-    /// (`immediate_uplink_pending` is false).
-    #[cfg(feature = "class-c")]
-    pub(crate) fn set_pending_ack_tx(&mut self, tx_config: radio::TxConfig, rx_windows: RxWindows) {
-        self.pending_immediate_uplink = Some((ImmediateUplink::Ack, tx_config, rx_windows));
-    }
-
-    /// Take the staged immediate uplink (see `set_pending_cert_tx` /
-    /// `set_pending_ack_tx`), for the context that owns the radio or `None`
-    /// if none is staged.
-    #[cfg(any(feature = "certification", feature = "class-c"))]
-    pub(crate) fn take_pending_immediate_uplink(&mut self) -> Option<(radio::TxConfig, RxWindows)> {
-        self.pending_immediate_uplink
-            .take()
-            .map(|(_, tx_config, rx_windows)| (tx_config, rx_windows))
-    }
-
-    /// Whether an immediate uplink (a certification answer, or the ACK for a
-    /// confirmed downlink received in RXC) is staged.
-    #[cfg(any(feature = "certification", feature = "class-c"))]
-    pub(crate) fn immediate_uplink_pending(&self) -> bool {
-        self.pending_immediate_uplink.is_some()
-    }
-
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
         match frame {
             Frame::Join => match window {
@@ -615,7 +512,6 @@ impl Mac {
     pub(crate) fn reset(&mut self, keep_identity: bool) {
         self.state = State::Unjoined;
         self.payload_dropped = false;
-        self.pending_immediate_uplink = None;
         // Drop the pending answer with the session.
         let _ = self.certification.take_pending_uplink();
         reset_network(&mut self.region, &mut self.configuration);
@@ -839,11 +735,9 @@ pub(crate) enum Response {
     RetransmitConfirmed,
     LinkCheckReq,
     DeviceTimeReq,
-    /// An immediate uplink (a certification answer, or the ACK for a
-    /// confirmed downlink received in RXC) was staged; the context owning
-    /// the radio transmits the staged frame and runs its RX windows in
-    /// place of the in-flight cycle. Never reported to the application.
-    #[cfg(any(feature = "certification", feature = "class-c"))]
+    /// A certification command prepared an answer and it'll be sent
+    /// on next regular uplink (which throws away application data).
+    #[cfg(feature = "certification")]
     UplinkStaged,
     #[cfg(feature = "certification")]
     DeviceHandler(DeviceEvent),
@@ -881,7 +775,7 @@ impl From<Response> for nb_device::Response {
             Response::RetransmitConfirmed => unimplemented!(),
             Response::LinkCheckReq => unimplemented!(),
             Response::DeviceTimeReq => unimplemented!(),
-            #[cfg(any(feature = "certification", feature = "class-c"))]
+            #[cfg(feature = "certification")]
             Response::UplinkStaged => unimplemented!(),
             #[cfg(feature = "certification")]
             Response::DeviceHandler(_) => unimplemented!(),
@@ -922,8 +816,6 @@ impl From<Response> for async_device::ListenResponse {
             Response::DownlinkReceived(fcnt) => {
                 async_device::ListenResponse::DownlinkReceived(fcnt)
             }
-            #[cfg(feature = "certification")]
-            Response::UplinkStaged => async_device::ListenResponse::CertificationAnswerSent,
             #[cfg(feature = "multicast")]
             Response::Multicast(mc) => async_device::ListenResponse::Multicast(mc.into()),
             r => panic!("Invalid async_device::ListenResponse::from {:?}", r),

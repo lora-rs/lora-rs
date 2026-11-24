@@ -43,10 +43,6 @@ enum AppPayload<'a> {
     /// The application requested FPort 0: no application data, the queued
     /// MAC commands are sent as the FRMPayload.
     FPort0,
-    /// No FPort at all (an immediate ACK): the queued MAC commands stay in
-    /// FOpts when they fit, otherwise they move to FPort 0.
-    #[cfg(feature = "class-c")]
-    NoFPort,
 }
 
 #[derive(Clone, Debug)]
@@ -441,33 +437,9 @@ impl Session {
         )
     }
 
-    /// Assemble the immediate ACK uplink for a confirmed downlink received
-    /// while listening in RXC and write it to `tx_buffer`.
-    ///
-    /// The ACK is the minimal uplink: the ACK bit carried from the downlink
-    /// confirmation, no FPort and no application payload. The certification
-    /// confirmed-frame override does not apply to it.
-    #[cfg(feature = "class-c")]
-    pub(crate) fn prepare_ack_buffer<const N: usize>(
-        &mut self,
-        tx_buffer: &mut RadioBuffer<N>,
-        configuration: &super::Configuration,
-        max_mac_payload_len: u8,
-    ) -> Result<FcntUp, super::Error> {
-        self.prepare_buffer_inner(
-            AppPayload::NoFPort,
-            false,
-            false,
-            tx_buffer,
-            configuration,
-            max_mac_payload_len,
-        )
-    }
-
     /// Assemble a data uplink frame and write it to `tx_buffer`.
     ///
-    /// `app_payload` carries the FPort and application data; `NoFPort` builds
-    /// the immediate ACK frame when the downlink confirmation is pending.
+    /// `app_payload` carries the FPort and application data.
     /// `handle_override` applies the certification confirmed-frame override to
     /// the frame type.
     ///
@@ -537,16 +509,6 @@ impl Session {
             AppPayload::FPort0 => {
                 (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
             }
-            // No FPort (an immediate ACK): the MAC commands stay in FOpts
-            // when they fit, otherwise they move to FPort 0 as usual.
-            #[cfg(feature = "class-c")]
-            AppPayload::NoFPort if mac_commands.len() <= FOPTS_MAX_LEN.min(max_frm_payload) => {
-                (mac_commands, Payload::None)
-            }
-            #[cfg(feature = "class-c")]
-            AppPayload::NoFPort => {
-                (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
-            }
         };
         let frame = DataFrame {
             frame_type: if self.confirmed {
@@ -575,14 +537,6 @@ impl Session {
         }
         self.uplink.clear_mac_commands(true);
         Ok(fcnt)
-    }
-
-    /// Re-arm the downlink confirmation so the next prepared uplink carries
-    /// the ACK bit: an immediate ACK that was staged but lost the uplink slot
-    /// to a certification answer must still be acknowledged.
-    #[cfg(all(feature = "class-c", feature = "certification"))]
-    pub(crate) fn requeue_downlink_confirmation(&mut self) {
-        self.uplink.set_downlink_confirmation();
     }
 
     /// The GPS time received in the last `DeviceTimeAns` downlink MAC command,
@@ -1192,14 +1146,14 @@ mod tests {
         assert!(matches!(response, Response::UplinkStaged));
 
         // The downlink confirmation is pending until the answer is prepared.
-        assert!(mac.ack_pending());
+        assert!(mac.get_session().unwrap().uplink.confirms_downlink());
 
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
         mac.certification_setup_send::<_, 256>(&mut SeqRng(0), &mut tx).unwrap();
 
         // Preparing the answer consumes the confirmation: the ACK bit is set
         // on the answer frame, and no pending ACK is left behind.
-        assert!(!mac.ack_pending());
+        assert!(!mac.get_session().unwrap().uplink.confirms_downlink());
         let fctrl = EncryptedDataPayload::parse(tx.as_mut_for_read()).unwrap().fhdr().fctrl();
         assert!(fctrl.ack(), "the answer must carry the ACK bit");
     }
