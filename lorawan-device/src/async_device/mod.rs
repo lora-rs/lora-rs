@@ -1231,14 +1231,32 @@ where
                 // And secondly report a downlink received in the
                 // staged uplink's windows instead of the regular
                 // response.
-                #[cfg(any(feature = "certification", feature = "class-c"))]
-                if let Some((tx_config, rx_windows)) = self.mac.take_pending_immediate_uplink()
-                    && let mac::Response::DownlinkReceived(fcnt) =
-                        self.run_uplink_cycle(tx_config, rx_windows).await?
-                {
-                    return Ok(ListenResponse::DownlinkReceived(fcnt));
+                if let Some((tx_config, rx_windows)) = self.mac.take_pending_immediate_uplink() {
+                    match self.run_uplink_cycle(tx_config, rx_windows).await? {
+                        mac::Response::DownlinkReceived(fcnt) => {
+                            return Ok(ListenResponse::DownlinkReceived(fcnt));
+                        }
+                        mac::Response::SessionExpired => return Ok(ListenResponse::SessionExpired),
+                        #[cfg(feature = "multicast")]
+                        mac::Response::Multicast(mc) => {
+                            return Ok(ListenResponse::Multicast(mc.into()));
+                        }
+                        _ => {}
+                    }
                 }
                 return Ok(response.into());
+            } else if let Some((tx_config, rx_windows)) = self.mac.take_pending_immediate_uplink() {
+                match self.run_uplink_cycle(tx_config, rx_windows).await? {
+                    mac::Response::DownlinkReceived(fcnt) => {
+                        return Ok(ListenResponse::DownlinkReceived(fcnt));
+                    }
+                    mac::Response::SessionExpired => return Ok(ListenResponse::SessionExpired),
+                    #[cfg(feature = "multicast")]
+                    mac::Response::Multicast(mc) => {
+                        return Ok(ListenResponse::Multicast(mc.into()));
+                    }
+                    _ => {}
+                }
             }
         }
     }
