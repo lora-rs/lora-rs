@@ -456,3 +456,66 @@ fn eu868_linkadrreq_redundancy() {
     assert_eq!(config.tx_power, Some(16)); // EU868 maximum EIRP
     assert_eq!(config.nb_trans, 1);
 }
+
+/// Certification command received while FCntUp counter is full:
+/// session expires and the device goes idle instead of
+/// staying in the previous frame's cycle.
+#[test]
+#[should_panic]
+fn eu868_cert_answer_expired_at_terminal_counter() {
+    let mut device = eu868_device();
+    device.shared.mac.get_session_mut().unwrap().fcnt_up = 0xFFFF_FFFE;
+    let response = device.send(&[1, 2, 3], 3, false).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+
+    fn tcl_rxappcnt_req(uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        let _ = uplink.expect("expected an uplink");
+        super::build_cert_downlink(buf, "09", 0)
+    }
+    let response = deliver_downlink_rx1(&mut device, tcl_rxappcnt_req);
+    assert!(matches!(response, Response::SessionExpired));
+    let response = device.handle_event(Event::TimeoutFired).unwrap();
+    assert!(matches!(response, Response::NoUpdate));
+}
+
+/// The answer's retransmission reports the answer's FCntUp, not the
+/// previous frame's.
+#[test]
+#[should_panic]
+fn eu868_cert_answer_retransmission_reports_answer_fcnt() {
+    let mut device = eu868_device();
+    // NbTrans = 2 so the answer is retransmitted once.
+    device.shared.mac.configuration.nb_trans = 2;
+
+    // The TCL's RxAppCntReq on RX1 triggers the synchronous answer.
+    let response = device.send(&[1, 2, 3], 3, false).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+
+    fn tcl_rxappcnt_req(uplink: Option<Uplink>, _config: RfConfig, buf: &mut [u8]) -> usize {
+        expect_uplink_fcnt(uplink, 0);
+        super::build_cert_downlink(buf, "09", 0)
+    }
+    let response = deliver_downlink_rx1(&mut device, tcl_rxappcnt_req);
+    assert!(matches!(response, Response::TimeoutRequest(1000)));
+    // Consume the answer's first transmission before the retransmission.
+    let uplink = device.get_radio().take_last_uplink().unwrap();
+    assert_uplink(&uplink, 1, false, false, &[], Some(224), &[0x09, 1, 0x00]);
+
+    // Let the answer's windows expire:
+    // async retransmission reports the carried FCntUp.
+    device.get_radio().set_async_tx(true);
+    let response = expire_rx_windows(&mut device);
+    assert!(
+        matches!(response, Response::UplinkSending(1)),
+        "answer retransmission must report FCntUp 1, got {:?}",
+        response
+    );
+
+    // Complete the async retransmission and check the resent frame.
+    let response = device.handle_event(Event::RadioEvent(RadioEvent::Phy(()))).unwrap();
+    assert!(matches!(response, Response::TimeoutRequest(_)));
+    let response = expire_rx_windows(&mut device);
+    assert!(matches!(response, Response::RxComplete));
+    let uplink = device.get_radio().take_last_uplink().unwrap();
+    assert_uplink(&uplink, 1, false, false, &[], Some(224), &[0x09, 1, 0x00]);
+}
