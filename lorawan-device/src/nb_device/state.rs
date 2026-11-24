@@ -586,7 +586,7 @@ impl WaitingForRx {
                 Ok(Response::UplinkSending(fcnt_up)),
             ),
             Ok(radio::Response::TxDone(ms)) => {
-                data_rxwindow1_timeout::<R, N>(self.frame, rx_windows, self.fcnt_up, mac, radio, ms)
+                data_rxwindow1_timeout::<R, N>(self.frame, rx_windows, fcnt_up, mac, radio, ms)
             }
             _ => (State::WaitingForRx(self), Err(Error::UnexpectedRadioResponse.into())),
         }

@@ -481,7 +481,6 @@ fn eu868_cert_answer_expired_at_terminal_counter() {
 /// The answer's retransmission reports the answer's FCntUp, not the
 /// previous frame's.
 #[test]
-#[should_panic]
 fn eu868_cert_answer_retransmission_reports_answer_fcnt() {
     let mut device = eu868_device();
     // NbTrans = 2 so the answer is retransmitted once.
