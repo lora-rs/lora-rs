@@ -1075,7 +1075,13 @@ where
             #[cfg(feature = "certification")]
             mac::Response::UplinkStaged => {
                 let (tx_config, rx_windows, _fcnt_up) =
-                    mac.certification_setup_send::<G, N>(rng, radio_buffer)?;
+                    match mac.certification_setup_send::<G, N>(rng, radio_buffer) {
+                        Ok(v) => v,
+                        Err(mac::Error::SessionExpired) => {
+                            return Ok(Some(mac::Response::SessionExpired));
+                        }
+                        Err(e) => return Err(e.into()),
+                    };
                 // The answer is a regular uplink: retain it so its cycle can
                 // retransmit it per NbTrans (the radio buffer is reused for
                 // reception), and stash the prepared frame. The context that
@@ -1093,7 +1099,13 @@ where
                 // the transmit.
                 if response.is_transmit_request() {
                     let (tx_config, _fcnt_up) =
-                        mac.multicast_setup_send::<G, N>(rng, radio_buffer)?;
+                        match mac.multicast_setup_send::<G, N>(rng, radio_buffer) {
+                            Ok(v) => v,
+                            Err(mac::Error::SessionExpired) => {
+                                return Ok(Some(mac::Response::SessionExpired));
+                            }
+                            Err(e) => return Err(e.into()),
+                        };
                     radio
                         .tx(tx_config, radio_buffer.as_ref_for_read())
                         .await

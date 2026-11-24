@@ -149,7 +149,6 @@ async fn test_multicast_state_dropped_on_dut_reset_req() {
 /// the nonzero retransmission counter keeps the session-level expiry from
 /// firing first.
 #[tokio::test]
-#[should_panic]
 async fn test_multicast_setup_expired_reports_session_expired() {
     let mut net = setup_multicast().await;
     let session = net.device().mac.get_session_mut().unwrap();
