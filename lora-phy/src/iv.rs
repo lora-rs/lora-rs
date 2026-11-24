@@ -211,6 +211,88 @@ where
     }
 }
 
+/// Base for the InterfaceVariant implementation for Sx126x-based boards
+pub struct GenericSx128xInterfaceVariant<CTRL, WAIT> {
+    reset: CTRL,
+    irq: WAIT,
+    busy: WAIT,
+    rf_switch_rx: Option<CTRL>,
+    rf_switch_tx: Option<CTRL>,
+}
+
+impl<CTRL, WAIT> GenericSx128xInterfaceVariant<CTRL, WAIT>
+where
+    CTRL: OutputPin,
+    WAIT: Wait,
+{
+    /// Create an InterfaceVariant instance for sx128x chips
+    pub fn new(
+        reset: CTRL,
+        irq: WAIT,
+        busy: WAIT,
+        rf_switch_rx: Option<CTRL>,
+        rf_switch_tx: Option<CTRL>,
+    ) -> Result<Self, RadioError> {
+        Ok(Self {
+            reset,
+            irq,
+            busy,
+            rf_switch_rx,
+            rf_switch_tx,
+        })
+    }
+}
+
+impl<CTRL, WAIT> InterfaceVariant for GenericSx128xInterfaceVariant<CTRL, WAIT>
+where
+    CTRL: OutputPin,
+    WAIT: Wait,
+{
+    async fn reset(&mut self, delay: &mut impl DelayNs) -> Result<(), RadioError> {
+        delay.delay_ms(10).await;
+        self.reset.set_low().map_err(|_| Reset)?;
+        delay.delay_ms(20).await;
+        self.reset.set_high().map_err(|_| Reset)?;
+        delay.delay_ms(10).await;
+        Ok(())
+    }
+    async fn wait_on_busy(&mut self) -> Result<(), RadioError> {
+        self.busy.wait_for_low().await.map_err(|_| Busy)
+    }
+    async fn await_irq(&mut self) -> Result<(), RadioError> {
+        self.irq.wait_for_high().await.map_err(|_| Irq)?;
+        Ok(())
+    }
+
+    async fn enable_rf_switch_rx(&mut self) -> Result<(), RadioError> {
+        if let Some(pin) = &mut self.rf_switch_tx {
+            pin.set_low().map_err(|_| RfSwitchTx)?
+        };
+        match &mut self.rf_switch_rx {
+            Some(pin) => pin.set_high().map_err(|_| RfSwitchRx),
+            None => Ok(()),
+        }
+    }
+    async fn enable_rf_switch_tx(&mut self) -> Result<(), RadioError> {
+        if let Some(pin) = &mut self.rf_switch_rx {
+            pin.set_low().map_err(|_| RfSwitchRx)?
+        };
+        match &mut self.rf_switch_tx {
+            Some(pin) => pin.set_high().map_err(|_| RfSwitchTx),
+            None => Ok(()),
+        }
+    }
+    async fn disable_rf_switch(&mut self) -> Result<(), RadioError> {
+        if let Some(pin) = &mut self.rf_switch_rx {
+            pin.set_low().map_err(|_| RfSwitchRx)?
+        };
+        match &mut self.rf_switch_tx {
+            Some(pin) => pin.set_low().map_err(|_| RfSwitchTx),
+            None => Ok(()),
+        }
+    }
+}
+
 /// Base for the InterfaceVariant implementation for LR1110/LR1120/LR1121-based boards
 ///
 /// The LR11xx family uses a BUSY signal to indicate when the chip is processing

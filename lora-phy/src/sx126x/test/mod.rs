@@ -4,7 +4,7 @@
 mod emulator;
 mod fixtures;
 use emulator::{Chip, FakeIv, FakeSpi, Mode, RxFate, get_emulated_sx1261};
-use fixtures::{Delayer, TestFixture, get_sx126x, get_sx1262};
+use fixtures::{CommandStreamFixture, Delayer, Ops, get_sx126x, get_sx1262};
 
 use crate::LoRa;
 use crate::mod_params::{RadioError, RadioMode, RxMode};
@@ -17,13 +17,13 @@ use smtc_modem_cores::sx126x::{
     sx126x_pkt_params_lora_t, sx126x_pkt_types_e, sx126x_ramp_time_e, sx126x_standby_cfgs_e,
 };
 
-fn reference() -> Context<TestFixture> {
-    Context::new(TestFixture::new())
+fn reference() -> Context<CommandStreamFixture> {
+    Context::new(CommandStreamFixture::new())
 }
 
 #[tokio::test]
 async fn test_sleep_cold_start() {
-    let mut smtc_sx126x = Context::new(TestFixture::new());
+    let mut smtc_sx126x = Context::new(CommandStreamFixture::new());
     smtc_sx126x.set_sleep(SleepCfg::ColdStart);
     let mut sx1261 = get_sx126x();
     sx1261.set_sleep(false, &mut Delayer).await.unwrap();
@@ -32,7 +32,7 @@ async fn test_sleep_cold_start() {
 
 #[tokio::test]
 async fn test_sleep_warm_start() {
-    let mut smtc_sx126x = Context::new(TestFixture::new());
+    let mut smtc_sx126x = Context::new(CommandStreamFixture::new());
     smtc_sx126x.set_sleep(SleepCfg::WarmStart);
     let mut sx1261 = get_sx126x();
     sx1261.set_sleep(true, &mut Delayer).await.unwrap();
@@ -185,12 +185,12 @@ async fn test_sync_word() {
     // Our driver skips the read-modify-write and writes the known reset
     // values (0x14 0x24) with the sync nibbles applied; prime the reference
     // with those reset values and both land on the same register write.
-    let mut fixture = TestFixture::new();
+    let mut fixture = CommandStreamFixture::new();
     fixture.prime_read(&[0x1D, 0x07, 0x40, 0x00], &[0x14, 0x24]);
     let mut reference = Context::new(fixture);
     reference.set_lora_sync_word(0x34);
     match reference.inner.writes()[..] {
-        [fixtures::Ops::Write(bytes)] => assert_eq!(bytes, &[0x0D, 0x07, 0x40, 0x34, 0x44]),
+        [Ops::Write(bytes)] => assert_eq!(bytes, &[0x0D, 0x07, 0x40, 0x34, 0x44]),
         ref other => panic!("unexpected write stream {other:?}"),
     }
     // 0x34 -> [0x34, 0x44] legacy mapping is asserted in
@@ -203,7 +203,7 @@ async fn test_runtime_sync_word() {
     // both bytes directly; prime the reference with the reset values so both
     // land on the same register write. The reference API takes the legacy
     // single-byte form, ours the 16-bit register form.
-    let mut fixture = TestFixture::new();
+    let mut fixture = CommandStreamFixture::new();
     fixture.prime_read(&[0x1D, 0x07, 0x40, 0x00], &[0x14, 0x24]);
     let mut reference = Context::new(fixture);
     reference.set_lora_sync_word(0x34);
@@ -216,7 +216,7 @@ async fn test_runtime_sync_word() {
     let mut sx1261 = get_sx126x();
     sx1261.set_lora_sync_word(0xAB12).await.unwrap();
     match sx1261.take_spi().writes()[..] {
-        [fixtures::Ops::Write(bytes)] => assert_eq!(bytes, &[0x0D, 0x07, 0x40, 0xAB, 0x12]),
+        [Ops::Write(bytes)] => assert_eq!(bytes, &[0x0D, 0x07, 0x40, 0xAB, 0x12]),
         ref other => panic!("unexpected write stream {other:?}"),
     }
 }
@@ -342,7 +342,7 @@ async fn test_get_packet_status() {
     sx1261.spi_mut().prime_read(&[0x14], &[0x00, 160, 20, 162]);
     let pkt_status = sx1261.get_rx_packet_status().await.unwrap();
 
-    let mut fixture = TestFixture::new();
+    let mut fixture = CommandStreamFixture::new();
     fixture.prime_read(&[0x14, 0x00], &[160, 20, 162]);
     let mut reference = Context::new(fixture);
     let (_, c_status) = reference.get_lora_pkt_status();
@@ -364,7 +364,7 @@ async fn test_get_packet_status_half_db() {
         sx1261.spi_mut().prime_read(&[0x14], &[0x00, raw_rssi, raw_snr, 0]);
         let pkt_status = sx1261.get_rx_packet_status().await.unwrap();
 
-        let mut fixture = TestFixture::new();
+        let mut fixture = CommandStreamFixture::new();
         fixture.prime_read(&[0x14, 0x00], &[raw_rssi, raw_snr, 0]);
         let mut reference = Context::new(fixture);
         let (_, c_status) = reference.get_lora_pkt_status();
@@ -386,7 +386,7 @@ async fn test_get_rssi() {
     sx1261.spi_mut().prime_read(&[0x15], &[0x00, 161]);
     let rssi = sx1261.get_rssi().await.unwrap();
 
-    let mut fixture = TestFixture::new();
+    let mut fixture = CommandStreamFixture::new();
     fixture.prime_read(&[0x15, 0x00], &[161]);
     let mut reference = Context::new(fixture);
     let (_, c_rssi) = reference.get_rssi_inst();
@@ -403,7 +403,7 @@ async fn test_get_irq_status() {
     let state = sx1261.process_irq_event(RadioMode::Transmit, false).await.unwrap();
     assert!(matches!(state, Some(IrqState::Done)));
 
-    let mut fixture = TestFixture::new();
+    let mut fixture = CommandStreamFixture::new();
     fixture.prime_read(&[0x12, 0x00], &[0x00, 0x01]);
     let mut reference = Context::new(fixture);
     let (_, c_irq) = reference.get_irq_status();
@@ -459,7 +459,7 @@ async fn test_tx_continuous_wave() {
 /// our driver; SWL2001 leaves it to the BSP layer, so the C driver is fed
 /// these values and verifies the command encoding around them.
 fn reference_tx_power(
-    reference: &mut Context<TestFixture>,
+    reference: &mut Context<CommandStreamFixture>,
     pa_duty_cycle: u8,
     hp_max: u8,
     device_sel: u8,
@@ -921,7 +921,7 @@ async fn test_tx_power_stm32wl() {
             sx126x_ramp_time_e::SX126X_RAMP_40_US,
         );
         let mut radio = crate::sx126x::Sx126x::new(
-            fixtures::TestFixture::new(),
+            fixtures::CommandStreamFixture::new(),
             fixtures::DummyVariant,
             crate::sx126x::Config {
                 chip: Stm32wl {

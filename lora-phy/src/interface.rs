@@ -54,15 +54,14 @@ where
 
             self.spi.transaction(&mut ops).await.map_err(|_| SPI)?;
         }
-
-        self.iv.wait_on_busy().await?;
-
         trace!(
             "read: addr={=[u8]:02x}, len={}, data={=[u8]:02x}",
             write_buffer,
             read_buffer.len(),
             read_buffer
         );
+
+        self.iv.wait_on_busy().await?;
 
         Ok(())
     }

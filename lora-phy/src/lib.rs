@@ -31,6 +31,8 @@ pub mod mod_traits;
 pub mod sx126x;
 /// Specific implementation to support Semtech Sx127x chips
 pub mod sx127x;
+/// Specific implementation to support Semtech Sx128x chips
+pub mod sx128x;
 #[cfg(test)]
 #[macro_use]
 extern crate std;

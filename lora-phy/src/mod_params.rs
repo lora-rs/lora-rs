@@ -22,6 +22,7 @@ pub enum RadioError {
     PayloadSizeUnexpected(usize),
     PayloadSizeMismatch(usize, usize),
     UnavailableSpreadingFactor,
+    UnavailableCodingRate,
     UnavailableBandwidth,
     InvalidBandwidthForFrequency,
     InvalidSF6ExplicitHeaderRequest,
