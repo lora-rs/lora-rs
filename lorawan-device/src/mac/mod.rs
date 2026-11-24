@@ -295,6 +295,15 @@ impl Mac {
     ) -> Result<(radio::TxConfig, RxWindows, FcntUp)> {
         let max_mac_payload_len =
             self.region.get_max_payload_length(self.configuration.data_rate, false, false);
+        // A pending certification answer is sent on this uplink, replacing the requested data.
+        #[cfg(feature = "certification")]
+        if self.certification.has_pending_uplink() {
+            let (tx_config, rx_windows, fcnt_up) =
+                self.certification_setup_send::<RNG, N>(rng, buf)?;
+            // The requested data is not sent.
+            self.payload_dropped = !send_data.data.is_empty();
+            return Ok((tx_config, rx_windows, fcnt_up));
+        }
         self.payload_dropped = false;
         let (fcnt, payload_dropped) = match &mut self.state {
             State::Joined(session) => {
@@ -463,10 +472,7 @@ impl Mac {
             })
     }
 
-    /// Prepare the pending certification uplink for transmission. A certification answer is a
-    /// regular Class A uplink, so it is prepared exactly like a data uplink: NbTrans
-    /// retransmission is armed and the RX windows are derived from the selected channel.
-    /// Returns the TX configuration, the RX windows and the frame counter of the answer.
+    /// Prepare the pending certification uplink (TODO: Use regular Class A send)
     #[cfg(feature = "certification")]
     pub(crate) fn certification_setup_send<RNG: RngCore, const N: usize>(
         &mut self,
@@ -610,6 +616,8 @@ impl Mac {
         self.state = State::Unjoined;
         self.payload_dropped = false;
         self.pending_immediate_uplink = None;
+        // Drop the pending answer with the session.
+        let _ = self.certification.take_pending_uplink();
         reset_network(&mut self.region, &mut self.configuration);
         if !keep_identity {
             self.configuration = Configuration::default_for_region(&self.region);

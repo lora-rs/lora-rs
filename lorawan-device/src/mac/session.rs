@@ -1204,6 +1204,101 @@ mod tests {
         assert!(fctrl.ack(), "the answer must carry the ACK bit");
     }
 
+    /// A pending answer follows the TxFramesCtrlReq frame type override.
+    #[cfg(feature = "certification")]
+    #[test]
+    fn pending_certification_answer_follows_frame_type_override() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+        let nwk_crypto = DefaultCrypto::new(NwkSKey::from([2; 16]).inner());
+        let app_crypto = DefaultCrypto::new(AppSKey::from([1; 16]).inner());
+
+        // Confirmed frame type, then a command that requires an answer.
+        let response = handle_downlink_on_port(&mut mac, 224, &[0x07, 0x02], 0);
+        assert!(matches!(response, Response::DownlinkReceived(0)));
+        let response = handle_downlink_on_port(&mut mac, 224, &[0x7F], 1);
+        assert!(matches!(response, Response::UplinkStaged));
+
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        mac.send::<_, 256>(
+            &mut SeqRng(0),
+            &mut tx,
+            &SendData { data: &[0xAA], fport: 5, confirmed: false },
+        )
+        .unwrap();
+        let decrypted = DecryptedDataPayload::decrypt_in_place(
+            tx.as_mut_for_read(),
+            Some(&nwk_crypto),
+            Some(&app_crypto),
+            0,
+        )
+        .unwrap();
+        assert_eq!(decrypted.f_port(), Some(224), "the answer replaces the requested data");
+        assert_eq!(
+            decrypted.frame_type(),
+            DataFrameType::ConfirmedUp,
+            "the answer follows the frame type override"
+        );
+    }
+
+    /// A FPort 224 command's answer is sent on the next uplink, replacing the requested data,
+    /// consuming the next FCntUp, and reported as dropped.
+    #[cfg(feature = "certification")]
+    #[test]
+    fn pending_certification_answer_is_sent_on_the_next_uplink() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+        let nwk_crypto = DefaultCrypto::new(NwkSKey::from([2; 16]).inner());
+        let app_crypto = DefaultCrypto::new(AppSKey::from([1; 16]).inner());
+
+        // A DutVersionsReq on FPort 224 prepares the answer.
+        let response = handle_downlink_on_port(&mut mac, 224, &[0x7F], 0);
+        assert!(matches!(response, Response::UplinkStaged));
+
+        // The next uplink transmits the answer; the replacement is reported.
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        mac.send::<_, 256>(
+            &mut SeqRng(0),
+            &mut tx,
+            &SendData { data: &[0xAA], fport: 5, confirmed: false },
+        )
+        .unwrap();
+        let decrypted = DecryptedDataPayload::decrypt_in_place(
+            tx.as_mut_for_read(),
+            Some(&nwk_crypto),
+            Some(&app_crypto),
+            0,
+        )
+        .unwrap();
+        assert_eq!(decrypted.f_port(), Some(224), "the answer replaces the requested data");
+        assert_eq!(decrypted.fhdr().fcnt(), 0, "the answer consumes the next FCntUp");
+        assert!(mac.take_payload_dropped(), "the requested data is dropped");
+        assert_eq!(
+            mac.get_session().unwrap().retransmissions,
+            1,
+            "the answer participates in NbTrans retransmission"
+        );
+
+        // The following uplink carries the requested data as usual.
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        mac.send::<_, 256>(
+            &mut SeqRng(0),
+            &mut tx,
+            &SendData { data: &[0xAA], fport: 5, confirmed: false },
+        )
+        .unwrap();
+        let decrypted = DecryptedDataPayload::decrypt_in_place(
+            tx.as_mut_for_read(),
+            Some(&nwk_crypto),
+            Some(&app_crypto),
+            1,
+        )
+        .unwrap();
+        assert_eq!(decrypted.f_port(), Some(5));
+        assert_eq!(decrypted.fhdr().fcnt(), 1);
+        assert!(!mac.take_payload_dropped());
+    }
+
     #[test]
     fn link_adr_req_sets_nb_trans() {
         let mut mac = eu868_mac();
