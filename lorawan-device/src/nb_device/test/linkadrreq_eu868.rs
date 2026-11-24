@@ -461,7 +461,6 @@ fn eu868_linkadrreq_redundancy() {
 /// session expires and the device goes idle instead of
 /// staying in the previous frame's cycle.
 #[test]
-#[should_panic]
 fn eu868_cert_answer_expired_at_terminal_counter() {
     let mut device = eu868_device();
     device.shared.mac.get_session_mut().unwrap().fcnt_up = 0xFFFF_FFFE;
