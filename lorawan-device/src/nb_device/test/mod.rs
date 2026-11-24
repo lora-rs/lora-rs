@@ -492,7 +492,6 @@ fn test_certification_answer_uplink_sending_reports_frame_fcnt() {
 /// A prepare failure at the terminal FCntUp counter reports
 /// `SessionExpired` instead of a mac error, and the device stays idle.
 #[test]
-#[should_panic]
 fn test_send_at_terminal_counter_reports_session_expired() {
     let mut device = test_device();
     device.join(get_abp_credentials()).unwrap();

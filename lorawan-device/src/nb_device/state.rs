@@ -183,6 +183,9 @@ impl Idle {
             Event::SendDataRequest(send_data) => {
                 let tx_config = mac.send::<RNG, N>(rng, buf, &send_data);
                 match tx_config {
+                    Err(mac::Error::SessionExpired) => {
+                        IntermediateResponse::EarlyReturn(Ok(Response::SessionExpired))
+                    }
                     Err(e) => IntermediateResponse::EarlyReturn(Err(e.into())),
                     Ok((tx_config, rx_windows, fcnt_up)) => {
                         // Retain a copy of the built frame for NbTrans
@@ -573,6 +576,9 @@ impl WaitingForRx {
     ) -> (State, Result<Response, super::Error<R>>) {
         let (tx, rx_windows, fcnt_up) = match mac.certification_setup_send::<RNG, N>(rng, buf) {
             Ok(v) => v,
+            Err(mac::Error::SessionExpired) => {
+                return (State::Idle(Idle), Ok(Response::SessionExpired));
+            }
             Err(e) => return (State::WaitingForRx(self), Err(e.into())),
         };
         // Retain the answer so it can be retransmitted per NbTrans (the radio
