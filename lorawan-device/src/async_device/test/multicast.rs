@@ -167,7 +167,6 @@ async fn test_multicast_setup_expired_reports_session_expired() {
 /// window must be reported to the caller instead of being discarded in
 /// favor of `CertificationAnswerSent`.
 #[tokio::test]
-#[should_panic]
 async fn test_multicast_group_downlink_in_answer_rx1_is_reported() {
     use crate::test_util::{get_crypto, get_dev_addr};
     use core::num::NonZeroU8;
