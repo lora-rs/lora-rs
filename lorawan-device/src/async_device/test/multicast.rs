@@ -144,3 +144,22 @@ async fn test_multicast_state_dropped_on_dut_reset_req() {
     assert!(net.device().mac.multicast.matching_session(mc_addr()).is_none());
     assert!(net.device().mac.multicast.mc_k_e_key.is_none());
 }
+
+/// A remote setup request at the terminal counter reports SessionExpired;
+/// the nonzero retransmission counter keeps the session-level expiry from
+/// firing first.
+#[tokio::test]
+#[should_panic]
+async fn test_multicast_setup_expired_reports_session_expired() {
+    let mut net = setup_multicast().await;
+    let session = net.device().mac.get_session_mut().unwrap();
+    session.fcnt_up = 0xFFFF_FFFF;
+    session.retransmissions = 1;
+
+    let r = net.listen(vec![mc_group_setup_req()]).await;
+    assert!(
+        matches!(r.response(), Ok(ListenResponse::SessionExpired)),
+        "the setup frame cannot be prepared at the terminal counter, got {:?}",
+        r.response()
+    );
+}
