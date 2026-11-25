@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- lr1110: Add the GNSS scanner commands (`gnss_*` methods: constellation and scan mode selection, scan and result readout, detected satellites, assistance position, time, almanac status and almanac updates), plus `cfg_lf_clock` and `set_dio_irq_params`, which a GNSS scan needs
 - `cad()` keeps waiting when the IRQ wait returns without `CadDone`, as `tx()` and `rx()` already do, instead of hitting `unreachable!()`; a stale interrupt left over from an earlier operation could trigger it on STM32WL (#418)
 - Breaking: `RadioKind::process_irq_event` and `RadioKind::get_irq_state` lose the `cad_activity_detected` out-parameter; a finished CAD now returns `IrqState::CadDetected` for a busy channel and `IrqState::Done` for a quiet one
 - Breaking: `PacketStatus::rssi` and `PacketStatus::snr` are now the `Rssi` and `Snr` newtypes in units of 0.25 dB, keeping the chip's resolution (0.5 dB RSSI and 0.25 dB SNR on sx126x and lr1110, 0.25 dB SNR on sx127x). `Rssi::dbm()` and `Snr::db()` give whole units with the previous rounding on sx126x and lr1110; on sx127x the whole-dB values can differ by 1 dB from before (#494)
