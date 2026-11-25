@@ -1,0 +1,11 @@
+[target.'cfg(all(target_arch = "arm", target_os = "none"))']
+# Proxies the ELF to the lora-hil Pi and runs probe-rs there.
+runner = "./remote-runner.sh"
+
+[build]
+target = "thumbv7em-none-eabi"
+
+[env]
+# info: semihosting output halts the core per write; trace-level SPI logs
+# would distort radio timing enough to break RX windows.
+DEFMT_LOG = "info"
