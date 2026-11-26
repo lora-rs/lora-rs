@@ -91,9 +91,6 @@ async fn test_listen_without_class_c_flag_errors() {
 /// A confirmed downlink received in RXC must be acknowledged immediately,
 /// without waiting for the next periodic uplink
 /// (TP_C_EU868_ED_MAC_104_BV_000: "downlinks on RXC just before RX1/RX2").
-// TODO: MAC REWORK
-// XXX: fport
-#[should_panic]
 #[tokio::test]
 async fn test_class_c_confirmed_downlink_in_rxc_is_acknowledged() {
     let mut net = util::setup_with_session_class_c().await;

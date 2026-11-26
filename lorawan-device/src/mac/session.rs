@@ -442,6 +442,16 @@ impl Session {
         )
     }
 
+    /// FPort 0 carries MAC commands in the FRMPayload; an empty command list
+    /// omits FPort and FRMPayload altogether.
+    fn mac_commands_payload(cmds: &[u8]) -> Payload<'_> {
+        if cmds.is_empty() {
+            Payload::None
+        } else {
+            Payload::MacCommands(cmds)
+        }
+    }
+
     /// Assemble a data uplink frame and write it to `tx_buffer`.
     ///
     /// `app_payload` carries the FPort and application data.
@@ -508,11 +518,11 @@ impl Session {
             }
             AppPayload::Data { data, .. } => {
                 self.app_payload_dropped = !data.is_empty();
-                (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
+                (&[][..], Self::mac_commands_payload(&mac_commands[..mac_commands_len]))
             }
             // FPort 0: the queued MAC commands are sent as the FRMPayload.
             AppPayload::FPort0 => {
-                (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
+                (&[][..], Self::mac_commands_payload(&mac_commands[..mac_commands_len]))
             }
         };
         let frame = DataFrame {

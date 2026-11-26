@@ -67,8 +67,6 @@ async fn eu868_class_c_listens_again_after_answering_in_rxc() {
 /// TxFramesCtrlReq in RXC. The DUT must acknowledge it immediately, not with
 /// the next periodic uplink.
 #[cfg(feature = "class-c")]
-// TODO: MAC REWORK
-#[should_panic]
 #[tokio::test]
 async fn eu868_class_c_confirmed_downlink_in_rxc_is_acknowledged() {
     let (radio, timer, mut device) =
