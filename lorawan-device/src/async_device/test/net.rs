@@ -154,9 +154,8 @@ where
             // before the listen returns. Fire those windows with no downlink.
             let armed = self.timer.get_armed_count().await;
             if armed > last {
-                last = armed;
                 let kind = self.timer.last_timer_kind();
-                self.timer.fire_most_recent().await;
+                last = self.timer.fire_most_recent().await;
                 if kind == TimerKind::Window {
                     self.radio.handle_timeout().await;
                 }
@@ -177,7 +176,7 @@ where
             let step = tokio::time::timeout(STUCK, async {
                 tokio::select! {
                     joined = &mut task => Step::Done(Box::new(joined.expect("device task panicked"))),
-                    armed = self.timer.wait_armed(last + 1) => Step::Armed(armed),
+                    _ = self.timer.wait_armed(last + 1) => Step::Armed,
                 }
             })
             .await
@@ -185,7 +184,7 @@ where
             match step {
                 Step::Done(outcome) => break *outcome,
                 // Loop again so the armed timer is fired at the top.
-                Step::Armed(_) => {}
+                Step::Armed => {}
             }
         };
         self.device = Some(device);
@@ -233,7 +232,7 @@ where
             let step = tokio::time::timeout(STUCK, async {
                 tokio::select! {
                     joined = &mut task => Step::Done(Box::new(joined.expect("device task panicked"))),
-                    armed = self.timer.wait_armed(last + 1) => Step::Armed(armed),
+                    _ = self.timer.wait_armed(last + 1) => Step::Armed,
                 }
             })
             .await
@@ -242,7 +241,9 @@ where
             });
             match step {
                 Step::Done(outcome) => break *outcome,
-                Step::Armed(armed) => last = armed,
+                // The armed timer is fired below; `last` is set from the
+                // count actually fired.
+                Step::Armed => {}
             }
             if let Some(pkt) = action.take_rxc(window) {
                 self.deliver(pkt, &mut fcnt_down).await;
@@ -256,7 +257,7 @@ where
             // firing wakes the device, this can arm the next timer and
             // overwrite the kind.
             let kind = self.timer.last_timer_kind();
-            self.timer.fire_most_recent().await;
+            last = self.timer.fire_most_recent().await;
             if kind == TimerKind::Delay {
                 continue;
             }
@@ -318,8 +319,8 @@ where
 enum Step<S: NonVolatileStoreSync, G: RngCore, H, R> {
     /// The device operation returned.
     Done(Box<(Device<S, G, H>, R)>),
-    /// The device armed a timer; the armed count so far.
-    Armed(usize),
+    /// The device armed a timer.
+    Armed,
 }
 
 /// A frame builder for a downlink the network builds itself, given the

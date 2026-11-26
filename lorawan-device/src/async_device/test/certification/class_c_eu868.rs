@@ -93,8 +93,6 @@ async fn eu868_class_c_confirmed_downlink_in_rxc_is_acknowledged() {
 /// (such as `TxPeriodicityChangeReq`) received during `retransmit_wait`
 /// must still transmit its immediate ACK rather than leaving it stashed.
 #[cfg(feature = "class-c")]
-// TODO: MAC REWORK
-#[should_panic]
 #[tokio::test]
 async fn eu868_class_c_confirmed_tx_periodicity_in_retransmit_wait_is_acked() {
     let (radio, timer, mut device) =
