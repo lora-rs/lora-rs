@@ -40,6 +40,19 @@ impl Scheduler {
         }
     }
 
+    /// Whether a package answer is pending
+    pub(crate) fn has_pending_package_answer(&self) -> bool {
+        #[cfg(feature = "certification")]
+        if self.certification.is_some() {
+            return true;
+        }
+        #[cfg(feature = "multicast")]
+        if self.multicast_setup.is_some() {
+            return true;
+        }
+        false
+    }
+
     /// Take the staged certification answer, if any.
     #[cfg(feature = "certification")]
     pub(crate) fn take_due_certification(&mut self) -> Option<heapless::Vec<u8, 256>> {

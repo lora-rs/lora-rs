@@ -40,8 +40,6 @@ fn assert_data_uplink(uplink: &Uplink, fcnt: u32, confirmed: bool, ack: bool, fo
 }
 
 #[tokio::test]
-// TODO: MAC REWORK
-#[should_panic]
 /// EU868 LinkADRReq Redundancy test
 ///
 /// This test validates the DUT's correct implementation of the NbTrans
@@ -324,8 +322,6 @@ async fn eu868_linkadrreq_datarate_unsupported_by_mask_clears_datarate_ack() {
 /// A certification answer that cannot be prepared at the terminal counter
 /// reports SessionExpired instead of a mac error.
 #[tokio::test]
-// TODO: MAC REWORK
-#[should_panic]
 async fn eu868_cert_answer_expired_at_terminal_counter() {
     use crate::async_device::SendResponse;
     let (radio, timer, mut device) =

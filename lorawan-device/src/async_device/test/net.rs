@@ -751,8 +751,6 @@ mod tests {
 
     #[cfg(feature = "certification")]
     #[tokio::test]
-    // TODO: MAC REWORK
-    #[should_panic]
     async fn exchange_downlink_in_rx2() {
         let (radio, timer, device) = util::session_with_region(region::EU868::new_eu868().into());
         let mut net = Net::new(radio, timer, device).await;

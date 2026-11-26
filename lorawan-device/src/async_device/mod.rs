@@ -601,10 +601,8 @@ where
     /// `retransmit_buffer`: transmit it, then run its RX windows and NbTrans
     /// retransmissions until the MAC reports a terminal response.
     ///
-    /// An immediate uplink prepared inside a receive window or an RXC gap
-    /// (a certification answer, or the ACK for a confirmed downlink) is a
-    /// regular uplink: it replaces the in-flight frame and its cycle takes
-    /// over, exactly like the frame it replaced.
+    /// Staged package answers are sent right away as a regular uplink with
+    /// their own RX windows.
     async fn run_uplink_cycle(
         &mut self,
         mut tx_config: radio::TxConfig,
@@ -641,8 +639,7 @@ where
                     }
                     (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
                 }
-                // A certification reset dropped the session mid-flight. The uplink
-                // itself completed, but there is no session state left to report.
+                // A certification reset dropped the session mid-cycle.
                 mac::Response::NoUpdate => return Ok(mac::Response::NoUpdate),
                 response => {
                     // Wait for random RETRANSMIT_TIMEOUT before reporting a NoAck.
@@ -655,6 +652,28 @@ where
                         if let Some(response) = self.retransmit_wait(timeout_ms).await? {
                             return Ok(response);
                         }
+                    }
+                    // A package answer staged during this cycle is sent right
+                    // away as a regular uplink with its own RX windows.
+                    if self.mac.has_pending_package_answer() {
+                        let empty = SendData { data: &[], fport: 0, confirmed: false };
+                        let (forced_tx, forced_rx, _fcnt_up) = match self.mac.send::<G, N>(
+                            &mut self.rng,
+                            &mut self.radio_buffer,
+                            &empty,
+                        ) {
+                            Err(mac::Error::SessionExpired) => {
+                                return Ok(mac::Response::SessionExpired);
+                            }
+                            Err(e) => return Err(e.into()),
+                            Ok(v) => v,
+                        };
+                        self.retransmit_buffer.clear();
+                        self.retransmit_buffer
+                            .extend_from_slice(self.radio_buffer.as_ref_for_read())
+                            .unwrap();
+                        (tx_config, rx_windows) = (forced_tx, forced_rx);
+                        continue;
                     }
                     return Ok(response);
                 }

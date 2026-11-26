@@ -94,6 +94,24 @@ async fn test_multicast_remote_setup() {
     assert_eq!(fetched_group_id, 1);
 }
 
+/// A PackageVersionReq in the app uplink's RX2 window is answered right
+/// away: the exchange transmits the app data, then the answer.
+#[tokio::test]
+async fn test_multicast_package_version_answered_immediately() {
+    let mut net = setup_multicast().await;
+    let r =
+        net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx2(Pkt::app(MC_PORT, &[0x00]))).await;
+    r.expect_rx_complete();
+    assert_eq!(r.uplinks().len(), 2, "the answer is sent right after the app uplink");
+    assert_multicast_answer(r.uplink(1), |msg| {
+        let UplinkRemoteSetup::PackageVersionAns(ans) = msg else {
+            panic!("expected PackageVersionAns");
+        };
+        assert_eq!(ans.package_identifier(), 2);
+        assert_eq!(ans.package_version(), 2);
+    });
+}
+
 #[tokio::test]
 async fn test_multicast_group_delete() {
     let mut net = setup_multicast().await;

@@ -321,6 +321,18 @@ impl Mac {
         None
     }
 
+    /// Check whether a package answer is pending
+    pub(crate) fn has_pending_package_answer(&self) -> bool {
+        #[cfg(any(feature = "certification", feature = "multicast"))]
+        {
+            self.scheduler.has_pending_package_answer()
+        }
+        #[cfg(not(any(feature = "certification", feature = "multicast")))]
+        {
+            false
+        }
+    }
+
     /// Prepare a data uplink frame for `send_data` into `buf`. Consumes the next
     /// FCntUp and returns it with whether the application payload was dropped.
     fn prepare_frame<const N: usize>(
