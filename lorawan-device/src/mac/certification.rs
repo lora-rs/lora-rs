@@ -26,7 +26,6 @@ pub(crate) enum Response {
 }
 
 pub(crate) struct Certification {
-    pending_uplink: Option<heapless::Vec<u8, 256>>,
     /// Set for good by DutFPort224DisableReq or the application. FPort 224 downlinks
     /// are ordinary application data afterwards.
     port_disabled: bool,
@@ -35,7 +34,7 @@ pub(crate) struct Certification {
 
 impl Certification {
     pub fn new() -> Self {
-        Self { pending_uplink: None, port_disabled: false, lorawan_version: LORAWAN_VERSION_1_0_2 }
+        Self { port_disabled: false, lorawan_version: LORAWAN_VERSION_1_0_2 }
     }
 
     pub(crate) fn set_port_disabled(&mut self, disabled: bool) {
@@ -55,6 +54,7 @@ impl Certification {
         rx_app_cnt: u16,
         max_frm_payload_len: usize,
         firmware_version: [u8; 4],
+        scheduler: &mut super::scheduler::Scheduler,
     ) -> Response {
         use lorawan::certification::DownlinkDUTCommand::*;
         let messages = parse_downlink_dut_commands(data);
@@ -84,7 +84,7 @@ impl Certification {
                     versions[8..].copy_from_slice(&RP002_VERSION);
                     ans.set_versions_raw(versions);
                     buf.extend_from_slice(ans.build()).unwrap();
-                    self.pending_uplink = Some(buf);
+                    scheduler.stage_certification(buf);
                     return Response::CertificationAnswerSent;
                 }
                 EchoIncPayloadReq(payload) => {
@@ -103,7 +103,7 @@ impl Certification {
                     buf.extend_from_slice(ans.build()).unwrap();
                     // The answer is a regular uplink. Clip it to what the
                     // current DR leaves for the FRMPayload.
-                    self.pending_uplink = Some(buf);
+                    scheduler.stage_certification(buf);
                     return Response::CertificationAnswerSent;
                 }
                 RxAppCntReq(..) => {
@@ -111,7 +111,7 @@ impl Certification {
                     let mut ans = lorawan::certification::RxAppCntAnsCreator::new();
                     ans.set_rx_app_cnt(rx_app_cnt);
                     buf.extend_from_slice(ans.build()).unwrap();
-                    self.pending_uplink = Some(buf);
+                    scheduler.stage_certification(buf);
                     return Response::CertificationAnswerSent;
                 }
                 // MAC layer
@@ -135,10 +135,5 @@ impl Certification {
     /// Whether a downlink on `fport` is a certification command for this device.
     pub(crate) const fn fport(&self, fport: u8) -> bool {
         !self.port_disabled && CERTIFICATION_PORT == fport
-    }
-
-    /// Consume the pending certification uplink, if any.
-    pub(crate) fn take_pending_uplink(&mut self) -> Option<heapless::Vec<u8, 256>> {
-        self.pending_uplink.take()
     }
 }

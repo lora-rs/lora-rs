@@ -33,6 +33,8 @@ pub(crate) mod uplink;
 pub(crate) mod certification;
 #[cfg(feature = "multicast")]
 pub(crate) mod multicast;
+#[cfg(any(feature = "certification", feature = "multicast"))]
+pub(crate) mod scheduler;
 
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum Frame {
@@ -170,6 +172,9 @@ pub(crate) struct Mac {
     certification: certification::Certification,
     #[cfg(feature = "multicast")]
     pub multicast: multicast::Multicast,
+    /// The uplink scheduler; owns the pending package answers.
+    #[cfg(any(feature = "certification", feature = "multicast"))]
+    scheduler: scheduler::Scheduler,
 }
 
 struct BoardEirp {
@@ -220,6 +225,8 @@ impl Mac {
             certification: certification::Certification::new(),
             #[cfg(feature = "multicast")]
             multicast: multicast::Multicast::new(),
+            #[cfg(any(feature = "certification", feature = "multicast"))]
+            scheduler: scheduler::Scheduler::new(),
         }
     }
 
@@ -304,11 +311,11 @@ impl Mac {
     /// Certification (FPort 224) takes priority over multicast setup (FPort 200).
     fn take_pending_package_uplink(&mut self) -> Option<(u8, heapless::Vec<u8, 256>)> {
         #[cfg(feature = "certification")]
-        if let Some(data) = self.certification.take_pending_uplink() {
+        if let Some(data) = self.scheduler.take_due_certification() {
             return Some((certification::CERTIFICATION_PORT, data));
         }
         #[cfg(feature = "multicast")]
-        if let Some(data) = self.multicast.take_pending_uplink() {
+        if let Some(data) = self.scheduler.take_due_multicast_setup() {
             return Some((self.multicast.remote_setup_port(), data));
         }
         None
@@ -471,6 +478,8 @@ impl Mac {
                 &mut self.certification,
                 #[cfg(feature = "multicast")]
                 &mut self.multicast,
+                #[cfg(any(feature = "certification", feature = "multicast"))]
+                &mut self.scheduler,
                 buf,
                 dl,
                 rf_config.max_payload_len,
@@ -521,10 +530,8 @@ impl Mac {
     pub(crate) fn reset(&mut self, keep_identity: bool) {
         self.state = State::Unjoined;
         self.payload_dropped = false;
-        // Drop the pending answer with the session.
-        let _ = self.certification.take_pending_uplink();
-        #[cfg(feature = "multicast")]
-        let _ = self.multicast.take_pending_uplink();
+        // Drop the pending package answers with the session.
+        self.scheduler.reset();
         reset_network(&mut self.region, &mut self.configuration);
         if !keep_identity {
             self.configuration = Configuration::default_for_region(&self.region);
@@ -572,6 +579,8 @@ impl Mac {
                 &mut self.certification,
                 #[cfg(feature = "multicast")]
                 &mut self.multicast,
+                #[cfg(any(feature = "certification", feature = "multicast"))]
+                &mut self.scheduler,
                 buf,
                 dl,
                 rf_config.max_payload_len,

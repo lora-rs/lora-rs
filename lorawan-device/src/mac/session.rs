@@ -171,6 +171,8 @@ impl Session {
         configuration: &mut super::Configuration,
         #[cfg(feature = "certification")] certification: &mut super::certification::Certification,
         #[cfg(feature = "multicast")] multicast: &mut super::multicast::Multicast,
+        #[cfg(any(feature = "certification", feature = "multicast"))]
+        scheduler: &mut super::scheduler::Scheduler,
         rx: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
         max_payload_len: u8,
@@ -303,6 +305,7 @@ impl Session {
                                 self.rx_app_cnt,
                                 max_frm_payload_len,
                                 handler.firmware_version(),
+                                scheduler,
                             ) {
                                 AdrBitChange(adr) => configuration.set_adr(adr),
                                 DutJoinReq => {
@@ -339,7 +342,7 @@ impl Session {
                         }
                         #[cfg(feature = "multicast")]
                         if multicast.is_remote_setup_port(fport) {
-                            return multicast.handle_setup_message(data).into();
+                            return multicast.handle_setup_message(data, scheduler).into();
                         }
 
                         // heapless Vec from slice fails only if slice is too large.

@@ -41,7 +41,6 @@ pub struct Multicast {
     pub(crate) sessions: [Option<Session>; multicast::MAX_GROUPS],
     range: RangeInclusive<u8>,
     remote_setup_port: u8,
-    pending_uplinks: heapless::Vec<u8, 256>,
 }
 
 impl Default for Multicast {
@@ -57,7 +56,6 @@ impl Multicast {
             range: DEFAULT_MC_PORT_RANGE,
             remote_setup_port: REMOTE_MULTICAST_SETUP_PORT,
             sessions: [None, None, None, None],
-            pending_uplinks: heapless::Vec::new(),
         }
     }
 
@@ -133,13 +131,18 @@ impl Multicast {
         self.remote_setup_port
     }
 
-    pub(crate) fn handle_setup_message(&mut self, data: &[u8]) -> Response {
+    pub(crate) fn handle_setup_message(
+        &mut self,
+        data: &[u8],
+        scheduler: &mut super::scheduler::Scheduler,
+    ) -> Response {
         if self.mc_k_e_key.is_none() {
             return Response::NoUpdate;
         }
         let mc_k_e_key = self.mc_k_e_key.as_ref().unwrap();
         let messages = parse_downlink_multicast_commands(data);
         let mut new_session: Option<u8> = None;
+        let mut answer: heapless::Vec<u8, 256> = heapless::Vec::new();
         for message in messages {
             let Ok(message) = message else {
                 break;
@@ -151,7 +154,7 @@ impl Multicast {
                     self.sessions[group_id as usize] = Some(session);
                     let mut ans = McGroupSetupAnsCreator::new();
                     ans.mc_group_id_header(group_id);
-                    self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
+                    answer.extend_from_slice(ans.build()).unwrap();
                     new_session = Some(group_id);
                 }
                 DownlinkRemoteSetup::PackageVersionReq(_) => {
@@ -160,7 +163,7 @@ impl Multicast {
                     let mut ans = PackageVersionAnsCreator::new();
                     ans.package_identifier(MULTICAST_CONTROL_PACKAGE);
                     ans.package_version(MULTICAST_CONTROL_PACKAGE_VERSION);
-                    self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
+                    answer.extend_from_slice(ans.build()).unwrap();
                 }
                 DownlinkRemoteSetup::McGroupDeleteReq(req) => {
                     let group_id = req.mc_group_id_header();
@@ -171,7 +174,7 @@ impl Multicast {
                     } else {
                         ans.mc_group_undefined(true);
                     }
-                    self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
+                    answer.extend_from_slice(ans.build()).unwrap();
                 }
                 DownlinkRemoteSetup::McGroupStatusReq(r) => {
                     let bm = r.req_group_mask();
@@ -189,28 +192,23 @@ impl Multicast {
                         }
                     }
                     ans.nb_total_groups(nb_total_groups);
-                    self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
+                    answer.extend_from_slice(ans.build()).unwrap();
                 }
                 m => {
                     warn!("Unhandled multicast message: {}", m);
                 }
             }
         }
-        if self.pending_uplinks.is_empty() {
+        if answer.is_empty() {
             Response::NoUpdate
-        } else if let Some(group_id) = new_session {
-            Response::NewSession { group_id }
         } else {
-            Response::SetupAnswerStaged
-        }
-    }
-
-    /// Consume the pending setup answer, if any.
-    pub(crate) fn take_pending_uplink(&mut self) -> Option<heapless::Vec<u8, 256>> {
-        if self.pending_uplinks.is_empty() {
-            None
-        } else {
-            Some(core::mem::take(&mut self.pending_uplinks))
+            // The answers are sent on the next regular uplink.
+            scheduler.stage_multicast_setup(&answer);
+            if let Some(group_id) = new_session {
+                Response::NewSession { group_id }
+            } else {
+                Response::SetupAnswerStaged
+            }
         }
     }
 
