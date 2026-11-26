@@ -5,7 +5,7 @@ use lorawan::keys::{McKEKey, McKey};
 use lorawan::multicast::parse_uplink_multicast_commands;
 use lorawan::multicast::{McGroupDeleteReqCreator, McGroupSetupReqCreator, UplinkRemoteSetup};
 use lorawan::parser::FrmPayload;
-use net::{Net, Pkt};
+use net::{ExchangeAction, Net, Pkt};
 
 /// Remote multicast setup port
 const MC_PORT: u8 = 200;
@@ -70,13 +70,18 @@ fn assert_mc_group_setup_ans(uplink: &Uplink) {
 async fn test_multicast_remote_setup() {
     let mut net = setup_multicast().await;
 
+    // The setup downlink stages the answer; it is sent on the next uplink.
     let r = net.listen(vec![mc_group_setup_req()]).await;
     let Ok(ListenResponse::Multicast(MulticastResponse::NewSession { group_id })) = r.response()
     else {
         panic!("expected NewSession response, got {:?}", r.response());
     };
     assert_eq!(*group_id, 1); // Group ID from the setup request
-    // The device answered with a McGroupSetupAns
+    assert_eq!(r.uplinks().len(), 0);
+
+    // The next regular uplink carries the McGroupSetupAns instead of the app data.
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
     assert_eq!(r.uplinks().len(), 1);
     assert_mc_group_setup_ans(r.uplink(0));
 
@@ -92,12 +97,19 @@ async fn test_multicast_remote_setup() {
 #[tokio::test]
 async fn test_multicast_group_delete() {
     let mut net = setup_multicast().await;
+    // Stage the setup answer; it is sent on the next uplink.
     let r = net.listen(vec![mc_group_setup_req()]).await;
+    assert_eq!(r.uplinks().len(), 0);
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
     assert_mc_group_setup_ans(r.uplink(0));
 
-    // Delete the group, then a regular downlink ends the listen
+    // Delete the group: the delete answer is staged and sent on the next uplink.
     let r = net.listen(vec![mc_group_delete_req(0x01), Pkt::app(1, &[1, 2, 3])]).await;
     r.expect_downlink_received();
+    assert_eq!(r.uplinks().len(), 0);
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
     assert_eq!(r.uplinks().len(), 1);
     assert_multicast_answer(r.uplink(0), |msg| {
         let UplinkRemoteSetup::McGroupDeleteAns(ans) = msg else {
@@ -112,12 +124,19 @@ async fn test_multicast_group_delete() {
 #[tokio::test]
 async fn test_multicast_invalid_group_delete() {
     let mut net = setup_multicast().await;
+    // Stage the setup answer; it is sent on the next uplink.
     let r = net.listen(vec![mc_group_setup_req()]).await;
+    assert_eq!(r.uplinks().len(), 0);
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
     assert_mc_group_setup_ans(r.uplink(0));
 
-    // Delete an unknown group, then a regular downlink ends the listen
+    // Delete an unknown group: the delete answer is staged and sent on the next uplink.
     let r = net.listen(vec![mc_group_delete_req(0x03), Pkt::app(1, &[1, 2, 3])]).await;
     r.expect_downlink_received();
+    assert_eq!(r.uplinks().len(), 0);
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
     assert_eq!(r.uplinks().len(), 1);
     assert_multicast_answer(r.uplink(0), |msg| {
         let UplinkRemoteSetup::McGroupDeleteAns(ans) = msg else {
@@ -145,9 +164,8 @@ async fn test_multicast_state_dropped_on_dut_reset_req() {
     assert!(net.device().mac.multicast.mc_k_e_key.is_none());
 }
 
-/// A remote setup request at the terminal counter reports SessionExpired;
-/// the nonzero retransmission counter keeps the session-level expiry from
-/// firing first.
+/// A remote setup request at the terminal counter is staged, but the answer
+/// cannot be sent on the next uplink: the exchange reports SessionExpired.
 #[tokio::test]
 async fn test_multicast_setup_expired_reports_session_expired() {
     let mut net = setup_multicast().await;
@@ -155,9 +173,17 @@ async fn test_multicast_setup_expired_reports_session_expired() {
     session.fcnt_up = 0xFFFF_FFFF;
     session.retransmissions = 1;
 
+    // The setup is staged; it is sent on the next uplink.
     let r = net.listen(vec![mc_group_setup_req()]).await;
     assert!(
-        matches!(r.response(), Ok(ListenResponse::SessionExpired)),
+        matches!(r.response(), Ok(ListenResponse::Multicast(MulticastResponse::NewSession { .. }))),
+        "the setup is staged, got {:?}",
+        r.response()
+    );
+    // The terminal counter prevents the answer from being prepared on the next uplink.
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    assert!(
+        matches!(r.response(), Ok(SendResponse::SessionExpired)),
         "the setup frame cannot be prepared at the terminal counter, got {:?}",
         r.response()
     );

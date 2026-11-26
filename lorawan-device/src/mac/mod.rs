@@ -276,17 +276,53 @@ impl Mac {
     ) -> Result<(radio::TxConfig, RxWindows, FcntUp)> {
         let max_mac_payload_len =
             self.region.get_max_payload_length(self.configuration.data_rate, false, false);
-        // A pending certification answer is sent on this uplink, replacing the requested data.
-        #[cfg(feature = "certification")]
-        if self.certification.has_pending_uplink() {
-            let (tx_config, rx_windows, fcnt_up) =
-                self.certification_setup_send::<RNG, N>(rng, buf)?;
-            // The requested data is not sent.
-            self.payload_dropped = !send_data.data.is_empty();
-            return Ok((tx_config, rx_windows, fcnt_up));
+        // A pending package answer is sent on this uplink, in the order of
+        // priority, replacing the application uplink:
+        // - certification on FPort 224
+        // - multicast setup on FPort 200 (default)
+        match self.take_pending_package_uplink() {
+            Some((fport, data)) => {
+                let answer = SendData { fport, data: data.as_ref(), confirmed: false };
+                let (fcnt, _) = self.prepare_frame::<N>(&answer, buf, max_mac_payload_len)?;
+                // The requested data is not sent.
+                self.payload_dropped = !send_data.data.is_empty();
+                let (tx_config, rx_windows) = self.tx_config_and_windows(rng);
+                Ok((tx_config, rx_windows, fcnt))
+            }
+            None => {
+                self.payload_dropped = false;
+                let (fcnt, payload_dropped) =
+                    self.prepare_frame::<N>(send_data, buf, max_mac_payload_len)?;
+                self.payload_dropped = payload_dropped;
+                let (tx_config, rx_windows) = self.tx_config_and_windows(rng);
+                Ok((tx_config, rx_windows, fcnt))
+            }
         }
-        self.payload_dropped = false;
-        let (fcnt, payload_dropped) = match &mut self.state {
+    }
+
+    /// Take the pending package answer uplink, if any.
+    /// Certification (FPort 224) takes priority over multicast setup (FPort 200).
+    fn take_pending_package_uplink(&mut self) -> Option<(u8, heapless::Vec<u8, 256>)> {
+        #[cfg(feature = "certification")]
+        if let Some(data) = self.certification.take_pending_uplink() {
+            return Some((certification::CERTIFICATION_PORT, data));
+        }
+        #[cfg(feature = "multicast")]
+        if let Some(data) = self.multicast.take_pending_uplink() {
+            return Some((self.multicast.remote_setup_port(), data));
+        }
+        None
+    }
+
+    /// Prepare a data uplink frame for `send_data` into `buf`. Consumes the next
+    /// FCntUp and returns it with whether the application payload was dropped.
+    fn prepare_frame<const N: usize>(
+        &mut self,
+        send_data: &SendData<'_>,
+        buf: &mut RadioBuffer<N>,
+        max_mac_payload_len: u8,
+    ) -> Result<(FcntUp, bool)> {
+        match &mut self.state {
             State::Joined(session) => {
                 let fcnt = session.prepare_buffer::<N>(
                     send_data,
@@ -295,18 +331,14 @@ impl Mac {
                     max_mac_payload_len,
                 )?;
                 let payload_dropped = session.take_payload_dropped();
-                // Uplinks prepared here (data uplinks and certification answers)
-                // participate in NbTrans retransmission; multicast setup uplinks
-                // do not.
+                // Data uplinks and package answers participate in NbTrans
+                // retransmission.
                 session.retransmissions = 1;
                 Ok((fcnt, payload_dropped))
             }
             State::Otaa(_) => Err(Error::NotJoined),
             State::Unjoined => Err(Error::NotJoined),
-        }?;
-        self.payload_dropped = payload_dropped;
-        let (tx_config, rx_windows) = self.tx_config_and_windows(rng);
-        Ok((tx_config, rx_windows, fcnt))
+        }
     }
 
     /// Whether the last prepared uplink dropped non-empty application data.
@@ -392,39 +424,16 @@ impl Mac {
         }
     }
 
-    #[cfg(feature = "multicast")]
-    pub(crate) fn multicast_setup_send<RNG: RngCore, const N: usize>(
-        &mut self,
-        rng: &mut RNG,
-        buf: &mut RadioBuffer<N>,
-    ) -> Result<(radio::TxConfig, FcntUp)> {
-        let max_mac_payload_len =
-            self.region.get_max_payload_length(self.configuration.data_rate, false, false);
-        self.multicast
-            .setup_send::<N>(&mut self.state, buf, &self.configuration, max_mac_payload_len)
-            .map(|fcnt_up| {
-                // No RX windows follow this uplink; the caller re-arms the RXC window.
-                let (mut tx_config, _) =
-                    self.region.create_tx_config(rng, self.configuration.data_rate, &Frame::Data);
-                tx_config.adjust_power(
-                    self.configuration.tx_power.unwrap_or(self.board_eirp.max_power),
-                    self.board_eirp.antenna_gain,
-                );
-                (tx_config, fcnt_up)
-            })
-    }
-
-    /// Prepare the pending certification uplink (TODO: Use regular Class A send)
+    /// Send the pending certification uplink on this uplink (no requested data).
     #[cfg(feature = "certification")]
     pub(crate) fn certification_setup_send<RNG: RngCore, const N: usize>(
         &mut self,
         rng: &mut RNG,
         buf: &mut RadioBuffer<N>,
     ) -> Result<(radio::TxConfig, RxWindows, FcntUp)> {
-        let data = self.certification.take_pending_uplink().unwrap();
-        let send_data =
-            SendData { fport: certification::CERTIFICATION_PORT, data: &data, confirmed: false };
-        self.send::<RNG, N>(rng, buf, &send_data)
+        // No requested data: the pending package answer is sent instead.
+        let empty = SendData { fport: 0, data: &[], confirmed: false };
+        self.send::<RNG, N>(rng, buf, &empty)
     }
 
     pub(crate) fn get_rx_delay(&self, frame: &Frame, window: &Window) -> u32 {
@@ -514,6 +523,8 @@ impl Mac {
         self.payload_dropped = false;
         // Drop the pending answer with the session.
         let _ = self.certification.take_pending_uplink();
+        #[cfg(feature = "multicast")]
+        let _ = self.multicast.take_pending_uplink();
         reset_network(&mut self.region, &mut self.configuration);
         if !keep_identity {
             self.configuration = Configuration::default_for_region(&self.region);

@@ -1012,32 +1012,9 @@ where
                 Ok(None)
             }
             #[cfg(feature = "multicast")]
-            mac::Response::Multicast(mut response) => {
-                // TODO: Investigate whether to handle this the same way as
-                // certification answers: prepare the answer here and stash
-                // the TxConfig, then let the context owning the radio handle
-                // the transmit.
-                if response.is_transmit_request() {
-                    let (tx_config, _fcnt_up) =
-                        match mac.multicast_setup_send::<G, N>(rng, radio_buffer) {
-                            Ok(v) => v,
-                            Err(mac::Error::SessionExpired) => {
-                                return Ok(Some(mac::Response::SessionExpired));
-                            }
-                            Err(e) => return Err(e.into()),
-                        };
-                    radio
-                        .tx(tx_config, radio_buffer.as_ref_for_read())
-                        .await
-                        .map_err(Error::Radio)?;
-                    if let Some(rx_config) = rx_config {
-                        radio.setup_rx(rx_config).await.map_err(Error::Radio)?;
-                    }
-                    // GroupSetupTransmitRequest needs to be transformed into a NewSession response
-                    if let multicast::Response::GroupSetupTransmitRequest { group_id } = response {
-                        response = multicast::Response::NewSession { group_id };
-                    }
-                }
+            mac::Response::Multicast(response) => {
+                // The setup answer is staged and sent on the next regular uplink.
+                // Report the user-facing response, if any.
                 if response.is_for_async_mc_response() {
                     Ok(Some(mac::Response::Multicast(response)))
                 } else {

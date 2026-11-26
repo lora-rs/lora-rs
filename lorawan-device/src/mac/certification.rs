@@ -141,9 +141,4 @@ impl Certification {
     pub(crate) fn take_pending_uplink(&mut self) -> Option<heapless::Vec<u8, 256>> {
         self.pending_uplink.take()
     }
-
-    /// Whether an answer is pending; the next uplink sends it instead of the requested data.
-    pub(crate) fn has_pending_uplink(&self) -> bool {
-        self.pending_uplink.is_some()
-    }
 }
