@@ -333,6 +333,14 @@ impl Mac {
         }
     }
 
+    /// Whether a downlink confirmation staged in an RXC listen is pending.
+    /// This must be acknowledged right away, before the next regular uplink.
+    pub(crate) fn has_pending_immediate_ack(&self) -> bool {
+        matches!(&self.state,
+            State::Joined(session)
+                if session.uplink.confirms_downlink() && session.uplink.immediate_ack())
+    }
+
     /// Prepare a data uplink frame for `send_data` into `buf`. Consumes the next
     /// FCntUp and returns it with whether the application payload was dropped.
     fn prepare_frame<const N: usize>(

@@ -597,12 +597,12 @@ where
         })
     }
 
-    /// Run the complete uplink cycle of a frame already staged in
+    /// Run the complete uplink cycle of a frame staged in
     /// `retransmit_buffer`: transmit it, then run its RX windows and NbTrans
     /// retransmissions until the MAC reports a terminal response.
     ///
-    /// Staged package answers are sent right away as a regular uplink with
-    /// their own RX windows.
+    /// A package answer or downlink confirmation staged during the cycle is
+    /// sent right away as a regular uplink with its own RX windows.
     async fn run_uplink_cycle(
         &mut self,
         mut tx_config: radio::TxConfig,
@@ -632,8 +632,8 @@ where
                             "Retransmitting confirmed frame; waiting {} ms before the next copy.",
                             timeout_ms
                         );
-                        // A downlink accepted during the wait (class C) supersedes
-                        // the retransmission cycle and ends it.
+                        // A downlink accepted during the wait (class C) ends the
+                        // retransmission cycle.
                         if let Some(response) = self.retransmit_wait(timeout_ms).await? {
                             break response;
                         }
@@ -657,9 +657,8 @@ where
                     }
                 }
             };
-            // A package answer staged during the cycle is sent right away as
-            // a regular uplink with its own RX windows.
-            if !self.mac.has_pending_package_answer() {
+            // A staged package answer or immediate ACK is sent right away.
+            if !(self.mac.has_pending_package_answer() || self.mac.has_pending_immediate_ack()) {
                 return Ok(response);
             }
             let empty = SendData { data: &[], fport: 0, confirmed: false };
@@ -879,6 +878,11 @@ where
                         {
                             return Ok(Some(response));
                         }
+                        // A confirmed downlink's ACK must go out right away;
+                        // it supersedes the retransmission cycle.
+                        if self.mac.has_pending_immediate_ack() {
+                            return Ok(Some(mac::Response::RxComplete));
+                        }
                         maybe_timeout_fut = Some(timeout_fut);
                     }
                     RxcWindowResponse::Timeout(_) => break,
@@ -1093,7 +1097,7 @@ where
                 &rx_config.rf,
                 &self.handler,
             )?;
-            if let Some(response) = Self::handle_mac_response(
+            let Some(response) = Self::handle_mac_response(
                 #[cfg(feature = "certification")]
                 &mut self.override_periodicity,
                 #[cfg(feature = "class-c")]
@@ -1108,9 +1112,30 @@ where
                 Some(rx_config),
             )
             .await?
-            {
-                return Ok(response.into());
+            else {
+                continue;
+            };
+            // A confirmed downlink's ACK is sent right away, as a regular
+            // uplink with its own RX windows, before the frame is reported.
+            if self.mac.has_pending_immediate_ack() {
+                let empty = SendData { data: &[], fport: 0, confirmed: false };
+                let (tx_config, rx_windows, _fcnt_up) =
+                    match self.mac.send::<G, N>(&mut self.rng, &mut self.radio_buffer, &empty) {
+                        Err(mac::Error::SessionExpired) => {
+                            return Ok(ListenResponse::SessionExpired);
+                        }
+                        Err(e) => return Err(e.into()),
+                        Ok(v) => v,
+                    };
+                self.retransmit_buffer.clear();
+                self.retransmit_buffer
+                    .extend_from_slice(self.radio_buffer.as_ref_for_read())
+                    .unwrap();
+                // A downlink received in the ACK's own windows is queued for
+                // [`take_downlink`](Self::take_downlink).
+                let _ = self.run_uplink_cycle(tx_config, rx_windows).await?;
             }
+            return Ok(response.into());
         }
     }
 }

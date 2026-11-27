@@ -270,7 +270,9 @@ impl Session {
                 }
 
                 if confirmed {
-                    self.uplink.set_downlink_confirmation();
+                    // A downlink received in an RXC listen must be acknowledged
+                    // right away; the others wait for the next uplink.
+                    self.uplink.set_downlink_confirmation(ignore_mac);
                 }
 
                 return if self.fcnt_up_exhausted() && self.retransmissions == 0 {

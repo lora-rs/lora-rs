@@ -11,17 +11,29 @@ pub(crate) const MAX_MAC_COMMAND_LEN: usize = 255;
 pub struct Uplink {
     pending: heapless::Vec<u8, MAX_MAC_COMMAND_LEN>,
     confirmed: bool,
+    /// The confirmation came from an RXC listen and must be acknowledged
+    /// right away, not on the next regular uplink.
+    immediate: bool,
 }
 
 impl Uplink {
-    pub fn set_downlink_confirmation(&mut self) {
+    /// Mark the next uplink to acknowledge the last downlink. `immediate` is
+    /// set when the downlink was received in an RXC listen: that
+    /// acknowledgement goes out right away, before the next regular uplink.
+    pub fn set_downlink_confirmation(&mut self, immediate: bool) {
         self.confirmed = true;
+        self.immediate = immediate;
     }
     pub fn clear_downlink_confirmation(&mut self) {
         self.confirmed = false;
+        self.immediate = false;
     }
     pub fn confirms_downlink(&self) -> bool {
         self.confirmed
+    }
+    /// Whether the pending confirmation must be acknowledged immediately.
+    pub fn immediate_ack(&self) -> bool {
+        self.immediate
     }
     pub fn add_mac_command<M: SerializableMacCommand>(&mut self, cmd: M) {
         // Check that there's still enough room for the CID and payload.
