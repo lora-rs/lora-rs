@@ -81,7 +81,7 @@ pub struct TimerChannel {
 }
 
 impl TimerChannel {
-    pub async fn fire_most_recent(&self) {
+    pub async fn fire_most_recent(&self) -> usize {
         // Don't let the timeout overtake an injected frame.
         let start = Instant::now();
         while self.pending.load(Ordering::SeqCst) != 0 {
@@ -96,6 +96,7 @@ impl TimerChannel {
         let armed_count = *self.armed_count.borrow();
         let tx = tx_map.remove(&armed_count).unwrap();
         tx.send(()).await.unwrap();
+        armed_count
     }
 
     /// Wait until at least `count` timers have been armed; returns the

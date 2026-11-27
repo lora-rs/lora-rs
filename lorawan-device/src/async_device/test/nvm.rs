@@ -347,7 +347,6 @@ async fn port_disable_persists_before_the_reset_event() {
         #[cfg(feature = "class-c")]
         &mut device.class_c,
         &mut device.radio_buffer,
-        &mut device.retransmit_buffer,
         &mut device.mac,
         &mut device.radio,
         &mut device.rng,

@@ -5,7 +5,7 @@ use lorawan::keys::{McKEKey, McKey};
 use lorawan::multicast::parse_uplink_multicast_commands;
 use lorawan::multicast::{McGroupDeleteReqCreator, McGroupSetupReqCreator, UplinkRemoteSetup};
 use lorawan::parser::FrmPayload;
-use net::{Net, Pkt};
+use net::{ExchangeAction, Net, Pkt};
 
 /// Remote multicast setup port
 const MC_PORT: u8 = 200;
@@ -70,13 +70,18 @@ fn assert_mc_group_setup_ans(uplink: &Uplink) {
 async fn test_multicast_remote_setup() {
     let mut net = setup_multicast().await;
 
+    // The setup downlink stages the answer; it is sent on the next uplink.
     let r = net.listen(vec![mc_group_setup_req()]).await;
     let Ok(ListenResponse::Multicast(MulticastResponse::NewSession { group_id })) = r.response()
     else {
         panic!("expected NewSession response, got {:?}", r.response());
     };
     assert_eq!(*group_id, 1); // Group ID from the setup request
-    // The device answered with a McGroupSetupAns
+    assert_eq!(r.uplinks().len(), 0);
+
+    // The next regular uplink carries the McGroupSetupAns instead of the app data.
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
     assert_eq!(r.uplinks().len(), 1);
     assert_mc_group_setup_ans(r.uplink(0));
 
@@ -89,15 +94,40 @@ async fn test_multicast_remote_setup() {
     assert_eq!(fetched_group_id, 1);
 }
 
+/// A PackageVersionReq in the app uplink's RX2 window is answered right
+/// away: the exchange transmits the app data, then the answer.
+#[tokio::test]
+async fn test_multicast_package_version_answered_immediately() {
+    let mut net = setup_multicast().await;
+    let r =
+        net.exchange(&[1, 2, 3], 1, false, ExchangeAction::rx2(Pkt::app(MC_PORT, &[0x00]))).await;
+    r.expect_rx_complete();
+    assert_eq!(r.uplinks().len(), 2, "the answer is sent right after the app uplink");
+    assert_multicast_answer(r.uplink(1), |msg| {
+        let UplinkRemoteSetup::PackageVersionAns(ans) = msg else {
+            panic!("expected PackageVersionAns");
+        };
+        assert_eq!(ans.package_identifier(), 2);
+        assert_eq!(ans.package_version(), 2);
+    });
+}
+
 #[tokio::test]
 async fn test_multicast_group_delete() {
     let mut net = setup_multicast().await;
+    // Stage the setup answer; it is sent on the next uplink.
     let r = net.listen(vec![mc_group_setup_req()]).await;
+    assert_eq!(r.uplinks().len(), 0);
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
     assert_mc_group_setup_ans(r.uplink(0));
 
-    // Delete the group, then a regular downlink ends the listen
+    // Delete the group: the delete answer is staged and sent on the next uplink.
     let r = net.listen(vec![mc_group_delete_req(0x01), Pkt::app(1, &[1, 2, 3])]).await;
     r.expect_downlink_received();
+    assert_eq!(r.uplinks().len(), 0);
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
     assert_eq!(r.uplinks().len(), 1);
     assert_multicast_answer(r.uplink(0), |msg| {
         let UplinkRemoteSetup::McGroupDeleteAns(ans) = msg else {
@@ -112,12 +142,19 @@ async fn test_multicast_group_delete() {
 #[tokio::test]
 async fn test_multicast_invalid_group_delete() {
     let mut net = setup_multicast().await;
+    // Stage the setup answer; it is sent on the next uplink.
     let r = net.listen(vec![mc_group_setup_req()]).await;
+    assert_eq!(r.uplinks().len(), 0);
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
     assert_mc_group_setup_ans(r.uplink(0));
 
-    // Delete an unknown group, then a regular downlink ends the listen
+    // Delete an unknown group: the delete answer is staged and sent on the next uplink.
     let r = net.listen(vec![mc_group_delete_req(0x03), Pkt::app(1, &[1, 2, 3])]).await;
     r.expect_downlink_received();
+    assert_eq!(r.uplinks().len(), 0);
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    r.expect_rx_complete();
     assert_eq!(r.uplinks().len(), 1);
     assert_multicast_answer(r.uplink(0), |msg| {
         let UplinkRemoteSetup::McGroupDeleteAns(ans) = msg else {
@@ -145,9 +182,8 @@ async fn test_multicast_state_dropped_on_dut_reset_req() {
     assert!(net.device().mac.multicast.mc_k_e_key.is_none());
 }
 
-/// A remote setup request at the terminal counter reports SessionExpired;
-/// the nonzero retransmission counter keeps the session-level expiry from
-/// firing first.
+/// A remote setup request at the terminal counter is staged, but the answer
+/// cannot be sent on the next uplink: the exchange reports SessionExpired.
 #[tokio::test]
 async fn test_multicast_setup_expired_reports_session_expired() {
     let mut net = setup_multicast().await;
@@ -155,142 +191,18 @@ async fn test_multicast_setup_expired_reports_session_expired() {
     session.fcnt_up = 0xFFFF_FFFF;
     session.retransmissions = 1;
 
+    // The setup is staged; it is sent on the next uplink.
     let r = net.listen(vec![mc_group_setup_req()]).await;
     assert!(
-        matches!(r.response(), Ok(ListenResponse::SessionExpired)),
+        matches!(r.response(), Ok(ListenResponse::Multicast(MulticastResponse::NewSession { .. }))),
+        "the setup is staged, got {:?}",
+        r.response()
+    );
+    // The terminal counter prevents the answer from being prepared on the next uplink.
+    let r = net.exchange(&[1, 2, 3], 1, false, ExchangeAction::none()).await;
+    assert!(
+        matches!(r.response(), Ok(SendResponse::SessionExpired)),
         "the setup frame cannot be prepared at the terminal counter, got {:?}",
         r.response()
     );
-}
-
-/// A multicast group downlink received in a certification answer's RX1
-/// window must be reported to the caller instead of being discarded in
-/// favor of `CertificationAnswerSent`.
-#[tokio::test]
-async fn test_multicast_group_downlink_in_answer_rx1_is_reported() {
-    use crate::test_util::{get_crypto, get_dev_addr};
-    use core::num::NonZeroU8;
-    use lorawan::creator::{DataFrame, Payload};
-    use lorawan::default_crypto::DefaultCrypto;
-    use lorawan::multicast::{DownlinkRemoteSetup, parse_downlink_multicast_commands};
-    use lorawan::parser::DataFrameType;
-
-    let (radio, timer, mut device) =
-        util::session_with_region(crate::region::EU868::new_eu868().into());
-    device.enable_class_c();
-    device.mac.multicast.mc_k_e_key = Some(mcke_key());
-    let task = tokio::spawn(async move {
-        let _ = device.send(&[1], 1, false).await;
-        // The first listen ends on the remote setup request; the second on
-        // the certification answer's windows.
-        let res1 = device.rxc_listen().await;
-        let res2 = device.rxc_listen().await;
-        (device, res1, res2)
-    });
-
-    // Drive the initial uplink's RX1 and RX2 so the radio enters RXC.
-    for _ in 0..2 {
-        let armed = timer.get_armed_count().await;
-        timer.wait_armed(armed + 1).await;
-        timer.fire_most_recent().await;
-        radio.handle_timeout().await;
-    }
-
-    // Build the remote setup request (FPort 200, session keys, FCntDown 0)
-    // and derive the group session keys for the group downlink.
-    let mc_key = McKey::from([0x44; 16]);
-    let mut req = McGroupSetupReqCreator::new();
-    req.mc_group_id_header(0x01);
-    req.mc_addr(&mc_addr());
-    req.mc_key(&DefaultNetworkCrypto::new(mcke_key().inner()), &mc_key);
-    req.min_mc_fcount(0x12345678);
-    req.max_mc_fcount(0x87654321);
-    let req_bytes = req.build();
-    let mut msgs = parse_downlink_multicast_commands(req_bytes);
-    let DownlinkRemoteSetup::McGroupSetupReq(req_msg) = msgs.next().unwrap().unwrap() else {
-        panic!("expected McGroupSetupReq");
-    };
-    let (_group_id, group_session) =
-        req_msg.derive_session(&DefaultCrypto::new(mcke_key().inner()));
-
-    // Build each frame into its own buffer: they are built before any of
-    // them is delivered.
-    let crypto = get_crypto();
-    let setup = {
-        let mut buf = [0u8; 256];
-        let frame = DataFrame {
-            frame_type: DataFrameType::UnconfirmedDown,
-            dev_addr: get_dev_addr(),
-            fcnt: 0,
-            payload: Payload::Data { f_port: NonZeroU8::new(MC_PORT).unwrap(), data: req_bytes },
-            ..Default::default()
-        };
-        let len = frame.build_into(&mut buf, &crypto, Some(&crypto)).unwrap().len();
-        buf[..len].to_vec()
-    };
-    // Certification command (FCntDown 1); its answer opens its own RX1.
-    let cert = {
-        let mut buf = [0u8; 256];
-        let frame = DataFrame {
-            frame_type: DataFrameType::UnconfirmedDown,
-            dev_addr: get_dev_addr(),
-            fcnt: 1,
-            payload: Payload::Data {
-                f_port: NonZeroU8::new(224).unwrap(),
-                data: &[0x08, 0x01, 0x02, 0x03],
-            },
-            ..Default::default()
-        };
-        let len = frame.build_into(&mut buf, &crypto, Some(&crypto)).unwrap().len();
-        buf[..len].to_vec()
-    };
-    // Group downlink: group address, group keys, group FCnt 0, group 1 port.
-    let nwk_crypto = DefaultCrypto::new(group_session.mc_net_s_key().inner());
-    let app_crypto = DefaultCrypto::new(group_session.mc_app_s_key().inner());
-    let group = {
-        let mut buf = [0u8; 256];
-        let frame = DataFrame {
-            frame_type: DataFrameType::UnconfirmedDown,
-            dev_addr: 0x3C1D6E34.into(), // mc_addr() as a little-endian u32
-            fcnt: 0,
-            payload: Payload::Data { f_port: NonZeroU8::new(201).unwrap(), data: &[0xBE, 0xEF] },
-            ..Default::default()
-        };
-        let len = frame.build_into(&mut buf, &nwk_crypto, Some(&app_crypto)).unwrap().len();
-        buf[..len].to_vec()
-    };
-
-    radio.handle_frame(setup).await;
-    radio.handle_frame(cert).await;
-    // The answer's RX1 start.
-    let armed = timer.get_armed_count().await;
-    tokio::time::timeout(tokio::time::Duration::from_secs(5), timer.wait_armed(armed + 1))
-        .await
-        .expect("the answer must arm its RX1 timer");
-    timer.fire_most_recent().await;
-    // The group downlink in the answer's RX1.
-    radio.handle_frame(group).await;
-
-    let (mut device, res1, res2) = tokio::time::timeout(tokio::time::Duration::from_secs(10), task)
-        .await
-        .expect("the device must report both downlinks")
-        .unwrap();
-    let Ok(ListenResponse::Multicast(MulticastResponse::NewSession { group_id })) = res1 else {
-        panic!("expected NewSession from the setup request, got {:?}", res1);
-    };
-    assert_eq!(group_id, 1);
-    assert!(
-        matches!(
-            res2,
-            Ok(ListenResponse::Multicast(MulticastResponse::DownlinkReceived {
-                group_id: 1,
-                fcnt: 0
-            }))
-        ),
-        "expected the group downlink from the answer's RX1, got {:?}",
-        res2
-    );
-    let dl = device.take_downlink().expect("group downlink must be queued");
-    assert_eq!(dl.fport, 201);
-    assert_eq!(dl.data.as_slice(), &[0xBE, 0xEF]);
 }

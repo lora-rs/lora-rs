@@ -43,10 +43,6 @@ enum AppPayload<'a> {
     /// The application requested FPort 0: no application data, the queued
     /// MAC commands are sent as the FRMPayload.
     FPort0,
-    /// No FPort at all (an immediate ACK): the queued MAC commands stay in
-    /// FOpts when they fit, otherwise they move to FPort 0.
-    #[cfg(feature = "class-c")]
-    NoFPort,
 }
 
 #[derive(Clone, Debug)]
@@ -175,6 +171,8 @@ impl Session {
         configuration: &mut super::Configuration,
         #[cfg(feature = "certification")] certification: &mut super::certification::Certification,
         #[cfg(feature = "multicast")] multicast: &mut super::multicast::Multicast,
+        #[cfg(any(feature = "certification", feature = "multicast"))]
+        scheduler: &mut super::scheduler::Scheduler,
         rx: &mut RadioBuffer<N>,
         dl: &mut Vec<Downlink, D>,
         max_payload_len: u8,
@@ -272,7 +270,9 @@ impl Session {
                 }
 
                 if confirmed {
-                    self.uplink.set_downlink_confirmation();
+                    // A downlink received in an RXC listen must be acknowledged
+                    // right away; the others wait for the next uplink.
+                    self.uplink.set_downlink_confirmation(ignore_mac);
                 }
 
                 return if self.fcnt_up_exhausted() && self.retransmissions == 0 {
@@ -307,6 +307,7 @@ impl Session {
                                 self.rx_app_cnt,
                                 max_frm_payload_len,
                                 handler.firmware_version(),
+                                scheduler,
                             ) {
                                 AdrBitChange(adr) => configuration.set_adr(adr),
                                 DutJoinReq => {
@@ -343,7 +344,7 @@ impl Session {
                         }
                         #[cfg(feature = "multicast")]
                         if multicast.is_remote_setup_port(fport) {
-                            return multicast.handle_setup_message(data).into();
+                            return multicast.handle_setup_message(data, scheduler).into();
                         }
 
                         // heapless Vec from slice fails only if slice is too large.
@@ -441,33 +442,19 @@ impl Session {
         )
     }
 
-    /// Assemble the immediate ACK uplink for a confirmed downlink received
-    /// while listening in RXC and write it to `tx_buffer`.
-    ///
-    /// The ACK is the minimal uplink: the ACK bit carried from the downlink
-    /// confirmation, no FPort and no application payload. The certification
-    /// confirmed-frame override does not apply to it.
-    #[cfg(feature = "class-c")]
-    pub(crate) fn prepare_ack_buffer<const N: usize>(
-        &mut self,
-        tx_buffer: &mut RadioBuffer<N>,
-        configuration: &super::Configuration,
-        max_mac_payload_len: u8,
-    ) -> Result<FcntUp, super::Error> {
-        self.prepare_buffer_inner(
-            AppPayload::NoFPort,
-            false,
-            false,
-            tx_buffer,
-            configuration,
-            max_mac_payload_len,
-        )
+    /// FPort 0 carries MAC commands in the FRMPayload; an empty command list
+    /// omits FPort and FRMPayload altogether.
+    fn mac_commands_payload(cmds: &[u8]) -> Payload<'_> {
+        if cmds.is_empty() {
+            Payload::None
+        } else {
+            Payload::MacCommands(cmds)
+        }
     }
 
     /// Assemble a data uplink frame and write it to `tx_buffer`.
     ///
-    /// `app_payload` carries the FPort and application data; `NoFPort` builds
-    /// the immediate ACK frame when the downlink confirmation is pending.
+    /// `app_payload` carries the FPort and application data.
     /// `handle_override` applies the certification confirmed-frame override to
     /// the frame type.
     ///
@@ -531,21 +518,11 @@ impl Session {
             }
             AppPayload::Data { data, .. } => {
                 self.app_payload_dropped = !data.is_empty();
-                (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
+                (&[][..], Self::mac_commands_payload(&mac_commands[..mac_commands_len]))
             }
             // FPort 0: the queued MAC commands are sent as the FRMPayload.
             AppPayload::FPort0 => {
-                (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
-            }
-            // No FPort (an immediate ACK): the MAC commands stay in FOpts
-            // when they fit, otherwise they move to FPort 0 as usual.
-            #[cfg(feature = "class-c")]
-            AppPayload::NoFPort if mac_commands.len() <= FOPTS_MAX_LEN.min(max_frm_payload) => {
-                (mac_commands, Payload::None)
-            }
-            #[cfg(feature = "class-c")]
-            AppPayload::NoFPort => {
-                (&[][..], Payload::MacCommands(&mac_commands[..mac_commands_len]))
+                (&[][..], Self::mac_commands_payload(&mac_commands[..mac_commands_len]))
             }
         };
         let frame = DataFrame {
@@ -575,14 +552,6 @@ impl Session {
         }
         self.uplink.clear_mac_commands(true);
         Ok(fcnt)
-    }
-
-    /// Re-arm the downlink confirmation so the next prepared uplink carries
-    /// the ACK bit: an immediate ACK that was staged but lost the uplink slot
-    /// to a certification answer must still be acknowledged.
-    #[cfg(all(feature = "class-c", feature = "certification"))]
-    pub(crate) fn requeue_downlink_confirmation(&mut self) {
-        self.uplink.set_downlink_confirmation();
     }
 
     /// The GPS time received in the last `DeviceTimeAns` downlink MAC command,
@@ -1192,16 +1161,111 @@ mod tests {
         assert!(matches!(response, Response::UplinkStaged));
 
         // The downlink confirmation is pending until the answer is prepared.
-        assert!(mac.ack_pending());
+        assert!(mac.get_session().unwrap().uplink.confirms_downlink());
 
         let mut tx: RadioBuffer<256> = RadioBuffer::new();
         mac.certification_setup_send::<_, 256>(&mut SeqRng(0), &mut tx).unwrap();
 
         // Preparing the answer consumes the confirmation: the ACK bit is set
         // on the answer frame, and no pending ACK is left behind.
-        assert!(!mac.ack_pending());
+        assert!(!mac.get_session().unwrap().uplink.confirms_downlink());
         let fctrl = EncryptedDataPayload::parse(tx.as_mut_for_read()).unwrap().fhdr().fctrl();
         assert!(fctrl.ack(), "the answer must carry the ACK bit");
+    }
+
+    /// A pending answer follows the TxFramesCtrlReq frame type override.
+    #[cfg(feature = "certification")]
+    #[test]
+    fn pending_certification_answer_follows_frame_type_override() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+        let nwk_crypto = DefaultCrypto::new(NwkSKey::from([2; 16]).inner());
+        let app_crypto = DefaultCrypto::new(AppSKey::from([1; 16]).inner());
+
+        // Confirmed frame type, then a command that requires an answer.
+        let response = handle_downlink_on_port(&mut mac, 224, &[0x07, 0x02], 0);
+        assert!(matches!(response, Response::DownlinkReceived(0)));
+        let response = handle_downlink_on_port(&mut mac, 224, &[0x7F], 1);
+        assert!(matches!(response, Response::UplinkStaged));
+
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        mac.send::<_, 256>(
+            &mut SeqRng(0),
+            &mut tx,
+            &SendData { data: &[0xAA], fport: 5, confirmed: false },
+        )
+        .unwrap();
+        let decrypted = DecryptedDataPayload::decrypt_in_place(
+            tx.as_mut_for_read(),
+            Some(&nwk_crypto),
+            Some(&app_crypto),
+            0,
+        )
+        .unwrap();
+        assert_eq!(decrypted.f_port(), Some(224), "the answer replaces the requested data");
+        assert_eq!(
+            decrypted.frame_type(),
+            DataFrameType::ConfirmedUp,
+            "the answer follows the frame type override"
+        );
+    }
+
+    /// A FPort 224 command's answer is sent on the next uplink, replacing the requested data,
+    /// consuming the next FCntUp, and reported as dropped.
+    #[cfg(feature = "certification")]
+    #[test]
+    fn pending_certification_answer_is_sent_on_the_next_uplink() {
+        let mut mac = eu868_mac();
+        mac.set_session(session());
+        let nwk_crypto = DefaultCrypto::new(NwkSKey::from([2; 16]).inner());
+        let app_crypto = DefaultCrypto::new(AppSKey::from([1; 16]).inner());
+
+        // A DutVersionsReq on FPort 224 prepares the answer.
+        let response = handle_downlink_on_port(&mut mac, 224, &[0x7F], 0);
+        assert!(matches!(response, Response::UplinkStaged));
+
+        // The next uplink transmits the answer; the replacement is reported.
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        mac.send::<_, 256>(
+            &mut SeqRng(0),
+            &mut tx,
+            &SendData { data: &[0xAA], fport: 5, confirmed: false },
+        )
+        .unwrap();
+        let decrypted = DecryptedDataPayload::decrypt_in_place(
+            tx.as_mut_for_read(),
+            Some(&nwk_crypto),
+            Some(&app_crypto),
+            0,
+        )
+        .unwrap();
+        assert_eq!(decrypted.f_port(), Some(224), "the answer replaces the requested data");
+        assert_eq!(decrypted.fhdr().fcnt(), 0, "the answer consumes the next FCntUp");
+        assert!(mac.take_payload_dropped(), "the requested data is dropped");
+        assert_eq!(
+            mac.get_session().unwrap().retransmissions,
+            1,
+            "the answer participates in NbTrans retransmission"
+        );
+
+        // The following uplink carries the requested data as usual.
+        let mut tx: RadioBuffer<256> = RadioBuffer::new();
+        mac.send::<_, 256>(
+            &mut SeqRng(0),
+            &mut tx,
+            &SendData { data: &[0xAA], fport: 5, confirmed: false },
+        )
+        .unwrap();
+        let decrypted = DecryptedDataPayload::decrypt_in_place(
+            tx.as_mut_for_read(),
+            Some(&nwk_crypto),
+            Some(&app_crypto),
+            1,
+        )
+        .unwrap();
+        assert_eq!(decrypted.f_port(), Some(5));
+        assert_eq!(decrypted.fhdr().fcnt(), 1);
+        assert!(!mac.take_payload_dropped());
     }
 
     #[test]

@@ -125,7 +125,9 @@ impl<'de> Deserialize<'de> for Uplink {
                     pending_data.0
                 };
 
-                Ok(Uplink { pending, confirmed })
+                // An immediate acknowledgement is transient: on restore it degrades
+                // to the regular path, where the next uplink carries the ACK bit.
+                Ok(Uplink { pending, confirmed, immediate: false })
             }
         }
 
@@ -150,13 +152,26 @@ mod tests {
     #[test]
     fn test_serde_uplink_with_data() {
         let mut uplink = Uplink::default();
-        uplink.set_downlink_confirmation();
+        uplink.set_downlink_confirmation(false);
         uplink.pending.extend_from_slice(&[1, 2, 3, 4]).unwrap();
 
         let json = serde_json::to_string(&uplink).unwrap();
         let decoded: Uplink = serde_json::from_str(&json).unwrap();
         assert!(decoded.confirms_downlink());
         assert_eq!(decoded.mac_commands(), &[1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn test_serde_immediate_confirmation_degrades_on_restore() {
+        let mut uplink = Uplink::default();
+        uplink.set_downlink_confirmation(true);
+
+        let json = serde_json::to_string(&uplink).unwrap();
+        let decoded: Uplink = serde_json::from_str(&json).unwrap();
+        // The confirmation is kept, but a restored ack waits for the next
+        // regular uplink instead of going out right away.
+        assert!(decoded.confirms_downlink());
+        assert!(!decoded.immediate_ack());
     }
 
     #[test]

@@ -1,6 +1,5 @@
 use crate::Downlink;
 use crate::mac::FcntDown;
-use crate::radio::RadioBuffer;
 use crate::{async_device, mac};
 use core::fmt::Debug;
 use core::ops::RangeInclusive;
@@ -21,8 +20,8 @@ pub enum Response {
     NewSession { group_id: u8 },
     SessionExpired { group_id: u8 },
     NoUpdate,
-    GroupSetupTransmitRequest { group_id: u8 },
-    TransmitRequest,
+    // A setup answer was staged; it is sent on the next regular uplink.
+    SetupAnswerStaged,
     DownlinkReceived { group_id: u8, fcnt: FcntDown },
 }
 
@@ -42,7 +41,6 @@ pub struct Multicast {
     pub(crate) sessions: [Option<Session>; multicast::MAX_GROUPS],
     range: RangeInclusive<u8>,
     remote_setup_port: u8,
-    pending_uplinks: heapless::Vec<u8, 256>,
 }
 
 impl Default for Multicast {
@@ -58,7 +56,6 @@ impl Multicast {
             range: DEFAULT_MC_PORT_RANGE,
             remote_setup_port: REMOTE_MULTICAST_SETUP_PORT,
             sessions: [None, None, None, None],
-            pending_uplinks: heapless::Vec::new(),
         }
     }
 
@@ -129,13 +126,23 @@ impl Multicast {
         self.remote_setup_port == port
     }
 
-    pub(crate) fn handle_setup_message(&mut self, data: &[u8]) -> Response {
+    /// The current remote multicast setup port.
+    pub(crate) fn remote_setup_port(&self) -> u8 {
+        self.remote_setup_port
+    }
+
+    pub(crate) fn handle_setup_message(
+        &mut self,
+        data: &[u8],
+        scheduler: &mut super::scheduler::Scheduler,
+    ) -> Response {
         if self.mc_k_e_key.is_none() {
             return Response::NoUpdate;
         }
         let mc_k_e_key = self.mc_k_e_key.as_ref().unwrap();
         let messages = parse_downlink_multicast_commands(data);
-        let mut new_session = None;
+        let mut new_session: Option<u8> = None;
+        let mut answer: heapless::Vec<u8, 256> = heapless::Vec::new();
         for message in messages {
             let Ok(message) = message else {
                 break;
@@ -147,8 +154,8 @@ impl Multicast {
                     self.sessions[group_id as usize] = Some(session);
                     let mut ans = McGroupSetupAnsCreator::new();
                     ans.mc_group_id_header(group_id);
-                    self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
-                    new_session = Some(Response::GroupSetupTransmitRequest { group_id });
+                    answer.extend_from_slice(ans.build()).unwrap();
+                    new_session = Some(group_id);
                 }
                 DownlinkRemoteSetup::PackageVersionReq(_) => {
                     const MULTICAST_CONTROL_PACKAGE: u8 = 2;
@@ -156,7 +163,7 @@ impl Multicast {
                     let mut ans = PackageVersionAnsCreator::new();
                     ans.package_identifier(MULTICAST_CONTROL_PACKAGE);
                     ans.package_version(MULTICAST_CONTROL_PACKAGE_VERSION);
-                    self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
+                    answer.extend_from_slice(ans.build()).unwrap();
                 }
                 DownlinkRemoteSetup::McGroupDeleteReq(req) => {
                     let group_id = req.mc_group_id_header();
@@ -167,7 +174,7 @@ impl Multicast {
                     } else {
                         ans.mc_group_undefined(true);
                     }
-                    self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
+                    answer.extend_from_slice(ans.build()).unwrap();
                 }
                 DownlinkRemoteSetup::McGroupStatusReq(r) => {
                     let bm = r.req_group_mask();
@@ -185,49 +192,23 @@ impl Multicast {
                         }
                     }
                     ans.nb_total_groups(nb_total_groups);
-                    self.pending_uplinks.extend_from_slice(ans.build()).unwrap();
+                    answer.extend_from_slice(ans.build()).unwrap();
                 }
                 m => {
                     warn!("Unhandled multicast message: {}", m);
                 }
             }
         }
-        if !self.pending_uplinks.is_empty() {
-            if let Some(new_session) = new_session {
-                new_session
-            } else {
-                Response::TransmitRequest
-            }
-        } else {
+        if answer.is_empty() {
             Response::NoUpdate
-        }
-    }
-
-    pub(crate) fn setup_send<const N: usize>(
-        &mut self,
-        mut state: &mut mac::State,
-        buf: &mut RadioBuffer<N>,
-        configuration: &mac::Configuration,
-        max_mac_payload_len: u8,
-    ) -> mac::Result<mac::FcntUp> {
-        let send_data = mac::SendData {
-            fport: self.remote_setup_port,
-            data: self.pending_uplinks.as_ref(),
-            confirmed: false,
-        };
-        match &mut state {
-            mac::State::Joined(session) => {
-                let response = session.prepare_buffer::<N>(
-                    &send_data,
-                    buf,
-                    configuration,
-                    max_mac_payload_len,
-                )?;
-                self.pending_uplinks.clear();
-                Ok(response)
+        } else {
+            // The answers are sent on the next regular uplink.
+            scheduler.stage_multicast_setup(&answer);
+            if let Some(group_id) = new_session {
+                Response::NewSession { group_id }
+            } else {
+                Response::SetupAnswerStaged
             }
-            mac::State::Otaa(_) => Err(mac::Error::NotJoined),
-            mac::State::Unjoined => Err(mac::Error::NotJoined),
         }
     }
 
@@ -277,13 +258,5 @@ impl Response {
                 | Response::SessionExpired { .. }
                 | Response::DownlinkReceived { .. }
         )
-    }
-
-    pub fn is_new_session(&self) -> bool {
-        matches!(self, Response::NewSession { .. })
-    }
-
-    pub fn is_transmit_request(&self) -> bool {
-        matches!(self, Response::TransmitRequest | Response::GroupSetupTransmitRequest { .. })
     }
 }
