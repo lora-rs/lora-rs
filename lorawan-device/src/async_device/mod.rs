@@ -609,75 +609,69 @@ where
         mut rx_windows: mac::RxWindows,
     ) -> Result<mac::Response, Error<R::PhyError>> {
         loop {
-            // Transmit the (possibly replaced) frame
-            let ms = self
-                .radio
-                .tx(tx_config, self.retransmit_buffer.as_ref_for_read())
-                .await
-                .map_err(Error::Radio)?;
+            let response = loop {
+                // Transmit the (possibly replaced) frame
+                let ms = self
+                    .radio
+                    .tx(tx_config, self.retransmit_buffer.as_ref_for_read())
+                    .await
+                    .map_err(Error::Radio)?;
 
-            // Wait for received data within window
-            self.timer.reset();
-            let response = self.rx_downlink(&Frame::Data, ms, &rx_windows).await?;
-            match response {
-                // NbTrans: the MAC will resend this frame with the same FCntUp;
-                // re-select the channel (and its RX windows) as usual
-                mac::Response::Retransmit => {
-                    (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
-                }
-                // Every repetition of a confirmed frame waits RETRANSMIT_TIMEOUT.
-                mac::Response::RetransmitConfirmed => {
-                    let timeout_ms = mac::retransmit_timeout_ms(&mut self.rng);
-                    debug!(
-                        "Retransmitting confirmed frame; waiting {} ms before the next copy.",
-                        timeout_ms
-                    );
-                    // A downlink accepted during the wait (class C) supersedes
-                    // the retransmission cycle and ends it.
-                    if let Some(response) = self.retransmit_wait(timeout_ms).await? {
-                        return Ok(response);
+                // Wait for received data within window
+                self.timer.reset();
+                let response = self.rx_downlink(&Frame::Data, ms, &rx_windows).await?;
+                match response {
+                    // NbTrans: the MAC will resend this frame with the same FCntUp
+                    mac::Response::Retransmit => {
+                        (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
                     }
-                    (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
-                }
-                // A certification reset dropped the session mid-cycle.
-                mac::Response::NoUpdate => return Ok(mac::Response::NoUpdate),
-                response => {
-                    // Wait for random RETRANSMIT_TIMEOUT before reporting a NoAck.
-                    if matches!(response, mac::Response::NoAck) {
+                    // Every repetition of a confirmed frame waits RETRANSMIT_TIMEOUT.
+                    mac::Response::RetransmitConfirmed => {
                         let timeout_ms = mac::retransmit_timeout_ms(&mut self.rng);
                         debug!(
-                            "No ACK received; waiting {} ms before the next uplink.",
+                            "Retransmitting confirmed frame; waiting {} ms before the next copy.",
                             timeout_ms
                         );
+                        // A downlink accepted during the wait (class C) supersedes
+                        // the retransmission cycle and ends it.
                         if let Some(response) = self.retransmit_wait(timeout_ms).await? {
-                            return Ok(response);
+                            break response;
                         }
+                        (tx_config, rx_windows) = self.mac.retransmit_config::<G>(&mut self.rng);
                     }
-                    // A package answer staged during this cycle is sent right
-                    // away as a regular uplink with its own RX windows.
-                    if self.mac.has_pending_package_answer() {
-                        let empty = SendData { data: &[], fport: 0, confirmed: false };
-                        let (forced_tx, forced_rx, _fcnt_up) = match self.mac.send::<G, N>(
-                            &mut self.rng,
-                            &mut self.radio_buffer,
-                            &empty,
-                        ) {
-                            Err(mac::Error::SessionExpired) => {
-                                return Ok(mac::Response::SessionExpired);
+                    // A certification reset dropped the session mid-cycle.
+                    mac::Response::NoUpdate => break mac::Response::NoUpdate,
+                    response => {
+                        // Wait for random RETRANSMIT_TIMEOUT before reporting a NoAck.
+                        if matches!(response, mac::Response::NoAck) {
+                            let timeout_ms = mac::retransmit_timeout_ms(&mut self.rng);
+                            debug!(
+                                "No ACK received; waiting {} ms before the next uplink.",
+                                timeout_ms
+                            );
+                            if let Some(response) = self.retransmit_wait(timeout_ms).await? {
+                                break response;
                             }
-                            Err(e) => return Err(e.into()),
-                            Ok(v) => v,
-                        };
-                        self.retransmit_buffer.clear();
-                        self.retransmit_buffer
-                            .extend_from_slice(self.radio_buffer.as_ref_for_read())
-                            .unwrap();
-                        (tx_config, rx_windows) = (forced_tx, forced_rx);
-                        continue;
+                        }
+                        break response;
                     }
-                    return Ok(response);
                 }
+            };
+            // A package answer staged during the cycle is sent right away as
+            // a regular uplink with its own RX windows.
+            if !self.mac.has_pending_package_answer() {
+                return Ok(response);
             }
+            let empty = SendData { data: &[], fport: 0, confirmed: false };
+            let (forced_tx, forced_rx, _fcnt_up) =
+                match self.mac.send::<G, N>(&mut self.rng, &mut self.radio_buffer, &empty) {
+                    Err(mac::Error::SessionExpired) => return Ok(mac::Response::SessionExpired),
+                    Err(e) => return Err(e.into()),
+                    Ok(v) => v,
+                };
+            self.retransmit_buffer.clear();
+            self.retransmit_buffer.extend_from_slice(self.radio_buffer.as_ref_for_read()).unwrap();
+            (tx_config, rx_windows) = (forced_tx, forced_rx);
         }
     }
 
